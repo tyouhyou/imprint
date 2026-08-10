@@ -1,0 +1,68 @@
+# temporary file
+review*.md
+
+# Build outputs (all variants, e.g. /build/, /build_font/)
+/build*/
+/bin/
+*.o
+*.obj
+*.a
+*.lib
+*.exp
+*.dll
+*.exe
+*.pdb
+*.tlog
+*.vcxproj
+*.vcxproj.user
+
+# CMake
+/CMakeCache.txt
+/CMakeFiles/
+cmake_install.cmake
+CMakeLists.txt.user
+CMakeUserPresets.json
+compile_commands.json
+*.cmake.orig
+
+# NDS / devkitARM outputs
+*.elf
+*.lst
+*.nds
+*.ds.gba
+*.map
+
+# IDE / editor
+.vs/
+.vscode/*
+!.vscode/launch.json
+!.vscode/settings.json
+!.vscode/c_cpp_properties.json
+.idea/
+*.user
+
+# Logs
+*.log
+
+# Python
+__pycache__/
+*.pyc
+
+# wasm build outputs (rebuild with demo/wasm/build.sh)
+demo/wasm/tictactoe.js
+demo/wasm/tictactoe.wasm
+
+# vendored 3rd-party headers (USE_FONT/USE_PNG/USE_JPEG need system dev packages instead)
+/imcore/ext_lib/
+
+# internal dev docs (not published)
+/AGENTS.md
+/CONTEXT.md
+/docs/code-contract.md
+
+# OS
+Thumbs.db
+.DS_Store
+# wasm demo build outputs
+/demo/wasm/*.js
+/demo/wasm/*.wasm
