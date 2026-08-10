@@ -2,6 +2,10 @@
 
 [![English](https://img.shields.io/badge/English-blue)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
+
 
 **One pixel buffer, every target.** Imprint is a dependency-free, software-rendered C++17 UI framework. The same source tree runs on a Nintendo DS, Linux (framebuffer or X11), Windows, in the browser via WebAssembly, and behind a C-ABI driven from Python.
 
@@ -23,6 +27,28 @@
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
 - **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback; optional FreeType / libpng / libjpeg
 - **C++17, CMake, static libraries** — everything is composable, nothing is forced
+
+## Quick Example
+
+```cpp
+#include "imapp.hpp"
+#include "imui.hpp"
+
+int main()
+{
+    auto app = zb::app::make_app();
+    app->create_window(320, 240);
+    auto* win = static_cast<zb::app::CanvasWindow*>(app->window().get());
+
+    auto btn = std::make_unique<zb::ui::Button>();
+    btn->set_size(100, 40);
+    btn->set_text("Click Me");
+    btn->clicked += [] { printf("Hello!\n"); };
+    win->root().add_child(std::move(btn));
+
+    app->paint();
+}
+```
 
 ## Platforms
 

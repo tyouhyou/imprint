@@ -2,6 +2,10 @@
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
+
 
 **一个像素缓冲，跑遍所有目标。** Imprint 是一个零依赖、软件渲染的 C++17 UI 框架。同一份源码可以跑在任天堂 DS、Linux（framebuffer 或 X11）、Windows、浏览器（WebAssembly）以及通过 C-ABI 调用的 Python 宿主上。
 
@@ -23,6 +27,28 @@
 - **零分配热路径** — RAII `ClipGuard`、事件墓碑删除、`Subscription`
 - **全链路 UTF-8 文本** — 内置 5x7 位图字形兜底；可选 FreeType / libpng / libjpeg
 - **C++17、CMake、静态库** — 一切可组合，不强加任何东西
+
+## 快速示例
+
+```cpp
+#include "imapp.hpp"
+#include "imui.hpp"
+
+int main()
+{
+    auto app = zb::app::make_app();
+    app->create_window(320, 240);
+    auto* win = static_cast<zb::app::CanvasWindow*>(app->window().get());
+
+    auto btn = std::make_unique<zb::ui::Button>();
+    btn->set_size(100, 40);
+    btn->set_text("点我");
+    btn->clicked += [] { printf("你好！\n"); };
+    win->root().add_child(std::move(btn));
+
+    app->paint();
+}
+```
 
 ## 平台
 
