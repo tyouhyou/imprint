@@ -185,6 +185,17 @@ namespace zb::ui
         virtual void on_cancel() {}
 
         /*
+         * Pointer capture (drag semantics): when true, the dispatcher
+         * delivers every move to this widget while it is the pressed
+         * target and never cancels the press, no matter how far the
+         * pointer leaves its area (e.g. a slider being dragged). The
+         * return value of on_input() then reports whether the widget
+         * changed (repaint gate). Default: false, the press is cancelled
+         * by the standard slop rule.
+         */
+        [[nodiscard]] virtual bool captures_pointer() const { return false; }
+
+        /*
          * Returns the deepest interactive child hit by a point given in
          * this widget's local coordinates, or nullptr.
          */

@@ -113,6 +113,14 @@ namespace zb::ui
         {
             return false;
         }
+        // the focused widget consumes the key first (slider arrows now,
+        // TextInput characters later); an unconsumed key falls back to
+        // the navigation handling below
+        if (focus_target != nullptr && focus_target->on_input(ev))
+        {
+            LD << "key consumed by focused widget (" << ev.key << ")";
+            return true;
+        }
         switch (static_cast<input::key_code>(ev.key))
         {
         case input::key_code::tab:
@@ -218,6 +226,18 @@ namespace zb::ui
         {
             if (pressed_target != nullptr && ev.touch_id == press_touch_id)
             {
+                // drag semantics: a widget that captures the pointer
+                // (e.g. a slider) receives every move while held; the
+                // slop rule does not apply to it
+                if (pressed_target->captures_pointer())
+                {
+                    if (pressed_target->on_input(ev))
+                    {
+                        LD << "move delivered to captured pointer at " << ev.x << "," << ev.y;
+                        return true;
+                    }
+                    return false;
+                }
                 // the pointer left the pressed widget: cancel the press,
                 // but tolerate a few pixels of drift (touch jitter) that
                 // must not eat a click

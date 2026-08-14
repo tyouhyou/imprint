@@ -87,6 +87,67 @@ namespace
             root.add_child(std::move(b));
         }
     };
+
+    /*
+     * A widget that captures the pointer while pressed (like a slider):
+     * drags outside its area must reach it and never cancel the press.
+     */
+    struct CaptureProbe : public Widget
+    {
+        bool pressed = false;
+        int moves_while_captured = 0;
+        int cancelled = 0;
+        bool reports_change_on_move = true;
+
+        bool captures_pointer() const override { return true; }
+
+        void on_cancel() override { ++cancelled; }
+
+        bool on_input(const zb::input::input_event &ev) override
+        {
+            if (ev.type == zb::input::input_type::mouse_left_down ||
+                ev.type == zb::input::input_type::touch_down)
+            {
+                pressed = true;
+                return true;
+            }
+            if (ev.type == zb::input::input_type::mouse_left_up ||
+                ev.type == zb::input::input_type::touch_up)
+            {
+                pressed = false;
+                return true;
+            }
+            if (ev.type == zb::input::input_type::mouse_move ||
+                ev.type == zb::input::input_type::touch_move)
+            {
+                ++moves_while_captured;
+                return reports_change_on_move;
+            }
+            return false;
+        }
+    };
+
+    /*
+     * A focusable widget that consumes key_down (returns true) so the
+     * dispatcher must not run the focus navigation for that key.
+     */
+    struct KeyProbe : public Widget
+    {
+        int keys_consumed = 0;
+        bool consume = true;
+
+        bool is_focusable() const override { return true; }
+
+        bool on_input(const zb::input::input_event &ev) override
+        {
+            if (ev.type == zb::input::input_type::key_down)
+            {
+                ++keys_consumed;
+                return consume;
+            }
+            return false;
+        }
+    };
 }
 
 int test_dispatch()
@@ -397,6 +458,106 @@ int test_dispatch()
         EXPECT(!d.dispatch(t.root, key_down(static_cast<int>(zb::input::key_code::tab))));
         // activation fires (focus is on the button)
         EXPECT(d.dispatch(t.root, key_down(static_cast<int>(zb::input::key_code::enter))));
+    }
+
+    // pointer capture: a widget that captures the pointer receives every
+    // move while held, even far outside its area, and is never cancelled
+    {
+        Panel root;
+        root.set_size(100, 100);
+
+        auto probe = std::make_unique<CaptureProbe>();
+        probe->set_size(20, 20);
+        probe->set_position(10, 10);
+        auto *pprobe = probe.get();
+        root.add_child(std::move(probe));
+
+        InputDispatcher d;
+
+        // press claims the probe; drags beyond slop still reach it and the
+        // press survives; the release fires anywhere
+        EXPECT(d.dispatch(root, press_at(15, 15)));
+        EXPECT(pprobe->pressed);
+        EXPECT(d.dispatch(root, move_to(90, 90)));  // far outside
+        EXPECT(pprobe->moves_while_captured == 1);
+        EXPECT(pprobe->cancelled == 0);
+        EXPECT(pprobe->pressed);
+        d.dispatch(root, move_to(95, 5));
+        EXPECT(pprobe->moves_while_captured == 2);
+        EXPECT(d.dispatch(root, release_at(95, 5)));
+        EXPECT(!pprobe->pressed);
+        EXPECT(pprobe->cancelled == 0);
+
+        // a move that does not change the widget reports no repaint
+        EXPECT(d.dispatch(root, press_at(15, 15)));
+        pprobe->reports_change_on_move = false;
+        EXPECT(!d.dispatch(root, move_to(90, 90)));
+        pprobe->reports_change_on_move = true;
+        EXPECT(d.dispatch(root, release_at(90, 90)));
+    }
+
+    // non-capture widgets keep the slop-cancel rule (capture contrast)
+    {
+        Tree t;
+        InputDispatcher d;
+
+        d.dispatch(t.root, press_at(28, 15));
+        EXPECT(t.button->get_state() == Button::state::pressed);
+        d.dispatch(t.root, move_to(40, 15));  // 11px out: beyond slop
+        EXPECT(t.button->get_state() == Button::state::normal);  // cancelled
+    }
+
+    // the focused widget consumes keys first; unconsumed keys fall back
+    // to the focus navigation
+    {
+        Panel root;
+        root.set_size(100, 100);
+
+        auto probe = std::make_unique<KeyProbe>();
+        probe->set_size(20, 20);
+        probe->set_position(10, 10);
+        auto *pprobe = probe.get();
+        auto btn = std::make_unique<Button>();
+        btn->set_size(20, 20);
+        btn->set_position(50, 50);
+        auto *pbtn = btn.get();
+        root.add_child(std::move(probe));
+        root.add_child(std::move(btn));
+
+        InputDispatcher d;
+
+        // first tab focuses the probe (no focus yet: nothing to consume)
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pprobe);
+
+        // the probe consumes the tab: focus must not move
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(pprobe->keys_consumed == 1);
+        EXPECT(d.get_focus_target() == pprobe);
+
+        // a probe that does not consume the key: navigation resumes
+        pprobe->consume = false;
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(pprobe->keys_consumed == 2);  // saw the key, did not consume
+        EXPECT(d.get_focus_target() == pbtn);
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pprobe);
+
+        // activations only fire when the key is not consumed
+        int clicks = 0;
+        pbtn->clicked += [&clicks]() { ++clicks; };
+        // walk the focus to the button with an unconsumed tab
+        pprobe->consume = false;
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));  // probe -> button
+        EXPECT(d.get_focus_target() == pbtn);
+        // enter reaches the button (it does not consume keys): click fires
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::enter))));
+        EXPECT(clicks == 1);
+        // a consuming focused widget would have eaten the enter: no click
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));  // button -> probe
+        pprobe->consume = true;
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::enter))));  // probe eats it
+        EXPECT(clicks == 1);
     }
 
     return test::report("dispatch");
