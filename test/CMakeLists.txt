@@ -22,6 +22,7 @@ add_executable(
     test_flex.cpp
     test_ptr.cpp
     test_codec.cpp
+    test_checkbox.cpp
 )
 
 target_link_libraries(

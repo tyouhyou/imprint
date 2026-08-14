@@ -1,6 +1,7 @@
 #pragma once
 
 #include "button.hpp"
+#include "checkbox.hpp"
 #include "dialog.hpp"
 #include "dispatcher.hpp"
 #include "label.hpp"

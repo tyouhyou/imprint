@@ -4,6 +4,7 @@ add_library(
     src/panel.cpp
     src/flex_panel.cpp
     src/button.cpp
+    src/checkbox.cpp
     src/dialog.cpp
     src/dispatcher.cpp
 )

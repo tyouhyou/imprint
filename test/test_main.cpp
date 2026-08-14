@@ -18,6 +18,7 @@ int test_text();
 int test_flex();
 int test_ptr();
 int test_codec();
+int test_checkbox();
 
 int main()
 {
@@ -40,6 +41,7 @@ int main()
     total += test_flex();
     total += test_ptr();
     total += test_codec();
+    total += test_checkbox();
 
     if (total)
     {

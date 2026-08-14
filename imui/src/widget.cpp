@@ -129,6 +129,9 @@ namespace zb::ui
             break;
         }
 
+        x += text_offset_.x;
+        y += text_offset_.y;
+
         // draw run by run; uncovered units keep the pen position
         int pen = 0;
         for (int i = 0; i < len;)

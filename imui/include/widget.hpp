@@ -90,6 +90,10 @@ namespace zb::ui
         void set_text(const std::u16string &text) { text_ = text; }
         [[nodiscard]] const std::u16string &get_text() const { return text_; }
         void set_text_color(const core::Color &c) { text_color = c; }
+
+        // moves the text baseline start (e.g. a checkbox labelling to the
+        // right of its box); applied on top of the alignment
+        void set_text_offset(const core::impoint_t &off) const { text_offset_ = off; }
         void set_h_align(const h_align a) { halign = a; }
         void set_v_align(const v_align a) { valign = a; }
 
@@ -230,6 +234,10 @@ namespace zb::ui
         // text
         std::u16string text_;
         core::Color text_color = core::colors::Black;
+        // layout hint applied at draw time; widgets may update it from
+        // their (const) draw path (e.g. a checkbox labelling next to its
+        // box)
+        mutable core::impoint_t text_offset_{0, 0};
         h_align halign = h_align::left;
         v_align valign = v_align::top;
         zb::SharedPtr<GlyphProvider> primary_provider_;
