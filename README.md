@@ -25,7 +25,7 @@
 - **C-ABI as a first-class citizen** — stable `zbapi` C interface with Python (ctypes), WebAssembly and C smoke-test hosts
 - **Embedded-grade** — no RTTI, 16-bit color (abgr1555), integer-only geometry option, non-atomic refcounting option (NDS has no libatomic)
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
-- **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback; optional FreeType / libpng / libjpeg
+- **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback; optional FreeType (fonts) and vendored stb codecs (PNG/JPEG)
 - **C++17, CMake, static libraries** — everything is composable, nothing is forced
 
 ## Quick Example
