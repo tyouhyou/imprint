@@ -1,20 +1,24 @@
 /*
- * Implementation of png file processing with libpng
+ * Implementation of png file processing with the vendored stb_image /
+ * stb_image_write codecs (third_party/stb, see third_party/README.md).
  *
- * reference
- * http://www.libpng.org/pub/png/libpng-manual.html
+ * replaced libpng (2026-08, backlog batch D): decode happens in one shot
+ * (stb has no row-streaming), so the file is fully decoded before
+ * image_loaded() is called; the Image API and its callback contract
+ * (image_loaded -> one read_row per scanline, RGBA) are unchanged.
  */
 
 #ifdef USE_PNG
 
 #include "image.hpp"
 #include "logging.hpp"
-extern "C"
-{
-#include "png.h"
-}
+#include "stb_image.h"
+#include "stb_image_write.h"
+#include <cstring>
 
 #define PNG_SIG_BYTES 8
+
+static const unsigned char kPngSignature[PNG_SIG_BYTES] = {137, 80, 78, 71, 13, 10, 26, 10};
 
 using namespace zb;
 using namespace zb::ui;
@@ -25,142 +29,67 @@ int Image::read_png_file(
     on_loading_image image_loaded,
     on_reading_image_row read_row)
 {
-    FILE *infile = nullptr;
-
-    auto png_ptr = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr)
+    FILE *infile = fopen(file_name.c_str(), "rb");
+    if (!infile)
     {
-        LE << "Initialization of png read struct failed.";
+        LE << "Openning png file failed. (" << file_name << ")";
         return 1;
     }
 
-    png_infop png_info = nullptr;
-
-    // longjmp must not skip C++ destructors, so cleanup is explicit here;
-    // every exit path (including the png error longjmp) goes through this
-    // single release point. png_destroy_read_struct tolerates a null info.
-    auto cleanup = [&]()
+    unsigned char magicbuf[PNG_SIG_BYTES];
+    bool sig_ok = PNG_SIG_BYTES == fread(magicbuf, 1, PNG_SIG_BYTES, infile) &&
+                  0 == std::memcmp(magicbuf, kPngSignature, PNG_SIG_BYTES);
+    fclose(infile);
+    if (!sig_ok)
     {
-        if (png_ptr)
-        {
-            png_destroy_read_struct(&png_ptr, &png_info, nullptr);
-        }
-        if (infile)
-        {
-            fclose(infile);
-            infile = nullptr;
-        }
-    };
-
-    png_info = png_create_info_struct(png_ptr);
-    if (!png_info)
-    {
-        cleanup();
-        LE << "Initialization of png info struct failed.";
+        LE << "The specified file is not a PNG file. (" << file_name << ")";
         return 2;
     }
 
-    infile = fopen(file_name.c_str(), "rb");
-    if (!infile)
+    int img_width = 0, img_height = 0, comp = 0;
+    unsigned char *data = stbi_load(file_name.c_str(), &img_width, &img_height, &comp, 4);
+    if (!data)
     {
-        cleanup();
-        LE << "Openning png file failed.";
+        LE << "Decoding png file failed. (" << file_name << ") reason: " << stbi_failure_reason();
         return 3;
     }
-
-    unsigned char magicbuf[PNG_SIG_BYTES];
-    if (PNG_SIG_BYTES != fread(magicbuf, 1, PNG_SIG_BYTES, infile) ||
-        0 != png_sig_cmp(magicbuf, 0, PNG_SIG_BYTES))
+    if (img_width <= 0 || img_height <= 0)
     {
-        cleanup();
-        LE << "The specified file is not a PNG file. (" << file_name << ")";
+        LE << "PNG file reports zero width/height, refusing to process. (" << file_name << ")";
+        stbi_image_free(data);
         return 4;
     }
 
-    if (setjmp(png_jmpbuf(png_ptr)))
-    {
-        cleanup();
-        return -1;
-    }
-
-    png_init_io(png_ptr, infile);
-    png_set_sig_bytes(png_ptr, PNG_SIG_BYTES);
-    png_read_info(png_ptr, png_info);
-
-    auto img_width = png_get_image_width(png_ptr, png_info);
-    auto img_height = png_get_image_height(png_ptr, png_info);
-    if (img_width == 0 || img_height == 0)
-    {
-        cleanup();
-        LE << "PNG file reports zero width/height, refusing to process. (" << file_name << ")";
-        return 5;
-    }
-    auto img_color_type = png_get_color_type(png_ptr, png_info);
-    auto bit_depth = png_get_bit_depth(png_ptr, png_info);
-
-    // input transformation, to RGBA
-
-    if (bit_depth == 16)
-    {
-#if PNG_LIBPNG_VER >= 10504
-        png_set_scale_16(png_ptr);
-#else
-        png_set_strip_16(png_ptr);
-#endif
-    }
-
-    if (img_color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8)
-    {
-        png_set_expand_gray_1_2_4_to_8(png_ptr);
-    }
-
-    if (img_color_type == PNG_COLOR_TYPE_PALETTE)
-    {
-        png_set_palette_to_rgb(png_ptr);
-    }
-
-    if (png_get_valid(png_ptr, png_info, PNG_INFO_tRNS))
-    {
-        png_set_tRNS_to_alpha(png_ptr);
-    }
-
-    if (img_color_type == PNG_COLOR_TYPE_GRAY ||
-        img_color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
-    {
-        png_set_gray_to_rgb(png_ptr);
-    }
-
-    if (img_color_type == PNG_COLOR_TYPE_RGB ||
-        img_color_type == PNG_COLOR_TYPE_GRAY ||
-        img_color_type == PNG_COLOR_TYPE_PALETTE)
-    {
-        png_set_filler(png_ptr, 0xFF, PNG_FILLER_AFTER);
-    }
-
-    png_read_update_info(png_ptr, png_info);
-
-    auto row_stride = (uint32_t)png_get_rowbytes(png_ptr, png_info); // bit number in one row
-    auto components = row_stride / img_width;                        // 4, RGBA format
+    auto img_width_u = (uint32_t)img_width;
+    auto img_height_u = (uint32_t)img_height;
+    auto row_stride = img_width_u * 4; // stb always yields RGBA with req_comp=4
     image_info iminf
     {
-        (uint32_t)img_width,
-        (uint32_t)img_height,
+        img_width_u,
+        img_height_u,
         row_stride,
-        (uint32_t)components
+        4
     };
-    image_loaded(iminf);
-
-    std::vector<png_byte> row_data(row_stride, 0x00);
-    auto row_pointer = row_data.data();
-    for (int i = 0; i < img_height; i++)
+    if (!image_loaded(iminf))
     {
-        png_read_row(png_ptr, row_pointer, NULL);
-        read_row(row_pointer);
+        LE << "Error occurred when set image info in image_loaded callback.";
+        stbi_image_free(data);
+        return 5;
     }
 
-    png_read_end(png_ptr, NULL);
-    cleanup();
+    auto row_pointer = data;
+    for (uint32_t i = 0; i < img_height_u; i++)
+    {
+        if (!read_row(row_pointer))
+        {
+            LE << "Error occurred when processing image row data.";
+            stbi_image_free(data);
+            return 6;
+        }
+        row_pointer += row_stride;
+    }
 
+    stbi_image_free(data);
     return 0;
 }
 
@@ -181,7 +110,7 @@ int Image::read_png(
     auto png_read_row = [&png_inf, &png_img](unsigned char *buf)
     {
         uint8_t a = 0, r = 0, g = 0, b = 0;
-        for (int i = 0; i < png_inf.image_width; i++)
+        for (int i = 0; i < (int)png_inf.image_width; i++)
         {
             r = *buf++;
             g = *buf++;
@@ -207,91 +136,45 @@ int Image::write_png_file(
     const image_info &img_inf,
     on_writing_image_row write_row)
 {
-    png_structp png_ptr = png_create_write_struct(
-        PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    if (!png_ptr)
+    auto img_width = img_inf.image_width;
+    auto img_height = img_inf.image_height;
+    if (img_width == 0 || img_height == 0)
     {
-        LE << "Failed creating png write struct.";
+        LE << "PNG write request with zero width/height.";
         return 1;
     }
 
-    png_infop info_ptr = nullptr;
-    FILE *fp = nullptr;
-
-    // same longjmp-safe pattern as read_png_file: one cleanup point for all
-    // exit paths (png_destroy_write_struct tolerates a null info_ptr)
-    auto cleanup = [&]()
-    {
-        if (png_ptr)
-        {
-            png_destroy_write_struct(&png_ptr, &info_ptr);
-        }
-        if (fp)
-        {
-            fclose(fp);
-            fp = nullptr;
-        }
-    };
-
-    info_ptr = png_create_info_struct(png_ptr);
-    if (!info_ptr)
-    {
-        cleanup();
-        LE << "Failed creating png info struct.";
-        return 2;
-    }
-
-    fp = fopen(file_name.c_str(), "wb");
-    if (!fp)
-    {
-        cleanup();
-        LE << "Failed openning png file " << file_name << ").";
-        return 3;
-    }
-
-    if (setjmp(png_jmpbuf(png_ptr)))
-    {
-        cleanup();
-        return -1;
-    }
-
-    png_init_io(png_ptr, fp);
-
-    // to RGBA
-    png_set_IHDR(
-        png_ptr,
-        info_ptr,
-        img_inf.image_width,
-        img_inf.image_height,
-        8,
-        PNG_COLOR_TYPE_RGBA,
-        PNG_INTERLACE_NONE,
-        PNG_COMPRESSION_TYPE_DEFAULT,
-        PNG_FILTER_TYPE_DEFAULT);
-
-    png_write_info(png_ptr, info_ptr);
-
-    std::vector<png_byte> row(img_inf.row_stride);
-    png_bytep row_pointer;
-    for (int i = 0; i < img_inf.image_height; i++)
+    // stb has no streaming writer: collect the rows first (RGBA, 4 comp),
+    // then hand the whole buffer to stbi_write_png.
+    auto row_stride = img_width * 4;
+    std::vector<unsigned char> image_data((size_t)row_stride * img_height);
+    std::vector<unsigned char> row(row_stride);
+    for (uint32_t i = 0; i < img_height; i++)
     {
         row.clear();
         if (!write_row(row))
         {
             LE << "Error occurred while write data to png file.";
-            cleanup();
-            return -2;
+            return 2;
         }
-        // guarantee the buffer is at least row_stride long before png_write_row reads it
-        if (row.size() < img_inf.row_stride)
-            row.resize(img_inf.row_stride, 0x00);
-        row_pointer = row.data();
-        png_write_row(png_ptr, row_pointer);
+        if (row.size() < row_stride)
+            row.resize(row_stride, 0x00);
+        std::memcpy(image_data.data() + (size_t)i * row_stride, row.data(), row_stride);
     }
 
-    png_write_end(png_ptr, NULL);
-    cleanup();
+    FILE *outfile = fopen(file_name.c_str(), "wb");
+    if (!outfile)
+    {
+        LE << "Failed openning png file " << file_name << ").";
+        return 3;
+    }
+    fclose(outfile);
 
+    if (0 == stbi_write_png(file_name.c_str(), (int)img_width, (int)img_height, 4, image_data.data(), (int)row_stride))
+    {
+        LE << "Writing png file failed. (" << file_name << ") reason: " << stbi_failure_reason();
+        return 4;
+    }
     return 0;
 }
 

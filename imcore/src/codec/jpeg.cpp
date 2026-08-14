@@ -1,48 +1,24 @@
 /*
- * Implementation of jpeg file processing with libjpeg.
+ * Implementation of jpeg file processing with the vendored stb_image /
+ * stb_image_write codecs (third_party/stb, see third_party/README.md).
  *
- * reference
- * https://dev.w3.org/Amaya/libjpeg/example.c
+ * replaced libjpeg (2026-08, backlog batch D): decode happens in one shot
+ * (stb has no row-streaming), read yields 24bit RGB (3 comp, the contract
+ * this file already enforced); the Image API and its callback contract
+ * (image_loaded -> one read_row per scanline) are unchanged.
  */
 
 #ifdef USE_JPEG
 
 #include "image.hpp"
 #include "logging.hpp"
-#include <memory>
-extern "C"
-{
-#include "jpeglib.h" // TODO: change to libjpeg-turbo?
-#include <setjmp.h>
-}
+#include "stb_image.h"
+#include "stb_image_write.h"
+#include <cstring>
 
 using namespace zb;
 using namespace zb::ui;
 using namespace zb::ui::core;
-
-namespace
-{
-    /*
-     * RAII for a libjpeg compression struct. Safe here: the write path has
-     * no setjmp/longjmp (the default error handler exits the process), so
-     * the destructor is never skipped.
-     */
-    struct JpegCompressGuard
-    {
-        jpeg_compress_struct cinfo{};
-        jpeg_error_mgr jerr{};
-
-        JpegCompressGuard()
-        {
-            cinfo.err = jpeg_std_error(&jerr);
-            jpeg_create_compress(&cinfo);
-        }
-        ~JpegCompressGuard()
-        {
-            jpeg_destroy_compress(&cinfo);
-        }
-    };
-}
 
 int Image::write_jpeg(
     Graphics &g,
@@ -51,7 +27,7 @@ int Image::write_jpeg(
 {
     auto cur_row = 0;
     auto gsize = g.size();
-    auto row_bit_stride = gsize.width * 3; // at this time being, 24bit jpeg only
+    auto row_bit_stride = gsize.width * 3; // 24bit jpeg only
     image_info img_inf{
         (uint32_t)gsize.width,
         (uint32_t)gsize.height,
@@ -77,7 +53,7 @@ int Image::write_jpeg(
         return true;
     };
 
-    auto rst = write_jpeg_file(file_name, img_inf, write_row);
+    auto rst = write_jpeg_file(file_name, img_inf, write_row, quality);
     if (0 != rst)
     {
         LE << "writing jpeg file failed. ( error code :" << rst << "; jpeg file : " << file_name << ")";
@@ -92,65 +68,52 @@ int Image::write_jpeg_file(
     on_writing_image_row write_row,
     const int &quality)
 {
-    JpegCompressGuard guard;
-    auto &cinfo = guard.cinfo;
-
-    std::unique_ptr<FILE, int (*)(FILE *)> outfile(fopen(file_name.c_str(), "wb"), &fclose);
-    if (!outfile)
+    auto img_width = img_inf.image_width;
+    auto img_height = img_inf.image_height;
+    if (img_width == 0 || img_height == 0)
     {
-        LE << "can't open " << file_name;
+        LE << "JPEG write request with zero width/height.";
         return 1;
     }
-    jpeg_stdio_dest(&cinfo, outfile.get());
 
-    cinfo.image_width = img_inf.image_width;
-    cinfo.image_height = img_inf.image_height;
-    cinfo.input_components = 3;
-    cinfo.in_color_space = JCS_RGB;
-    jpeg_set_defaults(&cinfo);
-    jpeg_set_quality(&cinfo, quality, TRUE);
-
-    jpeg_start_compress(&cinfo, TRUE);
-
-    auto row_stride = img_inf.image_width * img_inf.color_components;
-
-    std::vector<JSAMPLE> image_buffer(row_stride);
-    while (cinfo.next_scanline < cinfo.image_height)
+    // stb has no streaming writer: collect the rows first (RGB, 3 comp),
+    // then hand the whole buffer to stbi_write_jpg.
+    auto row_stride = img_width * 3;
+    std::vector<unsigned char> image_data((size_t)row_stride * img_height);
+    std::vector<unsigned char> row(row_stride);
+    for (uint32_t i = 0; i < img_height; i++)
     {
-        image_buffer.clear();
-        if (!write_row(image_buffer))
+        row.clear();
+        if (!write_row(row))
         {
             LE << "Error occurred while write data to jpeg file.";
             return 2;
         }
-        // guarantee the buffer is at least row_stride long before (de)compression reads it
-        if (image_buffer.size() < (size_t)row_stride)
-            image_buffer.resize((size_t)row_stride);
-        JSAMPROW row_pointer[1] = {image_buffer.data()};
-        (void)jpeg_write_scanlines(&cinfo, row_pointer, 1);
+        if (row.size() < row_stride)
+            row.resize(row_stride, 0x00);
+        std::memcpy(image_data.data() + (size_t)i * row_stride, row.data(), row_stride);
     }
-    image_buffer.clear();
 
-    jpeg_finish_compress(&cinfo);
+    FILE *outfile = fopen(file_name.c_str(), "wb");
+    if (!outfile)
+    {
+        LE << "can't open " << file_name;
+        return 3;
+    }
+    fclose(outfile);
 
+    auto q = quality;
+    if (q < 1)
+        q = 1;
+    else if (q > 100)
+        q = 100;
+
+    if (0 == stbi_write_jpg(file_name.c_str(), (int)img_width, (int)img_height, 3, image_data.data(), q))
+    {
+        LE << "Writing jpeg file failed. (" << file_name << ")";
+        return 4;
+    }
     return 0;
-}
-
-extern "C"
-{
-    typedef struct _my_error_mgr
-    {
-        struct jpeg_error_mgr pub;
-        jmp_buf setjmp_buffer;
-    } my_error_mgr, *my_error_ptr;
-
-    METHODDEF(void)
-    my_error_exit(j_common_ptr cinfo)
-    {
-        my_error_ptr myerr = (my_error_ptr)cinfo->err;
-        (*cinfo->err->output_message)(cinfo);
-        longjmp(myerr->setjmp_buffer, 1);
-    }
 }
 
 int Image::read_jpg(Graphics &g, const std::string &file_name, const int &start_x, const int &start_y)
@@ -165,14 +128,8 @@ int Image::read_jpg(Graphics &g, const std::string &file_name, const int &start_
     };
     auto jpg_read_row = [&jpg_inf, &jpg_img](unsigned char *buf)
     {
-        if (3 != jpg_inf.color_components)
-        {
-            LE << "Only 24bit RGB image is supported at this time being. (Color components: " << jpg_inf.color_components << ")";
-            return false;
-        }
-
         uint8_t r = 0, g = 0, b = 0;
-        for (int i = 0; i < jpg_inf.image_width; i++)
+        for (int i = 0; i < (int)jpg_inf.image_width; i++)
         {
             r = *buf++;
             g = *buf++;
@@ -198,78 +155,64 @@ int Image::read_jpeg_file(
     on_loading_image image_loaded,
     on_reading_image_row read_row)
 {
-    struct jpeg_decompress_struct cinfo;
-    my_error_mgr jerr;
-
-    FILE *infile;
-    JSAMPARRAY buffer;
-    uint32_t row_stride;
-
-    if ((infile = fopen(file_name.c_str(), "rb")) == NULL)
+    // SOI marker (0xFF 0xD8) check for a clearer "not a jpeg" error
+    FILE *infile = fopen(file_name.c_str(), "rb");
+    if (!infile)
     {
         LE << "can't open " << file_name;
         return 1;
     }
-
-    cinfo.err = jpeg_std_error(&jerr.pub);
-    jerr.pub.error_exit = my_error_exit;
-    jpeg_create_decompress(&cinfo);
-    bool cinfo_alive = true;
-
-    // longjmp must not skip C++ destructors, so cleanup is explicit here;
-    // every exit path goes through this single release point
-    auto cleanup = [&]()
+    unsigned char magicbuf[2] = {0, 0};
+    bool soi_ok = 2 == fread(magicbuf, 1, 2, infile) && magicbuf[0] == 0xFF && magicbuf[1] == 0xD8;
+    fclose(infile);
+    if (!soi_ok)
     {
-        if (cinfo_alive)
-        {
-            cinfo_alive = false;
-            jpeg_destroy_decompress(&cinfo);
-        }
-        fclose(infile);
-        infile = nullptr;
-    };
-
-    if (setjmp(jerr.setjmp_buffer))
-    {
-        cleanup();
-        LE << "unexpected error.";
-        return -1;
-    }
-
-    jpeg_stdio_src(&cinfo, infile);
-    (void)jpeg_read_header(&cinfo, TRUE);
-
-    (void)jpeg_start_decompress(&cinfo);
-    row_stride = cinfo.output_width * cinfo.output_components;
-    LD << "image width=" << cinfo.output_width << "; height=" << cinfo.output_height << "; Color components=" << cinfo.output_components;
-
-    image_info iminf{
-        cinfo.output_width,
-        cinfo.output_height,
-        row_stride,
-        (uint32_t)cinfo.output_components};
-    if (!image_loaded(iminf))
-    {
-        LE << "Error occurred when set image info in image_loaded callback.";
-        cleanup();
+        LE << "The specified file is not a JPEG file. (" << file_name << ")";
         return 2;
     }
 
-    buffer = (*cinfo.mem->alloc_sarray)((j_common_ptr)&cinfo, JPOOL_IMAGE, row_stride, 1);
-
-    while (cinfo.output_scanline < cinfo.output_height)
+    int img_width = 0, img_height = 0, comp = 0;
+    unsigned char *data = stbi_load(file_name.c_str(), &img_width, &img_height, &comp, 3);
+    if (!data)
     {
-        (void)jpeg_read_scanlines(&cinfo, buffer, 1);
-        if (!read_row(buffer[0]))
-        {
-            LE << "Error occurred when processing image row data.";
-            cleanup();
-            return 3;
-        }
+        LE << "Decoding jpeg file failed. (" << file_name << ") reason: " << stbi_failure_reason();
+        return 3;
+    }
+    if (img_width <= 0 || img_height <= 0)
+    {
+        LE << "JPEG file reports zero width/height, refusing to process. (" << file_name << ")";
+        stbi_image_free(data);
+        return 4;
     }
 
-    (void)jpeg_finish_decompress(&cinfo);
-    cleanup();
+    auto img_width_u = (uint32_t)img_width;
+    auto img_height_u = (uint32_t)img_height;
+    auto row_stride = img_width_u * 3; // stb yields RGB with req_comp=3
+    image_info iminf{
+        img_width_u,
+        img_height_u,
+        row_stride,
+        3};
+    if (!image_loaded(iminf))
+    {
+        LE << "Error occurred when set image info in image_loaded callback.";
+        stbi_image_free(data);
+        return 5;
+    }
+
+    auto row_pointer = data;
+    for (uint32_t i = 0; i < img_height_u; i++)
+    {
+        if (!read_row(row_pointer))
+        {
+            LE << "Error occurred when processing image row data.";
+            stbi_image_free(data);
+            return 6;
+        }
+        row_pointer += row_stride;
+    }
+
+    stbi_image_free(data);
     return 0;
 }
 
