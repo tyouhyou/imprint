@@ -17,6 +17,7 @@ int test_event();
 int test_text();
 int test_flex();
 int test_ptr();
+int test_codec();
 
 int main()
 {
@@ -38,6 +39,7 @@ int main()
     total += test_text();
     total += test_flex();
     total += test_ptr();
+    total += test_codec();
 
     if (total)
     {

@@ -21,6 +21,7 @@ add_executable(
     test_text.cpp
     test_flex.cpp
     test_ptr.cpp
+    test_codec.cpp
 )
 
 target_link_libraries(
