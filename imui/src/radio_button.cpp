@@ -1,0 +1,99 @@
+#include "radio_button.hpp"
+
+namespace zb::ui
+{
+    void RadioButton::press()
+    {
+        pressed_ = true;
+    }
+
+    void RadioButton::release()
+    {
+        if (!pressed_)
+        {
+            return;
+        }
+        pressed_ = false;
+        select();
+    }
+
+    void RadioButton::cancel()
+    {
+        pressed_ = false;
+    }
+
+    void RadioButton::set_checked(const bool c)
+    {
+        if (c && !checked_)
+        {
+            checked_ = true;
+            notify_siblings_group_selection(group_, this);
+        }
+        else if (!c)
+        {
+            checked_ = false;
+        }
+    }
+
+    void RadioButton::select()
+    {
+        if (checked_)
+        {
+            return;
+        }
+        set_checked(true);
+        changed();
+    }
+
+    void RadioButton::on_cancel()
+    {
+        cancel();
+    }
+
+    void RadioButton::on_activate()
+    {
+        select();
+    }
+
+    bool RadioButton::on_input(const zb::input::input_event &ev)
+    {
+        if (ev.type == zb::input::input_type::mouse_left_down ||
+            ev.type == zb::input::input_type::touch_down)
+        {
+            press();
+            return true;
+        }
+        if (ev.type == zb::input::input_type::mouse_left_up ||
+            ev.type == zb::input::input_type::touch_up)
+        {
+            release();
+            return true;
+        }
+        return false;
+    }
+
+    void RadioButton::on_group_selected(const int group, const Widget *selected)
+    {
+        if (selected != this && group == group_ && checked_)
+        {
+            checked_ = false;
+        }
+    }
+
+    void RadioButton::draw_at(core::Graphics &area) const
+    {
+        const auto center = circle_size / 2;
+        const auto radius = circle_size / 2 - 1;
+
+        // the ring highlights while focused (like the Button border)
+        area.draw_ellipse(center, center, radius, radius, is_focused() ? dot_color : circle_color);
+        if (checked_)
+        {
+            const auto dot = radius / 2;
+            area.fill_ellipse(center, center, dot, dot, dot_color);
+        }
+        // the label to the right of the circle (draw_text applies the offset)
+        set_text_offset(core::impoint_t{circle_size + text_gap, 0});
+        draw_text(area);
+    }
+}

@@ -19,6 +19,7 @@ int test_flex();
 int test_ptr();
 int test_codec();
 int test_checkbox();
+int test_radio();
 
 int main()
 {
@@ -42,6 +43,7 @@ int main()
     total += test_ptr();
     total += test_codec();
     total += test_checkbox();
+    total += test_radio();
 
     if (total)
     {

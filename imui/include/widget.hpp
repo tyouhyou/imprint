@@ -218,6 +218,42 @@ namespace zb::ui
         // called when the focused widget is activated (Enter/Space)
         virtual void on_activate() {}
 
+        /*
+         * Group selection notification: called by a widget on its
+         * same-parent siblings when it joined a selection group (the
+         * group id and the selected widget). RadioButton uses it to
+         * unselect itself when another member of its group is chosen;
+         * the base does nothing.
+         */
+        virtual void on_group_selected(const int group, const Widget *selected)
+        {
+            (void)group;
+            (void)selected;
+        }
+
+        /*
+         * Notifies every same-parent sibling (except this) that this
+         * widget joined a selection group. Sits here (rather than in
+         * RadioButton) because only the class itself may reach the
+         * protected child walk through a base pointer.
+         */
+        void notify_siblings_group_selection(const int group, const Widget *selected)
+        {
+            if (parent != nullptr)
+            {
+                for (size_t i = 0; i < parent->child_count(); ++i)
+                {
+                    if (auto *sibling = parent->child_at(i))
+                    {
+                        if (sibling != this)
+                        {
+                            sibling->on_group_selected(group, selected);
+                        }
+                    }
+                }
+            }
+        }
+
         // set by the container that owns this widget
         Widget *parent = nullptr;
 

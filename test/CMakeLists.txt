@@ -23,6 +23,7 @@ add_executable(
     test_ptr.cpp
     test_codec.cpp
     test_checkbox.cpp
+    test_radio.cpp
 )
 
 target_link_libraries(
