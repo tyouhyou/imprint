@@ -67,6 +67,9 @@ namespace zb::ui
 
     void FlexPanel::layout()
     {
+        // the layout owns all child geometry writes: report the whole
+        // container area (children cannot move outside its bounds)
+        mark_dirty();
         const auto &s = get_size();
         const int avail_main = (is_row(direction) ? s.width : s.height) - 2 * padding;
 

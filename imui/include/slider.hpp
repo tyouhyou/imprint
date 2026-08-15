@@ -24,12 +24,12 @@ namespace zb::ui
         void set_range(const int min, const int max);
         void set_value(const int v);
         [[nodiscard]] int get_value() const { return value; }
-        void set_step(const int s) { step = s; }
+        void set_step(const int s) { step = s; mark_dirty(); }
 
-        void set_track_color(const core::Color &c) { track_color = c; }
-        void set_thumb_color(const core::Color &c) { thumb_color = c; }
-        void set_thumb_width(const int w) { thumb_w = w; }
-        void set_track_height(const int h) { track_h = h; }
+        void set_track_color(const core::Color &c) { track_color = c; mark_dirty(); }
+        void set_thumb_color(const core::Color &c) { thumb_color = c; mark_dirty(); }
+        void set_thumb_width(const int w) { thumb_w = w; mark_dirty(); }
+        void set_track_height(const int h) { track_h = h; mark_dirty(); }
 
         // fired when the value changes through a user interaction
         zb::event::Event<int> changed;

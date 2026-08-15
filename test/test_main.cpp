@@ -25,6 +25,7 @@ int test_list_box();
 int test_text_input();
 int test_builder();
 int test_measure();
+int test_dirty();
 
 int main()
 {
@@ -54,6 +55,7 @@ int main()
     total += test_text_input();
     total += test_builder();
     total += test_measure();
+    total += test_dirty();
 
     if (total)
     {

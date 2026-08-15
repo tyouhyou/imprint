@@ -6,6 +6,7 @@ namespace zb::ui
 {
     void Widget::set_text(const char *text)
     {
+        mark_dirty();
         text_.clear();
         if (nullptr == text)
         {
@@ -261,5 +262,29 @@ const auto s = get_size();
             }
         }
         return false;
+    }
+
+    void Widget::walk_damage(int *out_l, int *out_t, int *out_r, int *out_b)
+    {
+        take_dirty(out_l, out_t, out_r, out_b);
+        for (size_t i = 0; i < child_count(); ++i)
+        {
+            if (auto *c = child_at(i))
+            {
+                c->walk_damage(out_l, out_t, out_r, out_b);
+            }
+        }
+    }
+
+    void Widget::walk_clear_damage()
+    {
+        clear_dirty();
+        for (size_t i = 0; i < child_count(); ++i)
+        {
+            if (auto *c = child_at(i))
+            {
+                c->walk_clear_damage();
+            }
+        }
     }
 }

@@ -28,6 +28,7 @@ namespace zb::ui
         std::u16string t = get_text();
         t.insert(caret, 1, ch);
         ++caret;
+        mark_dirty();
         set_text(t);
         fire_changed();
     }
@@ -42,6 +43,7 @@ namespace zb::ui
         std::u16string t = get_text();
         t.erase(caret - 1, 1);
         --caret;
+        mark_dirty();
         set_text(t);
         fire_changed();
         return true;
@@ -56,6 +58,7 @@ namespace zb::ui
         }
         std::u16string t = get_text();
         t.erase(caret, 1);
+        mark_dirty();
         set_text(t);
         fire_changed();
         return true;
@@ -67,11 +70,13 @@ namespace zb::ui
         const size_t n = get_text().size();
         if (dir > 0 && caret < n)
         {
+            mark_dirty();
             ++caret;
             return true;
         }
         if (dir < 0 && caret > 0)
         {
+            mark_dirty();
             --caret;
             return true;
         }
@@ -89,8 +94,10 @@ namespace zb::ui
         if (xx <= 0)
         {
             caret = 0;
+            mark_dirty();
             return;
         }
+        const size_t before = caret;
         caret = 0;
         for (int i = 1; i <= len; ++i)
         {
@@ -111,6 +118,10 @@ namespace zb::ui
                 }
                 break;
             }
+        }
+        if (caret != before)
+        {
+            mark_dirty();
         }
     }
 

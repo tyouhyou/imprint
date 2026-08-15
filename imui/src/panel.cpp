@@ -4,6 +4,9 @@ namespace zb::ui
 {
     void Panel::layout()
     {
+        // the layout owns all child geometry writes: report the whole
+        // container area (children cannot move outside its bounds)
+        mark_dirty();
         auto pos = padding;
         for (auto &child : children)
         {

@@ -6,6 +6,7 @@ namespace zb::ui
 {
     void Slider::set_range(const int mn, const int mx)
     {
+        mark_dirty();
         min = mn;
         max = mx;
         if (max < min)
@@ -25,6 +26,7 @@ namespace zb::ui
 
     void Slider::set_value(const int v)
     {
+        mark_dirty();
         value = v;
         if (value < min)
         {
@@ -73,6 +75,7 @@ namespace zb::ui
         {
             return false;
         }
+        mark_dirty();
         value = v;
         changed(v);
         return true;
@@ -86,6 +89,7 @@ namespace zb::ui
         case zb::input::input_type::touch_down:
         {
             const auto pos = get_absolute_position();
+            mark_dirty();
             value = value_from_x(ev.x - pos.x);
             changed(value);
             return true;
@@ -97,6 +101,7 @@ namespace zb::ui
             const int v = value_from_x(ev.x - pos.x);
             if (v != value)
             {
+                mark_dirty();
                 value = v;
                 changed(v);
                 return true;  // a change: repaint gate

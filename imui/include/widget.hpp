@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <optional>
 #include <string>
@@ -69,19 +70,33 @@ namespace zb::ui
         Widget(const Widget &) = delete;
         Widget &operator=(const Widget &) = delete;
 
-        void set_position(const core::impoint_t &p) { position = p; }
-        void set_position(const int x, const int y) { position = {x, y}; }
+        void set_position(const core::impoint_t &p)
+        {
+            mark_dirty();     // old area
+            position = p;
+            mark_dirty();     // new area
+        }
+        void set_position(const int x, const int y)
+        {
+            mark_dirty();
+            position = {x, y};
+            mark_dirty();
+        }
         [[nodiscard]] core::impoint_t get_position() const { return position; }
 
         void set_size(const core::imsize_t &s)
         {
+            mark_dirty();
             size = s;
             size_explicit_ = true;
+            mark_dirty();
         }
         void set_size(const int w, const int h)
         {
+            mark_dirty();
             size = {w, h};
             size_explicit_ = true;
+            mark_dirty();
         }
         [[nodiscard]] core::imsize_t get_size() const { return size; }
 
@@ -98,12 +113,18 @@ namespace zb::ui
         // flex-assigned size never overrides the widget's measure()
         void set_size_auto(const int w, const int h)
         {
+            mark_dirty();
             size = {w, h};
             size_explicit_ = false;
+            mark_dirty();
         }
         [[nodiscard]] virtual bool is_size_explicit() const { return size_explicit_; }
 
-        void set_visible(const bool v) { visible = v; }
+        void set_visible(const bool v)
+        {
+            mark_dirty();
+            visible = v;
+        }
         [[nodiscard]] bool is_visible() const { return visible; }
 
         /*
@@ -115,32 +136,102 @@ namespace zb::ui
         void set_id(const std::string &id) { id_ = id; }
         [[nodiscard]] const std::string &get_id() const { return id_; }
 
+        /*
+         * Damage reporting (region invalidation, see docs/code-contract.md
+         * section 3.2). Every state setter marks the widget automatically,
+         * and the layout containers mark themselves, so application code
+         * never calls these. Widget authors call mark_dirty() from their
+         * own state setters (the same obligation as implementing draw_at).
+         *
+         * The no-argument form reports the widget's own bounds; the rect
+         * form reports an absolute-screen rectangle (the widget still has
+         * to be within the tree -- damage is collected at paint time by
+         * walking the tree, never through the pointer).
+         *
+         * A widget with a zero-size area reports nothing (no visible
+         * damage); a repaint requested while not a single widget reported
+         * damage falls back to a full-frame repaint.
+         */
+        void mark_dirty() { mark_dirty_rect(get_absolute_position().x, get_absolute_position().y, size.width, size.height); }
+        void mark_dirty(const int x, const int y, const int w, const int h) { mark_dirty_rect(x, y, w, h); }
+        [[nodiscard]] bool is_dirty() const { return dirty_; }
+        // aggregate reads the damage rect and clears it in one pass
+        void take_dirty(int *out_l, int *out_t, int *out_r, int *out_b)
+        {
+            if (dirty_)
+            {
+                *out_l = std::min(*out_l, dirty_l_);
+                *out_t = std::min(*out_t, dirty_t_);
+                *out_r = std::max(*out_r, dirty_r_);
+                *out_b = std::max(*out_b, dirty_b_);
+            }
+        }
+        void clear_dirty() { dirty_ = false; }
+
+        /*
+         * Damage walk: aggregates this widget's and every descendant's
+         * reported rect into the union given in (l, t, r, b), then clears
+         * all of them. Called once by the window at paint time.
+         */
+        void walk_damage(int *out_l, int *out_t, int *out_r, int *out_b);
+        void walk_clear_damage();
+
         // background
-        void set_background_color(const core::Color &c) { background = c; }
-        void set_background_image(const core::image_t &img) { background_image = img; }
+        void set_background_color(const core::Color &c)
+        {
+            background = c;
+            mark_dirty();
+        }
+        void set_background_image(const core::image_t &img)
+        {
+            background_image = img;
+            mark_dirty();
+        }
         [[nodiscard]] bool has_background() const { return background.has_value() || background_image.has_value(); }
 
         // text (input is UTF-8, see docs/code-contract.md section 2)
         void set_text(const char *text);
-        void set_text(const std::u16string &text) { text_ = text; }
+        void set_text(const std::u16string &text)
+        {
+            text_ = text;
+            mark_dirty();
+        }
         [[nodiscard]] const std::u16string &get_text() const { return text_; }
-        void set_text_color(const core::Color &c) { text_color = c; }
+        void set_text_color(const core::Color &c)
+        {
+            text_color = c;
+            mark_dirty();
+        }
 
         // moves the text baseline start (e.g. a checkbox labelling to the
-        // right of its box); applied on top of the alignment
+        // right of its box); applied on top of the alignment (adjusted
+        // from the const draw path, so it never reports damage)
         void set_text_offset(const core::impoint_t &off) const { text_offset_ = off; }
-        void set_h_align(const h_align a) { halign = a; }
-        void set_v_align(const v_align a) { valign = a; }
+        void set_h_align(const h_align a)
+        {
+            halign = a;
+            mark_dirty();
+        }
+        void set_v_align(const v_align a)
+        {
+            valign = a;
+            mark_dirty();
+        }
 
         /*
          * Sets the primary glyph provider (e.g. a FreeTypeProvider).
          * Uncovered code units fall back to the built-in bitmap glyphs.
          */
-        void set_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider) { primary_provider_ = provider; }
+        void set_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider)
+        {
+            primary_provider_ = provider;
+            mark_dirty();
+        }
 #if defined(USE_FONT)
         /* convenience: wraps the font as the primary provider */
         void set_font(const Font *f)
         {
+            mark_dirty();
             font_ = f;
             primary_provider_ = zb::make_shared<FreeTypeProvider>(f);
         }
@@ -280,7 +371,14 @@ namespace zb::ui
         virtual Widget *child_at(const size_t i) { (void)i; return nullptr; }
 
         // set by the input dispatcher when the widget gains/loses focus
-        void set_focused(const bool f) { focused = f; }
+        void set_focused(const bool f)
+        {
+            if (focused != f)
+            {
+                mark_dirty();
+            }
+            focused = f;
+        }
 
         // called when the focused widget is activated (Enter/Space)
         virtual void on_activate() {}
@@ -331,6 +429,39 @@ namespace zb::ui
         bool visible = true;
         bool focused = false;
         bool size_explicit_ = false;
+
+        // damage reporting: one unioned rect per widget, in absolute
+        // coordinates; empty (dirty_ false) means "nothing reported"
+        bool dirty_ = false;
+        int dirty_l_ = 0;
+        int dirty_t_ = 0;
+        int dirty_r_ = -1;
+        int dirty_b_ = -1;
+
+        void mark_dirty_rect(const int x, const int y, const int w, const int h)
+        {
+            if (w <= 0 || h <= 0)
+            {
+                return;
+            }
+            const int r = x + w;
+            const int b = y + h;
+            if (!dirty_)
+            {
+                dirty_l_ = x;
+                dirty_t_ = y;
+                dirty_r_ = r;
+                dirty_b_ = b;
+                dirty_ = true;
+            }
+            else
+            {
+                dirty_l_ = std::min(dirty_l_, x);
+                dirty_t_ = std::min(dirty_t_, y);
+                dirty_r_ = std::max(dirty_r_, r);
+                dirty_b_ = std::max(dirty_b_, b);
+            }
+        }
 
         // background
         std::optional<core::Color> background;

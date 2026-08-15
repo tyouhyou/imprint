@@ -26,7 +26,7 @@ namespace zb::ui
         void release();
         void cancel();
 
-        void set_group(const int g) { group_ = g; }
+        void set_group(const int g) { group_ = g; mark_dirty(); }
         [[nodiscard]] int get_group() const { return group_; }
 
         [[nodiscard]] bool is_checked() const { return checked_; }
@@ -38,9 +38,9 @@ namespace zb::ui
          */
         void set_checked(const bool c);
 
-        void set_circle_color(const core::Color &c) { circle_color = c; }
-        void set_dot_color(const core::Color &c) { dot_color = c; }
-        void set_circle_size(const int s) { circle_size = s; }
+        void set_circle_color(const core::Color &c) { circle_color = c; mark_dirty(); }
+        void set_dot_color(const core::Color &c) { dot_color = c; mark_dirty(); }
+        void set_circle_size(const int s) { circle_size = s; mark_dirty(); }
         void set_text_gap(const int g) { text_gap = g; }
 
         // fired when this button becomes selected by a user interaction

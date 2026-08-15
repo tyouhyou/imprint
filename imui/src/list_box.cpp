@@ -34,11 +34,17 @@ namespace zb::ui
         auto s = get_size();
         s.height = static_cast<int>(visible) * row_height;
         set_size(s.width, s.height);
+        mark_dirty();
         clamp_top();
     }
 
     void ListBox::set_item_count(const size_t n)
     {
+        if (count == n)
+        {
+            return;
+        }
+        mark_dirty();
         count = n;
         clamp_top();
         if (value >= count && value != invalid)
@@ -60,6 +66,11 @@ namespace zb::ui
         {
             return;
         }
+        if (value == v)
+        {
+            return;
+        }
+        mark_dirty();
         value = v;
         if (value != invalid)
         {
@@ -117,6 +128,7 @@ namespace zb::ui
         {
             return false;
         }
+        mark_dirty();
         value = next;
         reveal(value);
         changed(value);
@@ -141,6 +153,7 @@ namespace zb::ui
         {
             return false;
         }
+        mark_dirty();
         top = static_cast<size_t>(next);
         return true;
     }
@@ -172,6 +185,7 @@ namespace zb::ui
             {
                 return false;
             }
+            mark_dirty();
             value = row;
             changed(value);
             return true;
@@ -204,6 +218,7 @@ namespace zb::ui
             {
                 return false;
             }
+            mark_dirty();
             top = static_cast<size_t>(next);
             return true;
         }

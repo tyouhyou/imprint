@@ -15,6 +15,7 @@ namespace zb::ui
 
     void RadioButton::press()
     {
+        mark_dirty();
         pressed_ = true;
     }
 
@@ -24,12 +25,17 @@ namespace zb::ui
         {
             return;
         }
+        mark_dirty();
         pressed_ = false;
         select();
     }
 
     void RadioButton::cancel()
     {
+        if (pressed_)
+        {
+            mark_dirty();
+        }
         pressed_ = false;
     }
 
@@ -37,11 +43,13 @@ namespace zb::ui
     {
         if (c && !checked_)
         {
+            mark_dirty();
             checked_ = true;
             notify_siblings_group_selection(group_, this);
         }
-        else if (!c)
+        else if (!c && checked_)
         {
+            mark_dirty();
             checked_ = false;
         }
     }
@@ -87,6 +95,7 @@ namespace zb::ui
     {
         if (selected != this && group == group_ && checked_)
         {
+            mark_dirty();  // the sibling unchecks: its visuals change
             checked_ = false;
         }
     }

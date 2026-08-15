@@ -36,7 +36,7 @@ namespace zb::ui
 
         ListBox() = default;
 
-        void set_row_height(const int h) { row_height = h; }
+        void set_row_height(const int h) { row_height = h; mark_dirty(); }
         // re-sizes the widget: width stays, height = rows * row_height
         void set_visible_rows(const size_t rows);
         void set_item_count(const size_t n);
@@ -46,6 +46,7 @@ namespace zb::ui
         {
             text_fn = fn;
             text_arg = arg;
+            mark_dirty();
         }
 
         // programmatic selection (silent); `invalid` clears it

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <memory>
 #include <string>
 
@@ -86,7 +87,41 @@ namespace zb::app
             {
                 return;
             }
+            // the damage: the union of every widget's reported rect
+            const bool requested = dirty_;  // a repaint was owed
+            int l = width(), t = height(), r = -1, b = -1;
+            root_->walk_damage(&l, &t, &r, &b);
+            if (r < l || b < t)
+            {
+                // nothing reported: a full-frame repaint was requested but
+                // no widget claimed damage (e.g. an app drawing outside
+                // the widget tree) -- cover the whole buffer; a repaint
+                // that was never owed reports an empty region instead
+                if (requested)
+                {
+                    l = 0;
+                    t = 0;
+                    r = width();
+                    b = height();
+                }
+                else
+                {
+                    // a repaint that was never owed: nothing was drawn,
+                    // the region stays empty (a blank frame)
+                    dirty_ = false;
+                    damage_l_ = 0;
+                    damage_t_ = 0;
+                    damage_r_ = -1;
+                    damage_b_ = -1;
+                    return;
+                }
+            }
             root_->draw(*graphics_);
+            root_->walk_clear_damage();
+            damage_l_ = l;
+            damage_t_ = t;
+            damage_r_ = r;
+            damage_b_ = b;
             dirty_ = false;
             painted(data());
         }
@@ -95,10 +130,36 @@ namespace zb::app
         // freshly created app is rendered once before idle
         [[nodiscard]] bool is_dirty() const noexcept override { return dirty_; }
 
+        /*
+         * The region that the last paint() repainted, in pixels, in the
+         * same coordinate space as the framebuffer ([0..w) x [0..h)).
+         * Empty (w == 0) when nothing was repainted since the previous
+         * query. Presenting shells copy only this region (batch C); a
+         * repaint that reported no damage covers the full frame.
+         */
+        void dirty_region(int &out_x, int &out_y, int &out_w, int &out_h) const
+        {
+            if (damage_r_ < damage_l_ || damage_b_ < damage_t_)
+            {
+                out_x = out_y = out_w = out_h = 0;
+                return;
+            }
+            out_x = damage_l_;
+            out_y = damage_t_;
+            out_w = damage_r_ - damage_l_;
+            out_h = damage_b_ - damage_t_;
+        }
+
     protected:
         zb::ui::core::Graphics::ptr graphics_;
         std::unique_ptr<zb::ui::Panel> root_;
         zb::ui::InputDispatcher dispatcher_;
         bool dirty_ = true;
+
+        // half-open damage rect of the last paint(), in buffer pixels
+        int damage_l_ = 0;
+        int damage_t_ = 0;
+        int damage_r_ = -1;
+        int damage_b_ = -1;
     };
 }

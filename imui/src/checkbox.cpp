@@ -15,6 +15,7 @@ namespace zb::ui
 
     void Checkbox::press()
     {
+        mark_dirty();
         pressed_ = true;
     }
 
@@ -24,22 +25,32 @@ namespace zb::ui
         {
             return;
         }
+        mark_dirty();
         pressed_ = false;
         toggle();
     }
 
     void Checkbox::cancel()
     {
+        if (pressed_)
+        {
+            mark_dirty();
+        }
         pressed_ = false;
     }
 
     void Checkbox::set_checked(const bool c)
     {
+        if (checked_ != c)
+        {
+            mark_dirty();
+        }
         checked_ = c;
     }
 
     void Checkbox::toggle()
     {
+        mark_dirty();
         checked_ = !checked_;
         changed(checked_);
     }

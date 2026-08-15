@@ -4,6 +4,10 @@ namespace zb::ui
 {
     void Button::press()
     {
+        if (state_ != state::pressed)
+        {
+            mark_dirty();
+        }
         state_ = state::pressed;
     }
 
@@ -13,12 +17,17 @@ namespace zb::ui
         {
             return;
         }
+        mark_dirty();
         state_ = state::normal;
         clicked();
     }
 
     void Button::cancel()
     {
+        if (state_ != state::normal)
+        {
+            mark_dirty();
+        }
         state_ = state::normal;
     }
 

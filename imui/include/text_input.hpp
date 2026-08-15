@@ -34,9 +34,9 @@ namespace zb::ui
         // fired on enter, with the whole text (UTF-8)
         zb::event::Event<std::string> submitted;
 
-        void set_border_color(const core::Color &c) { border_color = c; }
-        void set_caret_color(const core::Color &c) { caret_color = c; }
-        void set_text_gap(const int g) { text_gap = g; }
+        void set_border_color(const core::Color &c) { border_color = c; mark_dirty(); }
+        void set_caret_color(const core::Color &c) { caret_color = c; mark_dirty(); }
+        void set_text_gap(const int g) { text_gap = g; mark_dirty(); }
 
         // natural size: 100 wide, one line plus the border
         [[nodiscard]] core::imsize_t measure() const override;
