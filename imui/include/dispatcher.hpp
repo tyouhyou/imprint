@@ -58,6 +58,7 @@ namespace zb::ui
         static bool is_release(const input::input_event &ev);
         static bool is_move(const input::input_event &ev);
         static bool is_key(const input::input_event &ev);
+        static bool is_wheel(const input::input_event &ev);
 
         Widget *pick_target(Widget &root, const int x, const int y) const;
         Widget *pick_target_internal(Widget &root, const int x, const int y) const;

@@ -6,6 +6,7 @@ add_library(
     src/button.cpp
     src/checkbox.cpp
     src/radio_button.cpp
+    src/slider.cpp
     src/dialog.cpp
     src/dispatcher.cpp
 )

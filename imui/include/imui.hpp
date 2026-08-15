@@ -7,4 +7,5 @@
 #include "label.hpp"
 #include "panel.hpp"
 #include "radio_button.hpp"
+#include "slider.hpp"
 #include "widget.hpp"

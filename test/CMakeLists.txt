@@ -24,6 +24,7 @@ add_executable(
     test_codec.cpp
     test_checkbox.cpp
     test_radio.cpp
+    test_slider.cpp
 )
 
 target_link_libraries(

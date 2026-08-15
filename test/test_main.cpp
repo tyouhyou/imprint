@@ -20,6 +20,7 @@ int test_ptr();
 int test_codec();
 int test_checkbox();
 int test_radio();
+int test_slider();
 
 int main()
 {
@@ -44,6 +45,7 @@ int main()
     total += test_codec();
     total += test_checkbox();
     total += test_radio();
+    total += test_slider();
 
     if (total)
     {

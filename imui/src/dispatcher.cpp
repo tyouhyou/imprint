@@ -28,6 +28,11 @@ namespace zb::ui
                ev.type == input::input_type::key_up;
     }
 
+    bool InputDispatcher::is_wheel(const input::input_event &ev)
+    {
+        return ev.type == input::input_type::mouse_wheel;
+    }
+
     void InputDispatcher::collect_focusable(Widget &w, std::vector<Widget *> &out)
     {
         // hidden widgets (e.g. buttons of a closed dialog) must not be
@@ -178,6 +183,21 @@ namespace zb::ui
         if (is_key(ev))
         {
             return handle_key(root, ev);
+        }
+
+        if (is_wheel(ev))
+        {
+            // wheel events go to the widget under the pointer; a widget
+            // that does not claim them leaves the event unhandled
+            if (auto *t = pick_target(root, ev.x, ev.y))
+            {
+                if (t->on_input(ev))
+                {
+                    LD << "wheel claimed by widget";
+                    return true;
+                }
+            }
+            return false;
         }
 
         if (is_press(ev))
