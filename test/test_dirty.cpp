@@ -35,6 +35,13 @@ namespace
         w.dirty_region(rx, ry, rw, rh);
         EXPECT(rx == x && ry == y && rw == ww && rh == hh);
     }
+
+    // counts how many times the rasterizer touched it
+    struct DrawProbe : public Widget
+    {
+        mutable int draws = 0;
+        void draw_at(zb::ui::core::Graphics &) const override { ++draws; }
+    };
 }
 
 // damage reporting: setters mark their widget, paint() aggregates the
@@ -239,6 +246,36 @@ int test_dirty()
         rig r;
         r.w.paint();
         expect_region(r.w, 0, 0, 0, 0);
+    }
+
+    // damage culling: subtrees outside the reported region are not drawn
+    // at all (the rasterizer never runs for them)
+    {
+        zb::app::CanvasWindow w;
+        w.create(200, 80);
+        auto near = std::make_unique<DrawProbe>();
+        near->set_position(10, 10);
+        near->set_size(40, 20);
+        auto far = std::make_unique<DrawProbe>();
+        far->set_position(150, 10);
+        far->set_size(40, 20);
+        auto *n = near.get();
+        auto *f = far.get();
+        w.root().add_child(std::move(near));
+        w.root().add_child(std::move(far));
+        w.paint();
+        // the initial frame covers the whole buffer: both drew
+        EXPECT(n->draws > 0 && f->draws > 0);
+
+        // damage one probe only: the other subtree must not render
+        n->draws = 0;
+        f->draws = 0;
+        n->set_background_color(core::colors::Red);
+        w.paint();
+        EXPECT(n->draws > 0 && f->draws == 0);
+        int x = 0, y = 0, ww = 0, hh = 0;
+        w.dirty_region(x, y, ww, hh);
+        EXPECT(x == 10 && y == 10 && ww == 40 && hh == 20);
     }
 
     return test::report("dirty");

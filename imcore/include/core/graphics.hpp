@@ -87,6 +87,29 @@ namespace zb::ui::core
          */
         [[nodiscard]] ClipGuard clip_safe(const int &x, const int &y, const int32_t &width, const int32_t &height);
 
+        /*
+         * Damage culling: when active, widgets whose bounds do not
+         * intersect the reported region skip rendering entirely (whole
+         * subtrees never reach the rasterizer). Set by the window once
+         * per paint(); cleared afterwards. Coordinates are surface
+         * (absolute) pixels.
+         */
+        void set_damage(const int &l, const int &t, const int &r, const int &b)
+        {
+            damage_l_ = l;
+            damage_t_ = t;
+            damage_r_ = r;
+            damage_b_ = b;
+            damage_on_ = true;
+        }
+        void clear_damage() { damage_on_ = false; }
+        [[nodiscard]] bool damage_on() const { return damage_on_; }
+        [[nodiscard]] inline bool damage_intersects(const int &x, const int &y,
+                                                    const int &w, const int &h) const
+        {
+            return x < damage_r_ && y < damage_b_ && x + w > damage_l_ && y + h > damage_t_;
+        }
+
         [[nodiscard]] inline Color *data() const
         {
             return pixels;
@@ -216,6 +239,13 @@ namespace zb::ui::core
         impoint_t draw_area_offset{};
         imsize_t imsize{};
         imarea_t draw_area{};
+
+        // the culling region (see set_damage); off by default
+        bool damage_on_ = false;
+        int damage_l_ = 0;
+        int damage_t_ = 0;
+        int damage_r_ = -1;
+        int damage_b_ = -1;
 
 #pragma endregion
 

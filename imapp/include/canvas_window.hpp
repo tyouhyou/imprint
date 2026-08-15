@@ -116,7 +116,19 @@ namespace zb::app
                     return;
                 }
             }
+            // the repainted region starts from the surface's default
+            // background: moved widgets must not leave their old pixels
+            // behind on a partial repaint
+            graphics_->set_damage(l, t, r, b);
+            {
+                auto guard = graphics_->clip_safe(l, t, r - l, b - t);
+                if (guard)
+                {
+                    graphics_->fill(zb::ui::core::colors::White);
+                }
+            }
             root_->draw(*graphics_);
+            graphics_->clear_damage();
             root_->walk_clear_damage();
             damage_l_ = l;
             damage_t_ = t;

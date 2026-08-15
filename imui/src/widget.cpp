@@ -22,6 +22,17 @@ namespace zb::ui
             return;
         }
 
+        // damage culling: outside the reported region the whole subtree
+        // is by definition invisible, skip the rasterizer entirely
+        if (g.damage_on())
+        {
+            const auto abs = get_absolute_position();
+            if (!g.damage_intersects(abs.x, abs.y, size.width, size.height))
+            {
+                return;
+            }
+        }
+
         // clip_safe restricts g's draw area to this widget and restores it
         // on scope exit; no allocation per widget per frame
         auto area = g.clip_safe(position.x, position.y, size.width, size.height);
