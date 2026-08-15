@@ -60,7 +60,7 @@ def load_zbapi(path):
     lib.zb_app_destroy.argtypes = [ctypes.c_void_p]
     lib.zb_input.argtypes = [ctypes.c_void_p, ctypes.c_int,
                              ctypes.c_int, ctypes.c_int, ctypes.c_int,
-                             ctypes.c_int]  # type, x, y, key, touch_id
+                             ctypes.c_int, ctypes.c_int]  # type,x,y,key,ch,touch_id
     lib.zb_paint.argtypes = [ctypes.c_void_p]
     lib.zb_buffer.argtypes = [ctypes.c_void_p,
                               ctypes.POINTER(ctypes.c_uint32),
@@ -85,15 +85,17 @@ def feed_input(lib, app, event):
     The mouse stands in for a single touch pointer, so touch_id is 0.
     """
     if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-        lib.zb_input(app, ZB_INPUT_TOUCH_DOWN, *event.pos, 0, 0)
+        lib.zb_input(app, ZB_INPUT_TOUCH_DOWN, *event.pos, 0, 0, 0)
     elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
-        lib.zb_input(app, ZB_INPUT_TOUCH_UP, *event.pos, 0, 0)
+        lib.zb_input(app, ZB_INPUT_TOUCH_UP, *event.pos, 0, 0, 0)
     elif event.type == pygame.MOUSEMOTION:
-        lib.zb_input(app, ZB_INPUT_TOUCH_MOVE, *event.pos, 0, 0)
+        lib.zb_input(app, ZB_INPUT_TOUCH_MOVE, *event.pos, 0, 0, 0)
     elif event.type == pygame.KEYDOWN:
         key = _KEY_MAP.get(event.key)
-        if key is not None:
-            lib.zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, key, 0)
+        ch = 0
+        if key is None and event.unicode and len(event.unicode) == 1:
+            ch = ord(event.unicode)  # printable character (B1 channel)
+        lib.zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, key or 0, ch, 0)
 
 
 def main():

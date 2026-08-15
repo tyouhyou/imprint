@@ -1,0 +1,160 @@
+/*
+ * JS shell for the WASM TicTacToe build.
+ *
+ * The host owns the frame loop (requestAnimationFrame), samples input
+ * and presents the framebuffer. The C-ABI (zbapi.h) is exposed on the
+ * Module via EXPORTED_FUNCTIONS / EXPORTED_RUNTIME_METHODS.
+ */
+(function () {
+  "use strict";
+
+  var W = 256; // framebuffer width  (COLOR_DEPTH=32, bgra32, 4 B/px)
+  var H = 192; // framebuffer height
+  var PIXELS = W * H * 4;
+
+  // input types, must match ZB_INPUT_* in zbapi.h
+  var ZB_INPUT_TOUCH_DOWN = 9;
+  var ZB_INPUT_TOUCH_UP = 10;
+  var ZB_INPUT_TOUCH_MOVE = 11;
+  var ZB_INPUT_KEY_DOWN = 12;
+  var ZB_INPUT_KEY_UP = 13;
+
+  // key codes, must match ZB_KEY_* in zbapi.h (ASCII used verbatim)
+  var ZB_KEY_BACKSPACE = 8, ZB_KEY_TAB = 9, ZB_KEY_ENTER = 13, ZB_KEY_ESCAPE = 27, ZB_KEY_SPACE = 32;
+  var ZB_KEY_DEL = 127;
+  var ZB_KEY_UP = 256, ZB_KEY_DOWN = 257, ZB_KEY_LEFT = 258, ZB_KEY_RIGHT = 259;
+
+  // DOMKeyCodes of keys that differ from the framework codes
+  // (tab/enter/escape/space/backspace are verbatim ASCII, see above;
+  // printable characters travel through the ch field -- B5)
+  var KEY_MAP = {
+    37: ZB_KEY_LEFT,
+    38: ZB_KEY_UP,
+    39: ZB_KEY_RIGHT,
+    40: ZB_KEY_DOWN,
+    46: ZB_KEY_DEL
+  };
+
+  var canvas = document.getElementById("screen");
+  canvas.width = W;
+  canvas.height = H;
+  var ctx = canvas.getContext("2d");
+  var imageData = ctx.createImageData(W, H);
+  var rgba = imageData.data; // bgra -> rgba scratch buffer
+
+  var status = document.getElementById("status");
+
+  var app = null;
+  var zbInput = null, zbPaint = null, zbBuffer = null;
+  var wPtr = 0, hPtr = 0; // out params for zb_buffer
+
+  /* translate a client coordinate into framebuffer space (256x192) */
+  function scale(e) {
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.floor((e.clientX - rect.left) * W / rect.width);
+    var y = Math.floor((e.clientY - rect.top) * H / rect.height);
+    return [Math.max(0, Math.min(W - 1, x)), Math.max(0, Math.min(H - 1, y))];
+  }
+
+  // the browser touch identifier becomes the framework's touch_id
+  function send(type, x, y, key, ch, touchId) {
+    if (app && zbInput) zbInput(app, type, x | 0, y | 0, key | 0, ch | 0, touchId | 0);
+  }
+
+  function onDown(e) {
+    var p = scale(e);
+    send(ZB_INPUT_TOUCH_DOWN, p[0], p[1], 0, 0, 0);
+  }
+  function onMove(e) {
+    if (e.buttons === 0) return;
+    var p = scale(e);
+    send(ZB_INPUT_TOUCH_MOVE, p[0], p[1], 0, 0, 0);
+  }
+  function onUp(e) {
+    var p = scale(e);
+    send(ZB_INPUT_TOUCH_UP, p[0], p[1], 0, 0, 0);
+  }
+  function onTouch(e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.max(0, Math.min(W - 1, Math.floor((t.clientX - rect.left) * W / rect.width)));
+    var y = Math.max(0, Math.min(H - 1, Math.floor((t.clientY - rect.top) * H / rect.height)));
+    var type = e.type === "touchstart" ? ZB_INPUT_TOUCH_DOWN
+             : e.type === "touchmove" ? ZB_INPUT_TOUCH_MOVE
+             : ZB_INPUT_TOUCH_UP;
+    send(type, x, y, 0, 0, t.identifier);
+  }
+
+  /* navigation/editing keys fill key (ch 0); other single-char keys fill
+   * ch (printable text), matching the shell convention (B2/B5) */
+  function onKeyDown(e) {
+    var code = KEY_MAP[e.keyCode] !== undefined ? KEY_MAP[e.keyCode] : e.keyCode;
+    var ch = 0;
+    if (KEY_MAP[e.keyCode] === undefined && e.key.length === 1) {
+      ch = e.key.charCodeAt(0);
+    }
+    if (code === ZB_KEY_SPACE || code === ZB_KEY_UP || code === ZB_KEY_DOWN ||
+        code === ZB_KEY_LEFT || code === ZB_KEY_RIGHT) {
+      e.preventDefault(); // don't scroll the page
+    }
+    send(ZB_INPUT_KEY_DOWN, 0, 0, code, ch, 0);
+  }
+  function onKeyUp(e) {
+    var code = KEY_MAP[e.keyCode] !== undefined ? KEY_MAP[e.keyCode] : e.keyCode;
+    send(ZB_INPUT_KEY_UP, 0, 0, code, 0, 0);
+  }
+
+  canvas.addEventListener("mousedown", onDown);
+  canvas.addEventListener("mousemove", onMove);
+  window.addEventListener("mouseup", onUp);
+  canvas.addEventListener("touchstart", onTouch, { passive: false });
+  canvas.addEventListener("touchmove", onTouch, { passive: false });
+  canvas.addEventListener("touchend", onTouch, { passive: false });
+  window.addEventListener("keydown", onKeyDown);
+  window.addEventListener("keyup", onKeyUp);
+
+  /* ---- frame loop: paint -> read framebuffer -> present ---- */
+  function frame() {
+    if (app) {
+      zbPaint(app);
+
+      var ptr = zbBuffer(app, wPtr, hPtr);
+      if (ptr) {
+        // wasm memory is a growable ArrayBuffer; subarray must be taken
+        // from the live HEAPU8 view on every frame
+        var src = Module.HEAPU8.subarray(ptr, ptr + PIXELS);
+        var i, j;
+        for (i = 0, j = 0; i < PIXELS; i += 4, j += 4) {
+          rgba[j]     = src[i + 2]; // r <- b
+          rgba[j + 1] = src[i + 1]; // g <- g
+          rgba[j + 2] = src[i];     // b <- r
+          rgba[j + 3] = 0xff;       // a
+        }
+        ctx.putImageData(imageData, 0, 0);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+
+  /* ---- bind the C-ABI after the wasm runtime is ready ---- */
+  window.Module = {
+    onRuntimeInitialized: function () {
+      app = Module.ccall("zb_app_create", "number", ["number", "number"], [W, H]);
+      if (!app) {
+        status.textContent = "failed to create app";
+        return;
+      }
+      zbInput = Module.cwrap("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"]);
+      zbPaint = Module.cwrap("zb_paint", null, ["number"]);
+      zbBuffer = Module.cwrap("zb_buffer", "number", ["number", "number", "number"]);
+      wPtr = Module._malloc(8); // two uint32 out params
+      hPtr = Module._malloc(8);
+      Module.HEAPU32[wPtr >> 2] = 0;
+      Module.HEAPU32[hPtr >> 2] = 0;
+
+      status.textContent = "ready — 256x192 @ " + PIXELS + " B/frame";
+      requestAnimationFrame(frame);
+    }
+  };
+})();

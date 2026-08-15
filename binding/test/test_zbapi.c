@@ -48,10 +48,17 @@ int main(void)
     assert(nonzero);
 
     /* clicking a board cell places a mark, also without error */
-    zb_input(app, ZB_INPUT_TOUCH_DOWN, 60, 60, 0, 0);
-    zb_input(app, ZB_INPUT_TOUCH_UP, 60, 60, 0, 0);
+    zb_input(app, ZB_INPUT_TOUCH_DOWN, 60, 60, 0, 0, 0);
+    zb_input(app, ZB_INPUT_TOUCH_UP, 60, 60, 0, 0, 0);
     zb_paint(app);
     assert(painted_calls >= 1);
+
+    /* printable characters travel through the ch channel; the demo app
+     * has no text input, so the dispatcher drops it unconsumed (B1) */
+    zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, 0, 'A', 0);
+    zb_input(app, ZB_INPUT_KEY_UP, 0, 0, 0, 0, 0);
+    zb_paint(app);
+    assert(painted_calls >= 2);
 
     zb_app_destroy(app);
 

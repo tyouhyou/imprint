@@ -71,9 +71,14 @@ void zb_app_destroy(zb_app_t *app);
  *   - touch_*:                         touch_id identifies the finger
  *                                      (0 for single-touch shells / mouse)
  *   - mouse_wheel:                     key holds the wheel delta
- *   - key_*:                           key holds the key code
+ *   - key_*:                           key holds the navigation/editing key
+ *                                      code (see zb_key_code); ch holds the
+ *                                      printable character (ASCII today,
+ *                                      Unicode later) -- navigation keys
+ *                                      always set key and leave ch 0, and
+ *                                      a text-producing key may set both
  */
-void zb_input(zb_app_t *app, int type, int x, int y, int key, int touch_id);
+void zb_input(zb_app_t *app, int type, int x, int y, int key, int ch, int touch_id);
 
 /* renders one frame; the host should drive this from its own loop */
 void zb_paint(zb_app_t *app);

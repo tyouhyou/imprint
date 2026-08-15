@@ -63,6 +63,8 @@ demo/wasm/tictactoe.wasm
 # OS
 Thumbs.db
 .DS_Store
-# wasm demo build outputs
+# wasm demo build outputs; main.js/smoke.js are hand-written sources, keep
 /demo/wasm/*.js
 /demo/wasm/*.wasm
+!/demo/wasm/main.js
+!/demo/wasm/smoke.js

@@ -61,7 +61,7 @@ extern "C" void zb_app_destroy(zb_app_t *self)
     delete self;
 }
 
-extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int touch_id)
+extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int ch, int touch_id)
 {
     if (self == nullptr || self->app == nullptr)
     {
@@ -82,6 +82,7 @@ extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int to
         ev.x = x;
         ev.y = y;
         ev.key = key;
+        ev.ch = ch;
         ev.touch_id = touch_id;
         self->app->input(ev);
     }
