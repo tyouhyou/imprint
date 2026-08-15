@@ -104,6 +104,13 @@ int test_panel()
         EXPECT(!w.hit(0, 0));
         w.set_visible(true);
         EXPECT(w.hit(0, 0));
+
+        // id: opaque handle for host/designer references; empty by default
+        EXPECT(w.get_id().empty());
+        w.set_id("main_panel");
+        EXPECT(w.get_id() == "main_panel");
+        w.set_id("other");
+        EXPECT(w.get_id() == "other");
     }
 
     // draw: background filled in the panel's own area only

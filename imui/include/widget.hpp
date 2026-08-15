@@ -106,6 +106,15 @@ namespace zb::ui
         void set_visible(const bool v) { visible = v; }
         [[nodiscard]] bool is_visible() const { return visible; }
 
+        /*
+         * Identity for host/designer-side references and event wiring.
+         * Optional: ids must be unique within the widget tree that uses
+         * them; the framework itself never depends on them.
+         */
+        void set_id(const char *id) { id_ = id; }
+        void set_id(const std::string &id) { id_ = id; }
+        [[nodiscard]] const std::string &get_id() const { return id_; }
+
         // background
         void set_background_color(const core::Color &c) { background = c; }
         void set_background_image(const core::image_t &img) { background_image = img; }
@@ -290,6 +299,7 @@ namespace zb::ui
     private:
         core::impoint_t position{0, 0};
         core::imsize_t size{0, 0};
+        std::string id_;  // host/designer reference handle, unused by the framework
         bool visible = true;
         bool focused = false;
         bool size_explicit_ = false;
