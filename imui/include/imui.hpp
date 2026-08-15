@@ -8,4 +8,5 @@
 #include "panel.hpp"
 #include "radio_button.hpp"
 #include "slider.hpp"
+#include "list_box.hpp"
 #include "widget.hpp"
