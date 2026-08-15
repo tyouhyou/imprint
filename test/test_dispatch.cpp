@@ -148,6 +148,28 @@ namespace
             return false;
         }
     };
+
+    /*
+     * Records characters (ev.ch); consumes them when asked so the
+     * dispatch result can be asserted either way.
+     */
+    struct CharProbe : public Widget
+    {
+        int chars_received = 0;
+        bool consume = true;
+
+        bool is_focusable() const override { return true; }
+
+        bool on_input(const zb::input::input_event &ev) override
+        {
+            if (ev.type == zb::input::input_type::key_down && ev.ch != 0)
+            {
+                ++chars_received;
+                return consume;
+            }
+            return false;
+        }
+    };
 }
 
 int test_dispatch()
@@ -558,6 +580,54 @@ int test_dispatch()
         pprobe->consume = true;
         EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::enter))));  // probe eats it
         EXPECT(clicks == 1);
+    }
+
+    // characters are routed to the focused widget and never fall back
+    // to navigation when unconsumed (B1)
+    {
+        Panel root;
+        root.set_size(100, 100);
+
+        auto probe = std::make_unique<CharProbe>();
+        probe->set_size(20, 20);
+        probe->set_position(10, 10);
+        auto *pprobe = probe.get();
+        auto btn = std::make_unique<Button>();
+        btn->set_size(20, 20);
+        btn->set_position(50, 50);
+        auto *pbtn = btn.get();
+        root.add_child(std::move(probe));
+        root.add_child(std::move(btn));
+
+        InputDispatcher d;
+        auto ch_ev = [](const int ch) {
+            zb::input::input_event ev;
+            ev.type = zb::input::input_type::key_down;
+            ev.ch = ch;
+            return ev;
+        };
+
+        // no focus: a character is dropped, nothing navigates
+        EXPECT(!d.dispatch(root, ch_ev(static_cast<int>('a'))));
+        EXPECT(pprobe->chars_received == 0);
+
+        // focus the probe, then a character reaches it
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pprobe);
+        EXPECT(d.dispatch(root, ch_ev(static_cast<int>('a'))));
+        EXPECT(pprobe->chars_received == 1);
+
+        // an unconsumed character is dropped: no navigation, no activation
+        pprobe->consume = false;
+        EXPECT(!d.dispatch(root, ch_ev(static_cast<int>('b'))));
+        EXPECT(pprobe->chars_received == 2);
+        EXPECT(d.get_focus_target() == pprobe);  // focus stayed put
+        EXPECT(pbtn->get_state() == Button::state::normal);
+
+        // a tab with ch == 0 still navigates (regression)
+        pprobe->consume = false;
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pbtn);
     }
 
     return test::report("dispatch");

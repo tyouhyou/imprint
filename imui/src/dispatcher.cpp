@@ -126,6 +126,11 @@ namespace zb::ui
             LD << "key consumed by focused widget (" << ev.key << ")";
             return true;
         }
+        // characters never navigate: unconsumed text is dropped (B1)
+        if (ev.ch != 0)
+        {
+            return false;
+        }
         switch (static_cast<input::key_code>(ev.key))
         {
         case input::key_code::tab:

@@ -41,10 +41,12 @@ namespace zb::input
      */
     enum class key_code : int
     {
+        backspace = 8,
         tab = 9,
         enter = 13,
         escape = 27,
         space = 32,
+        del = 127,
         up = 256,
         down,
         left,
@@ -60,7 +62,14 @@ namespace zb::input
      *   - mouse_* (click / move) : x, y, button
      *   - touch_*                : x, y, touch_id (which finger)
      *   - mouse_wheel            : delta  (> 0 up / forward, < 0 down / back)
-     *   - key_*                  : key (see key_code)
+     *   - key_*                  : key (see key_code), ch (printable character
+     *                              when the key produces one; 0 otherwise)
+     *
+     * `ch` holds a Unicode code point produced by a printable key (ASCII
+     * 0x20..0x7E for now). Both fields are independent: a key may set only
+     * `key` (navigation/editing keys), only `ch` (characters), or both.
+     * The dispatcher routes `ch` to the focused widget; an unconsumed
+     * character is dropped and never falls back to focus navigation.
      *
      * `touch_id` identifies a touch pointer (0 for mouse events and for
      * single-touch shells). The framework currently tracks one active
@@ -76,6 +85,7 @@ namespace zb::input
         int delta = 0;
         int key = 0;
         int touch_id = 0;
+        int ch = 0;  // Unicode code point (0 = no character)
     };
 } // namespace zb::input
 
