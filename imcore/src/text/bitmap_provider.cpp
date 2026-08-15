@@ -2,6 +2,10 @@
 
 #include <cstdint>
 
+#if defined(IMCORE_HAS_SUBSET)
+#include "subset_glyphs.hpp"
+#endif
+
 namespace zb::ui
 {
     namespace
@@ -14,8 +18,11 @@ namespace zb::ui
          * Built-in 5x7 glyphs indexed by (ascii - 32), covering the
          * printable range 32..95 (space through '_'). Bit 4 of a row is the
          * leftmost pixel. Unsupported characters are blank rows.
-         * i18n: to add more characters, append glyphs here and extend the
-         * index range in BitmapProvider::covers().
+         * i18n: code units beyond this range come from the generated
+         * subset table (tools/font_subset.py + tools/extra_glyphs.py,
+         * see subset_glyphs.hpp when IMCORE_HAS_SUBSET is defined); the
+         * sources must draw what they use, everything else falls back to
+         * a zero-width skip.
          */
         const uint8_t kGlyphs[64][glyph_height] = {
             // 32 ' '
@@ -83,7 +90,12 @@ namespace zb::ui
             {}, {}, {}, {}, {},
         };
 
-        // normalizes a code unit to the glyph-table index or -1
+        // number of built-in 5x7 glyphs; subset glyphs index after these
+        constexpr int kBaseGlyphCount = 64;
+
+        // normalizes a code unit to the glyph-table index or -1: the
+        // built-in 5x7 range, then the generated subset (binary search
+        // over the sorted table)
         int glyph_index(const char16_t ch)
         {
             char16_t cc = ch;
@@ -95,7 +107,41 @@ namespace zb::ui
             {
                 return static_cast<int>(cc) - 32;
             }
+#if defined(IMCORE_HAS_SUBSET)
+            int lo = 0;
+            int hi = static_cast<int>(kSubsetGlyphCount);
+            while (lo < hi)
+            {
+                const int mid = (lo + hi) / 2;
+                if (kSubsetGlyphs[mid].ch < cc)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid;
+                }
+            }
+            if (lo < static_cast<int>(kSubsetGlyphCount) && kSubsetGlyphs[lo].ch == cc)
+            {
+                return kBaseGlyphCount + lo;
+            }
+#endif
             return -1;
+        }
+
+        // the glyph bitmap for a normalized table index (built-in or subset)
+        const uint8_t *glyph_rows(const int idx)
+        {
+            if (idx < kBaseGlyphCount)
+            {
+                return kGlyphs[idx];
+            }
+#if defined(IMCORE_HAS_SUBSET)
+            return kSubsetGlyphs[idx - kBaseGlyphCount].rows;
+#else
+            return nullptr;
+#endif
         }
     }  // namespace
 
@@ -143,7 +189,7 @@ namespace zb::ui
             const int idx = glyph_index(str[i]);
             if (idx >= 0)
             {
-                const uint8_t *glyph = kGlyphs[idx];
+                const uint8_t *glyph = glyph_rows(idx);
                 for (int r = 0; r < glyph_height; ++r)
                 {
                     const uint8_t bits = glyph[r];

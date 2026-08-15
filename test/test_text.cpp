@@ -112,8 +112,14 @@ int test_text()
         EXPECT(p.covers(u'A'));
         EXPECT(p.covers(u'a'));  // uppercase rendering
         EXPECT(p.covers(u' '));
-        EXPECT(!p.covers(u'\u4E2D'));
-        EXPECT(!p.covers(0xE9));
+#if defined(IMCORE_HAS_SUBSET)
+        // the string literal below is in the generator's scan set, so
+        // the generated subset covers its code unit (batch E)
+        EXPECT(p.covers(u"é"[0]));
+        EXPECT(!p.covers(u'\u4E2D'));  // CJK is never in the 5x7 subset
+#else
+        EXPECT(!p.covers(u"é"[0]));  // ASCII-only build
+#endif
         const auto m = p.measure(u"AB", 2);
         EXPECT(m.width == 12);
         EXPECT(m.height == 7);
@@ -138,6 +144,24 @@ int test_text()
         EXPECT(test::pixel_at(*g, 4, 6) == core::colors::White.pixel);  // 'A' bottom row right leg
         EXPECT(test::pixel_at(*g, 0, 0) != core::colors::White.pixel);  // left of the glyph
         EXPECT(test::pixel_at(*g, 1, 7) != core::colors::White.pixel);  // below the baseline
+    }
+
+    // BitmapProvider: subset glyphs (batch E) render with the same
+    // advance; an uncovered code unit advances zero width
+    {
+        auto g = core::Graphics::make_ptr(20, 10);
+        g->fill(core::colors::Black);
+        BitmapProvider p;
+        p.write(*g, u"\u4E2D", 1, 0, 7, core::colors::White);
+        EXPECT(test::pixel_at(*g, 0, 0) != core::colors::White.pixel);  // CJK: nothing
+#if defined(IMCORE_HAS_SUBSET)
+        EXPECT(p.measure(u"é", 1).width == 6);
+        p.write(*g, u"é", 1, 0, 7, core::colors::White);  // baseline at y=7
+        EXPECT(test::pixel_at(*g, 2, 0) == core::colors::White.pixel);  // accent dot
+        EXPECT(test::pixel_at(*g, 0, 6) == core::colors::White.pixel);  // 'e' bottom row
+#else
+        EXPECT(p.measure(u"é", 1).width == 0);  // ASCII-only build
+#endif
     }
 
     // Widget::set_text decodes UTF-8 into UTF-16 storage

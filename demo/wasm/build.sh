@@ -33,8 +33,17 @@ SRCS="
 
 OUT="/src/demo/wasm/tictactoe.js"
 
+# font subset (batch E): generate the table for the app/test sources, like
+# the CMake configure step does; skipped when Python is missing
+SUBSET_FLAGS=""
+if python3 tools/font_subset.py --extras tools/extra_glyphs.py \
+    --out /tmp/subset_glyphs.hpp /src/apps /src/test 2>/dev/null; then
+    SUBSET_FLAGS="-DIMCORE_HAS_SUBSET -I/tmp"
+fi
+
 em++ -std=c++17 -O2 \
   -DCOLOR_DEPTH=32 -DRGB_MODEL=bgra32 -DENDIAN=le \
+  $SUBSET_FLAGS \
   -I /src/imcore/include \
   -I /src/imcore/include/core \
   -I /src/imcore/include/text \

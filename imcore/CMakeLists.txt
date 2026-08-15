@@ -28,6 +28,38 @@ set(USE_INTEGER_GEOMETRY OFF CACHE BOOL "Switch it to ON for FPU-less embedded t
 # automatically). The default is std::shared_ptr everywhere else. The UI
 # runs on a single thread, so the non-atomic branch is safe.
 set(USE_NON_ATOMIC_PTR OFF CACHE BOOL "Switch it to ON for targets without atomic instructions (non-atomic refcounts).")
+# Font subset (batch E): scans the app/test sources at configure time and
+# generates a glyph table for the code units they use beyond the built-in
+# ASCII range (tools/font_subset.py + tools/extra_glyphs.py). Needs
+# Python 3; without it the provider falls back to ASCII-only glyphs.
+set(FONT_SUBSET ON CACHE BOOL "Scan sources and generate the font subset table (needs Python 3).")
+if (FONT_SUBSET)
+    find_package(Python3 COMPONENTS Interpreter QUIET)
+    set(IMCORE_HAS_SUBSET OFF)
+    if (Python3_Interpreter_FOUND)
+        file(GLOB_RECURSE FONT_SUBSET_INPUTS CONFIGURE_DEPENDS
+            ${CMAKE_SOURCE_DIR}/apps/*/src/*.cpp
+            ${CMAKE_SOURCE_DIR}/apps/*/include/*.hpp
+            ${CMAKE_SOURCE_DIR}/test/*.cpp)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/text)
+        execute_process(
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/../tools/font_subset.py
+                --extras ${CMAKE_CURRENT_SOURCE_DIR}/../tools/extra_glyphs.py
+                --out ${CMAKE_CURRENT_BINARY_DIR}/include/text/subset_glyphs.hpp
+                ${FONT_SUBSET_INPUTS}
+            RESULT_VARIABLE FONT_SUBSET_RESULT)
+        if (NOT FONT_SUBSET_RESULT EQUAL 0)
+            message(WARNING "font subset generation failed (code ${FONT_SUBSET_RESULT}); falling back to ASCII-only glyphs")
+        else()
+            set(IMCORE_HAS_SUBSET ON)
+        endif()
+    else()
+        message(STATUS "Python 3 not found: font subset generation disabled (ASCII-only glyphs)")
+    endif()
+else()
+    set(IMCORE_HAS_SUBSET OFF)
+endif()
 
 if (USE_FONT)
     set(FONT_SRC
@@ -141,6 +173,14 @@ endif()
 
 if (USE_NON_ATOMIC_PTR)
     target_compile_definitions(${IMCORELIB} PUBLIC USE_NON_ATOMIC_PTR)
+endif()
+
+if (IMCORE_HAS_SUBSET)
+    # the generated table lives in the build dir; PUBLIC so the tests can
+    # branch on the same macro the provider was compiled with
+    target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_SUBSET)
+    target_include_directories(${IMCORELIB} PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/include/text ${CMAKE_CURRENT_BINARY_DIR}/include)
 endif()
 
 if (USE_PNG)
