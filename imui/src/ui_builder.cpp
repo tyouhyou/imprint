@@ -9,6 +9,7 @@
 #include "panel.hpp"
 #include "radio_button.hpp"
 #include "slider.hpp"
+#include "text_input.hpp"
 #include "widget.hpp"
 
 namespace zb::ui
@@ -105,6 +106,10 @@ namespace zb::ui
             if (t == "list_box")
             {
                 return std::make_unique<ListBox>();
+            }
+            if (t == "text_input")
+            {
+                return std::make_unique<TextInput>();
             }
             if (t == "column" || t == "row")
             {

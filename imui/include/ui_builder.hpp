@@ -151,6 +151,13 @@ namespace zb::ui
         n.rows(rows);
         return n;
     }
+    inline ui_node text_input(std::string text = {})
+    {
+        ui_node n;
+        n.type = "text_input";
+        n.text(std::move(text));
+        return n;
+    }
 
     /*
      * Materializes a descriptive tree into the live widget tree:

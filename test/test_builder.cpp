@@ -31,6 +31,14 @@ namespace
         ev.key = key;
         return ev;
     }
+
+    zb::input::input_event char_down(const char ch)
+    {
+        zb::input::input_event ev;
+        ev.type = zb::input::input_type::key_down;
+        ev.ch = static_cast<int>(ch);
+        return ev;
+    }
 }  // namespace
 
 // the descriptive tree mirrors the fluent builder calls
@@ -191,6 +199,31 @@ int test_builder()
         // (slider has capture: refire on the focused widget)
         EXPECT(d.dispatch(host, key_down(static_cast<int>(zb::input::key_code::right))));
         EXPECT(sld->get_value() == 15);
+    }
+
+    // text_input: DOM + materialize + editable after build (B4)
+    {
+        auto doc = column({
+            label("Name").named("lbl"),
+            text_input("hello").named("name"),
+        });
+        FlexPanel host;
+        host.set_size(200, 80);
+        build(host, doc);
+        host.layout();
+
+        EXPECT(doc.children[1].type == "text_input");
+        EXPECT(doc.children[1].props[0].first == "text");
+        EXPECT(std::get<std::string>(doc.children[1].props[0].second) == "hello");
+
+        auto *ti = static_cast<TextInput *>(host.find_by_id("name"));
+        EXPECT(ti != nullptr && ti->get_text() == u"hello");
+
+        // the materialized widget is a live editor: type into it
+        InputDispatcher d;
+        d.dispatch(host, press_at(40, 12));  // click the far right of the input
+        d.dispatch(host, char_down('!'));
+        EXPECT(ti->get_text() == u"hello!");
     }
 
     // host root node is documentation only... panel() children flow
