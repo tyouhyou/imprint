@@ -12,7 +12,13 @@ SRCS="
   imcore/src/text/bitmap_provider.cpp
   imui/src/widget.cpp
   imui/src/panel.cpp
+  imui/src/flex_panel.cpp
   imui/src/button.cpp
+  imui/src/checkbox.cpp
+  imui/src/radio_button.cpp
+  imui/src/label.cpp
+  imui/src/slider.cpp
+  imui/src/list_box.cpp
   imui/src/dialog.cpp
   imui/src/dispatcher.cpp
   apps/tictactoe/src/app_maker.cpp
