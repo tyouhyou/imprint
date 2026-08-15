@@ -87,6 +87,11 @@ namespace
 	}
 
 	// maps the d-pad to focus movement and A/B to activation
+	/*
+	 * Maps the NDS buttons to navigation keys. The hardware has no
+	 * keyboard: there is no character source on this shell (B2), so
+	 * input_event::ch stays 0 here.
+	 */
 	bool handle_keys(const zb::SharedPtr<IApp> &app)
 	{
 		const u32 down = keysDown();

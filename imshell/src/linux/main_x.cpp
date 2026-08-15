@@ -118,8 +118,9 @@ int start()
         {
         case KeyPress:
         {
-            // forward navigation keys; the dispatcher handles focus
-            // traversal (tab/arrows) and activation (enter/space)
+            // navigation/editing keys -> key field; printable ASCII ->
+            // ch field (chars are routed to the focused widget; see
+            // dispatcher B1)
             const KeySym ks = XLookupKeysym(&event.xkey, 0);
             zb::input::input_event ev;
             ev.type = zb::input::input_type::key_down;
@@ -137,6 +138,12 @@ int start()
             case XK_space:
                 ev.key = static_cast<int>(zb::input::key_code::space);
                 break;
+            case XK_BackSpace:
+                ev.key = static_cast<int>(zb::input::key_code::backspace);
+                break;
+            case XK_Delete:
+                ev.key = static_cast<int>(zb::input::key_code::del);
+                break;
             case XK_Up:
                 ev.key = static_cast<int>(zb::input::key_code::up);
                 break;
@@ -152,7 +159,21 @@ int start()
             default:
                 break;
             }
-            if (ev.key != 0)
+            // printable character (latin-1 from XLookupString; only
+            // single-byte, handles shift via the modifier state). Keys
+            // that produced a key field keep their key semantics (space
+            // is the navigation-activation key, not a character)
+            if (ev.key == 0)
+            {
+                char buf[4];
+                if (const int len = XLookupString(&event.xkey, buf, sizeof(buf), nullptr, nullptr);
+                    len == 1 && static_cast<unsigned char>(buf[0]) >= 0x20 &&
+                    static_cast<unsigned char>(buf[0]) <= 0x7e)
+                {
+                    ev.ch = buf[0];
+                }
+            }
+            if (ev.key != 0 || ev.ch != 0)
             {
                 app->input(ev);
             }

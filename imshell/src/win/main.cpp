@@ -177,6 +177,8 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 case VK_TAB: ev.key = static_cast<int>(key_code::tab); break;
                 case VK_ESCAPE: ev.key = static_cast<int>(key_code::escape); break;
                 case VK_SPACE: ev.key = static_cast<int>(key_code::space); break;
+                case VK_BACK: ev.key = static_cast<int>(key_code::backspace); break;
+                case VK_DELETE: ev.key = static_cast<int>(key_code::del); break;
                 case VK_UP: ev.key = static_cast<int>(key_code::up); break;
                 case VK_DOWN: ev.key = static_cast<int>(key_code::down); break;
                 case VK_LEFT: ev.key = static_cast<int>(key_code::left); break;
@@ -186,6 +188,25 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             if (g_app)
             {
                 g_app->input(ev);
+            }
+            return 0;
+        }
+        case WM_CHAR:
+        {
+            // printable characters arrive as WM_CHAR (after
+            // TranslateMessage); the space key keeps its key_code::space
+            // routing for navigation activation, other printable ASCII
+            // becomes a character event (ch field, see dispatcher B1)
+            const int c = static_cast<int>(wParam);
+            if (c >= 0x20 && c <= 0x7e && c != ' ')
+            {
+                input_event ev;
+                ev.type = input_type::key_down;
+                ev.ch = c;
+                if (g_app)
+                {
+                    g_app->input(ev);
+                }
             }
             return 0;
         }
