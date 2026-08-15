@@ -170,6 +170,17 @@ namespace zb::ui
         [[nodiscard]] bool is_descendant_of(const Widget *ancestor) const;
 
         /*
+         * First descendant (or this widget) with the given id; nullptr
+         * when missing. Linear search: id lookup is for wiring and
+         * debugging, not for hot paths.
+         */
+        Widget *find_by_id(const std::string &id);
+
+        // containers report true so host code can adapt add_child() (see
+        // FlexPanel); leaves are false
+        [[nodiscard]] virtual bool is_flex_container() const { return false; }
+
+        /*
          * Absolute position in the widget tree (the root's offset is the
          * origin of the coordinate system used by input events).
          */

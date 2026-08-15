@@ -142,6 +142,25 @@ const auto s = get_size();
         return visible && x >= 0 && y >= 0 && x < size.width && y < size.height;
     }
 
+    Widget *Widget::find_by_id(const std::string &id)
+    {
+        if (get_id() == id)
+        {
+            return this;
+        }
+        for (size_t i = 0; i < child_count(); ++i)
+        {
+            if (auto *c = child_at(i))
+            {
+                if (const auto hit = c->find_by_id(id))
+                {
+                    return hit;
+                }
+            }
+        }
+        return nullptr;
+    }
+
     int Widget::text_advance() const
     {
         const GlyphProvider *const primary = primary_provider();

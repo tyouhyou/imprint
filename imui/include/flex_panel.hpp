@@ -53,6 +53,9 @@ namespace zb::ui
 
         [[nodiscard]] const std::vector<flex_item> &get_items() const { return items; }
 
+        // container marker for generic host code (ui_builder, layout)
+        [[nodiscard]] bool is_flex_container() const override { return true; }
+
         void layout() override;
 
     protected:

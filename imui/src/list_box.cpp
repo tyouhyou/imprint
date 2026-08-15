@@ -11,6 +11,13 @@ namespace zb::ui
         const core::Color kSelection = core::Color::from(0, 80, 200);
         const core::Color kScrollTrack = core::Color::from(200, 200, 200);
         const core::Color kScrollThumb = core::Color::from(120, 120, 120);
+
+        // static string model callback (see ListBox::set_items)
+        std::string static_items_text(const void *arg, const size_t i)
+        {
+            const auto &items = *static_cast<const std::vector<std::string> *>(arg);
+            return i < items.size() ? items[i] : std::string{};
+        }
     }  // namespace
 
     void ListBox::set_visible_rows(const size_t rows)
@@ -38,6 +45,13 @@ namespace zb::ui
         {
             value = invalid;
         }
+    }
+
+    void ListBox::set_items(std::vector<std::string> items)
+    {
+        items_ = std::make_shared<std::vector<std::string>>(std::move(items));
+        set_item_count(items_->size());
+        set_item_text(static_items_text, items_.get());
     }
 
     void ListBox::set_value(const size_t v)

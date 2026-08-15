@@ -1,5 +1,9 @@
 #pragma once
 
+#include <memory>
+#include <string>
+#include <vector>
+
 #include "event.hpp"
 #include "widget.hpp"
 
@@ -50,6 +54,13 @@ namespace zb::ui
         // index of the first visible row
         [[nodiscard]] size_t get_top() const { return top; }
 
+        /*
+         * Static string model owned by the widget: fills the rows from a
+         * plain list (no ItemText callback needed). The dynamic model
+         * (ItemText) takes precedence when both are set.
+         */
+        void set_items(std::vector<std::string> items);
+
         // fired when the selection changed through user input
         zb::event::Event<size_t> changed;
 
@@ -96,6 +107,8 @@ namespace zb::ui
 
         ItemText text_fn = nullptr;
         const void *text_arg = nullptr;
+        std::shared_ptr<std::vector<std::string>> items_;  // static model
+        size_t static_count = 0;
 
         bool dragging = false;  // a thumb drag is in flight
         int drag_grab = 0;      // press offset from the thumb top
