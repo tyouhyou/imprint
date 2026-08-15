@@ -30,6 +30,7 @@ add_executable(
     test_slider.cpp
     test_list_box.cpp
     test_measure.cpp
+    test_ui_file.cpp
 )
 
 target_link_libraries(

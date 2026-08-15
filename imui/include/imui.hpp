@@ -12,4 +12,5 @@
 #include "list_box.hpp"
 #include "text_input.hpp"
 #include "ui_builder.hpp"
+#include "ui_file.hpp"
 #include "widget.hpp"

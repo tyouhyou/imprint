@@ -26,6 +26,7 @@ int test_text_input();
 int test_builder();
 int test_measure();
 int test_dirty();
+int test_ui_file();
 
 int main()
 {
@@ -56,6 +57,7 @@ int main()
     total += test_builder();
     total += test_measure();
     total += test_dirty();
+    total += test_ui_file();
 
     if (total)
     {
