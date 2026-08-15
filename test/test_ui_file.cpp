@@ -2,6 +2,8 @@
 
 #include "imui.hpp"
 
+#include "ui_embed_test.gen.hpp"  // packed by ui_embed at build time
+
 using namespace zb::ui;
 
 namespace
@@ -172,6 +174,22 @@ column id="main" spacing=4 padding=8
         EXPECT(d.dispatch(host, press_at(5, 3)));
         EXPECT(d.dispatch(host, release_at(5, 3)));
         EXPECT(cb->is_checked());
+    }
+
+    // the ui_embed-packed document parses back identically
+    {
+        EXPECT(sizeof(kUiFiles) / sizeof(kUiFiles[0]) == 1);
+        const embedded_ui_file &f = kUiFiles[0];
+        EXPECT(f.data != nullptr && f.size > 0);
+
+        bool ok = false;
+        ui_node root = parse_ui_text(reinterpret_cast<const char *>(f.data), &ok);
+        EXPECT(ok);
+        EXPECT(root.type == "column");
+        EXPECT(root.children.size() == 5);
+
+        EXPECT(find_ui_file(kUiFiles[0].name) == &kUiFiles[0]);
+        EXPECT(find_ui_file("no_such.ui") == nullptr);
     }
 
     return test::report("ui_file");

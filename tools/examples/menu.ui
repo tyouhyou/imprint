@@ -1,0 +1,9 @@
+# example design file: a small settings screen
+column id="root" spacing=6 padding=10
+  label id="title" text="Settings"
+  checkbox id="sound" text="Sound"
+  slider min=0 max=100 step=10
+  list_box rows=3 items="Easy" "Normal" "Hard"
+  row spacing=4
+    button id="ok" text="OK"
+    button id="cancel" text="Cancel"
