@@ -46,6 +46,9 @@ namespace zb::ui
         // fired when this button becomes selected by a user interaction
         zb::event::Event<> changed;
 
+        // natural size: circle, or circle + gap + label (tallest of two)
+        [[nodiscard]] core::imsize_t measure() const override;
+
     protected:
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;

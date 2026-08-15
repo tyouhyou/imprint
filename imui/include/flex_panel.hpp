@@ -15,10 +15,12 @@ namespace zb::ui
      * children with a nonzero flex grow value share the leftover main-axis
      * space proportionally inside their own line.
      *
-     * v1 scope: no content-based auto sizing; children keep the size set
-     * via set_size() unless flex grow expands them along the main axis.
+     * Sizing: a child that was never explicitly sized (set_size) is sized
+     * by its natural measure() along both axes; an explicit set_size wins.
      * Cross-axis sizes are not stretched. Wrap breaks a line when the
-     * fixed demands exceed the available main-axis space.
+     * fixed demands exceed the available main-axis space. Flex-assigned
+     * sizes never mark a child as explicitly sized, so re-layout keeps
+     * measuring.
      */
     class FlexPanel : public Widget
     {

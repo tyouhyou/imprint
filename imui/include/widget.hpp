@@ -73,9 +73,35 @@ namespace zb::ui
         void set_position(const int x, const int y) { position = {x, y}; }
         [[nodiscard]] core::impoint_t get_position() const { return position; }
 
-        void set_size(const core::imsize_t &s) { size = s; }
-        void set_size(const int w, const int h) { size = {w, h}; }
+        void set_size(const core::imsize_t &s)
+        {
+            size = s;
+            size_explicit_ = true;
+        }
+        void set_size(const int w, const int h)
+        {
+            size = {w, h};
+            size_explicit_ = true;
+        }
         [[nodiscard]] core::imsize_t get_size() const { return size; }
+
+        /*
+         * Natural (content-derived) size of the widget, used by flex
+         * layouts for children that were never explicitly sized
+         * (set_size). The default returns the current size; widgets with
+         * intrinsic geometry (Label, Checkbox, Slider, ListBox, ...)
+         * override it.
+         */
+        [[nodiscard]] virtual core::imsize_t measure() const { return size; }
+
+        // layout-driven resize: does not mark the size as explicit, so a
+        // flex-assigned size never overrides the widget's measure()
+        void set_size_auto(const int w, const int h)
+        {
+            size = {w, h};
+            size_explicit_ = false;
+        }
+        [[nodiscard]] virtual bool is_size_explicit() const { return size_explicit_; }
 
         void set_visible(const bool v) { visible = v; }
         [[nodiscard]] bool is_visible() const { return visible; }
@@ -166,6 +192,10 @@ namespace zb::ui
 
         // draws the text via the primary provider with bitmap fallback
         void draw_text(core::Graphics &area) const;
+
+        // text metrics over the whole text_, split into covered runs
+        [[nodiscard]] int text_advance() const;
+        [[nodiscard]] int text_height() const;
 
         /*
          * Returns the primary glyph provider: the custom provider set via
@@ -262,6 +292,7 @@ namespace zb::ui
         core::imsize_t size{0, 0};
         bool visible = true;
         bool focused = false;
+        bool size_explicit_ = false;
 
         // background
         std::optional<core::Color> background;

@@ -74,26 +74,12 @@ namespace zb::ui
             return nullptr;
         };
 
-        const auto s = get_size();
-        const char16_t *const data = text_.data();
-        const int len = static_cast<int>(text_.size());
+const auto s = get_size();
+    const char16_t *const data = text_.data();
+    const int len = static_cast<int>(text_.size());
 
-        // total advance: split into covered runs; uncovered units add 0
-        int total = 0;
-        for (int i = 0; i < len;)
-        {
-            const GlyphProvider *cur = pick(data[i]);
-            int j = i;
-            while (j < len && pick(data[j]) == cur)
-            {
-                ++j;
-            }
-            if (cur != nullptr)
-            {
-                total += cur->measure(data + i, j - i).width;
-            }
-            i = j;
-        }
+    // total advance: split into covered runs; uncovered units add 0
+    const int total = text_advance();
 
         // line metrics come from the primary provider, or the fallback;
         // line_metrics does not scan the string (no per-glyph loads)
@@ -154,6 +140,61 @@ namespace zb::ui
     bool Widget::hit(const int x, const int y) const
     {
         return visible && x >= 0 && y >= 0 && x < size.width && y < size.height;
+    }
+
+    int Widget::text_advance() const
+    {
+        const GlyphProvider *const primary = primary_provider();
+        const GlyphProvider *const fallback = bitmap_fallback_.get();
+
+        // pick the provider for a code unit; nullptr means "not covered"
+        const auto pick = [&](const char16_t ch) -> const GlyphProvider *
+        {
+            if (primary != nullptr && primary->covers(ch))
+            {
+                return primary;
+            }
+            if (fallback->covers(ch))
+            {
+                return fallback;
+            }
+            return nullptr;
+        };
+
+        if (text_.empty())
+        {
+            return 0;
+        }
+        const char16_t *const data = text_.data();
+        const int len = static_cast<int>(text_.size());
+        int total = 0;
+        for (int i = 0; i < len;)
+        {
+            const GlyphProvider *cur = pick(data[i]);
+            int j = i;
+            while (j < len && pick(data[j]) == cur)
+            {
+                ++j;
+            }
+            if (cur != nullptr)
+            {
+                total += cur->measure(data + i, j - i).width;
+            }
+            i = j;
+        }
+        return total;
+    }
+
+    int Widget::text_height() const
+    {
+        const GlyphProvider *const primary = primary_provider();
+        const GlyphProvider *const fallback = bitmap_fallback_.get();
+        // line metrics come from the primary provider, or the fallback;
+        // line_metrics does not scan the string (no per-glyph loads)
+        const text_metrics m = primary != nullptr
+                                   ? primary->line_metrics()
+                                   : fallback->line_metrics();
+        return m.height;
     }
 
     bool Widget::is_descendant_of(const Widget *ancestor) const

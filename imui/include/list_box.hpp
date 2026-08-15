@@ -53,6 +53,12 @@ namespace zb::ui
         // fired when the selection changed through user input
         zb::event::Event<size_t> changed;
 
+        // natural size: 100 wide, visible rows tall
+        [[nodiscard]] core::imsize_t measure() const override
+        {
+            return {100, static_cast<int>(visible) * row_height};
+        }
+
     protected:
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;

@@ -41,6 +41,9 @@ namespace zb::ui
         // fired on user toggle, with the new state
         zb::event::Event<bool> changed;
 
+        // natural size: box, or box + gap + label (tallest of the two)
+        [[nodiscard]] core::imsize_t measure() const override;
+
     protected:
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;

@@ -12,26 +12,44 @@ namespace zb::ui
             return d == FlexPanel::flex_direction::row;
         }
 
-        int main_size(const Widget &w, const FlexPanel::flex_direction d)
+        void set_main_size(Widget &w, const FlexPanel::flex_direction d, const int v)
+        {
+            // set_size_auto: a flex-assigned size must not mark the child
+            // as explicitly sized, or the next layout would freeze it
+            if (is_row(d))
+            {
+                w.set_size_auto(v, w.get_size().height);
+            }
+            else
+            {
+                w.set_size_auto(w.get_size().width, v);
+            }
+        }
+
+        // the layout demand of a child along the main axis: an explicit
+        // set_size wins, otherwise the widget's natural measure()
+        int main_demand(const Widget &w, const FlexPanel::flex_direction d)
+        {
+            const auto demand = w.is_size_explicit() ? w.get_size() : w.measure();
+            return is_row(d) ? demand.width : demand.height;
+        }
+
+        // the layout demand of a child along the cross axis
+        int cross_demand(const Widget &w, const FlexPanel::flex_direction d)
+        {
+            const auto demand = w.is_size_explicit() ? w.get_size() : w.measure();
+            return is_row(d) ? demand.height : demand.width;
+        }
+
+        // the child's final main/cross size (after materialization)
+        int main_now(const Widget &w, const FlexPanel::flex_direction d)
         {
             return is_row(d) ? w.get_size().width : w.get_size().height;
         }
 
-        int cross_size(const Widget &w, const FlexPanel::flex_direction d)
+        int cross_now(const Widget &w, const FlexPanel::flex_direction d)
         {
             return is_row(d) ? w.get_size().height : w.get_size().width;
-        }
-
-        void set_main_size(Widget &w, const FlexPanel::flex_direction d, const int v)
-        {
-            if (is_row(d))
-            {
-                w.set_size(v, w.get_size().height);
-            }
-            else
-            {
-                w.set_size(w.get_size().width, v);
-            }
         }
 
         void set_main_position(Widget &w, const FlexPanel::flex_direction d, const int main, const int cross)
@@ -60,7 +78,8 @@ namespace zb::ui
             int need = 0;
             for (size_t i = 0; i < items.size(); ++i)
             {
-                const int item_need = items[i].flex_grow > 0 ? 0 : main_size(*items[i].child, direction);
+                const int item_need =
+                    items[i].flex_grow > 0 ? 0 : main_demand(*items[i].child, direction);
                 if (wrap && !cur.empty() && need + spacing + item_need > avail_main)
                 {
                     lines.push_back(std::move(cur));
@@ -96,7 +115,7 @@ namespace zb::ui
                 }
                 else
                 {
-                    fixed += main_size(*items[i].child, direction);
+                    fixed += main_demand(*items[i].child, direction);
                 }
             }
             fixed += static_cast<int>(line.size() - 1) * spacing;
@@ -125,15 +144,44 @@ namespace zb::ui
                 }
             }
 
-            // place the line items along the main axis
+            // materialize the sizes of auto-sized children (both axes) so
+            // hit-testing works; explicit sizes are left untouched; grown
+            // main sizes (set above) are kept
+            for (const size_t i : line)
+            {
+                Widget &child = *items[i].child;
+                if (!child.is_size_explicit())
+                {
+                    const int main = items[i].flex_grow > 0 ? main_now(child, direction)
+                                                            : main_demand(child, direction);
+                    const int cross = cross_demand(child, direction);
+                    if (is_row(direction))
+                    {
+                        child.set_size_auto(main, cross);
+                    }
+                    else
+                    {
+                        child.set_size_auto(cross, main);
+                    }
+                }
+            }
+
+            // place the line items along the main axis, spaced by their
+            // final sizes
             int pen = padding;
             int line_cross = 0;
             for (const size_t i : line)
             {
                 Widget &child = *items[i].child;
+                line_cross = std::max(line_cross, cross_now(child, direction));
+                pen += main_now(child, direction) + spacing;
+            }
+            pen = padding;
+            for (const size_t i : line)
+            {
+                Widget &child = *items[i].child;
                 set_main_position(child, direction, pen, cross_pos);
-                line_cross = std::max(line_cross, cross_size(child, direction));
-                pen += main_size(child, direction) + spacing;
+                pen += main_now(child, direction) + spacing;
                 child.layout();
             }
             cross_pos += line_cross + spacing;

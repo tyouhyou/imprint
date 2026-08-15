@@ -5,6 +5,7 @@ add_library(
     src/flex_panel.cpp
     src/button.cpp
     src/checkbox.cpp
+    src/label.cpp
     src/radio_button.cpp
     src/slider.cpp
     src/list_box.cpp

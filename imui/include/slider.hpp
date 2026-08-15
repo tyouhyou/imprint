@@ -34,6 +34,9 @@ namespace zb::ui
         // fired when the value changes through a user interaction
         zb::event::Event<int> changed;
 
+        // natural size: 100x20
+        [[nodiscard]] core::imsize_t measure() const override { return {100, 20}; }
+
     protected:
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;

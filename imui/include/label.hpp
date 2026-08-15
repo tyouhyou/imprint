@@ -13,5 +13,8 @@ namespace zb::ui
     {
     public:
         Label() = default;
+
+        // natural size: the text's advance (empty label measures 0x0)
+        [[nodiscard]] core::imsize_t measure() const override;
     };
 }

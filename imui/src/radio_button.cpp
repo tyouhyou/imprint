@@ -2,6 +2,17 @@
 
 namespace zb::ui
 {
+    core::imsize_t RadioButton::measure() const
+    {
+        if (get_text().empty())
+        {
+            return {circle_size, circle_size};
+        }
+        const int w = circle_size + text_gap + text_advance();
+        const int h = circle_size > text_height() ? circle_size : text_height();
+        return {w, h};
+    }
+
     void RadioButton::press()
     {
         pressed_ = true;

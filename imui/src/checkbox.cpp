@@ -2,6 +2,17 @@
 
 namespace zb::ui
 {
+    core::imsize_t Checkbox::measure() const
+    {
+        if (get_text().empty())
+        {
+            return {box_size, box_size};
+        }
+        const int w = box_size + text_gap + text_advance();
+        const int h = box_size > text_height() ? box_size : text_height();
+        return {w, h};
+    }
+
     void Checkbox::press()
     {
         pressed_ = true;

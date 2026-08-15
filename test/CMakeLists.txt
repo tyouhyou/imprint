@@ -26,6 +26,7 @@ add_executable(
     test_radio.cpp
     test_slider.cpp
     test_list_box.cpp
+    test_measure.cpp
 )
 
 target_link_libraries(
