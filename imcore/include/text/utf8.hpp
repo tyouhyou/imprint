@@ -24,4 +24,12 @@ namespace zb::ui
      * be converted by decoding in a loop with decode_utf8_next().
      */
     std::u16string utf8_to_utf16(const char *utf8);
+
+    /*
+     * Converts an UTF-16 string back to UTF-8 (the string shape the
+     * framework API hands out; widget text is stored as UTF-16). Lone
+     * surrogates are emitted as U+FFFD, so the result is always valid
+     * UTF-8.
+     */
+    std::string utf16_to_utf8(const std::u16string &u16);
 }  // namespace zb::ui

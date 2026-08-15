@@ -22,6 +22,7 @@ int test_checkbox();
 int test_radio();
 int test_slider();
 int test_list_box();
+int test_text_input();
 int test_builder();
 int test_measure();
 
@@ -50,6 +51,7 @@ int main()
     total += test_radio();
     total += test_slider();
     total += test_list_box();
+    total += test_text_input();
     total += test_builder();
     total += test_measure();
 

@@ -216,6 +216,23 @@ namespace zb::ui
         // text metrics over the whole text_, split into covered runs
         [[nodiscard]] int text_advance() const;
         [[nodiscard]] int text_height() const;
+        // line metrics helpers (do not scan the string)
+        [[nodiscard]] int text_ascent() const;
+
+        /*
+         * Advance width of an arbitrary UTF-16 run (not just text_),
+         * split into covered runs like text_advance(). Text-hosting
+         * widgets (TextInput) use it for caret math.
+         */
+        [[nodiscard]] int advance_of(const char16_t *data, const int len) const;
+
+        /*
+         * Draws an arbitrary UTF-16 run (not just text_) with the
+         * baseline of the first (only) line at (x, y). Text-hosting
+         * widgets (TextInput) render their own buffer with it.
+         */
+        void draw_text_at(core::Graphics &area, const char16_t *data, const int len,
+                          const int x, const int y) const;
 
         /*
          * Returns the primary glyph provider: the custom provider set via

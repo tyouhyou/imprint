@@ -118,23 +118,7 @@ const auto s = get_size();
         x += text_offset_.x;
         y += text_offset_.y;
 
-        // draw run by run; uncovered units keep the pen position
-        int pen = 0;
-        for (int i = 0; i < len;)
-        {
-            const GlyphProvider *cur = pick(data[i]);
-            int j = i;
-            while (j < len && pick(data[j]) == cur)
-            {
-                ++j;
-            }
-            if (cur != nullptr)
-            {
-                cur->write(area, data + i, j - i, x + pen, y, text_color);
-                pen += cur->measure(data + i, j - i).width;
-            }
-            i = j;
-        }
+        draw_text_at(area, data, len, x, y);
     }
 
     bool Widget::hit(const int x, const int y) const
@@ -163,6 +147,21 @@ const auto s = get_size();
 
     int Widget::text_advance() const
     {
+        return advance_of(text_.data(), static_cast<int>(text_.size()));
+    }
+
+    int Widget::text_ascent() const
+    {
+        const GlyphProvider *const primary = primary_provider();
+        const GlyphProvider *const fallback = bitmap_fallback_.get();
+        const text_metrics m = primary != nullptr
+                                   ? primary->line_metrics()
+                                   : fallback->line_metrics();
+        return m.ascent;
+    }
+
+    int Widget::advance_of(const char16_t *data, const int len) const
+    {
         const GlyphProvider *const primary = primary_provider();
         const GlyphProvider *const fallback = bitmap_fallback_.get();
 
@@ -180,12 +179,10 @@ const auto s = get_size();
             return nullptr;
         };
 
-        if (text_.empty())
+        if (len <= 0)
         {
             return 0;
         }
-        const char16_t *const data = text_.data();
-        const int len = static_cast<int>(text_.size());
         int total = 0;
         for (int i = 0; i < len;)
         {
@@ -202,6 +199,44 @@ const auto s = get_size();
             i = j;
         }
         return total;
+    }
+
+    void Widget::draw_text_at(core::Graphics &area, const char16_t *data, const int len,
+                              const int x, const int y) const
+    {
+        const GlyphProvider *const primary = primary_provider();
+        const GlyphProvider *const fallback = bitmap_fallback_.get();
+
+        const auto pick = [&](const char16_t ch) -> const GlyphProvider *
+        {
+            if (primary != nullptr && primary->covers(ch))
+            {
+                return primary;
+            }
+            if (fallback->covers(ch))
+            {
+                return fallback;
+            }
+            return nullptr;
+        };
+
+        // draw run by run; uncovered units keep the pen position
+        int pen = 0;
+        for (int i = 0; i < len;)
+        {
+            const GlyphProvider *cur = pick(data[i]);
+            int j = i;
+            while (j < len && pick(data[j]) == cur)
+            {
+                ++j;
+            }
+            if (cur != nullptr)
+            {
+                cur->write(area, data + i, j - i, x + pen, y, text_color);
+                pen += cur->measure(data + i, j - i).width;
+            }
+            i = j;
+        }
     }
 
     int Widget::text_height() const

@@ -10,5 +10,6 @@
 #include "radio_button.hpp"
 #include "slider.hpp"
 #include "list_box.hpp"
+#include "text_input.hpp"
 #include "ui_builder.hpp"
 #include "widget.hpp"
