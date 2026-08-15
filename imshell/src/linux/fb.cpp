@@ -19,25 +19,48 @@ FB::~FB()
 }
 
 // TODO: for prototype sample. need pixel size, color format etc.
-void FB::draw(char *b, int w, int h)
+void FB::draw(char *b, int w, int h, int rx, int ry, int rw, int rh)
 {
     if (nullptr == b || w <= 0 || h <= 0)
     {
         return;
     }
 
-    // one memcpy per row instead of per pixel; clip to the screen so a
-    // buffer larger than the display cannot overrun buf
-    const int rows_to_copy = (h < screen_height) ? h : screen_height;
-    const int cols_to_copy = (w < screen_width) ? w : screen_width;
-    const int copy_bytes = cols_to_copy * bytes_per_pixel;
-
-    for (int row = 0; row < rows_to_copy; row++)
+    // clip the region to the screen so a buffer larger than the display
+    // cannot overrun buf
+    if (rx < 0)
     {
-        std::memcpy(buf + row * screen_line_len, b + row * w * bytes_per_pixel, copy_bytes);
+        rw += rx;
+        rx = 0;
+    }
+    if (ry < 0)
+    {
+        rh += ry;
+        ry = 0;
+    }
+    if (rw > screen_width - rx)
+    {
+        rw = screen_width - rx;
+    }
+    if (rh > screen_height - ry)
+    {
+        rh = screen_height - ry;
+    }
+    if (rw <= 0 || rh <= 0)
+    {
+        return;
     }
 
-    msync(buf, screen_line_len * rows_to_copy, 0);
+    // one memcpy per row instead of per pixel, restricted to the region
+    const int copy_bytes = rw * bytes_per_pixel;
+    for (int row = ry; row < ry + rh; row++)
+    {
+        std::memcpy(buf + row * screen_line_len + rx * bytes_per_pixel,
+                    b + row * w * bytes_per_pixel + rx * bytes_per_pixel, copy_bytes);
+    }
+
+    msync(buf + ry * screen_line_len + rx * bytes_per_pixel,
+          screen_line_len * rh, 0);
 }
 
 int FB::init()

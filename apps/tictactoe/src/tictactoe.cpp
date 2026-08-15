@@ -48,6 +48,12 @@ namespace zb::app::tictactoe
         return w ? w->is_dirty() : false;
     }
 
+    bool Tictactoe::dirty_region(int &x, int &y, int &rw, int &rh) const noexcept
+    {
+        auto w = view_.window();
+        return w ? w->dirty_region(x, y, rw, rh) : false;
+    }
+
     void Tictactoe::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
         if (auto w = view_.window())

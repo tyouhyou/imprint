@@ -32,7 +32,7 @@ namespace
                        const int x, const int y, const int ww, const int hh)
     {
         int rx = 0, ry = 0, rw = 0, rh = 0;
-        w.dirty_region(rx, ry, rw, rh);
+        EXPECT(w.dirty_region(rx, ry, rw, rh));
         EXPECT(rx == x && ry == y && rw == ww && rh == hh);
     }
 
@@ -210,7 +210,7 @@ int test_dirty()
         w.paint();
         EXPECT(input->get_text() == u"a");
         int rx = 0, ry = 0, rw = 0, rh = 0;
-        w.dirty_region(rx, ry, rw, rh);
+        EXPECT(w.dirty_region(rx, ry, rw, rh));
         EXPECT(rx <= 10 && ry <= 10 && rx + rw >= 10 + 100 && ry + rh >= 10 + 7);
     }
 
@@ -235,7 +235,7 @@ int test_dirty()
         w.paint();
         // the union of the container and its children stays inside it
         int rx = 0, ry = 0, rw = 0, rh = 0;
-        w.dirty_region(rx, ry, rw, rh);
+        EXPECT(w.dirty_region(rx, ry, rw, rh));
         EXPECT(rx >= 20 && ry >= 10 && rx + rw <= 120 && ry + rh <= 70);
         // both children are inside the reported region
         EXPECT(rx <= 21 && ry <= 11 && rx + rw >= 21 + 30 && ry + rh >= 11 + 20);
@@ -274,7 +274,7 @@ int test_dirty()
         w.paint();
         EXPECT(n->draws > 0 && f->draws == 0);
         int x = 0, y = 0, ww = 0, hh = 0;
-        w.dirty_region(x, y, ww, hh);
+        EXPECT(w.dirty_region(x, y, ww, hh));
         EXPECT(x == 10 && y == 10 && ww == 40 && hh == 20);
     }
 

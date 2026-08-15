@@ -28,9 +28,22 @@ int main(int argc, char *argv[])
     // idle-poll loop: paint (and present via the painted callback) only
     // when the app owns a frame. The FB backend has no input source at
     // all (no keyboard, no pointer); use the X11 backend for input (B2).
-    app->on_painted([&fb, &window](const void *)
+    app->on_painted([&fb, &app, &window](const void *)
     {
-        fb.draw(static_cast<char *>(window->data()), window->width(), window->height());
+        int x = 0, y = 0, w = 0, h = 0;
+        if (app->dirty_region(x, y, w, h))
+        {
+            if (w <= 0 || h <= 0)
+            {
+                return;  // nothing was drawn, nothing to present
+            }
+        }
+        else
+        {
+            w = window->width();
+            h = window->height();
+        }
+        fb.draw(static_cast<char *>(window->data()), window->width(), window->height(), x, y, w, h);
     });
 
     while (!app_closed)

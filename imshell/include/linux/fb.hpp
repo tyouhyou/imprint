@@ -10,7 +10,7 @@ public:
     FB();
     ~FB();
 
-    void draw(char *b, int w, int h);
+    void draw(char *b, int w, int h, int rx, int ry, int rw, int rh);
 
 private:
     int init();

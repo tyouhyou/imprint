@@ -68,6 +68,16 @@ namespace zb::app
          */
         virtual bool is_dirty() const noexcept = 0;
 
+        /*
+         * @brief the region the last paint() drew, in surface pixels
+         *        (see IGui::dirty_region). The default reports false and
+         *        shells then present the whole buffer.
+         */
+        [[nodiscard]] virtual bool dirty_region(int &, int &, int &, int &) const noexcept
+        {
+            return false;
+        }
+
         virtual void on_painting(event::PAINT_EVENT::EventHandler) noexcept = 0;
         virtual void on_painted(event::PAINT_EVENT::EventHandler) noexcept = 0;
 

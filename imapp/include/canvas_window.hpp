@@ -149,17 +149,18 @@ namespace zb::app
          * query. Presenting shells copy only this region (batch C); a
          * repaint that reported no damage covers the full frame.
          */
-        void dirty_region(int &out_x, int &out_y, int &out_w, int &out_h) const
+        [[nodiscard]] bool dirty_region(int &out_x, int &out_y, int &out_w, int &out_h) const noexcept override
         {
             if (damage_r_ < damage_l_ || damage_b_ < damage_t_)
             {
                 out_x = out_y = out_w = out_h = 0;
-                return;
+                return true;
             }
             out_x = damage_l_;
             out_y = damage_t_;
             out_w = damage_r_ - damage_l_;
             out_h = damage_b_ - damage_t_;
+            return true;
         }
 
     protected:

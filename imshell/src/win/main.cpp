@@ -17,8 +17,13 @@ namespace
     const void *g_framebuffer = nullptr; // framebuffer blitted on WM_PAINT
     LONG g_buffer_width = 0;
     LONG g_buffer_height = 0;
+    LONG g_dirty_x = 0;
+    LONG g_dirty_y = 0;
+    LONG g_dirty_w = 0;
+    LONG g_dirty_h = 0;
 
-    // called on every "painted" event, requests a repaint by invalidating the window
+    // called on every "painted" event, requests a repaint by invalidating
+    // only the region that was actually drawn
     void handle_painted(const void *data)
     {
         if (nullptr == data)
@@ -28,13 +33,55 @@ namespace
         g_framebuffer = data;
         if (nullptr != g_hwnd)
         {
-            InvalidateRect(g_hwnd, nullptr, FALSE);
+            int x = 0, y = 0, w = 0, h = 0;
+            if (g_app->dirty_region(x, y, w, h))
+            {
+                if (w <= 0 || h <= 0)
+                {
+                    g_dirty_w = 0;  // nothing drawn, nothing invalid
+                    return;
+                }
+                g_dirty_x = x;
+                g_dirty_y = y;
+                g_dirty_w = w;
+                g_dirty_h = h;
+                RECT rc{g_dirty_x, g_dirty_y, g_dirty_x + g_dirty_w, g_dirty_y + g_dirty_h};
+                InvalidateRect(g_hwnd, &rc, FALSE);
+            }
+            else
+            {
+                g_dirty_x = 0;
+                g_dirty_y = 0;
+                g_dirty_w = g_buffer_width;
+                g_dirty_h = g_buffer_height;
+                InvalidateRect(g_hwnd, nullptr, FALSE);
+            }
         }
     }
 
-    void paint_app(HWND hwnd, HDC hDC)
+    void paint_app(HWND hwnd, HDC hDC, const RECT &rc_paint)
     {
         if (nullptr == g_framebuffer || 0 == g_buffer_width || 0 == g_buffer_height)
+        {
+            return;
+        }
+
+        // a system-triggered repaint (first show, resize) invalidates the
+        // whole client area: blit the entire buffer; otherwise only the
+        // region the last paint() drew
+        LONG x = g_dirty_x;
+        LONG y = g_dirty_y;
+        LONG w = g_dirty_w;
+        LONG h = g_dirty_h;
+        if (rc_paint.left <= 0 && rc_paint.top <= 0 &&
+            rc_paint.right >= g_buffer_width && rc_paint.bottom >= g_buffer_height)
+        {
+            x = 0;
+            y = 0;
+            w = g_buffer_width;
+            h = g_buffer_height;
+        }
+        if (w <= 0 || h <= 0)
         {
             return;
         }
@@ -53,12 +100,13 @@ namespace
             (DWORD)((((g_buffer_width * zb::ui::core::ImColor_Depth) + 31) & ~31) >> 3) * (DWORD)g_buffer_height,
             0, 0, 0, 0};
 
+        // blit only the region the last paint() actually drew
         SetDIBitsToDevice(
             hDC,
-            0, 0,
-            g_buffer_width, g_buffer_height,
-            0, 0,
-            0, g_buffer_height,
+            x, y,
+            w, h,
+            x, y,
+            y, h,
             g_framebuffer, &bmi,
             DIB_RGB_COLORS);
     }
@@ -159,7 +207,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         {
             PAINTSTRUCT ps;
             const HDC hDC = BeginPaint(hwnd, &ps);
-            paint_app(hwnd, hDC);
+            paint_app(hwnd, hDC, ps.rcPaint);
             EndPaint(hwnd, &ps);
             return 0;
         }

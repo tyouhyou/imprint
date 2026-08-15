@@ -98,9 +98,22 @@ int start()
     // rendering loop protocol (see IApp): this shell is event-driven --
     // paint() is requested on the first Expose, and the app repaints after
     // every input event; the "painted" event asks the shell to present
-    app->on_painted([&display, &window, &xi, &gc](const void *)
+    app->on_painted([&display, &app, &window, &xi, &gc](const void *)
     {
-        XPutImage(display, window, gc, xi, 0, 0, 0, 0, xi->width, xi->height);
+        int x = 0, y = 0, w = 0, h = 0;
+        if (app->dirty_region(x, y, w, h))
+        {
+            if (w <= 0 || h <= 0)
+            {
+                return;  // nothing was drawn, nothing to present
+            }
+        }
+        else
+        {
+            w = xi->width;
+            h = xi->height;
+        }
+        XPutImage(display, window, gc, xi, x, y, x, y, w, h);
         XFlush(display);
     });
 

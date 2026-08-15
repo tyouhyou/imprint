@@ -34,6 +34,7 @@ namespace zb::app::tictactoe
         void input(const zb::input::input_event &ev) noexcept override;
         void paint() noexcept override;
         bool is_dirty() const noexcept override;
+        bool dirty_region(int &, int &, int &, int &) const noexcept override;
         void on_painting(event::PAINT_EVENT::EventHandler) noexcept override;
         void on_painted(event::PAINT_EVENT::EventHandler) noexcept override;
         void on_closing(event::CLOSE_EVENT::EventHandler) noexcept override;

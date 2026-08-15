@@ -34,6 +34,19 @@ namespace zb::app
          *        entirely while this is false.
          */
         [[nodiscard]] virtual bool is_dirty() const noexcept = 0;
+
+        /*
+         * The region of the framebuffer that the last paint() actually
+         * drew, in pixels of the surface ([0..w) x [0..h), empty when
+         * nothing was drawn). Presented shells copy only this region
+         * (batch C). The default reports false: the shell then presents
+         * the whole buffer, which stays correct for implementations
+         * without region tracking.
+         */
+        [[nodiscard]] virtual bool dirty_region(int &, int &, int &, int &) const noexcept
+        {
+            return false;
+        }
     };
 
 }
