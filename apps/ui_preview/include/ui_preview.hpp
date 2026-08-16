@@ -51,7 +51,7 @@ namespace zb::app::ui_preview
         zb::SharedPtr<CanvasWindow> window_;
         std::vector<std::string> files_;    // UI_PREVIEW_FILES paths
         std::vector<zb::ui::ui_node> docs_; // parsed documents
-        std::vector<zb::ui::Panel *> screens_;
+        std::vector<zb::ui::FlexPanel *> screens_;
         std::size_t current_ = 0;
     };
 }  // namespace zb::app::ui_preview

@@ -2,6 +2,19 @@
 
 namespace zb::ui
 {
+    namespace
+    {
+        constexpr int kSidePadding = 8;
+        constexpr int kVerticalPadding = 6;
+    }
+
+    core::imsize_t Button::measure() const
+    {
+        const int w = (get_text().empty() ? 0 : text_advance()) + 2 * kSidePadding + 2;
+        const int h = text_height() + 2 * kVerticalPadding + 2;
+        return {w, h};
+    }
+
     void Button::press()
     {
         if (state_ != state::pressed)

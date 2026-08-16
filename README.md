@@ -20,12 +20,13 @@
 ## Highlights
 
 - **Retained-mode widget tree** — `Button`, `Label`, `Dialog`, `FlexPanel`, `GraphicsView` and more
+- **Design files** — describe a UI in a small text format (`.ui`), validate and pack it at build time, load it from a C array on any target; a preview app renders files directly
 - **Software rendering into a raw pixel buffer** — no GPU, no external rendering library; the buffer format is fixed at build time (`COLOR_DEPTH`)
 - **Deterministic repaint-on-demand** — dirty tracking, shell owns the loop, no hidden redraws
 - **C-ABI as a first-class citizen** — stable `zbapi` C interface with Python (ctypes), WebAssembly and C smoke-test hosts
 - **Embedded-grade** — no RTTI, 16-bit color (abgr1555), integer-only geometry option, non-atomic refcounting option (NDS has no libatomic)
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
-- **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback; optional FreeType (fonts) and vendored stb codecs (PNG/JPEG)
+- **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback (auto-subsetted from source strings); optional FreeType (fonts) and vendored stb codecs (PNG/JPEG)
 - **C++17, CMake, static libraries** — everything is composable, nothing is forced
 
 ## Quick Example
@@ -50,6 +51,27 @@ int main()
 }
 ```
 
+The same screen described as a design file (`tools/examples/menu.ui`):
+
+```
+column id="root" spacing=6 padding=10
+  label id="title" text="Settings"
+  checkbox id="sound" text="Sound"
+  slider min=0 max=100 step=10
+  list_box rows=3 items="Easy" "Normal" "Hard"
+  row spacing=4
+    button id="ok" text="OK"
+    button id="cancel" text="Cancel"
+```
+
+Pack it at build time with `ui_embed` (fails the build on invalid files), then
+`parse_ui_text` + `build()` materialize it — the same code path on every
+platform. Preview interactively with the `ui_preview` app:
+
+```
+UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
+```
+
 ## Platforms
 
 | Platform | Shell | Notes |
@@ -71,24 +93,25 @@ int main()
 | WebAssembly | `demo/wasm/build.sh` (docker emscripten) |
 | Python | build `binding` shared lib, then `python3 demo/python/myapp.py --lib <libzbapi>` |
 
-Tests: `test/test_imui.exe` (17 suites, plain asserts, no framework). Automatic on desktop builds; skipped on NDS.
+Tests: `test/test_imui.exe` (27 suites, plain asserts, no framework). Automatic on desktop builds; skipped on NDS.
 
 ## Demo
 
-The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build_nds/bin/tictactoe.nds`.
+The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
 
 ## Repository layout
 
 | Path | Contents |
 |---|---|
 | `imcore/` | drawing kernel: Graphics / Color / Font / Image |
-| `imui/` | widget library (retained-mode) |
+| `imui/` | widget library (retained-mode) + design-file parser |
 | `imapp/` | app interface: `IApp` / `IWindow` + `CanvasWindow` default |
 | `imevent/` | events & input |
 | `imutil/` | logging |
 | `binding/` | C-ABI `zbapi` shared library + C smoke test |
+| `tools/` | build-time tools: `ui_embed` (design-file validator + packer), font subsetter |
 | `imshell/` | platform shells (NDS / FB / X11 / Win) |
-| `apps/` | demo applications |
+| `apps/` | demo applications (`tictactoe`, `ui_preview`) |
 | `test/` | unit tests |
 
 ## License

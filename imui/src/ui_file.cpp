@@ -124,6 +124,12 @@ namespace zb::ui
      * they are dropped with a warning. Text values need quotes; numbers
      * and true/false are bare. Unknown tags survive parsing (the
      * materializer skips them).
+     *
+     * A line ending in a single backslash continues on the next physical
+     * line (shell style): the backslash and newline are dropped, the
+     * next line's leading indentation is stripped, and blank/comment
+     * lines in between are skipped. An even run of trailing backslashes
+     * is literal text and does not continue.
      */
     ui_node parse_ui_text(const char *text, bool *ok)
     {
@@ -138,22 +144,78 @@ namespace zb::ui
         {
             p += 3;  // UTF-8 BOM
         }
+
         int line_no = 0;
+
+        // reads the next physical line that is not blank or a comment;
+        // returns its [start, end) span and advances p/line_no
+        auto next_content_line = [&]() -> std::pair<const char *, const char *> {
+            for (;;)
+            {
+                if (*p == '\0')
+                {
+                    return {p, p};  // end of text: empty line, no loop
+                }
+                const char *line_start = p;
+                while (*p && *p != '\n')
+                {
+                    ++p;
+                }
+                const char *line_end = p;
+                if (*p == '\n')
+                {
+                    ++p;
+                }
+                ++line_no;
+                const char *q = line_start;
+                while (q < line_end && (*q == ' ' || *q == '\t'))
+                {
+                    ++q;
+                }
+                if (q >= line_end || *q == '#')
+                {
+                    continue;  // blank or comment line
+                }
+                return {line_start, line_end};
+            }
+        };
+
         while (*p)
         {
-            const char *line_start = p;
-            while (*p && *p != '\n')
-            {
-                ++p;
-            }
-            const char *line_end = p;
-            if (*p == '\n')
-            {
-                ++p;
-            }
-            ++line_no;
+            const int first_line = line_no + 1;
 
-            const char *q = line_start;
+            // join continuation lines into one logical line
+            std::string content;
+            {
+                const char *line_start = nullptr;
+                const char *line_end = nullptr;
+                std::tie(line_start, line_end) = next_content_line();
+                for (;;)
+                {
+                    // count trailing backslashes: odd run = continuation
+                    const char *bs = line_end;
+                    while (bs > line_start && bs[-1] == '\\')
+                    {
+                        --bs;
+                    }
+                    const bool is_cont = ((line_end - bs) & 1) == 1;
+                    content.append(line_start, is_cont ? bs : line_end);
+                    if (!is_cont)
+                    {
+                        break;
+                    }
+                    std::tie(line_start, line_end) = next_content_line();
+                    const char *strip = line_start;
+                    while (strip < line_end && (*strip == ' ' || *strip == '\t'))
+                    {
+                        ++strip;
+                    }
+                    line_start = strip;
+                }
+            }
+
+            const char *line_end = content.data() + content.size();
+            const char *q = content.data();
             int depth = 0;
             while (q < line_end && (*q == ' ' || *q == '\t'))
             {
@@ -173,7 +235,7 @@ namespace zb::ui
             }
             if (q == tag_begin)
             {
-                LW << "ui_file: line " << line_no
+                LW << "ui_file: line " << first_line
                    << ": missing widget tag; line dropped";
                 continue;
             }
@@ -204,7 +266,7 @@ namespace zb::ui
                     {
                         ++q;
                     }
-                    LW << "ui_file: line " << line_no << ": bare token '"
+                    LW << "ui_file: line " << first_line << ": bare token '"
                        << std::string(tok_begin, q)
                        << "' (use key=value); token dropped";
                     skip_sp(&q, line_end);
@@ -227,7 +289,7 @@ namespace zb::ui
                     }
                     else
                     {
-                        LW << "ui_file: line " << line_no
+                        LW << "ui_file: line " << first_line
                            << ": unterminated string; line dropped";
                         dropped = true;
                         break;
@@ -258,7 +320,7 @@ namespace zb::ui
                     }
                     else
                     {
-                        LW << "ui_file: line " << line_no << ": bad value '"
+                        LW << "ui_file: line " << first_line << ": bad value '"
                            << token
                            << "' (text values need quotes); attribute dropped";
                     }
@@ -285,7 +347,7 @@ namespace zb::ui
                         }
                         else
                         {
-                            LW << "ui_file: line " << line_no << ": flex needs an integer";
+                            LW << "ui_file: line " << first_line << ": flex needs an integer";
                         }
                     }
                     else if (key == "items")
@@ -306,7 +368,7 @@ namespace zb::ui
                         }
                         else
                         {
-                            LW << "ui_file: line " << line_no
+                            LW << "ui_file: line " << first_line
                                << ": items must be quoted strings";
                         }
                     }

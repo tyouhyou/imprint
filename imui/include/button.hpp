@@ -37,6 +37,11 @@ namespace zb::ui
 
         [[nodiscard]] state get_state() const { return state_; }
 
+        // content-derived natural size (text + padding + border) so flex
+        // layouts and design files can size buttons without explicit
+        // width/height
+        [[nodiscard]] core::imsize_t measure() const override;
+
         void set_pressed_color(const core::Color &c) { pressed_color = c; }
         void set_pressed_image(const core::image_t &img) { pressed_image = img; }
         void set_border_color(const core::Color &c) { border = c; }

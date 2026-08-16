@@ -78,9 +78,9 @@ namespace zb::app::ui_preview
                 continue;
             }
 
-            auto screen = std::make_unique<zb::ui::Panel>();
+            auto screen = std::make_unique<zb::ui::FlexPanel>();
             screen->set_size(_width, _height);
-            zb::ui::Panel *raw = screen.get();
+            zb::ui::FlexPanel *raw = screen.get();
             zb::ui::build(*screen, doc);
             root.add_child(std::move(screen));
             screens_.push_back(raw);

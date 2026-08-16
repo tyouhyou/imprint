@@ -176,6 +176,79 @@ column id="main" spacing=4 padding=8
         EXPECT(cb->is_checked());
     }
 
+    // continuation: a line ending in a single backslash joins the next
+    // line; blank/comment lines in between are skipped; "\\" is literal
+    {
+        ui_node r = parse_ui_text(
+            "list_box rows=3 items=\"a\" \"b\" \\\n"
+            "    \"c\" \"d\"\n"
+            "label text=\"hello \\\n"
+            "# skipped comment\n"
+            "\n"
+            "  world\"\n"
+            "label text=\"C:\\\\path\"\n",
+            nullptr);
+        EXPECT(r.children.size() == 3);
+        const auto &list = r.children[0];
+        EXPECT(list.type == "list_box");
+        EXPECT(list.items.size() == 4);
+        EXPECT(list.items[0] == "a");
+        EXPECT(list.items[1] == "b");
+        EXPECT(list.items[2] == "c");
+        EXPECT(list.items[3] == "d");
+        EXPECT(std::get<long long>(list.props[0].second) == 3);
+
+        const auto &lbl = r.children[1];
+        EXPECT(std::get<std::string>(lbl.props[0].second) == "hello world");
+
+        const auto &lbl2 = r.children[2];
+        EXPECT(std::get<std::string>(lbl2.props[0].second) == "C:\\path");
+    }
+
+    // multi-document composition: separate documents build into separate
+    // containers of one live tree (a window + a placeholder that hosts a
+    // second document), and input reaches both
+    {
+        // main window document: a column with a placeholder panel
+        ui_node win = parse_ui_text(
+            "column spacing=4\n"
+            "  label id=\"head\" text=\"Main\"\n"
+            "  column id=\"placeholder\" width=80 height=30\n",
+            nullptr);
+        // secondary document: a row of two buttons (a 'screen')
+        ui_node screen = parse_ui_text(
+            "row spacing=2\n"
+            "  button id=\"ok\" text=\"OK\"\n"
+            "  button id=\"cancel\" text=\"Cancel\"\n",
+            nullptr);
+
+        FlexPanel host;
+        host.set_size(200, 60);
+        build(host, win);
+        host.layout();
+
+        auto *placeholder = static_cast<FlexPanel *>(host.find_by_id("placeholder"));
+        EXPECT(placeholder != nullptr);
+        build(*placeholder, screen);  // second document into the slot
+        host.layout();
+
+        auto *ok = static_cast<Button *>(host.find_by_id("ok"));
+        auto *cancel = static_cast<Button *>(host.find_by_id("cancel"));
+        EXPECT(ok != nullptr && cancel != nullptr);
+        EXPECT(ok->is_descendant_of(placeholder));
+        EXPECT(ok->get_text() == u"OK");
+        EXPECT(cancel->get_text() == u"Cancel");
+
+        // both widgets are clickable through the shared dispatcher
+        bool ok_clicked = false;
+        ok->clicked += [&ok_clicked]() { ok_clicked = true; };
+        zb::ui::InputDispatcher d;
+        const core::impoint_t p = ok->get_absolute_position();
+        EXPECT(d.dispatch(host, press_at(p.x + 2, p.y + 2)));
+        EXPECT(d.dispatch(host, release_at(p.x + 2, p.y + 2)));
+        EXPECT(ok_clicked);
+    }
+
     // the ui_embed-packed document parses back identically
     {
         EXPECT(sizeof(kUiFiles) / sizeof(kUiFiles[0]) == 1);
