@@ -28,6 +28,13 @@ namespace zb::event
      * Subscribers that need to live with the event should hold the RAII
      * Subscription returned by subscribe(); both objects detach safely on
      * destruction in either order.
+     *
+     * Exception contract (see docs/code-contract.md section 1.5): a
+     * handler must not throw -- an escaping exception would be swallowed
+     * by the C-ABI boundary's catch(...) while the event still owned the
+     * call. The invoke depth is guarded with RAII anyway, so a throwing
+     * handler can never leave the event permanently "invoking": the depth
+     * unwinds and the tombstone compaction still runs.
      */
     template <class... TArgs>
     class Event
@@ -134,19 +141,17 @@ namespace zb::event
         {
             // iterate by index over the size captured on entry: handlers
             // added during the invoke are not called until the next one,
-            // and tombstoned entries are skipped by the empty check
-            ++invoke_depth;
+            // and tombstoned entries are skipped by the empty check. The
+            // guard unwinds the depth and compacts even when a handler
+            // throws (unsupported, see the exception contract above).
+            InvokeGuard guard(*this);
             const std::size_t n = handlers.size();
             for (std::size_t i = 0; i < n; ++i)
             {
-            if (handlers[i].second)
-            {
-                handlers[i].second(args...);
-            }
-            }
-            if (--invoke_depth == 0 && !handlers.empty())
-            {
-                compact();
+                if (handlers[i].second)
+                {
+                    handlers[i].second(args...);
+                }
             }
         }
 
@@ -156,6 +161,31 @@ namespace zb::event
         }
 
     private:
+        /*
+         * Depth counter RAII: increments on entry; on exit decrements and
+         * compacts the tombstoned entries of the outermost invoke. Even
+         * an exception escaping a handler (unsupported, see the class
+         * comment) unwinds through it, so the event is never left
+         * permanently "invoking" with unsub() stuck in tombstone mode.
+         */
+        struct InvokeGuard
+        {
+            Event &event;
+
+            explicit InvokeGuard(Event &e) : event(e)
+            {
+                ++event.invoke_depth;
+            }
+
+            ~InvokeGuard()
+            {
+                if (--event.invoke_depth == 0 && !event.handlers.empty())
+                {
+                    event.compact();
+                }
+            }
+        };
+
         // Subscription registers/unregisters itself here; the Event
         // destructor detaches all of them so neither object can dangle
         void attach(Subscription<TArgs...> &s) { attached_subscriptions.push_back(&s); }

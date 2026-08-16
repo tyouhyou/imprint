@@ -136,5 +136,110 @@ int test_layout_dirty()
             EXPECT(pp->layouts == 2);
         }
 
+        // runtime mutation: a child added after the first paint joins
+        // the layout on the next paint, and a removal re-lays the rest
+        {
+            CanvasWindow w;
+            w.create(200, 150);
+            w.set_auto_layout(true);
+            auto &root = w.root();
+            auto panel = std::make_unique<Panel>();
+            panel->set_size(100, 60);
+            auto *pp = panel.get();
+            auto a = std::make_unique<Label>();
+            a->set_text("AB");
+            a->set_size(12, 7);
+            auto *pa = a.get();
+            panel->add_child(std::move(a));
+            root.add_child(std::move(panel));
+            w.paint();
+            EXPECT(pa->get_position().x == 0 && pa->get_position().y == 0);
+
+            auto b = std::make_unique<Label>();
+            b->set_text("CD");
+            b->set_size(12, 7);
+            auto *pb = b.get();
+            pp->add_child(std::move(b));  // mutated after the first paint
+            w.paint();
+            EXPECT(pa->get_position().x == 0 && pa->get_position().y == 0);
+            EXPECT(pb->get_position().x == 0 && pb->get_position().y == 7);  // 0 + 7 + 0
+
+            pp->remove_child(pb);
+            w.paint();
+            EXPECT(pa->get_position().x == 0 && pa->get_position().y == 0);
+        }
+        // runtime mutation: Panel spacing / padding / orientation after
+        // the first paint are picked up by the next paint
+        {
+            CanvasWindow w;
+            w.create(200, 150);
+            w.set_auto_layout(true);
+            auto &root = w.root();
+            auto panel = std::make_unique<Panel>();
+            panel->set_size(100, 60);
+            auto *pp = panel.get();
+            auto a = std::make_unique<Label>();
+            a->set_text("AB");
+            a->set_size(12, 7);
+            auto b = std::make_unique<Label>();
+            b->set_text("CD");
+            b->set_size(12, 7);
+            auto *pa = a.get();
+            auto *pb = b.get();
+            panel->add_child(std::move(a));
+            panel->add_child(std::move(b));
+            root.add_child(std::move(panel));
+            w.paint();
+            EXPECT(pa->get_position().y == 0);
+            EXPECT(pb->get_position().y == 7);
+
+            pp->set_spacing(3);
+            w.paint();
+            EXPECT(pb->get_position().y == 10);  // 0 + 7 + 3
+
+            pp->set_padding(2);
+            w.paint();
+            EXPECT(pa->get_position().x == 2 && pa->get_position().y == 2);
+            EXPECT(pb->get_position().y == 12);  // 2 + 7 + 3
+
+            pp->set_orientation(Panel::orientation::horizontal);
+            w.paint();
+            EXPECT(pa->get_position().x == 2 && pa->get_position().y == 2);
+            EXPECT(pb->get_position().x == 17 && pb->get_position().y == 2);  // 2 + 12 + 3
+        }
+        // runtime mutation: FlexPanel spacing / direction / add_child
+        // after the first paint (same protocol as Panel; sizes are
+        // materialized by the flex layout itself)
+        {
+            CanvasWindow w;
+            w.create(200, 150);
+            w.set_auto_layout(true);
+            auto &root = w.root();
+            auto flex = std::make_unique<FlexPanel>();
+            flex->set_size(200, 120);
+            auto *ff = flex.get();
+            auto a = std::make_unique<Label>();
+            a->set_text("AB");  // auto: 12x7
+            auto *pa = a.get();
+            flex->add_child(std::move(a));
+            root.add_child(std::move(flex));
+            w.paint();
+            EXPECT(pa->get_position().x == 0 && pa->get_position().y == 0);
+
+            ff->set_spacing(6);
+            auto b = std::make_unique<Label>();
+            b->set_text("CD");  // auto: 12x7
+            auto *pb = b.get();
+            ff->add_child(std::move(b));  // `ff` outlives the moved-from `flex`
+            w.paint();
+            EXPECT(pa->get_position().x == 0 && pa->get_position().y == 0);
+            EXPECT(pb->get_position().x == 0 && pb->get_position().y == 13);  // 7 + 6
+
+            ff->set_direction(FlexPanel::flex_direction::row);
+            w.paint();
+            EXPECT(pa->get_position().x == 0 && pa->get_position().y == 0);
+            EXPECT(pb->get_position().x == 18 && pb->get_position().y == 0);  // 12 + 6
+        }
+
         return test::report("layout_dirty");
 }

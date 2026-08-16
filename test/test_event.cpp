@@ -3,6 +3,8 @@
 // during-invoke isolation, reentrancy, and RAII guard lifecycle safety.
 #include "test.hpp"
 
+#include "test_alloc_count.hpp"
+
 #include "event.hpp"
 
 using zb::event::Event;
@@ -221,6 +223,95 @@ static void test_subscription_must_be_held()
     EXPECT(calls == 0);
 }
 
+static void test_handler_exception_keeps_event_consistent()
+{
+    // an exception escaping a handler is unsupported (code-contract 1.5),
+    // but it must not corrupt the event: the depth guard unwinds and
+    // compacts, so the table keeps its outside-invoke semantics
+    Event<> ev;
+    int fires = 0;
+    const uint32_t a = ev += [&fires]() { ++fires; };
+    bool boom = true;
+    const uint32_t b = ev += [&boom]()
+    {
+        if (boom)
+        {
+            boom = false;
+            throw 1;
+        }
+    };
+    const uint32_t c = ev += [&fires]() { ++fires; };
+
+    try
+    {
+        ev();
+    }
+    catch (const int &)
+    {
+    }
+    // the handler before the thrower ran, the one after it did not
+    EXPECT(fires == 1);
+
+    ev();  // the thrower is still subscribed and runs again
+    EXPECT(fires == 3);
+
+    // unsub from outside an invoke erases immediately: no leftover
+    // tombstone, no stuck depth
+    ev.unsub(a);
+    ev.unsub(b);
+    EXPECT(bool(ev));
+    ev.unsub(c);
+    EXPECT(!bool(ev));
+}
+
+static void test_handler_exception_no_table_growth()
+{
+    // regression gate for the depth guard: without it a throwing handler
+    // leaves the event permanently "invoking", every later unsub
+    // tombstones instead of erasing, and the handler table grows without
+    // bound. Warm the capacity, then hammer subscribe / invoke-throw /
+    // unsubscribe cycles: the exception-unwound compaction must keep the
+    // table inside its capacity (zero allocation).
+    Event<> ev;
+    for (int i = 0; i < 4; ++i)
+    {
+        ev += []() {};
+    }
+    ev();
+    bool boom = true;
+    ev += [&boom]()
+    {
+        if (boom)
+        {
+            throw 1;
+        }
+    };
+
+    const int cycles = 200;
+    bool caught = true;
+    {
+        test::scoped_alloc_count c;
+        for (int i = 0; i < cycles; ++i)
+        {
+            const uint32_t id = ev += []() {};
+            try
+            {
+                ev();
+                caught = false;  // the expected throw did not happen
+            }
+            catch (const int &)
+            {
+            }
+            ev.unsub(id);
+        }
+        std::printf("event subscribe/invoke-throw/unsub allocations (%d cycles): %lld\n",
+                    cycles, c.delta());
+        EXPECT(c.delta() == 0);
+    }
+    EXPECT(caught);
+    EXPECT(bool(ev));  // the thrower itself stays subscribed
+}
+
 int test_event()
 {
     test_basic_subscribe_invoke_unsub();
@@ -234,6 +325,8 @@ int test_event()
     test_subscription_event_destroyed_first();
     test_subscription_unsub_during_invoke_via_raii();
     test_subscription_must_be_held();
+    test_handler_exception_keeps_event_consistent();
+    test_handler_exception_no_table_growth();
 
     return test::report("event");
 }

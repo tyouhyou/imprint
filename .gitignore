@@ -1,5 +1,6 @@
 # temporary file
 review*.md
+reports/
 
 # Build outputs (all variants, e.g. /build/, /build_font/)
 /build*/
