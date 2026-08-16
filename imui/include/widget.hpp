@@ -90,6 +90,7 @@ namespace zb::ui
             size = s;
             size_explicit_ = true;
             mark_dirty();
+            mark_layout_dirty();
         }
         void set_size(const int w, const int h)
         {
@@ -97,6 +98,7 @@ namespace zb::ui
             size = {w, h};
             size_explicit_ = true;
             mark_dirty();
+            mark_layout_dirty();
         }
         [[nodiscard]] core::imsize_t get_size() const { return size; }
 
@@ -117,6 +119,10 @@ namespace zb::ui
             size = {w, h};
             size_explicit_ = false;
             mark_dirty();
+            // the layout that writes this size re-lays all children in
+            // this pass, so the widget itself needs no invalidation; its
+            // ancestors' layout can depend on the size, so they do
+            mark_layout_dirty(false);
         }
         [[nodiscard]] virtual bool is_size_explicit() const { return size_explicit_; }
 
@@ -196,6 +202,7 @@ namespace zb::ui
             text_ = text;
             advance_cache_ = -1;
             mark_dirty();
+            mark_layout_dirty();
         }
         [[nodiscard]] const std::u16string &get_text() const { return text_; }
         void set_text_color(const core::Color &c)
@@ -228,6 +235,7 @@ namespace zb::ui
             primary_provider_ = provider;
             advance_cache_ = -1;
             mark_dirty();
+            mark_layout_dirty();
         }
 #if defined(USE_FONT)
         /* convenience: wraps the font as the primary provider */
@@ -237,6 +245,7 @@ namespace zb::ui
             font_ = f;
             primary_provider_ = zb::make_shared<FreeTypeProvider>(f);
             advance_cache_ = -1;
+            mark_layout_dirty();
         }
 #endif
 
@@ -251,7 +260,25 @@ namespace zb::ui
          * Leaf widgets do nothing. Called after the widget tree is set up
          * or when child geometry changes.
          */
-        virtual void layout() {}
+        virtual void layout() { clear_layout_dirty(); }
+
+        /*
+         * Layout invalidation (batch J5): the geometry/content setters
+         * flag this widget and its ancestors; a host that enables
+         * automatic layout (CanvasWindow::set_auto_layout) runs the root
+         * layout from paint(). The flag is cleared at the end of every
+         * layout pass, so a pending layout runs at most once per paint.
+         */
+        void mark_layout_dirty(const bool include_self = true)
+        {
+            Widget *w = include_self ? this : parent;
+            for (; w != nullptr; w = w->parent)
+            {
+                w->layout_dirty_ = true;
+            }
+        }
+        [[nodiscard]] bool is_layout_dirty() const { return layout_dirty_; }
+        void clear_layout_dirty() { layout_dirty_ = false; }
 
         /*
          * Tests a point given in the widget's local coordinates.
@@ -432,6 +459,7 @@ namespace zb::ui
         bool visible = true;
         bool focused = false;
         bool size_explicit_ = false;
+        bool layout_dirty_ = true;  // first paint lays out the tree
 
         // damage reporting: one unioned rect per widget, in absolute
         // coordinates; empty (dirty_ false) means "nothing reported"

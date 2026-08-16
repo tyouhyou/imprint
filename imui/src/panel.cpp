@@ -13,6 +13,7 @@ namespace zb::ui
                 std::unique_ptr<Widget> out = std::move(*it);
                 out->parent = nullptr;
                 children.erase(it);
+                mark_layout_dirty();
                 return out;
             }
         }
@@ -26,6 +27,7 @@ namespace zb::ui
             child->parent = nullptr;
         }
         children.clear();
+        mark_layout_dirty();
     }
 
     void Panel::layout()
@@ -48,6 +50,7 @@ namespace zb::ui
             }
             child->layout();
         }
+        clear_layout_dirty();
     }
 
     void Panel::draw_at(core::Graphics &area) const

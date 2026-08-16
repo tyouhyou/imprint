@@ -8,6 +8,7 @@ namespace zb::ui
     {
         mark_dirty();
         advance_cache_ = -1;
+        mark_layout_dirty();
         text_.clear();
         if (nullptr == text)
         {

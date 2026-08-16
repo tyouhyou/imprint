@@ -39,16 +39,33 @@ namespace zb::ui
 
         FlexPanel() = default;
 
-        void set_direction(const flex_direction d) { direction = d; }
-        void set_spacing(const int s) { spacing = s; }
-        void set_padding(const int p) { padding = p; }
-        void set_wrap(const bool w) { wrap = w; }
+        void set_direction(const flex_direction d)
+        {
+            direction = d;
+            mark_layout_dirty();
+        }
+        void set_spacing(const int s)
+        {
+            spacing = s;
+            mark_layout_dirty();
+        }
+        void set_padding(const int p)
+        {
+            padding = p;
+            mark_layout_dirty();
+        }
+        void set_wrap(const bool w)
+        {
+            wrap = w;
+            mark_layout_dirty();
+        }
 
         /* flex_grow > 0 makes the child share the leftover main-axis space */
         void add_child(std::unique_ptr<Widget> child, const int flex_grow = 0)
         {
             child->parent = this;
             items.push_back({std::move(child), flex_grow});
+            mark_layout_dirty();
         }
 
         [[nodiscard]] const std::vector<flex_item> &get_items() const { return items; }

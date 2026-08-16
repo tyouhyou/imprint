@@ -31,14 +31,27 @@ namespace zb::ui
 
         Panel() = default;
 
-        void set_orientation(const orientation o) { orient = o; }
-        void set_spacing(const int s) { spacing = s; }
-        void set_padding(const int p) { padding = p; }
+        void set_orientation(const orientation o)
+        {
+            orient = o;
+            mark_layout_dirty();
+        }
+        void set_spacing(const int s)
+        {
+            spacing = s;
+            mark_layout_dirty();
+        }
+        void set_padding(const int p)
+        {
+            padding = p;
+            mark_layout_dirty();
+        }
 
         void add_child(std::unique_ptr<Widget> child)
         {
             child->parent = this;
             children.push_back(std::move(child));
+            mark_layout_dirty();
         }
 
         [[nodiscard]] const std::vector<std::unique_ptr<Widget>> &get_children() const { return children; }

@@ -75,6 +75,7 @@ namespace zb::ui
                 std::unique_ptr<Widget> out = std::move(it->child);
                 out->parent = nullptr;
                 items.erase(it);
+                mark_layout_dirty();
                 return out;
             }
         }
@@ -88,6 +89,7 @@ namespace zb::ui
             item.child->parent = nullptr;
         }
         items.clear();
+        mark_layout_dirty();
     }
 
     void FlexPanel::layout()
@@ -124,6 +126,7 @@ namespace zb::ui
         }
         if (lines.empty())
         {
+            clear_layout_dirty();
             return;
         }
 
@@ -214,6 +217,7 @@ namespace zb::ui
             }
             cross_pos += line_cross + spacing;
         }
+        clear_layout_dirty();
     }
 
     void FlexPanel::draw_at(core::Graphics &area) const
