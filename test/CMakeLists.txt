@@ -32,6 +32,7 @@ add_executable(
     test_measure.cpp
     test_ui_file.cpp
     test_widget_size.cpp
+    test_remove.cpp
 )
 
 target_link_libraries(
