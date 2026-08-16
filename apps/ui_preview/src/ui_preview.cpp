@@ -48,6 +48,8 @@ namespace zb::app::ui_preview
         _height = static_cast<int32_t>(max_client_height);
         window_ = zb::make_shared<CanvasWindow>();
         window_->create(max_client_width, max_client_height, buffer);
+        // design-file host: layout is driven by the window (batch J5)
+        window_->set_auto_layout(true);
         load_documents();
         if (!screens_.empty())
         {
