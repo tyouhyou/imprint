@@ -35,6 +35,7 @@ add_executable(
     test_remove.cpp
     test_layout_dirty.cpp
     test_alloc_guard.cpp
+    test_perf_walk.cpp
 )
 
 target_link_libraries(

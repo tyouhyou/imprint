@@ -32,6 +32,7 @@ int test_widget_size();
 int test_remove();
 int test_layout_dirty();
 int test_alloc_guard();
+int test_perf_walk();
 
 int main()
 {
@@ -67,6 +68,7 @@ int main()
     total += test_remove();
     total += test_layout_dirty();
     total += test_alloc_guard();
+    total += test_perf_walk();
 
     if (total)
     {
