@@ -31,6 +31,7 @@ namespace zb::ui
         {
             visible = rows;
         }
+        invalidate_row_cache();
         auto s = get_size();
         s.height = static_cast<int>(visible) * row_height;
         set_size(s.width, s.height);
@@ -44,6 +45,7 @@ namespace zb::ui
         {
             return;
         }
+        invalidate_row_cache();
         mark_dirty();
         count = n;
         clamp_top();
@@ -70,6 +72,7 @@ namespace zb::ui
         {
             return;
         }
+        invalidate_row_cache();
         mark_dirty();
         value = v;
         if (value != invalid)
@@ -128,6 +131,7 @@ namespace zb::ui
         {
             return false;
         }
+        invalidate_row_cache();
         mark_dirty();
         value = next;
         reveal(value);
@@ -153,6 +157,7 @@ namespace zb::ui
         {
             return false;
         }
+        invalidate_row_cache();
         mark_dirty();
         top = static_cast<size_t>(next);
         return true;
@@ -185,6 +190,7 @@ namespace zb::ui
             {
                 return false;
             }
+            invalidate_row_cache();
             mark_dirty();
             value = row;
             changed(value);
@@ -218,6 +224,7 @@ namespace zb::ui
             {
                 return false;
             }
+            invalidate_row_cache();
             mark_dirty();
             top = static_cast<size_t>(next);
             return true;
@@ -287,6 +294,37 @@ namespace zb::ui
         return r;
     }
 
+    const ListBox::row_cache_entry *ListBox::find_row_cache(
+        const size_t row, const bool sel, const int w, const int h,
+        const core::Color &fg, const core::Color &bg) const
+    {
+        for (const auto &e : row_cache_)
+        {
+            if (e.row == row && e.sel == sel && e.w == w && e.h == h &&
+                e.fg.pixel == fg.pixel && e.bg.pixel == bg.pixel)
+            {
+                return &e;
+            }
+        }
+        return nullptr;
+    }
+
+    void ListBox::insert_row_cache(row_cache_entry &&e) const
+    {
+        // byte accounting: 16bpp builds carry half-size pixels
+        const size_t bytes = static_cast<size_t>(e.w) * static_cast<size_t>(e.h) *
+                             sizeof(core::Color);
+        if (row_cache_bytes_ + bytes > row_cache_budget)
+        {
+            // over budget: drop everything, the next paint rebuilds; the
+            // cache is a fast path, a worst-case blip is fine
+            row_cache_.clear();
+            row_cache_bytes_ = 0;
+        }
+        row_cache_bytes_ += bytes;
+        row_cache_.push_back(std::move(e));
+    }
+
     void ListBox::draw_at(core::Graphics &area) const
     {
         const auto s = get_size();
@@ -310,10 +348,20 @@ namespace zb::ui
             }
             if (text_fn != nullptr)
             {
-                std::string text = text_fn(text_arg, r);
-                auto img = make_text_image(text.c_str(), text_w, row_height, fg, bg);
-                const auto sz = img->size();
-                const core::image_t row{img->data(), sz.width, sz.height, 0};
+                core::image_t row;
+                if (const auto *hit = find_row_cache(r, sel, text_w, row_height, fg, bg))
+                {
+                    row = {hit->img->data(), hit->w, hit->h, 0};
+                }
+                else
+                {
+                    std::string text = text_fn(text_arg, r);
+                    auto img = make_text_image(text.c_str(), text_w, row_height, fg, bg);
+                    const auto sz = img->size();
+                    row = {img->data(), sz.width, sz.height, 0};
+                    insert_row_cache(row_cache_entry{r, sel, text_w, row_height, fg, bg,
+                                                     std::move(img)});
+                }
                 area.draw_image(row, 0, y0);
             }
         }

@@ -1,6 +1,9 @@
 #include "test.hpp"
 
 #include <cstdio>
+#include <cstring>
+
+#include "test_alloc_count.hpp"
 
 #include "imui.hpp"
 
@@ -231,6 +234,90 @@ int test_list_box()
             t.root.draw(g);
             EXPECT(core::Color::from(0, 80, 200).pixel == test::pixel_at(g, 60, 30));
             EXPECT(core::Color::from(0, 80, 200).pixel != test::pixel_at(g, 60, 13));
+        }
+
+        // row-image cache (batch J2): warm repaints are zero-allocation
+        // and pixel-identical to a cold render; selection, scroll and
+        // model changes invalidate the cache and rebuild it. The
+        // reference uses a second list instance so its paints are truly
+        // cold (the cache lives in the widget, not per surface).
+        {
+            Tree ref;
+            Tree meas;
+            InputDispatcher dref;
+            InputDispatcher dmeas;
+            core::Graphics gr(140, 80, nullptr);
+            core::Graphics gm(140, 80, nullptr);
+
+            const auto paint = [](Tree &t, core::Graphics &g)
+            {
+                g.fill_rect(0, 0, 139, 79, core::colors::White);
+                t.root.draw(g);
+            };
+            const auto same = [&]()
+            {
+                return std::memcmp(gr.data(), gm.data(),
+                                   140u * 80u * sizeof(core::Color)) == 0;
+            };
+
+            paint(ref, gr);
+            paint(meas, gm);
+            EXPECT(same());
+
+            // warm repaint: cache hits, no row re-rasterization, no text
+            // fetch -- zero allocations
+            {
+                test::scoped_alloc_count c;
+                paint(meas, gm);
+                std::printf("warm list repaint allocations: %lld\n", c.delta());
+                EXPECT(c.delta() == 0);
+            }
+            EXPECT(same());
+
+            // selection change (value): invalidated, rebuilt on paint
+            dref.dispatch(ref.root, press_at(70, 34));  // local (60, 24): row 1
+            dmeas.dispatch(meas.root, press_at(70, 34));
+            paint(ref, gr);
+            {
+                test::scoped_alloc_count c;
+                paint(meas, gm);
+                std::printf("selection rebuild allocations: %lld\n", c.delta());
+                EXPECT(c.delta() > 0);
+            }
+            EXPECT(same());
+
+            // scroll (top): same
+            dref.dispatch(ref.root, wheel_at(20, 20, -1));  // top 0 -> 3
+            dmeas.dispatch(meas.root, wheel_at(20, 20, -1));
+            paint(ref, gr);
+            {
+                test::scoped_alloc_count c;
+                paint(meas, gm);
+                std::printf("scroll rebuild allocations: %lld\n", c.delta());
+                EXPECT(c.delta() > 0);
+            }
+            EXPECT(same());
+
+            // model swap (set_items): same
+            ref.list->set_items(std::vector<std::string>{"a", "b", "c", "d", "e", "f"});
+            meas.list->set_items(std::vector<std::string>{"a", "b", "c", "d", "e", "f"});
+            paint(ref, gr);
+            {
+                test::scoped_alloc_count c;
+                paint(meas, gm);
+                std::printf("model swap rebuild allocations: %lld\n", c.delta());
+                EXPECT(c.delta() > 0);
+            }
+            EXPECT(same());
+
+            // ... and the rebuilt cache is warm again
+            {
+                test::scoped_alloc_count c;
+                paint(meas, gm);
+                std::printf("post-rebuild warm allocations: %lld\n", c.delta());
+                EXPECT(c.delta() == 0);
+            }
+            EXPECT(same());
         }
 
         return test::report("list_box");
