@@ -4,6 +4,24 @@
 
 namespace zb::ui
 {
+    namespace
+    {
+        // process-level shared fallback provider (batch J6): constructed
+        // at the first widget construction, then leaked so it outlives
+        // every widget, including static-storage ones destroyed after
+        // main. Safe because BitmapProvider is stateless.
+        const zb::SharedPtr<BitmapProvider> &fallback_singleton()
+        {
+            static zb::SharedPtr<BitmapProvider> *p =
+                new zb::SharedPtr<BitmapProvider>(zb::make_shared<BitmapProvider>());
+            return *p;
+        }
+    }  // namespace
+
+    Widget::Widget() : bitmap_fallback_(fallback_singleton())
+    {
+    }
+
     void Widget::set_text(const char *text)
     {
         mark_dirty();

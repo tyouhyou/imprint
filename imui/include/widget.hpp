@@ -64,7 +64,7 @@ namespace zb::ui
             bottom
         };
 
-        Widget() = default;
+        Widget();
         virtual ~Widget() = default;
 
         Widget(const Widget &) = delete;
@@ -508,7 +508,16 @@ namespace zb::ui
         h_align halign = h_align::left;
         v_align valign = v_align::top;
         zb::SharedPtr<GlyphProvider> primary_provider_;
-        zb::SharedPtr<BitmapProvider> bitmap_fallback_ = zb::make_shared<BitmapProvider>();
+        /*
+         * Fallback provider (batch J6): every widget shares one
+         * process-level BitmapProvider instance instead of allocating
+         * its own. BitmapProvider is stateless (zero data members), so
+         * the sharing is safe; adding state to it requires unsharing
+         * first. The shared instance is created before any widget and
+         * never destroyed (leaked on purpose), so a widget that outlives
+         * main can never touch a dead provider.
+         */
+        zb::SharedPtr<BitmapProvider> bitmap_fallback_;
 #if defined(USE_FONT)
         const Font *font_ = nullptr;
 #endif
