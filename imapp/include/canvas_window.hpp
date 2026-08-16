@@ -80,6 +80,27 @@ namespace zb::app
         // events only reach widgets inside this subtree (nullptr = no modal)
         void set_modal(zb::ui::Widget *m) { dispatcher_.set_modal(m); }
 
+        /*
+         * Removes a child from a panel with the tree-mutation protocol
+         * (batch J3): the widget is evicted from the input dispatcher
+         * first (active press cancelled, held focus released, hosted
+         * modal dropped), then ownership moves to the caller. Use this
+         * for trees that ever saw input; Panel::remove_child is the
+         * direct, coordination-free call.
+         */
+        std::unique_ptr<zb::ui::Widget> remove_from(zb::ui::Panel &panel, zb::ui::Widget *w)
+        {
+            dispatcher_.evict(w);
+            return panel.remove_child(w);
+        }
+
+        // removes and destroys every root child (dispatcher evicted first)
+        void clear_root_children()
+        {
+            dispatcher_.evict(root_.get());
+            root_->clear_children();
+        }
+
         // renders the widget tree and emits the painted signal
         void paint() noexcept
         {

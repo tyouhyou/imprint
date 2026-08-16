@@ -43,6 +43,17 @@ namespace zb::ui
             press_touch_id = 0;
         }
 
+        /*
+         * Cuts every state reference to a subtree that is about to be
+         * removed from the tree (batch J3): an active press on it is
+         * cancelled (on_cancel is delivered), a focus it holds is
+         * released (set_focused(false)), and a modal it hosts is
+         * dropped. Call this before Panel::remove_child /
+         * FlexPanel::remove_child -- see the docs on those, the
+         * coordinated entry is CanvasWindow::remove_from.
+         */
+        void evict(const Widget *w);
+
         // events only reach widgets inside this subtree (nullptr = no modal)
         void set_modal(Widget *m) { modal = m; }
 

@@ -72,6 +72,33 @@ namespace zb::ui
         set_focus(nullptr);
     }
 
+    void InputDispatcher::evict(const Widget *w)
+    {
+        if (w == nullptr)
+        {
+            return;
+        }
+        // an active press on the subtree: deliver the cancel like the
+        // dispatcher state machine would, then drop the pointer
+        if (pressed_target != nullptr &&
+            (pressed_target == w || pressed_target->is_descendant_of(w)))
+        {
+            pressed_target->on_cancel();
+            pressed_target = nullptr;
+        }
+        // the focus target is a single widget: either the removed widget
+        // itself or one of its descendants
+        if (focus_target != nullptr &&
+            (focus_target == w || focus_target->is_descendant_of(w)))
+        {
+            set_focus(nullptr);
+        }
+        if (modal != nullptr && (modal == w || modal->is_descendant_of(w)))
+        {
+            modal = nullptr;
+        }
+    }
+
     bool InputDispatcher::focus_next(Widget &root, const bool forward)
     {
         std::vector<Widget *> list;
