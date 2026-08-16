@@ -1,9 +1,40 @@
 #include "test.hpp"
 
+#include <memory>
+
 #include "flex_panel.hpp"
 #include "imui.hpp"
+#include "text/glyph_provider.hpp"
 
 using namespace zb::ui;
+
+namespace
+{
+    // exposes the protected text_advance() for the cache probes
+    struct ProbeWidget : Widget
+    {
+        int adv() const { return text_advance(); }
+    };
+
+    // provider that counts measure() calls: a cache hit must not reach
+    // the provider at all
+    struct CountingProvider : GlyphProvider
+    {
+        mutable int measures = 0;
+
+        bool covers(const char16_t) const override { return true; }
+        text_metrics measure(const char16_t *str, const int len) const override
+        {
+            ++measures;
+            return {6 * len, 7, 6};
+        }
+        text_metrics line_metrics() const override { return {0, 7, 6}; }
+        void write(core::Graphics &, const char16_t *, const int, const int,
+                   const int, const core::Color &) const override
+        {
+        }
+    };
+}  // namespace
 
 // measure(): the contract is natural size by content, explicit size wins
 int test_measure()
@@ -132,6 +163,58 @@ int test_measure()
         EXPECT(sptr->get_position().y == 9);  // 7 + 2
         EXPECT(sptr->get_size().width == 100);
         EXPECT(lptr->get_size().width == 12);
+    }
+
+    // text advance cache (batch J4): a measured text is not measured
+    // again until a setter that changes the run fires; set_text and
+    // set_glyph_provider are the invalidation points
+    {
+        auto provider = zb::make_shared<CountingProvider>();
+        ProbeWidget w;
+        w.set_glyph_provider(provider);
+        w.set_text("AB");
+
+        EXPECT(w.adv() == 12);          // cold: measured once
+        EXPECT(provider->measures == 1);
+        EXPECT(w.adv() == 12);          // warm: cache hit
+        EXPECT(provider->measures == 1);
+        EXPECT(w.get_text().size() == 2);  // state unchanged by measuring
+
+        w.set_text("ABCD");             // invalidation: re-measured
+        EXPECT(w.adv() == 24);
+        EXPECT(provider->measures == 2);
+
+        w.set_text("ABCD");             // same text, setter still resets
+        EXPECT(w.adv() == 24);
+        EXPECT(provider->measures == 3);
+
+        auto other = zb::make_shared<CountingProvider>();
+        w.set_glyph_provider(other);    // provider change: invalidated
+        EXPECT(other->measures == 0);
+        EXPECT(w.adv() == 24);
+        EXPECT(other->measures == 1);
+        EXPECT(provider->measures == 3);  // the old provider is untouched
+
+        // a 0 advance is a valid cached value (not the "empty" sentinel);
+        // an empty run never reaches the provider at all
+        w.set_text("");
+        EXPECT(w.adv() == 0);
+        EXPECT(other->measures == 1);
+        EXPECT(w.adv() == 0);
+        EXPECT(other->measures == 1);
+    }
+
+    // measure() paths run through the same cache (Label)
+    {
+        auto provider = zb::make_shared<CountingProvider>();
+        Label l;
+        l.set_glyph_provider(provider);
+        l.set_text("XYZ");
+
+        EXPECT(l.measure().width == 18);
+        EXPECT(provider->measures == 1);
+        EXPECT(l.measure().width == 18);
+        EXPECT(provider->measures == 1);
     }
 
     return test::report("measure");

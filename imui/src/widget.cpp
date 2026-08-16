@@ -7,6 +7,7 @@ namespace zb::ui
     void Widget::set_text(const char *text)
     {
         mark_dirty();
+        advance_cache_ = -1;
         text_.clear();
         if (nullptr == text)
         {
@@ -159,7 +160,12 @@ const auto s = get_size();
 
     int Widget::text_advance() const
     {
-        return advance_of(text_.data(), static_cast<int>(text_.size()));
+        if (advance_cache_ >= 0)
+        {
+            return advance_cache_;
+        }
+        advance_cache_ = advance_of(text_.data(), static_cast<int>(text_.size()));
+        return advance_cache_;
     }
 
     int Widget::text_ascent() const

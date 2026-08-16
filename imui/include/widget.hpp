@@ -194,6 +194,7 @@ namespace zb::ui
         void set_text(const std::u16string &text)
         {
             text_ = text;
+            advance_cache_ = -1;
             mark_dirty();
         }
         [[nodiscard]] const std::u16string &get_text() const { return text_; }
@@ -225,6 +226,7 @@ namespace zb::ui
         void set_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider)
         {
             primary_provider_ = provider;
+            advance_cache_ = -1;
             mark_dirty();
         }
 #if defined(USE_FONT)
@@ -234,6 +236,7 @@ namespace zb::ui
             mark_dirty();
             font_ = f;
             primary_provider_ = zb::make_shared<FreeTypeProvider>(f);
+            advance_cache_ = -1;
         }
 #endif
 
@@ -481,5 +484,13 @@ namespace zb::ui
 #if defined(USE_FONT)
         const Font *font_ = nullptr;
 #endif
+        /*
+         * text_advance() cache (batch J4): the measurement splits text_
+         * into provider runs and asks each provider, which costs per
+         * call; the result depends only on text_ and the glyph providers
+         * (covers/measure), so every setter that changes either resets
+         * the cache. advance_of() (arbitrary runs) stays uncached.
+         */
+        mutable int advance_cache_ = -1;
     };
 }
