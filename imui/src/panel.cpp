@@ -1,7 +1,33 @@
 #include "panel.hpp"
 
+#include <utility>
+
 namespace zb::ui
 {
+    std::unique_ptr<Widget> Panel::remove_child(Widget *w)
+    {
+        for (auto it = children.begin(); it != children.end(); ++it)
+        {
+            if (it->get() == w)
+            {
+                std::unique_ptr<Widget> out = std::move(*it);
+                out->parent = nullptr;
+                children.erase(it);
+                return out;
+            }
+        }
+        return nullptr;
+    }
+
+    void Panel::clear_children()
+    {
+        for (const auto &child : children)
+        {
+            child->parent = nullptr;
+        }
+        children.clear();
+    }
+
     void Panel::layout()
     {
         // the layout owns all child geometry writes: report the whole

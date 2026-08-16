@@ -1,6 +1,7 @@
 #include "flex_panel.hpp"
 
 #include <algorithm>
+#include <utility>
 
 namespace zb::ui
 {
@@ -64,6 +65,30 @@ namespace zb::ui
             }
         }
     }  // namespace
+
+    std::unique_ptr<Widget> FlexPanel::remove_child(Widget *w)
+    {
+        for (auto it = items.begin(); it != items.end(); ++it)
+        {
+            if (it->child.get() == w)
+            {
+                std::unique_ptr<Widget> out = std::move(it->child);
+                out->parent = nullptr;
+                items.erase(it);
+                return out;
+            }
+        }
+        return nullptr;
+    }
+
+    void FlexPanel::clear_children()
+    {
+        for (const auto &item : items)
+        {
+            item.child->parent = nullptr;
+        }
+        items.clear();
+    }
 
     void FlexPanel::layout()
     {

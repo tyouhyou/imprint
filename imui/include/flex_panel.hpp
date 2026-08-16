@@ -53,6 +53,23 @@ namespace zb::ui
 
         [[nodiscard]] const std::vector<flex_item> &get_items() const { return items; }
 
+        /*
+         * Removes the child from the tree and transfers its ownership to
+         * the caller; the child's parent is reset to null. Returns null
+         * when `w` is not a child (no partial state).
+         *
+         * Tree-mutation protocol: a widget that ever reached a dispatcher
+         * must be evicted first (InputDispatcher::evict /
+         * CanvasWindow::remove_from, batch J3), or the dispatcher keeps a
+         * dangling pointer. Direct calls are for hosts that never fed the
+         * tree to a dispatcher.
+         */
+        std::unique_ptr<Widget> remove_child(Widget *w);
+
+        // removes and destroys every child (parents reset first); same
+        // eviction duty as remove_child
+        void clear_children();
+
         // container marker for generic host code (ui_builder, layout)
         [[nodiscard]] bool is_flex_container() const override { return true; }
 
