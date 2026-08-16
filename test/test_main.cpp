@@ -30,6 +30,7 @@ int test_ui_file();
 
 int test_widget_size();
 int test_remove();
+int test_layout_dirty();
 
 int main()
 {
@@ -63,6 +64,7 @@ int main()
     total += test_ui_file();
     total += test_widget_size();
     total += test_remove();
+    total += test_layout_dirty();
 
     if (total)
     {

@@ -33,6 +33,7 @@ add_executable(
     test_ui_file.cpp
     test_widget_size.cpp
     test_remove.cpp
+    test_layout_dirty.cpp
 )
 
 target_link_libraries(

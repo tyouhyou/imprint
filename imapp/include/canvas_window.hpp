@@ -81,6 +81,17 @@ namespace zb::app
         void set_modal(zb::ui::Widget *m) { dispatcher_.set_modal(m); }
 
         /*
+         * Automatic layout (batch J5): when enabled, paint() runs the
+         * root layout whenever a layout-affecting setter fired since the
+         * last pass (set_size / set_text / container setters). Off by
+         * default: hosts that place their widgets explicitly keep their
+         * geometry untouched, and their own layout() calls stay
+         * idempotent with the flag protocol. Design-file hosts
+         * (ui_preview) enable it.
+         */
+        void set_auto_layout(const bool on) { auto_layout_ = on; }
+
+        /*
          * Removes a child from a panel with the tree-mutation protocol
          * (batch J3): the widget is evicted from the input dispatcher
          * first (active press cancelled, held focus released, hosted
@@ -107,6 +118,14 @@ namespace zb::app
             if (graphics_ == nullptr || root_ == nullptr)
             {
                 return;
+            }
+            // a pending layout runs before the damage walk when automatic
+            // layout is enabled (set_auto_layout); the walk then collects
+            // the geometry changes the layout just made (order: layout ->
+            // damage -> draw, see docs/code-contract.md 5)
+            if (auto_layout_ && root_->is_layout_dirty())
+            {
+                root_->layout();
             }
             // the damage: the union of every widget's reported rect
             const bool requested = dirty_;  // a repaint was owed
@@ -189,6 +208,7 @@ namespace zb::app
         std::unique_ptr<zb::ui::Panel> root_;
         zb::ui::InputDispatcher dispatcher_;
         bool dirty_ = true;
+        bool auto_layout_ = false;
 
         // half-open damage rect of the last paint(), in buffer pixels
         int damage_l_ = 0;
