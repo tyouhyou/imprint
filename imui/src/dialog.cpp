@@ -75,6 +75,7 @@ namespace zb::ui
         title_label->layout();
         body->layout();
         buttons->layout();
+        clear_layout_dirty();
     }
 
     void Dialog::draw_at(core::Graphics &area) const

@@ -31,8 +31,16 @@ namespace zb::ui
         // frame
         void set_frame_size(const int w, const int h) { frame->set_size(w, h); }
         void set_frame_background_color(const core::Color &c) { frame->set_background_color(c); }
-        void set_frame_padding(const int p) { frame_padding = p; }
-        void set_mask_color(const core::Color &c) { mask = c; }
+        void set_frame_padding(const int p)
+        {
+            frame_padding = p;
+            mark_layout_dirty();
+        }
+        void set_mask_color(const core::Color &c)
+        {
+            mask = c;
+            mark_dirty();
+        }
 
         // title
         void set_title(const char *text) { title_label->set_text(text); }
@@ -47,6 +55,7 @@ namespace zb::ui
         {
             button_width = w;
             button_height = h;
+            mark_layout_dirty();
         }
 
         // a closed dialog must not intercept hits, drawing, or keyboard
