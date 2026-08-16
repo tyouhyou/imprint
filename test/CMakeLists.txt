@@ -31,6 +31,7 @@ add_executable(
     test_list_box.cpp
     test_measure.cpp
     test_ui_file.cpp
+    test_widget_size.cpp
 )
 
 target_link_libraries(

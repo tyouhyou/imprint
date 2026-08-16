@@ -28,6 +28,8 @@ int test_measure();
 int test_dirty();
 int test_ui_file();
 
+int test_widget_size();
+
 int main()
 {
     int total = 0;
@@ -58,6 +60,7 @@ int main()
     total += test_measure();
     total += test_dirty();
     total += test_ui_file();
+    total += test_widget_size();
 
     if (total)
     {
