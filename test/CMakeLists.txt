@@ -4,6 +4,7 @@ if (NOT NDS_PLATFORM)
 add_executable(
     test_imui
     test_main.cpp
+    test_alloc_count.cpp
     test_dirty.cpp
     test_builder.cpp
     test_panel.cpp

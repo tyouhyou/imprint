@@ -7,14 +7,23 @@
  * activity (the framework's hot-path zero-allocation contract, batch J).
  * The counters are plain static scalars: the tests are single-threaded.
  *
- * Include this header in exactly one TU chain of the test binary (it
- * defines the replacement operators); every suite that wants a probe
- * includes it and uses test::scoped_alloc_count.
+ * The replacement operators live in test_alloc_count.cpp as out-of-line
+ * strong definitions. They must NOT stay inline in this header: under
+ * -O2/-O3 an inline definition is only emitted in TUs that call it, so
+ * allocations made inside the library objects bind to the runtime's own
+ * operator new and silently bypass the counter (every allocation gate
+ * printed 0 in a Release build before the split). Sized deallocation is
+ * replaced as well: optimized builds delete through
+ * operator delete(void*, size), and an unreplaced sized delete freed on
+ * a different entry point than the counting new allocated on, which
+ * ASan reports as alloc-dealloc-mismatch.
+ *
+ * Not replaced: the aligned (align_val_t) overloads — nothing in the
+ * framework or the tests allocates over-aligned types dynamically; such
+ * an allocation would run uncounted through the runtime's own new.
  */
 
 #include <cstddef>
-#include <cstdlib>
-#include <new>
 
 namespace test
 {
@@ -26,49 +35,3 @@ namespace test
         [[nodiscard]] long long delta() const { return g_alloc_count - base; }
     };
 }  // namespace test
-
-inline void *operator new(std::size_t n)
-{
-    ++test::g_alloc_count;
-    if (void *p = std::malloc(n))
-    {
-        return p;
-    }
-    throw std::bad_alloc{};
-}
-
-inline void *operator new[](std::size_t n)
-{
-    return ::operator new(n);
-}
-
-inline void *operator new(std::size_t n, const std::nothrow_t &) noexcept
-{
-    ++test::g_alloc_count;
-    return std::malloc(n);
-}
-
-inline void *operator new[](std::size_t n, const std::nothrow_t &) noexcept
-{
-    return ::operator new(n, std::nothrow);
-}
-
-inline void operator delete(void *p) noexcept
-{
-    std::free(p);
-}
-
-inline void operator delete[](void *p) noexcept
-{
-    ::operator delete(p);
-}
-
-inline void operator delete(void *p, const std::nothrow_t &) noexcept
-{
-    std::free(p);
-}
-
-inline void operator delete[](void *p, const std::nothrow_t &) noexcept
-{
-    ::operator delete(p, std::nothrow);
-}
