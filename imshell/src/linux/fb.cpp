@@ -3,7 +3,7 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
-#include "color.hpp"
+#include "core/color.hpp"
 #include "linux/fb.hpp"
 #include "logging.hpp"
 
