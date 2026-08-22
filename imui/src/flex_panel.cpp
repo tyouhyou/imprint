@@ -15,30 +15,32 @@ namespace zb::ui
 
         void set_main_size(Widget &w, const FlexPanel::flex_direction d, const int v)
         {
-            // set_size_auto: a flex-assigned size must not mark the child
-            // as explicitly sized, or the next layout would freeze it
+            // per-axis write: a grown main size must not clear an
+            // explicit cross-axis size (set_size_auto clears both flags)
             if (is_row(d))
             {
-                w.set_size_auto(v, w.get_size().height);
+                w.set_width_auto(v);
             }
             else
             {
-                w.set_size_auto(w.get_size().width, v);
+                w.set_height_auto(v);
             }
         }
 
         // the layout demand of a child along the main axis: an explicit
-        // set_size wins, otherwise the widget's natural measure()
+        // set_size wins on that axis, otherwise the widget's measure()
         int main_demand(const Widget &w, const FlexPanel::flex_direction d)
         {
-            const auto demand = w.is_size_explicit() ? w.get_size() : w.measure();
+            const bool own = is_row(d) ? w.is_width_explicit() : w.is_height_explicit();
+            const auto demand = own ? w.get_size() : w.measure();
             return is_row(d) ? demand.width : demand.height;
         }
 
         // the layout demand of a child along the cross axis
         int cross_demand(const Widget &w, const FlexPanel::flex_direction d)
         {
-            const auto demand = w.is_size_explicit() ? w.get_size() : w.measure();
+            const bool own = is_row(d) ? w.is_height_explicit() : w.is_width_explicit();
+            const auto demand = own ? w.get_size() : w.measure();
             return is_row(d) ? demand.height : demand.width;
         }
 
@@ -175,24 +177,38 @@ namespace zb::ui
                 }
             }
 
-            // materialize the sizes of auto-sized children (both axes) so
-            // hit-testing works; explicit sizes are left untouched; grown
-            // main sizes (set above) are kept
+            // materialize the sizes of auto-sized children (per axis) so
+            // hit-testing works; an axis with an explicit size keeps both
+            // its value and its flag; grown main sizes (set above) are
+            // already written
             for (const size_t i : line)
             {
                 Widget &child = *items[i].child;
-                if (!child.is_size_explicit())
+                const bool row = is_row(direction);
+                const bool main_explicit = row ? child.is_width_explicit() : child.is_height_explicit();
+                const bool cross_explicit = row ? child.is_height_explicit() : child.is_width_explicit();
+                if (!main_explicit && items[i].flex_grow == 0)
                 {
-                    const int main = items[i].flex_grow > 0 ? main_now(child, direction)
-                                                            : main_demand(child, direction);
-                    const int cross = cross_demand(child, direction);
-                    if (is_row(direction))
+                    const int demand = main_demand(child, direction);
+                    if (row)
                     {
-                        child.set_size_auto(main, cross);
+                        child.set_width_auto(demand);
                     }
                     else
                     {
-                        child.set_size_auto(cross, main);
+                        child.set_height_auto(demand);
+                    }
+                }
+                if (!cross_explicit)
+                {
+                    const int cross = cross_demand(child, direction);
+                    if (row)
+                    {
+                        child.set_height_auto(cross);
+                    }
+                    else
+                    {
+                        child.set_width_auto(cross);
                     }
                 }
             }

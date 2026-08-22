@@ -145,6 +145,20 @@ namespace zb::ui
         {
             return false;
         }
+        // a focused widget hidden after the focus was set (e.g. its
+        // dialog closed) must not consume keys: release the stale focus,
+        // navigation continues on the visible tree
+        if (focus_target != nullptr && !focus_target->is_effectively_visible())
+        {
+            set_focus(nullptr);
+        }
+        // modal: keys only reach the modal subtree; a focus target left
+        // outside (focused before the modal opened) is released
+        if (modal != nullptr && focus_target != nullptr &&
+            !focus_target->is_descendant_of(modal))
+        {
+            set_focus(nullptr);
+        }
         // the focused widget consumes the key first (slider arrows now,
         // TextInput characters later); an unconsumed key falls back to
         // the navigation handling below
@@ -158,15 +172,18 @@ namespace zb::ui
         {
             return false;
         }
+        // navigation is confined to the modal subtree while a modal is
+        // open (Tab must not walk out of the dialog)
+        Widget &scope = modal != nullptr ? *modal : root;
         switch (static_cast<input::key_code>(ev.key))
         {
         case input::key_code::tab:
         case input::key_code::down:
         case input::key_code::right:
-            return focus_next(root, true);
+            return focus_next(scope, true);
         case input::key_code::up:
         case input::key_code::left:
-            return focus_next(root, false);
+            return focus_next(scope, false);
         case input::key_code::enter:
         case input::key_code::space:
             if (focus_target != nullptr)
@@ -230,6 +247,15 @@ namespace zb::ui
                 }
             }
             return false;
+        }
+
+        // a pressed widget hidden mid-press (e.g. its dialog closed)
+        // must not receive further moves/releases: cancel it and let
+        // the event flow on (a following press claims a fresh target)
+        if (pressed_target != nullptr && !pressed_target->is_effectively_visible())
+        {
+            pressed_target->on_cancel();
+            pressed_target = nullptr;
         }
 
         if (is_press(ev))

@@ -51,6 +51,24 @@ int test_flex()
         EXPECT(at(*c[1].child, 10, 0));
     }
 
+    // an explicit cross-axis size survives a flex-grown main axis (Z5):
+    // set_size(80, 40) + grow in a row keeps the height 40 across
+    // relayouts (the old two-axis set_size_auto cleared both flags)
+    {
+        FlexPanel p;
+        p.set_direction(FlexPanel::flex_direction::row);
+        p.set_size(200, 100);
+        auto c = std::make_unique<Widget>();
+        c->set_size(80, 40);
+        const Widget *cw = c.get();
+        p.add_child(std::move(c), 1);
+        p.layout();
+        EXPECT(cw->get_size().width == 200);  // grown to fill the row
+        EXPECT(cw->get_size().height == 40);  // explicit cross size kept
+        p.layout();                           // and it survives relayout
+        EXPECT(cw->get_size().height == 40);
+    }
+
     // padding offsets every child
     {
         FlexPanel p;

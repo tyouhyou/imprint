@@ -84,6 +84,13 @@ extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int ch
         ev.key = key;
         ev.ch = ch;
         ev.touch_id = touch_id;
+        // the documented C-ABI contract carries the wheel delta in `key`
+        // (zbapi.h); the widgets read ev.delta -- without this mapping
+        // every wheel tick scrolled the same direction
+        if (ev.type == zb::input::input_type::mouse_wheel)
+        {
+            ev.delta = key;
+        }
         self->app->input(ev);
     }
     catch (...)

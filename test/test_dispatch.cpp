@@ -630,5 +630,126 @@ int test_dispatch()
         EXPECT(d.get_focus_target() == pbtn);
     }
 
+    // modal: keyboard focus and navigation stay inside the modal subtree
+    // (F5); a focus target left outside the dialog is released
+    {
+        Panel root;
+        root.set_size(100, 100);
+        auto a = std::make_unique<Button>();
+        a->set_size(20, 20);
+        a->set_position(5, 5);
+        auto *pa = a.get();
+        int a_clicks = 0;
+        pa->clicked += [&a_clicks]() { ++a_clicks; };
+        root.add_child(std::move(a));
+
+        auto dlg = std::make_unique<Panel>();
+        dlg->set_size(50, 50);
+        dlg->set_position(40, 40);
+        auto b = std::make_unique<Button>();
+        b->set_size(20, 20);
+        b->set_position(5, 5);  // absolute (45, 45)
+        auto *pb = b.get();
+        int b_clicks = 0;
+        pb->clicked += [&b_clicks]() { ++b_clicks; };
+        dlg->add_child(std::move(b));
+        auto *pdlg = dlg.get();
+        root.add_child(std::move(dlg));
+
+        InputDispatcher d;
+
+        // without modal, tab reaches the background button and enter
+        // activates it
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pa);
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::enter))));
+        EXPECT(a_clicks == 1);
+
+        // modal open: the outside focus is released, tab lands inside
+        // the dialog, enter activates the dialog button only
+        d.set_modal(pdlg);
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pb);
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::enter))));
+        EXPECT(b_clicks == 1);
+        EXPECT(a_clicks == 1);
+
+        // modal released: whole-tree navigation works again
+        d.set_modal(nullptr);
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pa);
+    }
+
+    // a focused widget hidden after the focus was set (its holder is
+    // hidden; its own flag stays true) does not consume keys or
+    // characters (F6): the stale focus is released on the next key event
+    {
+        Panel root;
+        root.set_size(100, 100);
+        auto a = std::make_unique<Button>();
+        a->set_size(20, 20);
+        a->set_position(5, 5);
+        auto *pa = a.get();
+        root.add_child(std::move(a));
+
+        auto holder = std::make_unique<Panel>();
+        holder->set_size(30, 30);
+        holder->set_position(50, 50);
+        auto probe = std::make_unique<CharProbe>();
+        probe->set_size(20, 20);
+        probe->set_position(5, 5);
+        auto *pp = probe.get();
+        holder->add_child(std::move(probe));
+        auto *ph = holder.get();
+        root.add_child(std::move(holder));
+
+        InputDispatcher d;
+        // focus the probe by tab (CharProbe does not claim presses);
+        // navigation order: a, then the probe
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pa);
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pp);
+
+        ph->set_visible(false);
+
+        zb::input::input_event cev;
+        cev.type = zb::input::input_type::key_down;
+        cev.ch = 'x';
+        EXPECT(!d.dispatch(root, cev));  // not consumed by the hidden probe
+        EXPECT(pp->chars_received == 0);
+        EXPECT(d.get_focus_target() == nullptr);  // stale focus released
+
+        // tab navigates the visible tree (the hidden holder is skipped)
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pa);
+    }
+
+    // a press claimed on a widget that is then hidden is cancelled: no
+    // further moves or releases reach it (F6)
+    {
+        Panel root;
+        root.set_size(100, 100);
+        auto holder = std::make_unique<Panel>();
+        holder->set_size(30, 30);
+        holder->set_position(10, 10);
+        auto cp = std::make_unique<CaptureProbe>();
+        cp->set_size(20, 20);
+        cp->set_position(5, 5);
+        auto *pcp = cp.get();
+        holder->add_child(std::move(cp));
+        auto *ph = holder.get();
+        root.add_child(std::move(holder));
+
+        InputDispatcher d;
+        EXPECT(d.dispatch(root, press_at(15, 15)));
+        EXPECT(pcp->pressed);
+
+        ph->set_visible(false);
+        EXPECT(!d.dispatch(root, move_to(20, 20)));  // not fed to the probe
+        EXPECT(pcp->cancelled == 1);                 // cancelled instead
+        EXPECT(!d.dispatch(root, release_at(20, 20)));
+    }
+
     return test::report("dispatch");
 }
