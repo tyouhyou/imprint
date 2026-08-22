@@ -12,6 +12,7 @@ int test_game();
 int test_ai();
 int test_blit_font();
 int test_app_flow();
+int test_quit();
 int test_graphics();
 int test_event();
 int test_text();
@@ -49,6 +50,7 @@ int main()
     total += test_ai();
     total += test_blit_font();
     total += test_app_flow();
+    total += test_quit();
     total += test_graphics();
     total += test_event();
     total += test_text();

@@ -208,10 +208,35 @@ void Graphics::draw_image(
 
 void Graphics::fill(const Color &colr)
 {
-    auto draw_width = draw_area.end_x - draw_area.start_x + 1;
-    for (int row = draw_area.start_y; row <= draw_area.end_y; row++)
+    // damage mode: the fill is part of a partial repaint -- rows and
+    // spans outside the region must keep their previous content
+    int start_x = draw_area.start_x;
+    int end_x = draw_area.end_x;
+    int start_y = draw_area.start_y;
+    int end_y = draw_area.end_y;
+    if (damage_on_)
     {
-        std::fill_n(pixels + (imsize.width * row + draw_area.start_x), draw_width, colr);
+        if (start_x < damage_l_)
+        {
+            start_x = damage_l_;
+        }
+        if (end_x > damage_r_)
+        {
+            end_x = damage_r_;
+        }
+        if (start_y < damage_t_)
+        {
+            start_y = damage_t_;
+        }
+        if (end_y > damage_b_)
+        {
+            end_y = damage_b_;
+        }
+    }
+    auto draw_width = end_x - start_x + 1;
+    for (int row = start_y; row <= end_y; row++)
+    {
+        std::fill_n(pixels + (imsize.width * row + start_x), draw_width, colr);
     }
 }
 
@@ -225,6 +250,14 @@ void Graphics::draw_pixel(const int &x, const int &y, const Color &colr)
     }
 
     if (sx < draw_area.start_x || sy < draw_area.start_y || sx > draw_area.end_x || sy > draw_area.end_y)
+    {
+        return;
+    }
+
+    // damage mode: writes are hard-clipped to the repainted region so
+    // widgets redrawn for it cannot smear over pruned neighbors whose
+    // stale pixels the region-present relies on (CanvasWindow::paint)
+    if (damage_on_ && (sx < damage_l_ || sy < damage_t_ || sx > damage_r_ || sy > damage_b_))
     {
         return;
     }

@@ -169,7 +169,13 @@ namespace zb::app
             }
             // the repainted region starts from the surface's default
             // background: moved widgets must not leave their old pixels
-            // behind on a partial repaint
+            // behind on a partial repaint. set_damage also makes the
+            // rasterizer hard-clip every write to the region (see
+            // Graphics::draw_pixel / fill): intersecting widgets repaint
+            // their FULL bounds, so without the write clip a big widget's
+            // background would smear over pruned neighbors outside the
+            // damage -- e.g. a dialog frame wiping its own buttons on a
+            // click far away.
             graphics_->set_damage(l, t, r, b);
             {
                 auto guard = graphics_->clip_safe(l, t, r - l, b - t);

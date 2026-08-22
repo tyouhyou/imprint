@@ -54,6 +54,7 @@ namespace zb::app::tictactoe::layout
     constexpr int second_btn_x = 203;
     constexpr int again_btn_x = 110;
     constexpr int again_btn_y = 142;
+    constexpr int quit_btn_x = 206;
 
     // ---- probe pixels (frame-colored rows just under the titles) ----
     constexpr int step_probe_x = 160;
