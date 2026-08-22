@@ -50,10 +50,12 @@ enum
 /* ---- keyboard codes (must match zb::input::key_code) ---- */
 enum
 {
+    ZB_KEY_BACKSPACE = 8,
     ZB_KEY_TAB = 9,
     ZB_KEY_ENTER = 13,
     ZB_KEY_ESCAPE = 27,
     ZB_KEY_SPACE = 32,
+    ZB_KEY_DEL = 127,
     ZB_KEY_UP = 256,
     ZB_KEY_DOWN,
     ZB_KEY_LEFT,
@@ -65,6 +67,15 @@ zb_app_t *zb_app_create(uint32_t width, uint32_t height);
 
 /* destroys the app */
 void zb_app_destroy(zb_app_t *app);
+
+/*
+ * Host contract notes:
+ *   - the host IS the shell: it drives input/paint/buffer and nothing
+ *     else; the buffer format is fixed at build time by COLOR_DEPTH
+ *   - all entry points must be called from ONE thread (the embedded
+ *     glibc shim declares the process single-threaded; a host that
+ *     calls zb_* from worker threads must marshal them itself)
+ */
 
 /* feeds an input event; fields without meaning for the type are ignored:
  *   - touch_* / mouse_* (click, move): x, y

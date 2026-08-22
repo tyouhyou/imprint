@@ -42,15 +42,18 @@ extern "C" void zb_set_log_callback(zb_log_cb cb)
 
 extern "C" zb_app *zb_app_create(uint32_t width, uint32_t height)
 {
+    auto *self = new zb_app();
     try
     {
-        auto *self = new zb_app();
         self->app = zb::app::make_app();
         self->app->create_window(width, height);
         return self;
     }
     catch (...)
     {
+        // the node (and whatever the app constructed before throwing)
+        // must not leak across the failed create
+        delete self;
         LE << "zb_app_create failed.";
         return nullptr;
     }
@@ -58,7 +61,16 @@ extern "C" zb_app *zb_app_create(uint32_t width, uint32_t height)
 
 extern "C" void zb_app_destroy(zb_app_t *self)
 {
-    delete self;
+    // the only export without a body that can throw: wrapped for
+    // consistency with the file-wide no-exception-crossing rule
+    try
+    {
+        delete self;
+    }
+    catch (...)
+    {
+        LE << "zb_app_destroy failed.";
+    }
 }
 
 extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int ch, int touch_id)
