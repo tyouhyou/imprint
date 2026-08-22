@@ -3,6 +3,7 @@
 #include <sys/mman.h>
 #include <sys/ioctl.h>
 #include <fcntl.h>
+#include "color.hpp"
 #include "linux/fb.hpp"
 #include "logging.hpp"
 
@@ -100,6 +101,13 @@ int FB::init()
     bytes_per_pixel = bits_per_pixel / 8;
     LD << "bits_per_pixel : " << bits_per_pixel;
     LD << "bytes_per_pixel : " << bytes_per_pixel;
+    // a format mismatch (e.g. a 32bpp build on a 16bpp panel) corrupts
+    // silently -- name it instead of swapping colors for no reason
+    if (bytes_per_pixel != static_cast<int>(sizeof(zb::ui::core::Color)))
+    {
+        LW << "fb: panel is " << bits_per_pixel << "bpp but the build renders "
+           << sizeof(zb::ui::core::Color) * 8 << "bpp; pixels will corrupt";
+    }
 
     if (ioctl(ffb, FBIOPUT_VSCREENINFO, &vinfo) < 0)
     {
