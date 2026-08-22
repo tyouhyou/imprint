@@ -257,14 +257,21 @@ namespace zb::ui
                 as_panel(container)->add_child(std::move(w));
             }
 
-            for (const ui_node &c : n.children)
+            // a leaf tag cannot host children: recursing would static_cast
+            // it to a container (no RTTI) and write through a bogus
+            // pointer -- drop the children instead (contract: leaf
+            // children are dropped with a warning)
+            if (!n.children.empty() && !is_container_tag(n.type))
             {
-                if (!is_container_tag(c.type))
+                LW << "ui_builder: '" << n.type
+                   << "' is not a container tag; its children are dropped";
+            }
+            else
+            {
+                for (const ui_node &c : n.children)
                 {
-                    LW << "ui_builder: '" << c.type
-                       << "' is not a container tag; its children are dropped";
+                    materialize(*added, is_flex, c);
                 }
-                materialize(*added, is_flex, c);
             }
         }
     }  // namespace

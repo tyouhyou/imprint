@@ -355,16 +355,21 @@ namespace zb::ui
                         if (const auto *s = std::get_if<std::string>(&value))
                         {
                             rec.node.items.push_back(*s);
-                            // further quoted strings on the same key
-                            skip_sp(&q, line_end);
-                            while (q < line_end && *q == '"')
+                        // further quoted strings on the same key
+                        skip_sp(&q, line_end);
+                        while (q < line_end && *q == '"')
+                        {
+                            if (!read_string(&q, line_end, str_value))
                             {
-                                if (read_string(&q, line_end, str_value))
-                                {
-                                    rec.node.items.push_back(std::move(str_value));
-                                    skip_sp(&q, line_end);
-                                }
+                                // an unterminated string does not advance
+                                // q: stop or this loop never ends
+                                LW << "ui_file: line " << first_line
+                                   << ": unterminated items string dropped";
+                                break;
                             }
+                            rec.node.items.push_back(std::move(str_value));
+                            skip_sp(&q, line_end);
+                        }
                         }
                         else
                         {

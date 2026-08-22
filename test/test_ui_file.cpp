@@ -152,6 +152,23 @@ column id="main" spacing=4 padding=8
         EXPECT(std::get<std::string>(r.children[0].children[0].props[0].second) == "b");
     }
 
+    // materialize drops the children of a leaf tag: parsing keeps them
+    // (the block above), building must not recurse into them -- the leaf
+    // would be static_cast to a container and written through
+    {
+        ui_node root = parse_ui_text(
+            "column\n"
+            "  label id=\"x\" text=\"hi\"\n"
+            "    button id=\"oops\" text=\"nested\"\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(100, 40);
+        build(host, root);
+        host.layout();
+        EXPECT(host.find_by_id("x") != nullptr);
+        EXPECT(host.find_by_id("oops") == nullptr);  // dropped, not built
+    }
+
     // end-to-end: parse then materialize into a live tree
     {
         ui_node root = parse_ui_text(
@@ -203,6 +220,20 @@ column id="main" spacing=4 padding=8
 
         const auto &lbl2 = r.children[2];
         EXPECT(std::get<std::string>(lbl2.props[0].second) == "C:\\path");
+    }
+
+    // an unterminated follow-up items string: the reader does not advance
+    // on failure, so the collector must stop (this used to spin forever);
+    // what was already collected is kept and later lines still parse
+    {
+        ui_node r = parse_ui_text(
+            "list_box rows=3 items=\"a\" \"b\n"
+            "label text=\"next\"\n",
+            nullptr);
+        EXPECT(r.children.size() == 2);
+        const auto &list = r.children[0];
+        EXPECT(list.items.size() == 1);
+        EXPECT(list.items[0] == "a");
     }
 
     // multi-document composition: separate documents build into separate
@@ -260,6 +291,7 @@ column id="main" spacing=4 padding=8
         EXPECT(ok);
         EXPECT(root.type == "column");
         EXPECT(root.children.size() == 5);
+        EXPECT(f.data[f.size] == 0);  // NUL sentinel beyond the document bytes
 
         EXPECT(find_ui_file(kUiFiles[0].name) == &kUiFiles[0]);
         EXPECT(find_ui_file("no_such.ui") == nullptr);
