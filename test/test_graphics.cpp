@@ -191,5 +191,86 @@ int test_graphics()
         EXPECT(!guard);
     }
 
+    // the constructor rejects empty and overflow-sized surfaces (F3):
+    // the pixel count is validated in 64 bits -- 65536x65536 used to
+    // wrap to zero, allocate nothing and still report a full-size draw
+    // area, overflowing the heap on the first fill/draw
+    {
+        bool threw = false;
+        try
+        {
+            auto g = core::Graphics::make_ptr(0, 10);
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+        threw = false;
+        try
+        {
+            auto g = core::Graphics::make_ptr(10, 0);
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+        threw = false;
+        try
+        {
+            auto g = core::Graphics::make_ptr(65536, 65536);
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+        auto ok = core::Graphics::make_ptr(1920, 1080);
+        EXPECT(ok->size().width == 1920 && ok->size().height == 1080);
+    }
+
+    // clone rejects an area whose bounds check used to wrap: 2^30 + 2^30
+    // went negative and passed (out-of-bounds read)
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        bool threw = false;
+        try
+        {
+            g->clone(1 << 30, 0, 1 << 30, 5);
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+    }
+
+    // clip_safe: a child hanging off the left/top of its parent's clip
+    // has that part cut away, not translated into view (F4) -- the clip
+    // bounds are the intersection, the local-coordinate origin stays
+    // the requested one
+    {
+        auto g = core::Graphics::make_ptr(100, 100);
+        g->fill(core::colors::Black);
+        {
+            auto parent = g->clip_safe(30, 10, 70, 90);  // abs [30..99]x[10..99]
+            EXPECT(static_cast<bool>(parent));
+            {
+                // child at relative (-20, 0): requested abs x [10..59]
+                auto child = g->clip_safe(-20, 0, 50, 50);
+                EXPECT(static_cast<bool>(child));
+                g->draw_pixel(0, 0, core::colors::White);   // abs (10,10): clipped away
+                g->draw_pixel(30, 0, core::colors::White);  // abs (40,10): in place
+                g->draw_pixel(30, 10, core::colors::White); // abs (40,20): in place
+            }
+            g->draw_pixel(0, 0, core::colors::Red);  // parent restored: abs (30,10)
+        }
+        EXPECT(test::pixel_at(*g, 10, 10) != core::colors::White.pixel);  // cut away
+        EXPECT(test::pixel_at(*g, 40, 10) == core::colors::White.pixel);  // not shifted
+        EXPECT(test::pixel_at(*g, 40, 20) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 30, 10) == core::colors::Red.pixel);
+    }
+
     return test::report("graphics");
 }

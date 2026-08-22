@@ -50,7 +50,19 @@ Graphics::Graphics(const uint32_t &width, const uint32_t &height, void *data)
     , imsize{static_cast<int>(width), static_cast<int>(height)}
     , draw_area{0, 0, static_cast<int>(width) - 1, static_cast<int>(height) - 1}
 {
-    auto len = width * height;
+    // init-path validation (contract §1): the pixel index math is
+    // int-based, so the pixel count must fit in one; the product is
+    // computed in 64 bits so the check itself cannot wrap. 65536x65536
+    // used to wrap to zero -- allocate nothing, still report a
+    // full-size draw area and overflow the heap on the first fill/draw
+    if (width == 0 || height == 0 ||
+        static_cast<uint64_t>(width) * static_cast<uint64_t>(height) >
+            static_cast<uint64_t>(2147483647))
+    {
+        throw error("surface " + std::to_string(width) + "x" +
+                    std::to_string(height) + " is empty or too large");
+    }
+    const auto len = static_cast<size_t>(width) * static_cast<size_t>(height);
     if (nullptr == data)
     {
         is_wrapper_mode = false;
@@ -71,10 +83,13 @@ Graphics::~Graphics()
 
 Graphics::ptr Graphics::clone(const int &x, const int &y, const int32_t &width, const int32_t &height) const
 {
+    // 64-bit sums: x + width must not wrap the check itself
+    // (2^30 + 2^30 used to go negative and pass)
     if (x < 0 || y < 0 || width <= 0 || height <= 0 ||
-        x + width > imsize.width || y + height > imsize.height)
+        static_cast<int64_t>(x) + width > imsize.width ||
+        static_cast<int64_t>(y) + height > imsize.height)
     {
-        throw std::runtime_error("clone area out of bound");
+        throw error("clone area out of bounds");
     }
 
     auto g = Graphics::make_ptr((uint32_t)width, (uint32_t)height);
@@ -112,8 +127,16 @@ Graphics::ClipGuard Graphics::clip_safe(const int &x, const int &y, const int32_
     const imarea_t saved_area = draw_area;
     const bool saved_offset_enabled = draw_area_offset_enabled;
     const impoint_t saved_offset = draw_area_offset;
-    set_draw_area(cx, cy, cex - cx + 1, cey - cy + 1);
+
+    // the clip bounds are the intersection; the local-coordinate origin
+    // stays the REQUESTED one. Using the intersection origin as the
+    // offset too (what set_draw_area does) translated a child that
+    // hangs off the left/top of its parent's clip into view by the
+    // clipped-away amount; right/bottom overflow was never affected
+    // (cx == ax there), which is the asymmetry that pinned it
+    draw_area = {cx, cy, cex, cey};
     draw_area_offset_enabled = true;
+    draw_area_offset = {ax, ay};
     return ClipGuard(*this, saved_area, saved_offset_enabled, saved_offset, true);
 }
 

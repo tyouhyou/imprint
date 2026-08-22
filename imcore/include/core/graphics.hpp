@@ -3,6 +3,7 @@
 #include <memory>
 #include "im_defines.hpp"
 #include "color.hpp"
+#include "error.hpp"
 #include "image_view.hpp"
 #include "ptr.hpp"
 
