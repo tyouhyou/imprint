@@ -172,7 +172,9 @@ int Image::write_png_file(
 
     if (0 == stbi_write_png(file_name.c_str(), (int)img_width, (int)img_height, 4, image_data.data(), (int)row_stride))
     {
-        LE << "Writing png file failed. (" << file_name << ") reason: " << stbi_failure_reason();
+        // stbi_failure_reason belongs to the READ side (stb_image); it
+        // says nothing about a write failure, so it is not reported here
+        LE << "Writing png file failed. (" << file_name << ")";
         return 4;
     }
     return 0;
@@ -205,7 +207,9 @@ int Image::write_png(
             row.push_back(cd.rgb.r);
             row.push_back(cd.rgb.g);
             row.push_back(cd.rgb.b);
-            row.push_back(cd.rgb.a);
+            // color16's alpha bit must expand to full opacity, not the
+            // byte 0/1: a 16bpp screenshot was ~fully transparent
+            row.push_back(cd.rgb.a != 0 ? 0xFF : 0x00);
         }
         cur_row++;
         return true;
