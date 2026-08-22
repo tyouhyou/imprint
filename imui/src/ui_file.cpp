@@ -73,7 +73,15 @@ namespace zb::ui
                 {
                     return false;
                 }
-                v = v * 10 + (t[i] - '0');
+                const int d = t[i] - '0';
+                // a tolerant parser must not run into signed-overflow UB:
+                // an overlong number is a bad value like any other
+                // (dropped, the property falls back to its default)
+                if (v > (9223372036854775807LL - d) / 10)
+                {
+                    return false;
+                }
+                v = v * 10 + d;
             }
             out = neg ? -v : v;
             return true;

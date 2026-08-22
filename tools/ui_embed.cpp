@@ -62,6 +62,15 @@ namespace
         return dot == std::string::npos ? base : base.substr(0, dot);
     }
 
+    // "dir/menu.ui" -> "menu.ui": the lookup name is the basename (with
+    // extension), so find_ui_file matches regardless of the directory the
+    // build ran from
+    std::string file_name(const std::string &path)
+    {
+        const std::size_t slash = path.find_last_of("/\\");
+        return slash == std::string::npos ? path : path.substr(slash + 1);
+    }
+
     bool read_file(const char *path, std::vector<unsigned char> &out)
     {
         FILE *f = std::fopen(path, "rb");
@@ -129,20 +138,54 @@ int main(int argc, char **argv)
                       "    const std::size_t size;\n"
                       "};\n\n");
 
+    // pass 2: re-read each document and derive its symbol and lookup
+    // name up front. A file that vanished between the passes fails the
+    // build (an empty array used to be emitted silently), and same-name
+    // or same-symbol inputs fail with a readable message instead of a
+    // C++ duplicate-symbol error
+    struct doc
+    {
+        std::string path;
+        std::string sym;
+        std::string name;
+        std::vector<unsigned char> bytes;
+    };
+    std::vector<doc> docs;
     for (const std::string &path : inputs)
     {
-        std::vector<unsigned char> bytes;
-        read_file(path.c_str(), bytes);
-        const std::string sym = symbol_of(file_base(path)) + "_ui";
-
+        doc d;
+        d.path = path;
+        d.name = file_name(path);
+        d.sym = symbol_of(file_base(path)) + "_ui";
+        if (!read_file(path.c_str(), d.bytes))
+        {
+            std::fprintf(stderr, "ui_embed: %s: cannot read file\n", path.c_str());
+            std::fclose(out);
+            return 1;
+        }
+        for (const auto &prev : docs)
+        {
+            if (prev.sym == d.sym || prev.name == d.name)
+            {
+                std::fprintf(stderr, "ui_embed: %s and %s collide (%s)\n",
+                             prev.path.c_str(), path.c_str(),
+                             prev.sym == d.sym ? "same basename" : "same file name");
+                std::fclose(out);
+                return 1;
+            }
+        }
         // match the shape pass 1 validated: the parser needs the NUL
         // terminator, the size field below reports the document length
-        bytes.push_back(0);
+        d.bytes.push_back(0);
+        docs.push_back(std::move(d));
+    }
 
-        std::fprintf(out, "static const unsigned char %s[] =\n{\n", sym.c_str());
-        for (std::size_t i = 0; i < bytes.size(); ++i)
+    for (const doc &d : docs)
+    {
+        std::fprintf(out, "static const unsigned char %s[] =\n{\n", d.sym.c_str());
+        for (std::size_t i = 0; i < d.bytes.size(); ++i)
         {
-            std::fprintf(out, "0x%02x,", bytes[i]);
+            std::fprintf(out, "0x%02x,", d.bytes[i]);
             if (i % 16 == 15)
             {
                 std::fprintf(out, "\n");
@@ -152,11 +195,10 @@ int main(int argc, char **argv)
     }
 
     std::fprintf(out, "static const embedded_ui_file kUiFiles[] =\n{\n");
-    for (const std::string &path : inputs)
+    for (const doc &d : docs)
     {
-        const std::string sym = symbol_of(file_base(path)) + "_ui";
-        std::fprintf(out, "    {\"%s\", %s, sizeof(%s) - 1},\n", path.c_str(), sym.c_str(),
-                     sym.c_str());
+        std::fprintf(out, "    {\"%s\", %s, sizeof(%s) - 1},\n", d.name.c_str(),
+                     d.sym.c_str(), d.sym.c_str());
     }
     std::fprintf(out, "};\n\n");
 

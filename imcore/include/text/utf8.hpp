@@ -19,9 +19,10 @@ namespace zb::ui
     char32_t decode_utf8_next(const char *&p);
 
     /*
-     * Converts an UTF-8 string (null-terminated) to UTF-16. Embedded NUL
-     * bytes are preserved as code units. A non-null-terminated slice can
-     * be converted by decoding in a loop with decode_utf8_next().
+     * Converts an UTF-8 string to UTF-16. Conversion stops at the first
+     * NUL (the C-string convention: an embedded NUL ends the text, it is
+     * not preserved as a code unit). A slice with embedded NULs can be
+     * converted by decoding in a loop with decode_utf8_next().
      */
     std::u16string utf8_to_utf16(const char *utf8);
 
