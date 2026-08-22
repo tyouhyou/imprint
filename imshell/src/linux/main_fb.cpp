@@ -16,6 +16,13 @@ int main(int argc, char *argv[])
     LI << "run on FB";
 
     FB fb;
+    if (!fb.ok())
+    {
+        // headless host or missing /dev/fb0: fail instead of spinning a
+        // loop that can never present a frame
+        LE << "framebuffer unavailable, exiting";
+        return 1;
+    }
     auto app = make_app();
     app->create_window(320, 240);
 

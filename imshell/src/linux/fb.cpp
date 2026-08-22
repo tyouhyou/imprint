@@ -1,16 +1,20 @@
 #include <cstring>
-#include <unistd.h>  
-#include <stdio.h>  
+#include <unistd.h>
 #include <sys/mman.h>
 #include <sys/ioctl.h>
-#include <fcntl.h>  
+#include <fcntl.h>
 #include "linux/fb.hpp"
+#include "logging.hpp"
 
 FB::FB()
-    : ffb(-1), buf(nullptr)
 {
     // TODO: throw error
-    init();
+    if (init() != 0)
+    {
+        // members keep their zero defaults: draw() is a no-op and ok()
+        // reports the failure (a null buf also survives the present path)
+        LE << "fb: init failed, presenting disabled";
+    }
 }
 
 FB::~FB()
@@ -21,7 +25,7 @@ FB::~FB()
 // TODO: for prototype sample. need pixel size, color format etc.
 void FB::draw(char *b, int w, int h, int rx, int ry, int rw, int rh)
 {
-    if (nullptr == b || w <= 0 || h <= 0)
+    if (nullptr == b || nullptr == buf || w <= 0 || h <= 0)
     {
         return;
     }
@@ -69,29 +73,29 @@ int FB::init()
     ffb = open("/dev/fb0", O_RDWR);
     if (ffb < 0)
     {
-        printf("Error : Can not open framebuffer device\r\n");  
+        LE << "can not open framebuffer device";
         return 1;
     }
 
     struct fb_fix_screeninfo finfo;
     if (ioctl(ffb, FBIOGET_FSCREENINFO, &finfo) < 0)
     {
-        printf("Error : Can not read fix screen info\r\n");  
+        LE << "can not read fix screen info";
         return 2;
     }
 
     struct fb_var_screeninfo vinfo;
     if (ioctl(ffb, FBIOGET_VSCREENINFO, &vinfo) < 0)
     {
-        printf("Error : Can not read var screen info\r\n");  
+        LE << "can not read var screen info";
         return 3;
     }
 
     //memcpy(&bk_vinfo, &vinfo, sizeof(struct fb_var_screeninfo));
     bits_per_pixel = vinfo.bits_per_pixel;// TODO: set or use it to determine color
     bytes_per_pixel = bits_per_pixel / 8;
-    printf("bits_per_pixel : %d\r\n", bits_per_pixel);
-    printf("bytes_per_pixel : %d\r\n", bytes_per_pixel);
+    LD << "bits_per_pixel : " << bits_per_pixel;
+    LD << "bytes_per_pixel : " << bytes_per_pixel;
 
     if (ioctl(ffb, FBIOPUT_VSCREENINFO, &vinfo) < 0)
     {
@@ -108,9 +112,9 @@ int FB::init()
     screen_line_len = finfo.line_length; // in bytes
     screen_mem_len = screen_line_len * screen_height;   // in bytes
 
-    printf("screen_width : %d\r\n", (int)screen_width);
-    printf("screen_height : %d\r\n", (int)screen_height);
-    printf("screen_line_len : %d\r\n", (int)screen_line_len);
+    LD << "screen_width : " << screen_width;
+    LD << "screen_height : " << screen_height;
+    LD << "screen_line_len : " << screen_line_len;
 
     buf = (char *)mmap(0,
                        screen_mem_len,
@@ -121,6 +125,9 @@ int FB::init()
 
     if (MAP_FAILED == buf)
     {
+        // a non-null check in draw() must not see MAP_FAILED (-1)
+        buf = nullptr;
+        LE << "mmap of the framebuffer failed";
         return 6;
     }
 

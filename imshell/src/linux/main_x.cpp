@@ -119,6 +119,18 @@ int start()
 
     auto hasExposed = false;
 
+    // feeds the app and repaints when a frame is owed: apps may consume
+    // an event as an app-level command without routing it through
+    // CanvasWindow::input, and their widget changes still get presented
+    const auto send_input = [&app](const zb::input::input_event &ev)
+    {
+        app->input(ev);
+        if (app->is_dirty())
+        {
+            app->paint();
+        }
+    };
+
     // the app requests to quit by closing its window (e.g. a QUIT button)
     bool app_closed = false;
     app->on_closed([&app_closed]() { app_closed = true; });
@@ -188,7 +200,7 @@ int start()
             }
             if (ev.key != 0 || ev.ch != 0)
             {
-                app->input(ev);
+                send_input(ev);
             }
             break;
         }
@@ -212,7 +224,20 @@ int start()
                     ev.button = zb::input::mouse_button_t::left;
                     ev.x = bp->x;
                     ev.y = bp->y;
-                    app->input(ev);
+                    send_input(ev);
+                }
+                if (bp->button == 4 || bp->button == 5)
+                {
+                    // the wheel arrives as button 4/5 presses; delta
+                    // carries the direction and x/y the pointer (the
+                    // dispatcher routes the wheel by position)
+                    zb::input::input_event ev;
+                    ev.type = zb::input::input_type::mouse_wheel;
+                    ev.touch_id = 0;
+                    ev.delta = (bp->button == 4) ? 1 : -1;
+                    ev.x = bp->x;
+                    ev.y = bp->y;
+                    send_input(ev);
                 }
             }
             break;
@@ -229,7 +254,7 @@ int start()
                     ev.button = zb::input::mouse_button_t::left;
                     ev.x = br->x;
                     ev.y = br->y;
-                    app->input(ev);
+                    send_input(ev);
                 }
                 if (br->button == 3) // Right mouse button
                 {
@@ -239,7 +264,7 @@ int start()
                     ev.button = zb::input::mouse_button_t::right;
                     ev.x = br->x;
                     ev.y = br->y;
-                    app->input(ev);
+                    send_input(ev);
                 }
             }
             break;
@@ -253,7 +278,7 @@ int start()
                 ev.x = mm->x;
                 ev.y = mm->y;
                 ev.touch_id = 0;
-                app->input(ev);
+                send_input(ev);
             }
             break;
         }
@@ -283,6 +308,9 @@ int start()
     }
 endwhile:
 
+    // XDestroyImage frees ximage->data with Xfree; the buffer belongs to
+    // the app's Graphics (delete[]) and is freed again by its destructor
+    xi->data = nullptr;
     XDestroyImage(xi);
     XFreeGC(display, gc);
     XDestroyWindow(display, window);

@@ -41,11 +41,22 @@ namespace
                     g_dirty_w = 0;  // nothing drawn, nothing invalid
                     return;
                 }
-                g_dirty_x = x;
-                g_dirty_y = y;
-                g_dirty_w = w;
-                g_dirty_h = h;
-                RECT rc{g_dirty_x, g_dirty_y, g_dirty_x + g_dirty_w, g_dirty_y + g_dirty_h};
+                // painted events can coalesce before WM_PAINT runs (it is
+                // the lowest-priority message): keep the union of every
+                // invalidated region or all but the last one is lost
+                LONG l = x, t = y, r = x + w, b = y + h;
+                if (g_dirty_w > 0)
+                {
+                    if (g_dirty_x < l) l = g_dirty_x;
+                    if (g_dirty_y < t) t = g_dirty_y;
+                    if (g_dirty_x + g_dirty_w > r) r = g_dirty_x + g_dirty_w;
+                    if (g_dirty_y + g_dirty_h > b) b = g_dirty_y + g_dirty_h;
+                }
+                g_dirty_x = l;
+                g_dirty_y = t;
+                g_dirty_w = r - l;
+                g_dirty_h = b - t;
+                RECT rc{l, t, r, b};
                 InvalidateRect(g_hwnd, &rc, FALSE);
             }
             else
@@ -56,6 +67,22 @@ namespace
                 g_dirty_h = g_buffer_height;
                 InvalidateRect(g_hwnd, nullptr, FALSE);
             }
+        }
+    }
+
+    // feeds the app and repaints when a frame is owed: apps may consume
+    // an event as an app-level command without routing it through
+    // CanvasWindow::input, and their widget changes still get presented
+    void send_input(const input_event &ev)
+    {
+        if (g_app == nullptr)
+        {
+            return;
+        }
+        g_app->input(ev);
+        if (g_app->is_dirty())
+        {
+            g_app->paint();
         }
     }
 
@@ -100,13 +127,17 @@ namespace
             (DWORD)((((g_buffer_width * zb::ui::core::ImColor_Depth) + 31) & ~31) >> 3) * (DWORD)g_buffer_height,
             0, 0, 0, 0};
 
-        // blit only the region the last paint() actually drew
+        // the whole DIB is submitted (StartScan = 0, every row) and the
+        // source rectangle selects the region. Passing the base pointer
+        // together with StartScan = y would tell GDI the buffer holds
+        // rows [y, y+h): it would blit the top of the frame for any
+        // region below the first row
         SetDIBitsToDevice(
             hDC,
             x, y,
             w, h,
             x, y,
-            y, h,
+            0, g_buffer_height,
             g_framebuffer, &bmi,
             DIB_RGB_COLORS);
     }
@@ -213,6 +244,14 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         case WM_MOUSEMOVE:
         {
+            // hover/drag moves drive the dispatcher: slop cancel, captured
+            // moves (slider/listbox drag) and hover repaints all read them
+            input_event ev;
+            ev.type = input_type::mouse_move;
+            ev.touch_id = 0;
+            ev.x = GET_X_LPARAM(lParam);
+            ev.y = GET_Y_LPARAM(lParam);
+            send_input(ev);
             break;
         }
         case WM_KEYDOWN:
@@ -233,10 +272,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
                 case VK_RIGHT: ev.key = static_cast<int>(key_code::right); break;
                 default: return 0;
             }
-            if (g_app)
-            {
-                g_app->input(ev);
-            }
+            send_input(ev);
             return 0;
         }
         case WM_CHAR:
@@ -266,10 +302,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             ev.button = mouse_button_t::left;
             ev.x = GET_X_LPARAM(lParam);
             ev.y = GET_Y_LPARAM(lParam);
-            if (g_app)
-            {
-                g_app->input(ev);
-            }
+            send_input(ev);
             break;
         }
         case WM_LBUTTONUP:
@@ -280,10 +313,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             ev.button = mouse_button_t::left;
             ev.x = GET_X_LPARAM(lParam);
             ev.y = GET_Y_LPARAM(lParam);
-            if (g_app)
-            {
-                g_app->input(ev);
-            }
+            send_input(ev);
             break;
         }
         case WM_RBUTTONDOWN:
@@ -294,10 +324,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             ev.button = mouse_button_t::right;
             ev.x = GET_X_LPARAM(lParam);
             ev.y = GET_Y_LPARAM(lParam);
-            if (g_app)
-            {
-                g_app->input(ev);
-            }
+            send_input(ev);
             break;
         }
         case WM_RBUTTONUP:
@@ -308,10 +335,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             ev.button = mouse_button_t::right;
             ev.x = GET_X_LPARAM(lParam);
             ev.y = GET_Y_LPARAM(lParam);
-            if (g_app)
-            {
-                g_app->input(ev);
-            }
+            send_input(ev);
             break;
         }
         case WM_MOUSEWHEEL:
@@ -321,10 +345,13 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             ev.type = input_type::mouse_wheel;
             ev.delta = GET_WHEEL_DELTA_WPARAM(wParam);
             ev.touch_id = 0;
-            if (g_app)
-            {
-                g_app->input(ev);
-            }
+            // WM_MOUSEWHEEL carries screen coordinates; the dispatcher
+            // routes the wheel to the widget under the (client) pointer
+            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+            ScreenToClient(hwnd, &pt);
+            ev.x = pt.x;
+            ev.y = pt.y;
+            send_input(ev);
             break;
         }
         case WM_DESTROY:
