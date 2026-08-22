@@ -303,18 +303,26 @@ const auto s = get_size();
     void Widget::walk_damage(int *out_l, int *out_t, int *out_r, int *out_b)
     {
         take_dirty(out_l, out_t, out_r, out_b);
+        // consume at read time: damage reported after this point (a
+        // setter firing during the draw) is not wiped by the paint pass
+        // and survives into the next frame
+        clear_dirty();
+        bool pending = false;
         for (size_t i = 0; i < child_count(); ++i)
         {
             if (auto *c = child_at(i))
             {
                 c->walk_damage(out_l, out_t, out_r, out_b);
+                pending = pending || c->subtree_dirty_;
             }
         }
+        subtree_dirty_ = pending;
     }
 
     void Widget::walk_clear_damage()
     {
         clear_dirty();
+        subtree_dirty_ = false;
         for (size_t i = 0; i < child_count(); ++i)
         {
             if (auto *c = child_at(i))

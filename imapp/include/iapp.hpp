@@ -62,9 +62,13 @@ namespace zb::app
         virtual void paint() = 0;
 
         /*
-         * @brief whether a repaint is owed (state changed since the last
-         *        paint()). Idle-polling shells (linux-fb, NDS) can skip
-         *        paint() entirely while this is false.
+         * @brief whether a repaint is owed: until the first paint, after
+         *        input changed something, or after any widget setter
+         *        reported damage (the tree propagates it to the window,
+         *        so changes from timers/callbacks count too; see also
+         *        CanvasWindow::invalidate). Idle-polling shells
+         *        (linux-fb, NDS) can skip paint() entirely while this
+         *        is false.
          */
         virtual bool is_dirty() const noexcept = 0;
 

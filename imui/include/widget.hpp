@@ -88,7 +88,8 @@ namespace zb::ui
         {
             mark_dirty();
             size = s;
-            size_explicit_ = true;
+            size_explicit_w_ = true;
+            size_explicit_h_ = true;
             mark_dirty();
             mark_layout_dirty();
         }
@@ -96,7 +97,8 @@ namespace zb::ui
         {
             mark_dirty();
             size = {w, h};
-            size_explicit_ = true;
+            size_explicit_w_ = true;
+            size_explicit_h_ = true;
             mark_dirty();
             mark_layout_dirty();
         }
@@ -117,14 +119,36 @@ namespace zb::ui
         {
             mark_dirty();
             size = {w, h};
-            size_explicit_ = false;
+            size_explicit_w_ = false;
+            size_explicit_h_ = false;
             mark_dirty();
             // the layout that writes this size re-lays all children in
             // this pass, so the widget itself needs no invalidation; its
             // ancestors' layout can depend on the size, so they do
             mark_layout_dirty(false);
         }
-        [[nodiscard]] virtual bool is_size_explicit() const { return size_explicit_; }
+        // per-axis variants for flex layouts: growing a child along the
+        // main axis must not discard an explicit cross-axis size (the
+        // two-axis set_size_auto clears both flags)
+        void set_width_auto(const int w)
+        {
+            mark_dirty();
+            size.width = w;
+            size_explicit_w_ = false;
+            mark_dirty();
+            mark_layout_dirty(false);
+        }
+        void set_height_auto(const int h)
+        {
+            mark_dirty();
+            size.height = h;
+            size_explicit_h_ = false;
+            mark_dirty();
+            mark_layout_dirty(false);
+        }
+        [[nodiscard]] virtual bool is_size_explicit() const { return size_explicit_w_ || size_explicit_h_; }
+        [[nodiscard]] bool is_width_explicit() const { return size_explicit_w_; }
+        [[nodiscard]] bool is_height_explicit() const { return size_explicit_h_; }
 
         void set_visible(const bool v)
         {
@@ -132,6 +156,22 @@ namespace zb::ui
             visible = v;
         }
         [[nodiscard]] bool is_visible() const { return visible; }
+
+        // visible and every ancestor visible: the state keyboard focus
+        // and active presses must respect (a widget inside a hidden
+        // dialog is not effectively visible even though its own flag
+        // is still set)
+        [[nodiscard]] bool is_effectively_visible() const
+        {
+            for (const Widget *w = this; w != nullptr; w = w->parent)
+            {
+                if (!w->is_visible())
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
 
         /*
          * Identity for host/designer-side references and event wiring.
@@ -161,6 +201,9 @@ namespace zb::ui
         void mark_dirty() { mark_dirty_rect(get_absolute_position().x, get_absolute_position().y, size.width, size.height); }
         void mark_dirty(const int x, const int y, const int w, const int h) { mark_dirty_rect(x, y, w, h); }
         [[nodiscard]] bool is_dirty() const { return dirty_; }
+        // this widget or any descendant reported damage since the last
+        // paint (the window's repaint-owed source, see CanvasWindow)
+        [[nodiscard]] bool is_subtree_dirty() const { return subtree_dirty_; }
         // aggregate reads the damage rect and clears it in one pass
         void take_dirty(int *out_l, int *out_t, int *out_r, int *out_b)
         {
@@ -176,10 +219,14 @@ namespace zb::ui
 
         /*
          * Damage walk: aggregates this widget's and every descendant's
-         * reported rect into the union given in (l, t, r, b), then clears
-         * all of them. Called once by the window at paint time.
+         * reported rect into the union given in (l, t, r, b), consuming
+         * each rect as it is read, then recomputes the subtree-pending
+         * flag bottom-up. Damage reported after this walk (e.g. by a
+         * setter firing during the draw) survives into the next frame.
+         * Called once by the window at paint time.
          */
         void walk_damage(int *out_l, int *out_t, int *out_r, int *out_b);
+        // resets every reported rect and pending flag in the subtree
         void walk_clear_damage();
 
         // background
@@ -458,12 +505,18 @@ namespace zb::ui
         std::string id_;  // host/designer reference handle, unused by the framework
         bool visible = true;
         bool focused = false;
-        bool size_explicit_ = false;
+        bool size_explicit_w_ = false;  // set_size marks the axes it sized
+        bool size_explicit_h_ = false;
         bool layout_dirty_ = true;  // first paint lays out the tree
 
         // damage reporting: one unioned rect per widget, in absolute
-        // coordinates; empty (dirty_ false) means "nothing reported"
+        // coordinates; empty (dirty_ false) means "nothing reported".
+        // subtree_dirty_: this widget or any descendant reported damage
+        // since the last paint; the hosting window reads the root's flag
+        // to know a frame is owed without walking the tree. It sits next
+        // to dirty_ to fill its alignment padding (J1 size gate).
         bool dirty_ = false;
+        bool subtree_dirty_ = false;
         int dirty_l_ = 0;
         int dirty_t_ = 0;
         int dirty_r_ = -1;
@@ -491,6 +544,19 @@ namespace zb::ui
                 dirty_t_ = std::min(dirty_t_, y);
                 dirty_r_ = std::max(dirty_r_, r);
                 dirty_b_ = std::max(dirty_b_, b);
+            }
+            // the pending flag bubbles to the root (the same path as
+            // mark_layout_dirty). A set flag implies every ancestor is
+            // set too -- walk_damage's recompute never clears a parent
+            // while a child is pending -- so the loop stops early when
+            // this widget is pending already
+            if (!subtree_dirty_)
+            {
+                subtree_dirty_ = true;
+                for (Widget *a = parent; a != nullptr; a = a->parent)
+                {
+                    a->subtree_dirty_ = true;
+                }
             }
         }
 

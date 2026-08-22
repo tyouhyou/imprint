@@ -125,6 +125,66 @@ int test_canvas_window()
         EXPECT(painted_calls == 2);
     }
 
+    // widget setters outside the input path owe a frame (Z8): the tree
+    // propagates the damage to is_dirty(); paint() consumes it
+    {
+        CanvasWindow w;
+        w.create(100, 100);
+        auto lbl = std::make_unique<Label>();
+        lbl->set_size(40, 10);
+        auto *plbl = lbl.get();
+        w.root().add_child(std::move(lbl));
+
+        w.paint();
+        EXPECT(!w.is_dirty());
+
+        plbl->set_text("hello");  // no input handler involved
+        EXPECT(w.is_dirty());
+
+        w.paint();
+        EXPECT(!w.is_dirty());
+    }
+
+    // a setter firing during the draw survives into the next frame
+    // (walk_damage consumes at read time; the late damage stays pending)
+    {
+        CanvasWindow w;
+        w.create(100, 100);
+        auto lbl = std::make_unique<Label>();
+        lbl->set_size(40, 10);
+        auto *plbl = lbl.get();
+        w.root().add_child(std::move(lbl));
+
+        bool mutate = true;
+        w.painted += [&](const void *)
+        {
+            if (mutate)
+            {
+                mutate = false;
+                plbl->set_text("late");
+            }
+        };
+        w.paint();
+        EXPECT(w.is_dirty());  // the late change still owes a frame
+        w.paint();
+        EXPECT(!w.is_dirty());
+    }
+
+    // invalidate(): a full frame is owed without any widget damage
+    {
+        CanvasWindow w;
+        w.create(100, 100);
+        w.paint();
+        EXPECT(!w.is_dirty());
+        w.invalidate();
+        EXPECT(w.is_dirty());
+        w.paint();  // nothing reported: the full-frame fallback covers it
+        int x = 0, y = 0, rw = 0, h = 0;
+        EXPECT(w.dirty_region(x, y, rw, h));
+        EXPECT(rw == 100 && h == 100);
+        EXPECT(!w.is_dirty());
+    }
+
     // modal: set_modal blocks clicks outside the dialog
     {
         CanvasWindow w;

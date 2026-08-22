@@ -169,7 +169,8 @@ namespace zb::app
             }
             root_->draw(*graphics_);
             graphics_->clear_damage();
-            root_->walk_clear_damage();
+            // walk_damage consumed the rects as it read them; anything
+            // reported during the draw stays pending for the next frame
             damage_l_ = l;
             damage_t_ = t;
             damage_r_ = r;
@@ -178,9 +179,22 @@ namespace zb::app
             painted(data());
         }
 
-        // true until the next paint(): the initial frame is dirty so a
-        // freshly created app is rendered once before idle
-        [[nodiscard]] bool is_dirty() const noexcept override { return dirty_; }
+        // true while a frame is owed: until the first paint, after input
+        // changed something, after any widget setter reported damage
+        // (the tree's pending flag), or after invalidate(). Idle-polling
+        // shells (linux-fb, NDS) skip paint() entirely while false
+        [[nodiscard]] bool is_dirty() const noexcept override
+        {
+            return dirty_ || (root_ != nullptr && root_->is_subtree_dirty());
+        }
+
+        /*
+         * Owes a full-frame repaint. For changes the widget tree cannot
+         * report (drawing outside the tree, external buffer contents);
+         * widget setters do not need this -- their damage reaches
+         * is_dirty() through the tree automatically.
+         */
+        void invalidate() noexcept { dirty_ = true; }
 
         /*
          * The region that the last paint() repainted, in pixels, in the
