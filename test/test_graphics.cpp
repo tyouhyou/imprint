@@ -179,8 +179,11 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 6, 6) == core::colors::White.pixel);
         EXPECT(test::pixel_at(*g, 8, 8) == core::colors::Red.pixel);    // inner restored
         EXPECT(test::pixel_at(*g, 5, 14) == core::colors::Blue.pixel);  // outer area (5..14)
-        EXPECT(test::pixel_at(*g, 0, 0) == 0);                          // outside both
-        EXPECT(test::pixel_at(*g, 16, 16) == 0);
+        // outside both guards: untouched by the clipped fills, still the
+        // background Black (a literal 0 here broke when Black gained a
+        // real alpha -- the fill writes the full pixel)
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 16, 16) == core::colors::Black.pixel);
     }
 
     // clip_safe: an off-screen area yields an invalid guard (no-op)

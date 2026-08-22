@@ -14,7 +14,8 @@ Usage:
         --lib build_linux/libzbapi.so --frames 20
 
 Options:
-    --lib <path>   path to the shared zbapi library
+    --lib <path>   path to the shared zbapi library; the default is the
+                   first existing build output for the platform
                    (build/bin/Debug/zbapi.dll on Windows,
                     build_linux/lib/libzbapi.so on Linux)
     --width/--height  app window size, default 256x192
@@ -23,9 +24,30 @@ Options:
 
 import argparse
 import ctypes
+import os
 import sys
 
 import pygame
+
+
+def default_lib():
+    """First existing candidate for this platform, repo-root relative.
+
+    Resolved against the repository root (two levels up from this script)
+    so the default works from any working directory.
+    """
+    root = os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))
+    candidates = (
+        ["build/bin/Debug/zbapi.dll", "build/bin/Release/zbapi.dll"]
+        if sys.platform == "win32"
+        else ["build_linux/lib/libzbapi.so", "build_py/lib/libzbapi.so"]
+    )
+    for rel in candidates:
+        path = os.path.join(root, rel)
+        if os.path.exists(path):
+            return path
+    return os.path.join(root, candidates[0])
 
 # ---- input constants, must match binding/include/zbapi.h ----
 ZB_INPUT_TOUCH_DOWN = 9
@@ -54,7 +76,15 @@ _KEY_MAP = {
 
 
 def load_zbapi(path):
-    lib = ctypes.CDLL(str(path))
+    path = os.path.abspath(path)
+    if not os.path.exists(path):
+        raise SystemExit("zbapi library not found: %s (cwd=%s)"
+                         % (path, os.getcwd()))
+    # dependent DLLs (imcore.dll) live next to the library; register the
+    # directory so loading works regardless of the working directory
+    if sys.platform == "win32":
+        os.add_dll_directory(os.path.dirname(path))
+    lib = ctypes.CDLL(path)
     lib.zb_app_create.argtypes = [ctypes.c_uint32, ctypes.c_uint32]
     lib.zb_app_create.restype = ctypes.c_void_p
     lib.zb_app_destroy.argtypes = [ctypes.c_void_p]
@@ -72,10 +102,15 @@ def load_zbapi(path):
 
 
 def bgra_to_rgba(data, length):
-    """Framebuffer is 32-bit bgra (B,G,R,A bytes); pygame wants rgba."""
-    out = bytearray(data[:length])
-    for i in range(0, length, 4):
-        out[i], out[i + 2] = out[i + 2], out[i]
+    """Framebuffer is 32-bit bgra (B,G,R,A bytes); pygame wants rgba.
+    The alpha byte is NOT part of the buffer contract (it is padding) --
+    pinned to opaque so the per-pixel-alpha blit can never make pixels
+    transparent (borders drawn with colors::Black used to vanish)."""
+    buf = bytes(data[:length])
+    out = bytearray(buf)
+    out[0::4] = buf[2::4]
+    out[2::4] = buf[0::4]
+    out[3::4] = b"\xff" * (length // 4)
     return bytes(out)
 
 
@@ -100,8 +135,9 @@ def feed_input(lib, app, event):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--lib", default="build_linux/lib/libzbapi.so",
-                        help="path to the zbapi shared library")
+    parser.add_argument("--lib", default=default_lib(),
+                        help="path to the zbapi shared library "
+                             "(default: first existing build output)")
     parser.add_argument("--width", type=int, default=256)
     parser.add_argument("--height", type=int, default=192)
     parser.add_argument("--frames", type=int, default=0,

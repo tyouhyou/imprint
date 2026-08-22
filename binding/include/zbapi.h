@@ -18,6 +18,12 @@ extern "C" {
  *   - COLOR_DEPTH=32: 4 bytes per pixel, bgra on Windows/x86
  *   - COLOR_DEPTH=16: 2 bytes per pixel, abgr1555
  * Hosts should be written against a fixed build configuration.
+ *
+ * The 4th byte of a 32bpp pixel is NOT part of the contract: the raster
+ * may leave arbitrary values there (blend paths even write coverage
+ * alpha). Hosts must present pixels as fully opaque -- e.g. a python
+ * host building an RGBA surface must pin the alpha byte to 0xFF, or
+ * "black" pixels (borders, default text) become transparent.
  */
 
 /* opaque app handle */
