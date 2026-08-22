@@ -63,8 +63,12 @@ void FB::draw(char *b, int w, int h, int rx, int ry, int rw, int rh)
                     b + row * w * bytes_per_pixel + rx * bytes_per_pixel, copy_bytes);
     }
 
-    msync(buf + ry * screen_line_len + rx * bytes_per_pixel,
-          screen_line_len * rh, 0);
+    // sync whole rows of the region: the old start offset (rx included)
+    // plus a row-count length overran the mapping when the region
+    // touched the bottom of the screen; MS_SYNC instead of the
+    // implementation-defined flags value 0
+    msync(buf + static_cast<size_t>(ry) * screen_line_len,
+          static_cast<size_t>(rh) * screen_line_len, MS_SYNC);
 }
 
 int FB::init()

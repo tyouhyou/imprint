@@ -65,12 +65,22 @@ int start()
     // a non-default visual (e.g. a 32bpp visual on a 24bpp root, which is
     // the common case on desktop Xorg) requires an explicit colormap,
     // otherwise XCreateWindow fails with BadMatch
-    swa.colormap = XCreateColormap(display, RootWindow(display, screen), vi.visual, AllocNone);
+    const Colormap colormap =
+        XCreateColormap(display, RootWindow(display, screen), vi.visual, AllocNone);
+    swa.colormap = colormap;
     const Window window = XCreateWindow(
         display, RootWindow(display, screen),
         0, 0, width, height, 1,
         vi.depth, InputOutput, vi.visual,
         CWBackPixel | CWBorderPixel | CWColormap, &swa);
+
+    // the framebuffer is fixed-size: lock the window to it so a resize
+    // cannot crop the buffer with no redraw
+    XSizeHints hints{};
+    hints.flags = PMinSize | PMaxSize;
+    hints.min_width = hints.max_width = width;
+    hints.min_height = hints.max_height = height;
+    XSetWMNormalHints(display, window, &hints);
 
     XStoreName(display, window, win->title().c_str());
     const Atom wm_delete = XInternAtom(display, "WM_DELETE_WINDOW", False);
@@ -226,6 +236,19 @@ int start()
                     ev.y = bp->y;
                     send_input(ev);
                 }
+                if (bp->button == 3)
+                {
+                    // right press: mapped symmetrically to the release
+                    // (Win32 sends both, the dispatcher ignores them for
+                    // now but the pair must arrive consistently)
+                    zb::input::input_event ev;
+                    ev.type = zb::input::input_type::mouse_right_down;
+                    ev.touch_id = 0;
+                    ev.button = zb::input::mouse_button_t::right;
+                    ev.x = bp->x;
+                    ev.y = bp->y;
+                    send_input(ev);
+                }
                 if (bp->button == 4 || bp->button == 5)
                 {
                     // the wheel arrives as button 4/5 presses; delta
@@ -287,7 +310,15 @@ int start()
             if (!hasExposed)
             {
                 hasExposed = true;
-                app->paint(); // trigger the first paint into win->data()
+                app->paint();  // trigger the first paint into win->data()
+            }
+            else
+            {
+                // re-exposure (the window was un-occluded): the server
+                // lost our pixels -- the framebuffer still holds the
+                // last frame, put it back
+                XPutImage(display, window, gc, xi, 0, 0, 0, 0, xi->width, xi->height);
+                XFlush(display);
             }
             break;
         }
@@ -313,6 +344,7 @@ endwhile:
     xi->data = nullptr;
     XDestroyImage(xi);
     XFreeGC(display, gc);
+    XFreeColormap(display, colormap);
     XDestroyWindow(display, window);
     XCloseDisplay(display);
 

@@ -181,7 +181,9 @@ extern "C" int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrev
     // request a frame; the app repaints after every input event, and the
     // "painted" event asks the shell to present (InvalidateRect -> WM_PAINT)
     RECT client_rect{0, 0, g_buffer_width, g_buffer_height};
-    const DWORD dwStyle = WS_OVERLAPPEDWINDOW;
+    // the framebuffer is fixed-size: no thick frame (a resize could only
+    // crop the buffer with no redraw)
+    const DWORD dwStyle = WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
     const DWORD dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
     AdjustWindowRectEx(&client_rect, dwStyle, FALSE, dwExStyle);
 
@@ -210,10 +212,11 @@ extern "C" int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrev
     }
 
     g_hwnd = hwnd;
+    // fill the framebuffer before the first show: the initial WM_PAINT
+    // then blits real content instead of the uninitialized window
+    g_app->paint();
     ShowWindow(hwnd, SW_RESTORE);
     UpdateWindow(hwnd);
-
-    g_app->paint(); // trigger the first paint
 
     MSG msg{};
     while (GetMessage(&msg, nullptr, 0, 0) > 0)
