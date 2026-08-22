@@ -12,6 +12,8 @@ struct zb_app
     zb::SharedPtr<zb::app::IApp> app;
     zb_painted_cb painted_fn = nullptr;
     void *painted_userdata = nullptr;
+    zb_closed_cb closed_fn = nullptr;
+    void *closed_userdata = nullptr;
 };
 
 /*
@@ -182,5 +184,30 @@ extern "C" void zb_set_painted_callback(zb_app_t *self, zb_painted_cb cb, void *
     catch (...)
     {
         LE << "zb_set_painted_callback failed.";
+    }
+}
+
+extern "C" void zb_set_closed_callback(zb_app_t *self, zb_closed_cb cb, void *userdata)
+{
+    if (self == nullptr || self->app == nullptr)
+    {
+        return;
+    }
+    try
+    {
+        self->closed_fn = cb;
+        self->closed_userdata = userdata;
+        self->app->on_closed(
+            [self]()
+            {
+                if (self->closed_fn != nullptr)
+                {
+                    self->closed_fn(self->closed_userdata);
+                }
+            });
+    }
+    catch (...)
+    {
+        LE << "zb_set_closed_callback failed.";
     }
 }

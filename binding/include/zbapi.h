@@ -113,6 +113,13 @@ int zb_buffer_bpp(void);
  * present the framebuffer (via zb_buffer). userdata is passed through. */
 void zb_set_painted_callback(zb_app_t *app, zb_painted_cb cb, void *userdata);
 
+/* called when the app requested its own shutdown (window close, e.g. the
+ * tictactoe QUIT button). The host should stop driving input/paint and
+ * release the app. The framework does not exit any process by itself --
+ * shells own their main loops. userdata is passed through. */
+typedef void (*zb_closed_cb)(void *userdata);
+void zb_set_closed_callback(zb_app_t *app, zb_closed_cb cb, void *userdata);
+
 /* optional log hook receiving framework log messages */
 void zb_set_log_callback(zb_log_cb cb);
 

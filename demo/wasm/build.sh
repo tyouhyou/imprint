@@ -57,17 +57,21 @@ em++ -std=c++17 -O2 \
   -I /src/imapp/include \
   -I /src/apps/tictactoe/include \
   -I /src/binding/include \
-  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_log_callback","_malloc","_free"]' \
-  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32"]' \
+  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_malloc","_free"]' \
+  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32","addFunction"]' \
   -s ENVIRONMENT=web \
   -s ALLOW_MEMORY_GROWTH=1 \
+  -s ALLOW_TABLE_GROWTH=1 \
   -s INITIAL_MEMORY=16777216 \
   -s EXIT_RUNTIME=1 \
+  -s SINGLE_FILE=1 \
   --no-entry \
   $SRCS -o "$OUT"
 
+# SINGLE_FILE embeds the .wasm as a base64 data URI inside the .js so the page
+# works when opened directly from disk (file:// fetch of local files is blocked)
 echo "=== build ok ==="
-ls -l "$OUT" "${OUT%.js}.wasm"
+ls -l "$OUT"
 
 # node smoke-test build: MODULARIZE + ENVIRONMENT=node so `require()` returns
 # the module factory (the browser build above must stay non-modularized,
@@ -89,9 +93,10 @@ em++ -std=c++17 -O2 \
   -I /src/binding/include \
   -s MODULARIZE=1 -s EXPORT_NAME=createTictactoe \
   -s ENVIRONMENT=node \
-  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_log_callback","_malloc","_free"]' \
-  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32"]' \
+  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_malloc","_free"]' \
+  -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32","addFunction"]' \
   -s ALLOW_MEMORY_GROWTH=1 \
+  -s ALLOW_TABLE_GROWTH=1 \
   -s INITIAL_MEMORY=16777216 \
   -s EXIT_RUNTIME=1 \
   --no-entry \

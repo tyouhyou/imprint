@@ -1,8 +1,3 @@
-# temporary file
-review*.md
-reports/
-.zcode/
-
 # Build outputs (all variants, e.g. /build/, /build_font/)
 /build*/
 /bin/
@@ -70,3 +65,7 @@ Thumbs.db
 /demo/wasm/*.wasm
 !/demo/wasm/main.js
 !/demo/wasm/smoke.js
+
+reports/
+.zcode/
+run.bat

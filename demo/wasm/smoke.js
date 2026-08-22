@@ -49,6 +49,63 @@ createModule({
         console.error("SMOKE TEST FAILED");
         process.exit(1);
       }
+
+      // close-flow E2E: play a draw, click QUIT, the closed callback must
+      // fire and AGAIN's pixels must survive the partial repaint (the
+      // region-exact damage fix in Graphics). Geometry mirrors
+      // apps/tictactoe/include/tictactoe_layout.hpp (320x240 window).
+      const app2 = Module._zb_app_create(320, 240);
+      if (!app2) throw new Error("zb_app_create (2nd) failed");
+
+      let closedFired = 0;
+      const closedCb = Module.addFunction(function () { closedFired = 1; }, "vi");
+      Module.ccall("zb_set_closed_callback", null, ["number", "number", "number"],
+        [app2, closedCb, 0]);
+
+      const click = function (x, y) {
+        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+          [app2, 9, x, y, 0, 0, 0]);
+        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+          [app2, 10, x, y, 0, 0, 0]);
+      };
+
+      // menu: normal -> first (player starts); then a deterministic DRAW,
+      // same script as test_quit.cpp: X(0,0) O(2,0) X(0,2) O(2,1) X(1,2)
+      click(158, 130);           // Normal button
+      click(113, 130);           // First button
+      const cells = [[0, 0], [2, 0], [0, 2], [2, 1], [1, 2]];
+      for (const [r, c] of cells) {
+        // board at (52,12), 72px cells -> cell centers
+        click(52 + c * 72 + 36, 12 + r * 72 + 36);
+      }
+
+      // result dialog buttons: AGAIN center (110,142), QUIT center (206,142)
+      const w2 = Module._malloc(4), h2 = Module._malloc(4);
+      const paintAndBuffer = function () {
+        Module.ccall("zb_paint", null, ["number"], [app2]);
+        return Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app2, w2, h2]);
+      };
+      const px = function (buf, x, y) {
+        return [
+          Module.HEAPU8[buf + (y * 320 + x) * 4],
+          Module.HEAPU8[buf + (y * 320 + x) * 4 + 1],
+          Module.HEAPU8[buf + (y * 320 + x) * 4 + 2]
+        ];
+      };
+      const isWhite = function (p) { return p[0] > 240 && p[1] > 240 && p[2] > 240; };
+      let buf2 = paintAndBuffer();
+      if (!isWhite(px(buf2, 110, 142))) throw new Error("AGAIN interior not white before QUIT");
+
+      click(206, 142);           // QUIT
+      buf2 = paintAndBuffer();
+
+      if (!closedFired) throw new Error("closed callback did not fire on QUIT");
+      if (!isWhite(px(buf2, 110, 142))) throw new Error("AGAIN erased after QUIT repaint");
+
+      Module._zb_app_destroy(app2);
+      Module._free(w2); Module._free(h2);
+
+      console.log("close flow: callback fired=" + closedFired + ", AGAIN intact=true");
       console.log("SMOKE TEST OK");
       process.exit(0);
     } catch (e) {

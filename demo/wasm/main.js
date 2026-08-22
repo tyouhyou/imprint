@@ -45,6 +45,7 @@
   var status = document.getElementById("status");
 
   var app = null;
+  var closed = false; // app requested shutdown: stop driving input/paint
   var zbInput = null, zbPaint = null, zbBuffer = null;
   var wPtr = 0, hPtr = 0; // out params for zb_buffer
 
@@ -58,7 +59,7 @@
 
   // the browser touch identifier becomes the framework's touch_id
   function send(type, x, y, key, ch, touchId) {
-    if (app && zbInput) zbInput(app, type, x | 0, y | 0, key | 0, ch | 0, touchId | 0);
+    if (app && !closed && zbInput) zbInput(app, type, x | 0, y | 0, key | 0, ch | 0, touchId | 0);
   }
 
   function onDown(e) {
@@ -116,7 +117,7 @@
 
   /* ---- frame loop: paint -> read framebuffer -> present ---- */
   function frame() {
-    if (app) {
+    if (app && !closed) {
       zbPaint(app);
 
       var ptr = zbBuffer(app, wPtr, hPtr);
@@ -138,7 +139,16 @@
   }
 
   /* ---- bind the C-ABI after the wasm runtime is ready ---- */
+  function fail(msg) {
+    status.textContent = msg;
+    status.style.color = "#f66";
+  }
+
   window.Module = {
+    // runtime aborts (compile/OOM/...) otherwise die silently in the console
+    onAbort: function (what) {
+      fail("aborted: " + what);
+    },
     onRuntimeInitialized: function () {
       app = Module.ccall("zb_app_create", "number", ["number", "number"], [W, H]);
       if (!app) {
@@ -153,8 +163,26 @@
       Module.HEAPU32[wPtr >> 2] = 0;
       Module.HEAPU32[hPtr >> 2] = 0;
 
+      // app-requested shutdown (e.g. the tictactoe QUIT button): stop the
+      // frame loop. The app is NOT destroyed here -- the callback fires from
+      // inside zb_paint, destroying it reentrantly would be use-after-free;
+      // wasm memory is reclaimed with the page.
+      var closedCb = Module.addFunction(function () {
+        closed = true;
+        status.textContent = "app closed";
+        status.style.color = "#aaa";
+      }, "vi");
+      Module.ccall("zb_set_closed_callback", null, ["number", "number", "number"], [app, closedCb, 0]);
+
       status.textContent = "ready — 256x192 @ " + PIXELS + " B/frame";
       requestAnimationFrame(frame);
     }
   };
+
+  // wasm fetch/instantiate failures reject without ever reaching onRuntimeInitialized
+  window.addEventListener("unhandledrejection", function (e) {
+    var why = e && e.reason && e.reason.message ? e.reason.message : String(e && e.reason);
+    fail("failed to load wasm: " + why +
+      (location.protocol === "file:" ? " (file:// blocked? rebuild with SINGLE_FILE or use a local HTTP server)" : ""));
+  });
 })();
