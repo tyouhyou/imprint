@@ -20,6 +20,27 @@ namespace zb::ui
         }
     }  // namespace
 
+    void ListBox::set_row_height(const int h)
+    {
+        if (h < 1)
+        {
+            LW << "list: row height must be >= 1; clamping";
+            row_height = 1;
+        }
+        else
+        {
+            row_height = h;
+        }
+        invalidate_row_cache();
+        // the widget height is derived from the row height: keep it
+        // consistent (set_size also invalidates the layout)
+        auto s = get_size();
+        s.height = static_cast<int>(visible) * row_height;
+        set_size(s.width, s.height);
+        mark_dirty();
+        clamp_top();
+    }
+
     void ListBox::set_visible_rows(const size_t rows)
     {
         if (rows == 0)
@@ -287,6 +308,13 @@ namespace zb::ui
     {
         const auto s = get_size();
         if (x < 0 || x >= s.width || y < 0 || y >= s.height)
+        {
+            return invalid;
+        }
+        // the scrollbar gutter is not the row area: a click on the
+        // track (above or below the thumb) must not select the row that
+        // happens to be rendered under the bar
+        if (count > visible && s.width > gutter && x >= s.width - gutter)
         {
             return invalid;
         }

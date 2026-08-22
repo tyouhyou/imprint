@@ -40,8 +40,10 @@ namespace zb::ui
 
         void set_circle_color(const core::Color &c) { circle_color = c; mark_dirty(); }
         void set_dot_color(const core::Color &c) { dot_color = c; mark_dirty(); }
-        void set_circle_size(const int s) { circle_size = s; mark_dirty(); }
-        void set_text_gap(const int g) { text_gap = g; }
+        // circle_size/text_gap feed measure(): they report damage and
+        // invalidate the layout too
+        void set_circle_size(const int s) { circle_size = s; mark_dirty(); mark_layout_dirty(); }
+        void set_text_gap(const int g) { text_gap = g; mark_dirty(); mark_layout_dirty(); }
 
         // fired when this button becomes selected by a user interaction
         zb::event::Event<> changed;

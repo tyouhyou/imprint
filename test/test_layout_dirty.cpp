@@ -241,5 +241,34 @@ int test_layout_dirty()
             EXPECT(pb->get_position().x == 18 && pb->get_position().y == 0);  // 12 + 6
         }
 
+        // intrinsic-size setters of measure()-overriding widgets
+        // invalidate the layout (the J5 audit gap): checkbox
+        // box_size/text_gap, radio circle_size/text_gap, list row_height
+        {
+            Checkbox cb;
+            cb.layout();
+            EXPECT(!cb.is_layout_dirty());
+            cb.set_box_size(20);
+            EXPECT(cb.is_layout_dirty());
+            cb.layout();
+            cb.set_text_gap(4);
+            EXPECT(cb.is_layout_dirty());
+
+            RadioButton rb;
+            rb.layout();
+            EXPECT(!rb.is_layout_dirty());
+            rb.set_circle_size(14);
+            EXPECT(rb.is_layout_dirty());
+            rb.layout();
+            rb.set_text_gap(3);
+            EXPECT(rb.is_layout_dirty());
+
+            ListBox lb;
+            lb.layout();
+            EXPECT(!lb.is_layout_dirty());
+            lb.set_row_height(20);
+            EXPECT(lb.is_layout_dirty());
+        }
+
         return test::report("layout_dirty");
 }

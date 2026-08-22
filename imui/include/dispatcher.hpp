@@ -39,6 +39,13 @@ namespace zb::ui
         // clears the pressed target (e.g. on window focus loss)
         void reset()
         {
+            // deliver the cancel like every other press-abandon path: a
+            // Button must not keep its pressed visuals and a ListBox
+            // must not keep an in-flight thumb drag
+            if (pressed_target != nullptr)
+            {
+                pressed_target->on_cancel();
+            }
             pressed_target = nullptr;
             press_touch_id = 0;
         }

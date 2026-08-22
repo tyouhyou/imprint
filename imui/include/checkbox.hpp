@@ -35,8 +35,9 @@ namespace zb::ui
 
         void set_box_color(const core::Color &c) { box_color = c; mark_dirty(); }
         void set_check_color(const core::Color &c) { check_color = c; mark_dirty(); }
-        void set_box_size(const int s) { box_size = s; mark_dirty(); }
-        void set_text_gap(const int g) { text_gap = g; mark_dirty(); }
+        // box_size/text_gap feed measure(): they invalidate the layout too
+        void set_box_size(const int s) { box_size = s; mark_dirty(); mark_layout_dirty(); }
+        void set_text_gap(const int g) { text_gap = g; mark_dirty(); mark_layout_dirty(); }
 
         // fired on user toggle, with the new state
         zb::event::Event<bool> changed;

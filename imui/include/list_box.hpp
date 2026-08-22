@@ -46,12 +46,9 @@ namespace zb::ui
 
         ListBox() = default;
 
-        void set_row_height(const int h)
-        {
-            row_height = h;
-            invalidate_row_cache();
-            mark_dirty();
-        }
+        // clamps to >= 1 (a zero height divided by zero on the next
+        // click) and re-derives the widget height from the visible rows
+        void set_row_height(const int h);
         // re-sizes the widget: width stays, height = rows * row_height
         void set_visible_rows(const size_t rows);
         void set_item_count(const size_t n);
@@ -90,6 +87,10 @@ namespace zb::ui
     protected:
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;
+        // a cancelled press (reset, a competing press, eviction) must
+        // clear an in-flight thumb drag, or the stale dragging flag
+        // turns the next row press into a phantom thumb drag
+        void on_cancel() override { dragging = false; }
         bool is_focusable() const override { return true; }
         [[nodiscard]] bool captures_pointer() const override { return dragging; }
 

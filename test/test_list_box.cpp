@@ -193,6 +193,46 @@ int test_list_box()
             EXPECT(t.list->get_top() == static_cast<size_t>(19 * 17 / 38));
         }
 
+        // a cancelled thumb drag must not poison the next press: without
+        // the on_cancel reset the stale dragging flag turns a plain row
+        // press into a phantom thumb drag (Z6)
+        {
+            Tree t;
+            InputDispatcher d;
+            t.list->set_item_count(20);
+            EXPECT(d.dispatch(t.root, press_at(107, 14)));  // thumb grab
+            d.reset();                                      // e.g. focus lost
+            EXPECT(t.list->get_top() == 0);
+
+            // a row press behaves as a press, not as a drag
+            EXPECT(d.dispatch(t.root, press_at(20, 18)));  // row 0
+            EXPECT(t.list->get_value() == 0);
+            EXPECT(!d.dispatch(t.root, move_to(20, 30)));  // plain move
+            EXPECT(t.list->get_top() == 0);                // nothing scrolled
+        }
+
+        // row_height clamps to >= 1 (a zero height divided by zero on
+        // the next click) and re-derives the widget height (Z7)
+        {
+            Tree t;
+            InputDispatcher d;
+            t.list->set_row_height(0);
+            EXPECT(t.list->get_size().height == 3);  // 3 visible rows * 1
+            EXPECT(d.dispatch(t.root, press_at(20, 10)));  // local y 0: no trap
+            EXPECT(t.list->get_value() == 0);
+            t.list->set_row_height(16);
+            EXPECT(t.list->get_size().height == 48);
+        }
+
+        // the scrollbar gutter is not the row area: a click on the track
+        // below the thumb selects nothing (F12)
+        {
+            Tree t;
+            InputDispatcher d;
+            EXPECT(!d.dispatch(t.root, press_at(106, 40)));  // local (96, 30)
+            EXPECT(t.list->get_value() == ListBox::invalid);
+        }
+
         // set_value is silent and range-checked; shrinking the model
         // clears an out-of-range selection
         {
