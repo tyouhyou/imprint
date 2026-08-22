@@ -99,6 +99,10 @@ void zb_paint(zb_app_t *app);
  * app has no window yet. */
 const uint8_t *zb_buffer(zb_app_t *app, uint32_t *out_width, uint32_t *out_height);
 
+/* bytes per pixel of the framebuffer: fixed at build time by COLOR_DEPTH
+ * (4 on desktop bgra builds, 2 on embedded 16bpp) */
+int zb_buffer_bpp(void);
+
 /* registers a callback called after every painted frame; the host can then
  * present the framebuffer (via zb_buffer). userdata is passed through. */
 void zb_set_painted_callback(zb_app_t *app, zb_painted_cb cb, void *userdata);

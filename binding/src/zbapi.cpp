@@ -153,6 +153,13 @@ extern "C" const uint8_t *zb_buffer(zb_app_t *self, uint32_t *out_width, uint32_
     }
 }
 
+extern "C" int zb_buffer_bpp()
+{
+    // build-time constant: hosts size their pixel loops with it instead
+    // of assuming 4 bytes (a 16bpp build over-read by 2x before)
+    return static_cast<int>(sizeof(zb::ui::core::Color));
+}
+
 extern "C" void zb_set_painted_callback(zb_app_t *self, zb_painted_cb cb, void *userdata)
 {
     if (self == nullptr || self->app == nullptr)

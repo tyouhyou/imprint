@@ -1,4 +1,12 @@
-/* C smoke test: drive the app like a host shell does. */
+/* C smoke test: drive the app like a host shell does.
+ *
+ * Deterministic by construction (F11): the demo opens its setup dialogs
+ * as modals, so the drive is keyboard-only -- Tab focuses a dialog
+ * button (the modal keeps the focus inside), Enter activates it. Two
+ * dialogs, two rounds; no screen coordinates are involved, so a layout
+ * change cannot rot this test. The pixel scan is sized by
+ * zb_buffer_bpp (a 16bpp build has half the bytes).
+ */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
@@ -27,19 +35,23 @@ int main(void)
     assert(app != NULL);
     zb_set_painted_callback(app, on_painted, NULL);
 
-    /* initial frame renders the board (a green background) */
+    /* the initial frame renders the setup dialog */
     zb_paint(app);
+    assert(painted_calls >= 1);
+
     uint32_t w = 0, h = 0;
     const uint8_t *buf = zb_buffer(app, &w, &h);
     assert(buf != NULL);
     assert(w == 320 && h == 240);
 
-    /* the first pixel of a 32bpp build is the green mat; 16bpp has one byte
-     * per halfword -- both are non-zero after the first frame */
+    /* the first pixel row is the dialog mask over the board: non-zero in
+     * every depth; the scan is bounded by the build's bytes per pixel */
+    const int bpp = zb_buffer_bpp();
+    assert(bpp == 4 || bpp == 2);
     int nonzero = 0;
-    for (size_t i = 0; i < (size_t)w * h * 4; i += 4)
+    for (size_t i = 0; i < (size_t)w * h * (size_t)bpp; i += (size_t)bpp)
     {
-        if (buf[i] != 0 || buf[i + 1] != 0 || buf[i + 2] != 0)
+        if (buf[i] != 0 || buf[i + 1] != 0)
         {
             nonzero = 1;
             break;
@@ -47,18 +59,25 @@ int main(void)
     }
     assert(nonzero);
 
-    /* clicking a board cell places a mark, also without error */
-    zb_input(app, ZB_INPUT_TOUCH_DOWN, 60, 60, 0, 0, 0);
-    zb_input(app, ZB_INPUT_TOUCH_UP, 60, 60, 0, 0, 0);
-    zb_paint(app);
-    assert(painted_calls >= 1);
+    /* keyboard drives both setup dialogs: difficulty, then the side.
+     * Every claimed key repaints (a frame was owed and painted). */
+    for (int round = 0; round < 2; ++round)
+    {
+        const int base = painted_calls;
+        zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
+        assert(painted_calls > base);  /* focus move into the dialog */
+        const int after_tab = painted_calls;
+        zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
+        assert(painted_calls > after_tab);  /* button activated */
+    }
 
-    /* printable characters travel through the ch channel; the demo app
-     * has no text input, so the dispatcher drops it unconsumed (B1) */
+    /* the game is up: printable characters travel through the ch channel;
+     * the demo has no text input, so the dispatcher drops them (B1) --
+     * no crash, and nothing is claimed */
+    const int base = painted_calls;
     zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, 0, 'A', 0);
     zb_input(app, ZB_INPUT_KEY_UP, 0, 0, 0, 0, 0);
-    zb_paint(app);
-    assert(painted_calls >= 2);
+    assert(painted_calls == base);
 
     zb_app_destroy(app);
 

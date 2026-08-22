@@ -252,10 +252,13 @@ int test_remove()
 
             auto out = root.remove_child(s);
             EXPECT(out != nullptr);
+            // snapshot before the object dies: reading s->calls after the
+            // reset is a use-after-free (ASan caught it)
+            const int calls_at_removal = s->calls;
             out.reset();  // destructor unsubscribes
 
             ev();  // only the kept handler runs
-            EXPECT(s->calls == 1);
+            EXPECT(calls_at_removal == 1);
             EXPECT(kept == 2);
         }
 
