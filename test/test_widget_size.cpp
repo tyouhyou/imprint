@@ -19,9 +19,9 @@ using namespace zb::ui;
 // 32-bit ABI budget (NDS); 16bpp builds are smaller still.
 static_assert(sizeof(Widget) <= 192, "Widget inline size must stay under the 32-bit batch J budget");
 #else
-// 64-bit host baseline: gcc x86_64 224, MSVC x64 higher; one pointer of
-// headroom over the largest observed baseline.
-static_assert(sizeof(Widget) <= 240, "Widget inline size must stay under the 64-bit batch J budget");
+// 64-bit host baselines: gcc x86_64 224, MSVC x64 240 (both recorded in
+// CONTEXT.md); one pointer of headroom over the largest observed.
+static_assert(sizeof(Widget) <= 248, "Widget inline size must stay under the 64-bit batch J budget");
 #endif
 
 // Construction probe (batch J1, tightened by batch J6): widgets share
