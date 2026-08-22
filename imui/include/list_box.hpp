@@ -158,7 +158,6 @@ namespace zb::ui
         ItemText text_fn = nullptr;
         const void *text_arg = nullptr;
         std::shared_ptr<std::vector<std::string>> items_;  // static model
-        size_t static_count = 0;
 
         bool dragging = false;  // a thumb drag is in flight
         int drag_grab = 0;      // press offset from the thumb top

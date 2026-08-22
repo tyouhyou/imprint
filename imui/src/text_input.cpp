@@ -107,14 +107,19 @@ namespace zb::ui
             }
             else
             {
-                // nearest boundary wins when the click sits inside a glyph
-                if (i < len)
+                // nearest boundary wins when the click sits inside glyph
+                // i: past the glyph's midpoint the caret goes after it
+                // (the old formula used the NEXT glyph's span, which is
+                // always beyond the click, and could never place the
+                // caret after the clicked glyph)
+                const int half = (advance_of(data, i - 1) + advance_of(data, i)) / 2;
+                if (xx >= half)
                 {
-                    const int half = (advance_of(data, i + 1) + advance_of(data, i)) / 2;
-                    if (xx < half)
-                    {
-                        caret = static_cast<size_t>(i) - 1;
-                    }
+                    caret = static_cast<size_t>(i);
+                }
+                else
+                {
+                    caret = static_cast<size_t>(i) - 1;
                 }
                 break;
             }

@@ -43,7 +43,7 @@ namespace zb::event
         using EventHandler = std::function<void(const TArgs &...args)>;
 
     public:
-        const uint32_t INVALID_EVENT_ID = 0;
+        static constexpr uint32_t INVALID_EVENT_ID = 0;
 
         Event() = default;
 

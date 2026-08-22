@@ -106,7 +106,7 @@ namespace zb::ui
             return nullptr;
         };
 
-const auto s = get_size();
+            const auto s = get_size();
     const char16_t *const data = text_.data();
     const int len = static_cast<int>(text_.size());
 

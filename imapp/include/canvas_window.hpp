@@ -101,6 +101,14 @@ namespace zb::app
          */
         std::unique_ptr<zb::ui::Widget> remove_from(zb::ui::Panel &panel, zb::ui::Widget *w)
         {
+            // report the removed subtree's old pixels while it is still
+            // in the tree (the damage bubbles to the root): with
+            // automatic layout off -- the default -- nobody re-lays the
+            // panel, and the last frame's pixels would stay on screen
+            if (w != nullptr)
+            {
+                w->mark_dirty();
+            }
             dispatcher_.evict(w);
             return panel.remove_child(w);
         }
@@ -108,6 +116,9 @@ namespace zb::app
         // removes and destroys every root child (dispatcher evicted first)
         void clear_root_children()
         {
+            // the root's own bounds cover the window: that is the damage
+            // the removed children leave behind
+            root_->mark_dirty();
             dispatcher_.evict(root_.get());
             root_->clear_children();
         }
@@ -199,9 +210,10 @@ namespace zb::app
         /*
          * The region that the last paint() repainted, in pixels, in the
          * same coordinate space as the framebuffer ([0..w) x [0..h)).
-         * Empty (w == 0) when nothing was repainted since the previous
-         * query. Presenting shells copy only this region (batch C); a
-         * repaint that reported no damage covers the full frame.
+         * Empty (w == 0) when no paint() has drawn yet. The query does
+         * not consume the region -- it describes the last frame.
+         * Presenting shells copy only this region (batch C); a repaint
+         * that reported no damage covers the full frame.
          */
         [[nodiscard]] bool dirty_region(int &out_x, int &out_y, int &out_w, int &out_h) const noexcept override
         {

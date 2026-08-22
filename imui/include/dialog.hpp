@@ -28,7 +28,9 @@ namespace zb::ui
     public:
         Dialog();
 
-        // frame
+        // frame. Note: the title label is stretched to the frame width
+        // once, at layout time -- widening the frame afterwards does not
+        // re-stretch an already laid-out title (set it before layout).
         void set_frame_size(const int w, const int h) { frame->set_size(w, h); }
         void set_frame_background_color(const core::Color &c) { frame->set_background_color(c); }
         void set_frame_padding(const int p)
@@ -49,7 +51,10 @@ namespace zb::ui
         // body: fill with your own widgets (vertical layout inside)
         [[nodiscard]] Panel &get_body() { return *body; }
 
-        // buttons: added in a horizontal row at the bottom of the frame
+        // buttons: added in a horizontal row at the bottom of the frame.
+        // The size applies when a button is ADDED (add_button bakes the
+        // current metrics in); buttons added before a set_button_size
+        // call keep their size -- re-adding is the way to resize them.
         Button &add_button(const char *text);
         void set_button_size(const int w, const int h)
         {

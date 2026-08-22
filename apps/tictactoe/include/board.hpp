@@ -20,6 +20,10 @@ namespace zb::app::tictactoe
             if (row >= 0 && row < 3 && col >= 0 && col < 3)
             {
                 marks[row][col] = p;
+                // a state setter reports its damage (the Widget contract);
+                // the full-frame fallback masks a missing report today,
+                // any partial-damage change would make it visible
+                mark_dirty();
             }
         }
 
@@ -37,6 +41,7 @@ namespace zb::app::tictactoe
                     m = player_type::none;
                 }
             }
+            mark_dirty();
         }
 
         void set_grid_color(const zb::ui::core::Color &c) { grid_color = c; }
