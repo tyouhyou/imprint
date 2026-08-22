@@ -84,6 +84,64 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 4, 3) != core::colors::White.pixel);
     }
 
+    // fill_rect: a plain rect fills the interior and leaves the outside
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->fill_rect(3, 3, 6, 5, core::colors::White);
+        EXPECT(test::pixel_at(*g, 3, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 6, 5) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 2, 4) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 4) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 2) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 6) != core::colors::White.pixel);
+    }
+
+    // fill_rect: a single-row rect (y1 == y2) fills exactly that row and
+    // returns -- the old descending row loop iterated forever here
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->fill_rect(2, 4, 7, 4, core::colors::White);
+        EXPECT(test::pixel_at(*g, 2, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 1, 4) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 8, 4) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 3) != core::colors::White.pixel);  // row above
+        EXPECT(test::pixel_at(*g, 4, 5) != core::colors::White.pixel);  // row below
+    }
+
+    // fill_rect: corners in reverse row order fill the same span
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->fill_rect(2, 6, 7, 2, core::colors::White);
+        EXPECT(test::pixel_at(*g, 4, 2) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 6) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 1) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 7) != core::colors::White.pixel);
+    }
+
+    // 16bpp: the single alpha bit is binary opacity (Z2 core half) -- a
+    // set bit paints the foreground, a clear bit leaves the backdrop
+    // (the 8-bit blend math would treat the bit as 1/255 and make every
+    // covered pixel nearly transparent)
+    if (core::ImColor_Depth == 16)
+    {
+        auto g = core::Graphics::make_ptr(4, 4);
+        g->fill(core::colors::Black);
+        g->enable_alpha(true);
+        core::Color cover = core::colors::White;
+        cover.rgb.a = 255;  // collapses to the single alpha bit
+        g->draw_pixel(1, 1, cover);
+        core::Color clear = core::colors::White;
+        clear.rgb.a = 0;
+        g->draw_pixel(2, 2, clear);
+        EXPECT(test::pixel_at(*g, 1, 1) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 2, 2) == core::colors::Black.pixel);
+    }
+
     // clip_safe: restricts drawing, restores the state on scope exit
     {
         auto g = core::Graphics::make_ptr(20, 20);

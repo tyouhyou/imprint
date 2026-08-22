@@ -224,6 +224,13 @@ Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
     {
         return back_color;
     }
+    if constexpr (ImColor_Depth == 16)
+    {
+        // color16 carries a single alpha bit: opacity is binary. The
+        // 8-bit blend math below would treat the bit as a 1/255 weight
+        // and make every covered pixel nearly transparent
+        return front_color;
+    }
     if (alpha >= 0xFF)
     {
         return front_color;
@@ -240,8 +247,11 @@ Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
 
 void Graphics::fill_rect(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr)
 {
-    int rowstep = y2 > y1 ? 1 : -1;
-    for (int row = y1; row <= y2; row = row + rowstep)
+    // the row span is normalized: y1 == y2 is a single row (the old
+    // descending branch never ran and looped forever on a single row)
+    const int top = y1 < y2 ? y1 : y2;
+    const int bottom = y1 < y2 ? y2 : y1;
+    for (int row = top; row <= bottom; ++row)
     {
         draw_line(x1, row, x2, row, colr);
     }
