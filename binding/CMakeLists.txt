@@ -4,10 +4,17 @@ endif()
 
 # Linux host build: the .so is loaded by external hosts (python, etc.), so
 #   - resolve sibling shared libs (libimcore.so) next to it via $ORIGIN
-#   - embed libstdc++: stays runnable on older libstdc++ than the build
-#     toolchain (e.g. container-built on WSL)
+#   - libstdc++ links dynamically by default: a statically embedded copy
+#     breaks any host process that already loads a dynamic libstdc++
+#     (python+pygame segfaults in locale/codecvt state) -- two libstdc++
+#     copies in one process are unsupported. ZBAPI_STATIC_LIBSTDCXX=ON
+#     embeds it anyway for the "copy the .so to an older host" case.
 if (UNIX AND NOT NDS_PLATFORM)
-    set(ZBAPI_HOST_LINK_OPTIONS -Wl,-rpath,$ORIGIN -static-libstdc++)
+    option(ZBAPI_STATIC_LIBSTDCXX "Embed libstdc++ into the host .so (breaks hosts that load another libstdc++, e.g. python+pygame)" OFF)
+    set(ZBAPI_HOST_LINK_OPTIONS -Wl,-rpath,$ORIGIN)
+    if (ZBAPI_STATIC_LIBSTDCXX)
+        list(APPEND ZBAPI_HOST_LINK_OPTIONS -static-libstdc++)
+    endif()
 endif()
 
 # glibc shim (__libc_single_threaded, see host_compat.c) for host-facing
