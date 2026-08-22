@@ -2,6 +2,7 @@
 
 #include <functional>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <chrono>
 #include <iomanip>
@@ -28,11 +29,17 @@ namespace zb
 #endif
 #define __FILENAME_4_LOGGING__ strrchr(__PATH_SEP_STR_4_LOGGING__ __FILE__, __PATH_SEP_CHR_4_LOGGING__) + 1
 
-#define LD (zb::Logging::Stream(zb::Logging_Level::debug) << zb::Logging::Stream::get_cur_datetime() << "[" << __FILENAME_4_LOGGING__ << "(" << __LINE__ << ")" << "::" << __func__ << "]")
-#define LI (zb::Logging::Stream(zb::Logging_Level::info) << zb::Logging::Stream::get_cur_datetime() << "[" << __FILENAME_4_LOGGING__ << "(" << __LINE__ << ")" << "::" << __func__ << "]")
-#define LW (zb::Logging::Stream(zb::Logging_Level::warn) << zb::Logging::Stream::get_cur_datetime() << "[" << __FILENAME_4_LOGGING__ << "(" << __LINE__ << ")" << "::" << __func__ << "]")
-#define LE (zb::Logging::Stream(zb::Logging_Level::error) << zb::Logging::Stream::get_cur_datetime() << "[" << __FILENAME_4_LOGGING__ << "(" << __LINE__ << ")" << "::" << __func__ << "]")
-#define LF (zb::Logging::Stream(zb::Logging_Level::fatal) << zb::Logging::Stream::get_cur_datetime() << "[" << __FILENAME_4_LOGGING__ << "(" << __LINE__ << ")" << "::" << __func__ << "]")
+/*
+ * The macro is a stream expression: LD << "msg". The level check lives
+ * in the Stream constructor -- a suppressed level never builds the
+ * stringstream, so a hot path that logs LD allocates nothing once the
+ * minimum level is raised (see Logging::set_min_level).
+ */
+#define LD (zb::Logging::Stream(zb::Logging_Level::debug, __FILENAME_4_LOGGING__, __LINE__, __func__))
+#define LI (zb::Logging::Stream(zb::Logging_Level::info, __FILENAME_4_LOGGING__, __LINE__, __func__))
+#define LW (zb::Logging::Stream(zb::Logging_Level::warn, __FILENAME_4_LOGGING__, __LINE__, __func__))
+#define LE (zb::Logging::Stream(zb::Logging_Level::error, __FILENAME_4_LOGGING__, __LINE__, __func__))
+#define LF (zb::Logging::Stream(zb::Logging_Level::fatal, __FILENAME_4_LOGGING__, __LINE__, __func__))
 
     class Logging
     {
@@ -40,13 +47,21 @@ namespace zb
         class Stream
         {
         public:
-            explicit Stream(const Logging_Level level) : level(level)
+            Stream(const Logging_Level level, const char *file, const int line, const char *func)
+                : level(level)
             {
+                if (!suppressed(level))
+                {
+                    ss.emplace() << get_cur_datetime() << "[" << file << "(" << line << ")" << "::" << func << "]";
+                }
             }
             ~Stream()
             {
-                ss << std::endl;
-                Logging::log(level, ss.str());
+                if (ss)
+                {
+                    ss->put('\n');
+                    Logging::log(level, ss->str());
+                }
             }
 
             Stream(const Stream &) = delete;
@@ -57,18 +72,25 @@ namespace zb
             template <typename T>
             Stream &operator<<(const T &value)
             {
-                ss << value;
+                if (ss)
+                {
+                    *ss << value;
+                }
                 return *this;
             }
 
             Stream &operator<<(std::ostream &(*manip)(std::ostream &))
             {
-                ss << manip;
+                if (ss)
+                {
+                    *ss << manip;
+                }
                 return *this;
             }
 
         private:
-            std::stringstream ss;
+            // empty when the level is suppressed: no allocation happens
+            std::optional<std::stringstream> ss;
             Logging_Level level;
             Stream() = default;
 
@@ -98,6 +120,21 @@ namespace zb
         Logging &operator=(Logging &&) = delete;
 
         using log_handler_t = std::function<void(const Logging_Level &level, const std::string &message)>;
+
+        /*
+         * Runtime verbosity: messages below the minimum level are dropped
+         * without constructing anything (a hot path that logs LD becomes
+         * allocation-free once the level is at info or above). The
+         * default is debug -- everything logs -- matching the historical
+         * behavior; the NDS debug workflow depends on it. The flag is a
+         * plain read (the UI contract is single-threaded; see the mutex
+         * note below).
+         */
+        static void set_min_level(const Logging_Level level) { s_min_level = level; }
+        static bool suppressed(const Logging_Level level)
+        {
+            return static_cast<int>(level) < static_cast<int>(s_min_level);
+        }
 
         /*
          * Installs the message handler. log() is safe to call from any
@@ -154,5 +191,6 @@ namespace zb
         // is a single-core no-op, which is all that platform needs.
         inline static std::mutex s_log_mutex;
         inline static log_handler_t s_log_handler;
+        inline static Logging_Level s_min_level = Logging_Level::debug;
     };
 }
