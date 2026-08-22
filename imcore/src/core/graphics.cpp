@@ -500,15 +500,18 @@ void Graphics::draw_incir_pixels(const int &x, const int &y, const int &px, cons
 
 void Graphics::draw_ellipse(const int &cx, const int &cy, const int &rx, const int &ry, const Color &colr)
 {
-    int x = rx, y = 0,
-        sx = rx * rx,
-        sy = ry * ry,
-        sx2 = 2 * sx,
-        sy2 = 2 * sy,
-        dx = 2 * sy * x,
-        dy = 2 * sx * y;
-
-    int d = sx - sy * rx + sy * 0.25;
+    // int64 accumulators: rx*rx overflows int from rx > 46340 and
+    // 2*rx*rx already from rx > 32767 -- the midpoint scan corrupted
+    // silently on huge radii
+    const int64_t i64rx = rx, i64ry = ry;
+    int x = rx, y = 0;
+    const int64_t sx = i64rx * i64rx,
+                  sy = i64ry * i64ry,
+                  sx2 = 2 * sx,
+                  sy2 = 2 * sy;
+    int64_t dx = 2 * sy * x,
+            dy = 2 * sx * y,
+            d = sx - sy * i64rx;  // the old `+ sy * 0.25` truncated to 0
 
     while (dy < dx)
     {
@@ -532,7 +535,7 @@ void Graphics::draw_ellipse(const int &cx, const int &cy, const int &rx, const i
         }
     }
 
-    d = sx * (y * y + y) + sy * (x - 1) * (x - 1) - sy * sx;
+    d = sx * ((int64_t)y * y + y) + sy * ((int64_t)x - 1) * (x - 1) - sy * sx;
 
     while (x >= 0)
     {
@@ -563,31 +566,36 @@ void Graphics::fill_ellipse(const int &cx, const int &cy, const int &rx, const i
     {
         return;
     }
+    // clamp to the int64/isqrt domain: rx^2*ry^2 must stay below 2^62
+    // (46340^2 < 2^31) or isqrt_u64's shift prologue never terminates.
+    // An ellipse larger than any surface is clipped to the same pixels
+    const int crx = rx > 46340 ? 46340 : rx;
+    const int cry = ry > 46340 ? 46340 : ry;
     // scanline fill: one draw_line per row instead of testing every pixel.
     // USE_INTEGER_GEOMETRY (FPU-less targets) computes the half-width as
     // floor(isqrt(rx^2*ry^2 - rx^2*y^2)/ry) with 64-bit integer arithmetic,
     // exactly floor(rx*sqrt(1-(y/ry)^2)) -- same pixels as the float path.
 #if defined(USE_INTEGER_GEOMETRY)
-    const int64_t rx2 = 1LL * rx * rx;
-    const int64_t ry2 = 1LL * ry * ry;
+    const int64_t rx2 = 1LL * crx * crx;
+    const int64_t ry2 = 1LL * cry * cry;
     const int64_t rx2ry2 = rx2 * ry2;
-    for (int y = -ry; y <= ry; y++)
+    for (int y = -cry; y <= cry; y++)
     {
         const int64_t term = rx2ry2 - rx2 * (1LL * y * y);
-        const int dx = static_cast<int>(isqrt_u64(static_cast<uint64_t>(term)) / ry);
+        const int dx = static_cast<int>(isqrt_u64(static_cast<uint64_t>(term)) / cry);
         draw_line(cx - dx, cy + y, cx + dx, cy + y, colr);
     }
 #else
-    const double rx2 = static_cast<double>(rx) * rx;
-    const double ry2 = static_cast<double>(ry) * ry;
-    for (int y = -ry; y <= ry; y++)
+    const double rx2 = static_cast<double>(crx) * crx;
+    const double ry2 = static_cast<double>(cry) * cry;
+    for (int y = -cry; y <= cry; y++)
     {
         const double t = 1.0 - (static_cast<double>(y) * y) / ry2;
         if (t < 0.0)
         {
             continue;
         }
-        const int dx = static_cast<int>(rx * std::sqrt(t));
+        const int dx = static_cast<int>(crx * std::sqrt(t));
         draw_line(cx - dx, cy + y, cx + dx, cy + y, colr);
     }
 #endif
@@ -595,8 +603,20 @@ void Graphics::fill_ellipse(const int &cx, const int &cy, const int &rx, const i
 
 void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, const float &accuracy)
 {
-    for (float t = 0; t < 1; t += accuracy)
+    // integer step count: the endpoint (t == 1) is always sampled exactly
+    // and a non-positive accuracy cannot spin the loop forever
+    int steps = 1;
+    if (accuracy > 0.0f)
     {
+        steps = static_cast<int>(1.0f / accuracy);
+        if (steps < 1)
+        {
+            steps = 1;
+        }
+    }
+    for (int i = 0; i <= steps; ++i)
+    {
+        const float t = static_cast<float>(i) / static_cast<float>(steps);
         auto x = p1.x + (p2.x - p1.x) * t;
         auto y = p1.y + (p2.y - p1.y) * t;
         draw_pixel(x, y, colr);
@@ -605,8 +625,18 @@ void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const
 
 void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, const float &accuracy)
 {
-    for (float t = 0; t < 1; t += accuracy)
+    int steps = 1;
+    if (accuracy > 0.0f)
     {
+        steps = static_cast<int>(1.0f / accuracy);
+        if (steps < 1)
+        {
+            steps = 1;
+        }
+    }
+    for (int i = 0; i <= steps; ++i)
+    {
+        const float t = static_cast<float>(i) / static_cast<float>(steps);
         auto x = pow(1 - t, 2) * p1.x + 2 * (1 - t) * t * p2.x + pow(t, 2) * p3.x;
         auto y = pow(1 - t, 2) * p1.y + 2 * (1 - t) * t * p2.y + pow(t, 2) * p3.y;
         draw_pixel(x, y, colr);
@@ -615,8 +645,18 @@ void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const
 
 void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, const float &accuracy)
 {
-    for (float t = 0; t < 1; t += accuracy)
+    int steps = 1;
+    if (accuracy > 0.0f)
     {
+        steps = static_cast<int>(1.0f / accuracy);
+        if (steps < 1)
+        {
+            steps = 1;
+        }
+    }
+    for (int i = 0; i <= steps; ++i)
+    {
+        const float t = static_cast<float>(i) / static_cast<float>(steps);
         auto x = pow(1 - t, 3) * p1.x + 3 * pow(1 - t, 2) * t * p2.x + 3 * (1 - t) * pow(t, 2) * p3.x + pow(t, 3) * p4.x;
         auto y = pow(1 - t, 3) * p1.y + 3 * pow(1 - t, 2) * t * p2.y + 3 * (1 - t) * pow(t, 2) * p3.y + pow(t, 3) * p4.y;
         draw_pixel(x, y, colr);
