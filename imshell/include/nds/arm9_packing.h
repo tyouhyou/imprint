@@ -16,12 +16,6 @@ void printscore(int blacknum, int whitenum);
 void initFrameBuffer(void);
 /* set the sub LCD to console mode */
 void initSubVideoConsole(void);
-/* initiate the double buffer mode */
-void initDBFrameBuffer(void);
-/* swap the buffer */
-void swapBuffers(void);
-/* process the key event */
-bool processkey(void);
 
 void printlog(std::string str, ...);
 

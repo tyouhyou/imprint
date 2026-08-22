@@ -19,8 +19,10 @@ SRCS="
   imui/src/label.cpp
   imui/src/slider.cpp
   imui/src/list_box.cpp
+  imui/src/text_input.cpp
   imui/src/dialog.cpp
   imui/src/dispatcher.cpp
+  imui/src/ui_file.cpp
   apps/tictactoe/src/app_maker.cpp
   apps/tictactoe/src/ai.cpp
   apps/tictactoe/src/board.cpp
@@ -73,6 +75,7 @@ ls -l "$OUT" "${OUT%.js}.wasm"
 SMOKE_OUT="/src/demo/wasm/tictactoe_mod.js"
 em++ -std=c++17 -O2 \
   -DCOLOR_DEPTH=32 -DRGB_MODEL=bgra32 -DENDIAN=le \
+  $SUBSET_FLAGS \
   -I /src/imcore/include \
   -I /src/imcore/include/core \
   -I /src/imcore/include/text \
