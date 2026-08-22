@@ -3,6 +3,7 @@
 #include <memory>
 
 #include "tictactoe.hpp"
+#include "tictactoe_layout.hpp"
 
 using namespace zb::app;
 using namespace zb::app::tictactoe;
@@ -10,39 +11,13 @@ using namespace zb::ui;
 
 namespace
 {
-    // 320x240 window: the board is 216x216 at (52, 12), cell = 72
-    constexpr int window_w = 320;
-    constexpr int window_h = 240;
+    // geometry (and the probe/button coordinates derived from it) comes
+    // from tictactoe_layout.hpp -- the single source the view also uses
+    using namespace zb::app::tictactoe::layout;
 
     // absolute centers of the board cells
-    int cell_x(const int col) { return 52 + col * 72 + 36; }
-    int cell_y(const int row) { return 12 + row * 72 + 36; }
-
-    // inside the board, outside any dialog frame: (56, 120) is a board cell
-    // background pixel that stays unmasked while no dialog is open
-    constexpr int mask_probe_x = 56;
-    constexpr int mask_probe_y = 120;
-
-    // step dialogs (frame 200x64 centered) have their title at (70, 98);
-    // the row just below the 7px-tall text band is always frame-colored
-    constexpr int step_probe_x = 160;
-    constexpr int step_probe_y = 99;
-    // the result dialog (frame 200x84 centered) title sits at (70, 88)
-    constexpr int result_probe_x = 160;
-    constexpr int result_probe_y = 89;
-
-    // step 1 (difficulty) buttons: EASY/NORMAL/HARD at y 118..142
-    constexpr int normal_btn_x = 158;
-    constexpr int normal_btn_y = 130;
-    // step 2 (side) buttons: X FIRST / O SECOND at y 118..142
-    constexpr int first_btn_x = 113;
-    constexpr int first_btn_y = 130;
-    constexpr int second_btn_x = 203;
-    constexpr int second_btn_y = 130;
-
-    // the result dialog AGAIN button
-    constexpr int again_btn_x = 110;
-    constexpr int again_btn_y = 142;
+    int cell_x(const int col) { return board_x + col * board_cell + board_cell / 2; }
+    int cell_y(const int row) { return board_y + row * board_cell + board_cell / 2; }
 
     const core::Color board_bg = core::Color::from(100, 190, 70);
     const core::Color frame_bg = core::Color::from(240, 240, 240);
@@ -105,10 +80,10 @@ int test_app_flow()
         EXPECT(pixel_at_window(app->window(), step_probe_x, step_probe_y) == frame_bg.pixel);
         EXPECT(pixel_at_window(app->window(), mask_probe_x, mask_probe_y) != board_bg.pixel);
         // step 2: picking a difficulty opens the side dialog
-        click(app, normal_btn_x, normal_btn_y);
+        click(app, normal_btn_x, btn_y);
         EXPECT(pixel_at_window(app->window(), step_probe_x, step_probe_y) == frame_bg.pixel);
         // picking O SECOND starts the round: the computer (X) opens center
-        click(app, second_btn_x, second_btn_y);
+        click(app, second_btn_x, btn_y);
         const auto w = app->window();
         EXPECT(pixel_at_window(w, mask_probe_x, mask_probe_y) == board_bg.pixel);
         EXPECT(pixel_at_window(w, cell_x(1), cell_y(1)) == core::colors::White.pixel);
@@ -118,8 +93,8 @@ int test_app_flow()
     // one exchange: human X at (0,0), the computer answers at the center
     {
         auto app = make_app();
-        click(app, normal_btn_x, normal_btn_y);
-        click(app, first_btn_x, first_btn_y);
+        click(app, normal_btn_x, btn_y);
+        click(app, first_btn_x, btn_y);
         play(app, 0, 0);
         const auto w = app->window();
         EXPECT(pixel_at_window(w, cell_x(0), cell_y(0)) == core::colors::White.pixel);
@@ -131,8 +106,8 @@ int test_app_flow()
     // a full round ends with the game-over dialog (mask dims the board)
     {
         auto app = make_app();
-        click(app, normal_btn_x, normal_btn_y);
-        click(app, first_btn_x, first_btn_y);
+        click(app, normal_btn_x, btn_y);
+        click(app, first_btn_x, btn_y);
         play_draw_round(app);
         const auto w = app->window();
         EXPECT(pixel_at_window(w, mask_probe_x, mask_probe_y) != board_bg.pixel);
@@ -142,8 +117,8 @@ int test_app_flow()
     // AGAIN reopens the round setup with a cleared board
     {
         auto app = make_app();
-        click(app, normal_btn_x, normal_btn_y);
-        click(app, first_btn_x, first_btn_y);
+        click(app, normal_btn_x, btn_y);
+        click(app, first_btn_x, btn_y);
         play_draw_round(app);
         click(app, again_btn_x, again_btn_y);
         const auto w = app->window();

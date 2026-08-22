@@ -4,27 +4,16 @@
 
 #include "logging.hpp"
 #include "text/text_image.hpp"
+#include "tictactoe_layout.hpp"
 
 using namespace zb::app::tictactoe;
 using namespace zb::ui;
 
 namespace
 {
-    // dialog geometry (fits the NDS 256x192 screen)
-    constexpr int step_frame_w = 200;
-    constexpr int step_frame_h = 64;      // title + one button row
-    constexpr int result_frame_w = 200;
-    constexpr int result_frame_h = 84;
-    constexpr int dialog_padding = 10;
-    constexpr int title_height = 16;
-    constexpr int content_width = step_frame_w - 2 * dialog_padding;  // 180
-
-    constexpr int diff_button_w = 56;
-    constexpr int diff_button_h = 24;
-    constexpr int side_button_w = 86;
-    constexpr int side_button_h = 24;
-    constexpr int result_button_w = 88;
-    constexpr int result_button_h = 20;
+    // geometry comes from tictactoe_layout.hpp (shared with the
+    // end-to-end test, so a layout change and its test travel together)
+    using namespace zb::app::tictactoe::layout;
 
     const core::Color frame_bg = core::Color::from(240, 240, 240);
     const core::Color title_fg = core::Color::from(40, 40, 40);
@@ -65,7 +54,7 @@ void TictactoeView::build_board(const uint32_t &max_client_width, const uint32_t
     const int short_edge = (max_client_width < max_client_height)
                                ? static_cast<int>(max_client_width)
                                : static_cast<int>(max_client_height);
-    const int margin = short_edge / 20;
+    const int margin = short_edge / board_margin_den;
     const int board_size = short_edge - 2 * margin;
     auto board = std::make_unique<Board>();
     board->set_size(board_size, board_size);
