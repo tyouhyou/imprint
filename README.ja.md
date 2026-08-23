@@ -1,5 +1,7 @@
 # Imprint
 
+> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-08-23 時点）。
+
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-blue)](README.ja.md)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -72,47 +74,29 @@ column id="root" spacing=6 padding=10
 UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
 ```
 
-## プラットフォーム
-
-| プラットフォーム | シェル | 備考 |
-|---|---|---|
-| ニンテンドーDS | `imshell/nds` | ARM9、4MB RAM、FPU なし。ndstool で ROM 化 |
-| Linux | `imshell/fb`、`imshell/x11` | フレームバッファまたは X11 ウィンドウ |
-| Windows | `imshell/win` | Win32、32 ビット BGRA または 16 ビット |
-| WebAssembly | `demo/wasm` | emscripten + canvas |
-| Python | `demo/python` | C-ABI 経由で ctypes + pygame |
-
 ## ビルド
 
-| ターゲット | コマンド |
-|---|---|
-| Windows（MSVC） | `cmake -S . -B build && cmake --build build` |
-| Linux（フレームバッファ） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB` |
-| Linux（X11） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11` |
-| NDS（docker） | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` |
-| WebAssembly | `demo/wasm/build.sh`（docker emscripten） |
-| Python | `binding` 共有ライブラリをビルドしてから `python3 demo/python/myapp.py --lib <libzbapi>` |
+| ターゲット | コマンド | 備考 |
+|---|---|---|
+| Windows（MSVC） | `cmake -S . -B build && cmake --build build` | 依存ゼロのデフォルト（32bpp） |
+| Windows + フォント | `cmake -S . -B build_font -DUSE_FONT=ON && cmake --build build_font` | 実行には `freetype.dll` が PATH 上に必要 |
+| Linux（X11） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build_linux` | 入力対応バックエンド |
+| Linux（フレームバッファ） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB && cmake --build build_linux` | 表示のみ。操作は X11 で |
+| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` | `build_nds/bin/tictactoe.nds` を生成 |
+| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | node スモークテスト付き |
+| Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 
-テスト：`test/test_imui.exe`（27 スイート、素の assert、テストフレームワークなし）。デスクトップビルドで自動実行、NDS ではスキップ。
+テスト：`test/test_imui`——素の assert、テストフレームワークなし。デスクトップビルドで自動実行、NDS ではスキップ。
+
+## ドキュメント
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——実装済みアーキテクチャ：モジュールマップと依存ルール、契約（フレームライフサイクル、入力、ピクセルモデル、テキスト、イベント、エラー処理、C-ABI ホスト、ビルドオプション）、既知の制限、アーキテクチャバックログ
+- [`docs/design-file.md`](docs/design-file.md)——`.ui` デザインファイル形式：文法、パッケージングパイプライン、実体化セマンティクス
+- [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI ホストインターフェース。ホストルールは ARCHITECTURE §4.8
 
 ## デモ
 
 デモアプリは三目並べ（人間 vs コンピュータ）。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build_nds/bin/tictactoe.nds` を生成します。2 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。
-
-## リポジトリ構成
-
-| パス | 内容 |
-|---|---|
-| `imcore/` | 描画カーネル：Graphics / Color / Font / Image |
-| `imui/` | ウィジェットライブラリ（保持モード）+ デザインファイルパーサー |
-| `imapp/` | アプリインターフェース：`IApp` / `IWindow` + デフォルト `CanvasWindow` |
-| `imevent/` | イベントと入力 |
-| `imutil/` | ロギング |
-| `binding/` | C-ABI `zbapi` 共有ライブラリ + C スモークテスト |
-| `tools/` | ビルド時ツール：`ui_embed`（デザインファイル検証 + パック）、フォントサブセット化 |
-| `imshell/` | プラットフォームシェル（NDS / FB / X11 / Win） |
-| `apps/` | デモアプリケーション（`tictactoe`、`ui_preview`） |
-| `test/` | ユニットテスト |
 
 ## ライセンス
 

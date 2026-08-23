@@ -72,47 +72,29 @@ platform. Preview interactively with the `ui_preview` app:
 UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
 ```
 
-## Platforms
-
-| Platform | Shell | Notes |
-|---|---|---|
-| Nintendo DS | `imshell/nds` | ARM9, 4 MB RAM, no FPU; ROM packaged with ndstool |
-| Linux | `imshell/fb`, `imshell/x11` | framebuffer or X11 window |
-| Windows | `imshell/win` | Win32, 32-bit BGRA or 16-bit |
-| WebAssembly | `demo/wasm` | emscripten + canvas |
-| Python | `demo/python` | ctypes + pygame over the C-ABI |
-
 ## Build
 
-| Target | Command |
-|---|---|
-| Windows (MSVC) | `cmake -S . -B build && cmake --build build` |
-| Linux (framebuffer) | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB` |
-| Linux (X11) | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11` |
-| NDS (docker) | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` |
-| WebAssembly | `demo/wasm/build.sh` (docker emscripten) |
-| Python | build `binding` shared lib, then `python3 demo/python/myapp.py --lib <libzbapi>` |
+| Target | Command | Notes |
+|---|---|---|
+| Windows (MSVC) | `cmake -S . -B build && cmake --build build` | zero-dependency default (32bpp) |
+| Windows + fonts | `cmake -S . -B build_font -DUSE_FONT=ON && cmake --build build_font` | run needs `freetype.dll` on PATH |
+| Linux (X11) | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build_linux` | input-capable backend |
+| Linux (framebuffer) | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB && cmake --build build_linux` | presents only; use X11 for interaction |
+| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` | produces `build_nds/bin/tictactoe.nds` |
+| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | includes a node smoke test |
+| Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
-Tests: `test/test_imui.exe` (27 suites, plain asserts, no framework). Automatic on desktop builds; skipped on NDS.
+Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop builds, skipped on NDS.
+
+## Documentation
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the as-built architecture: module map & dependency rules, contracts (frame lifecycle, input, pixel model, text, events, errors, C-ABI hosts, build options), known limitations, and the architecture backlog
+- [`docs/design-file.md`](docs/design-file.md) — the `.ui` design-file format: grammar, packaging pipeline, materialization semantics
+- [`binding/include/zbapi.h`](binding/include/zbapi.h) — the C-ABI surface for hosts (Python, WASM, C); host rules in ARCHITECTURE §4.8
 
 ## Demo
 
 The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
-
-## Repository layout
-
-| Path | Contents |
-|---|---|
-| `imcore/` | drawing kernel: Graphics / Color / Font / Image |
-| `imui/` | widget library (retained-mode) + design-file parser |
-| `imapp/` | app interface: `IApp` / `IWindow` + `CanvasWindow` default |
-| `imevent/` | events & input |
-| `imutil/` | logging |
-| `binding/` | C-ABI `zbapi` shared library + C smoke test |
-| `tools/` | build-time tools: `ui_embed` (design-file validator + packer), font subsetter |
-| `imshell/` | platform shells (NDS / FB / X11 / Win) |
-| `apps/` | demo applications (`tictactoe`, `ui_preview`) |
-| `test/` | unit tests |
 
 ## License
 

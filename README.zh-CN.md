@@ -1,5 +1,7 @@
 # Imprint
 
+> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-08-23）。
+
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
@@ -71,47 +73,29 @@ column id="root" spacing=6 padding=10
 UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
 ```
 
-## 平台
-
-| 平台 | 壳层 | 说明 |
-|---|---|---|
-| 任天堂 DS | `imshell/nds` | ARM9、4MB 内存、无 FPU；ndstool 打包 ROM |
-| Linux | `imshell/fb`、`imshell/x11` | framebuffer 或 X11 窗口 |
-| Windows | `imshell/win` | Win32，32 位 BGRA 或 16 位 |
-| WebAssembly | `demo/wasm` | emscripten + canvas |
-| Python | `demo/python` | 通过 C-ABI 使用 ctypes + pygame |
-
 ## 构建
 
-| 目标 | 命令 |
-|---|---|
-| Windows（MSVC） | `cmake -S . -B build && cmake --build build` |
-| Linux（framebuffer） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB` |
-| Linux（X11） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11` |
-| NDS（docker） | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` |
-| WebAssembly | `demo/wasm/build.sh`（docker emscripten） |
-| Python | 先构建 `binding` 动态库，再 `python3 demo/python/myapp.py --lib <libzbapi>` |
+| 目标 | 命令 | 说明 |
+|---|---|---|
+| Windows（MSVC） | `cmake -S . -B build && cmake --build build` | 零依赖默认构建（32bpp） |
+| Windows + 字体 | `cmake -S . -B build_font -DUSE_FONT=ON && cmake --build build_font` | 运行需 `freetype.dll` 在 PATH 上 |
+| Linux（X11） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build_linux` | 支持输入的后端 |
+| Linux（framebuffer） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB && cmake --build build_linux` | 仅显示；交互请用 X11 |
+| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` | 产出 `build_nds/bin/tictactoe.nds` |
+| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | 附带 node 冒烟测试 |
+| Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
-测试：`test/test_imui.exe`（27 个套件，纯断言，无测试框架）。桌面构建自动运行；NDS 跳过。
+测试：`test/test_imui`——纯断言，无测试框架；桌面构建自动运行，NDS 跳过。
+
+## 文档
+
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——按现状实装的架构：模块图与依赖规则、契约（帧生命周期、输入、像素模型、文本、事件、错误处理、C-ABI 宿主、构建选项）、已知限制与架构 backlog
+- [`docs/design-file.md`](docs/design-file.md)——`.ui` 设计文件格式：语法、打包管线、物化语义
+- [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI 宿主接口；宿主规则见 ARCHITECTURE §4.8
 
 ## 示例
 
 示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
-
-## 仓库结构
-
-| 路径 | 内容 |
-|---|---|
-| `imcore/` | 绘制内核：Graphics / Color / Font / Image |
-| `imui/` | 控件库（保留模式）+ 设计文件解析器 |
-| `imapp/` | 应用接口：`IApp` / `IWindow` + 默认 `CanvasWindow` |
-| `imevent/` | 事件与输入 |
-| `imutil/` | 日志 |
-| `binding/` | C-ABI `zbapi` 动态库 + C 冒烟测试 |
-| `tools/` | 构建期工具：`ui_embed`（设计文件校验 + 打包）、字体子集化 |
-| `imshell/` | 平台壳层（NDS / FB / X11 / Win） |
-| `apps/` | 示例应用（`tictactoe`、`ui_preview`） |
-| `test/` | 单元测试 |
 
 ## 许可证
 

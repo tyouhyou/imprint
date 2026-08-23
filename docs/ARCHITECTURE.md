@@ -2,12 +2,8 @@
 
 > Living document. Describes the system **as built** and tracks the
 > architecture backlog. Public: intended for anyone reading, porting, or
-> extending the framework.
->
-> Companion docs (internal, for contributors):
-> - `docs/code-contract.md` — API/implementation contracts and contribution rules
-> - `CONTEXT.md` — session handoff notes and decision log
-> - `AGENTS.md` — build/verify matrix and environment constraints
+> extending the framework. This is the foundation of the documentation:
+> it is self-contained and references no other document.
 
 ## 1. What Imprint is
 
@@ -44,27 +40,26 @@ apps; apps never become framework code; only the shell and the binding
 instantiate an app. `imcore` is a CMake `SHARED` library so the Linux host
 `zbapi` can load it as a sibling `.so`; module boundaries are logical.
 
-## 3. Build variants
+## 3. Targets
 
-| Target                | Configuration                                             | Notes                                        |
-|-----------------------|-----------------------------------------------------------|----------------------------------------------|
-| Windows 32bpp         | `cmake -S . -B build` (MSVC)                              | zero-dependency default                      |
-| Windows + fonts       | `-B build_font -DUSE_FONT=ON`                             | needs freetype.dll on PATH                   |
-| Windows 16bpp         | `-B build_16 -DCOLOR_DEPTH=16`                            | compile/test only; desktop shells assume 32bpp |
-| Linux                 | `-B build_linux -DIM_SHELL_BACKEND=FB` or `=X11`          | X11 is the input-capable backend             |
-| Nintendo DS           | docker devkitARM, `cmake/nds.toolchain.cmake`             | produces `build_nds/bin/<story>.nds` ROM     |
-| WASM                  | `demo/wasm/build.sh` (Emscripten)                         | node smoke test included                     |
-| Python / C hosts      | uses the `zbapi` shared library                           | `demo/python/myapp.py`                      |
+What each target is; how to configure and build it is operational
+knowledge and lives with the quick-start material.
 
-Tests (`test/test_imui`) run on hosts only (embedded builds skip them) and
-cover 30+ suites with plain asserts. The C-ABI smoke test is
-`binding/test/test_zbapi.c`.
+| Target | Implementation | Fixed characteristics |
+|---|---|---|
+| Windows | `imshell/win` (Win32) | 32bpp BGRA presentation; a `COLOR_DEPTH=16` build compiles and passes tests but has no presenting shell |
+| Linux | `imshell/fb`, `imshell/x11` | X11 is the input-capable backend; the framebuffer backend presents only (no input source) |
+| Nintendo DS | `imshell/nds` + `cmake/nds.toolchain.cmake` | ARM9, 4 MB RAM, no FPU/RTTI/libatomic; 16bpp abgr1555; ROM packaged by ndstool (POST_BUILD) |
+| WebAssembly | `demo/wasm` (Emscripten) | JS host wraps the pixel buffer as canvas; node smoke test in-tree |
+| Host languages | `binding` (`zbapi` shared library) | Python/ctypes demo and a C smoke test drive the C-ABI |
+
+Tests (`test/test_imui`) run on hosts only (embedded builds skip them)
+and cover 30+ suites with plain asserts.
 
 ## 4. Architecture contract (as implemented, 2026-08-23)
 
 This section states the contracts the current implementation actually
-satisfies. Changing any of these is an architecture change: update this
-document and the internal contracts together.
+satisfies. Changing any of these is an architecture change.
 
 ### 4.1 Rendering loop and frame lifecycle
 
@@ -323,8 +318,3 @@ recorded risks and proposed directions, not scheduled work.
   must handle; a packaging abstraction would help.
 - **A-4.3 Present logic duplication.** The region-present logic exists in
   every shell with different edge cases; A-2's `Presenter` should absorb it.
-
----
-
-*Contribution mechanics — hot-path allocation budget, contract-before-API
-rules, error-path rules — live in `docs/code-contract.md` (internal).*
