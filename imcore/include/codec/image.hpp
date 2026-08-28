@@ -1,8 +1,6 @@
 /* class to process image.
  *
  * It reads/writes data from/to image files.
- * Only jpeg are supported.
- * (png, bmp are on their way)
  */
 #pragma once
 

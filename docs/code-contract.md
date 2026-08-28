@@ -257,6 +257,11 @@ keeps only API-level supplements.
   rejection; the caller owns alarming). `panel_pixel_bytes(format)`
   reports the format's bytes per pixel. New panel formats add a converter,
   not kernel macro-matrix combinations (`docs/ARCHITECTURE.md` §4.4).
+  Green pack semantics: red/blue are 5-bit on both sides of the seam and
+  recover exactly at every depth; green is 6-bit in the bgr565 word —
+  truncated from the 8-bit channel at 32bpp, replicated from the 5-bit
+  internal channel at 16bpp (full internal green packs to full panel
+  green).
 
 ## 4. Declarative UI builder (batch G contract)
 

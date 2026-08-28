@@ -266,7 +266,8 @@ recorded risks and proposed directions, not scheduled work.
 **Resolution.** The seam landed in three steps, all contract-first:
 1. §4.4 seam rule + `code-contract.md` §3 converter contract;
 2. `core/pixel_convert` — `panel_format{native,bgr565}`,
-   `panel_pixel_bytes`, `convert_row` (depth-agnostic, silent
+   `panel_pixel_bytes`, `convert_row` (one definition for every
+   COLOR_DEPTH; the bgr565 green pack adapts per depth, silent
    rejection), locked by the 35th suite `test_pixel_convert`;
 3. the FB shell — its validation case below — now detects the panel
    from the vinfo: byte-equal panels keep the memcpy fast path, RGB565

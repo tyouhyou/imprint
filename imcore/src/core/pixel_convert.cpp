@@ -43,11 +43,25 @@ namespace zb::ui::core
         case panel_format::bgr565:
             for (int i = 0; i < count; ++i)
             {
-                // the rgb accessors yield 0..255 at every color depth,
-                // so the pack is depth-agnostic (16bpp re-quantizes its
-                // own 5-bit channels, which is lossless here)
+                // red/blue are 5-bit on both sides of the seam, so >>3
+                // recovers the panel channel exactly at every depth.
+                // green is 6-bit in the panel word: at 32bpp the accessor
+                // is the true 8-bit channel (>>2 truncation); at 16bpp
+                // internal (abgr1555) it yields g5 << 3 (0..248, never
+                // 255), so the 5-bit channel is recovered and replicated
+                // to 6 bits -- full green stays full green (a plain >>2
+                // would cap it at 62/63)
                 const uint16_t r = static_cast<uint16_t>(src[i].rgb.r >> 3);
-                const uint16_t g = static_cast<uint16_t>(src[i].rgb.g >> 2);
+                uint16_t g;
+                if constexpr (ImColor_Depth == 16)
+                {
+                    const uint16_t g5 = static_cast<uint16_t>(src[i].rgb.g >> 3);
+                    g = static_cast<uint16_t>((g5 << 1) | (g5 >> 4));
+                }
+                else
+                {
+                    g = static_cast<uint16_t>(src[i].rgb.g >> 2);
+                }
                 const uint16_t b = static_cast<uint16_t>(src[i].rgb.b >> 3);
                 const uint16_t px = static_cast<uint16_t>((r << 11) | (g << 5) | b);
                 // little-endian 16-bit word: low byte first

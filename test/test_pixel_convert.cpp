@@ -45,7 +45,14 @@ int test_pixel_convert()
         EXPECT(core::convert_row(core::panel_format::bgr565, row, 1, buf, sizeof(buf)) == 2);
         const int px = buf[0] | (buf[1] << 8);
         EXPECT((px >> 11) == (128 >> 3));
-        EXPECT(((px >> 5) & 0x3F) == (128 >> 2));
+        // green is 6-bit in the panel word: truncated from the 8-bit
+        // channel at 32bpp; replicated from the 5-bit internal channel
+        // at 16bpp (128 -> g5 16 -> 33). Pure channels saturate at both
+        // depths, which is why the textbook words above hold everywhere
+        if constexpr (core::ImColor_Depth == 16)
+            EXPECT(((px >> 5) & 0x3F) == 33);
+        else
+            EXPECT(((px >> 5) & 0x3F) == (128 >> 2));
         EXPECT((px & 0x1F) == (128 >> 3));
     }
 
