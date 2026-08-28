@@ -336,16 +336,12 @@ require an API shape change have a companion entry in
   **Fixed.** `iminput/include/input.hpp` guard renamed from
   `IMEVENT_INPUT_HPP` to `IMINPUT_INPUT_HPP`. No ABI impact.
 
-- **A-7. `FONT_SUBSET` source scan omits `.ui` documents (P2).**
-  **Problem.** `imcore/CMakeLists.txt:40` `GLOB_RECURSE` scans only
-  `apps/*/src/*.cpp`, `apps/*/include/*.hpp`, `test/*.cpp`. Strings in
-  `.ui` files (`text="…"`) — now a selling point (`docs/design-file.md`,
-  backlog I) — never reach `tools/font_subset.py`, so a non-ASCII
-  `.ui` falls back to zero-width at runtime with no warning.
-  **Proposed direction.** Extend the glob to `*.ui`; teach
-  `font_subset.py` to parse `text="…"` / `items="…"` either by reusing
-  `parse_ui_text` or by a small `*.ui` scan mode. Fallback remains
-  ASCII-only.
+- **A-7. `FONT_SUBSET` source scan omits `.ui` documents (P2) — DONE 2026-08-28.**
+  **Fixed.** `imcore/CMakeLists.txt:40` glob extended to `*.ui` (CMake done
+  in 6c76e66). `tools/font_subset.py` now has `scan_ui_file()` that
+  extracts `text="…"` and `items="…"` attributes, handling line
+  continuations and escapes. Non-ASCII `.ui` strings now reach the subset
+  generator; undrawn glyphs still warn (fallback remains ASCII-only).
 
 - **A-8. `USE_FONT` text path hidden allocation (P2) — DONE 2026-08-28.**
   **Fixed.** `imcore/src/text/font.cpp:190` `draw_alphamap` now reserves
@@ -477,19 +473,12 @@ eviction handshake. None duplicates A-1..A-11.
   **First step.** Clamp copy width to `min(screen_width - rx, w - rx)`.
 
 - **A-17. `font_subset` dedicated `.ui` extractor (P3, follow-up to
-  A-7).**
-  **Problem.** A-7's glob now feeds `*.ui` to `tools/font_subset.py`, but
-  the script has no `.ui` branch — it scans `.ui` via its generic
-  string-literal regex (works by accident) and emits noisy "code unit
-  not drawn" warnings for any `.ui` string whose glyphs aren't in
-  `extra_glyphs.py`. If `.ui` quoting ever changes, the scan silently
-  misses glyphs.
-  **Proposed direction.** Add a dedicated `.ui` text extractor (reuse
-  `parse_ui_text` or a small scan mode for `text="…"` / `items="…"`),
-  supressing the false warnings; keep the ASCII-only fallback.
-  **First step.** Parse `.ui` `text`/`items` attributes explicitly in
-  `font_subset.py`; verify a non-ASCII `.ui` string lands in
-  `subset_glyphs.hpp` only when drawn.
+  A-7) — FIRST STEP DONE 2026-08-28.**
+  **Done.** `tools/font_subset.py` now has `scan_ui_file()` that parses
+  `text="…"` / `items="…"` explicitly (no generic regex). Remaining:
+  suppress "not drawn" warnings for `.ui` strings whose glyphs aren't in
+  `extra_glyphs.py` (expected — `.ui` strings may use glyphs the app
+  doesn't draw at runtime).
 
 - **A-18. `event.hpp` misleading comment (P3, hygiene).**
   **Problem.** `imevent/include/event.hpp:100` says the live-id scan

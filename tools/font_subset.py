@@ -24,7 +24,44 @@ import sys
 # a string literal with simple escapes; enough for the project's style
 _STRING_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
 
-_SOURCES = (".cpp", ".hpp", ".c", ".h", ".cc", ".hh")
+_SOURCES = (".cpp", ".hpp", ".c", ".h", ".cc", ".hh", ".ui")
+
+
+def scan_ui_file(path):
+    """Yields non-ASCII code units from text= and items= attributes in .ui file."""
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except OSError:
+        return set()
+    found = set()
+    # join continuation lines (backslash at end of line)
+    raw_lines = content.splitlines()
+    lines = []
+    for line in raw_lines:
+        line = line.rstrip()
+        if line.endswith("\\"):
+            if lines:
+                lines[-1] += line[:-1]
+            else:
+                lines.append(line[:-1])
+        else:
+            lines.append(line)
+    for line in lines:
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        # find all key="value" pairs for text= and items=
+        # handles escaped quotes and backslashes inside the value
+        for m in re.finditer(r'\b(text|items)\s*=\s*"((?:[^"\\]|\\.)*)"', line):
+            raw = m.group(2)
+            # decode escape sequences: \" -> ", \\ -> \, others kept literally
+            val = raw.replace('\\"', '"').replace('\\\\', '\\')
+            for ch in val:
+                cp = ord(ch)
+                if cp >= 128:
+                    found.add(cp)
+    return found
 
 
 def scan_literals(path):
@@ -121,7 +158,10 @@ def main():
 
     used = set()
     for path in collect_sources(args.sources):
-        used |= scan_literals(path)
+        if path.endswith(".ui"):
+            used |= scan_ui_file(path)
+        else:
+            used |= scan_literals(path)
 
     missing = sorted(cp for cp in used if cp not in extras_by_cp)
     if missing:
