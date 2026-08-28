@@ -358,16 +358,25 @@ require an API shape change have a companion entry in
   provide `touch_row(row)` / content-hash check (`code-contract.md`
   §8 ListBox exemption) so the framework can auto-invalidate.
 
-- **A-10. Damage culling over-prunes overflow children (P2).**
-  **Problem.** `imui/src/widget.cpp:38` prunes a whole subtree when
-  the widget's own bounds miss the damage region. Children positioned
-  outside the parent (negative `pos`, `Dialog` mask, explicit
-  overflow) are never drawn on a partial repaint; the rasterizer's
-  per-pixel `damage` clip would have been sufficient.
-  **Proposed direction.** Replace the subtree prune with a per-widget
-  test only, or add a virtual `damage_bounds()` that containers
-  override with the union of children; validate with a `test_dirty`
-  overflow probe.
+- **A-10. Damage culling over-prunes overflow children (P2) — CLOSED
+  2026-08-28 (not reachable in the current render model).**
+  **Resolution.** The prune is provably safe: `Widget::draw` clips
+  drawing to the widget's own rect (`clip_safe`) *before* descending,
+  so a widget's visible contribution is always a subset of its own
+  bounds (and of every ancestor's). `parent ∩ damage = ∅` therefore
+  implies no descendant pixel could show inside the damage, and the
+  subtree prune hides nothing a full frame would draw. The "overflow
+  children" named by the review (negative positions, Dialog mask,
+  explicit overflow) are clipped to invisibility on full frames too —
+  the Dialog mask fills its own size only. `test_dirty` pins the
+  invariant in both directions: an overflow child repaints its
+  in-bounds sliver on a partial repaint (the prune does not over-cull
+  it), and a fully-outside child stays invisible even when damaged.
+  The proposed `damage_bounds()` machinery was rejected as fixing an
+  unobservable problem. If a future feature renders children outside
+  their parent's clip (e.g. an `overflow: visible` mode), the prune
+  must be revisited in the same change — see `docs/code-contract.md`
+  §9.
 
 - **A-11. Small correctness/hygiene items (P3, batchable) — DONE
   2026-08-28.**

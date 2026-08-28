@@ -278,5 +278,69 @@ int test_dirty()
         EXPECT(x == 10 && y == 10 && ww == 40 && hh == 20);
     }
 
+    // overflow children and the subtree prune (A-10): every widget's
+    // drawing is clipped to its own rect before the descent (the
+    // clip_safe chain), so a widget's visible contribution is a subset
+    // of its own bounds -- the prune by own bounds can never hide a
+    // pixel that a full frame would show. Both directions are pinned:
+    // a negative-position child repaints its in-bounds sliver on a
+    // partial repaint, and a fully-outside child stays invisible even
+    // when damaged.
+    {
+        zb::app::CanvasWindow w;
+        w.create(60, 60);
+
+        auto parent = std::make_unique<Panel>();
+        parent->set_size(30, 30);
+        parent->set_position(10, 10);
+
+        // child hanging off the top-left: absolute (5,5)-(24,24); only
+        // the sliver inside the parent, (10,10)-(24,24), can ever show
+        auto child = std::make_unique<Widget>();
+        child->set_size(20, 20);
+        child->set_position(-5, -5);
+        child->set_background_color(core::colors::Red);
+        auto *pc = child.get();
+        parent->add_child(std::move(child));
+
+        // child fully outside the parent: never visible, even damaged
+        auto far = std::make_unique<Widget>();
+        far->set_size(10, 10);
+        far->set_position(50, 50);  // absolute (60,60): off-window too
+        far->set_background_color(core::colors::Blue);
+        auto *pf = far.get();
+        parent->add_child(std::move(far));
+
+        w.root().add_child(std::move(parent));
+        w.paint();
+
+        auto px = [&w](const int x, const int y)
+        {
+            return static_cast<const core::Color *>(w.data())[y * w.width() + x].pixel;
+        };
+
+        // full frame: the sliver is red, nothing outside the parent is
+        EXPECT(px(10, 10) == core::colors::Red.pixel);
+        EXPECT(px(24, 24) == core::colors::Red.pixel);
+        EXPECT(px(9, 9) != core::colors::Red.pixel);
+        EXPECT(px(25, 10) != core::colors::Red.pixel);
+        EXPECT(px(5, 5) != core::colors::Blue.pixel);
+
+        // partial repaint of the overflow child: the sliver updates, so
+        // the prune did not over-cull the part visible inside the parent
+        pc->set_background_color(core::colors::Green);
+        w.paint();
+        EXPECT(px(10, 10) == core::colors::Green.pixel);
+        EXPECT(px(24, 24) == core::colors::Green.pixel);
+        EXPECT(px(9, 9) != core::colors::Green.pixel);
+
+        // damage the fully-outside child: the tree prunes at the parent
+        // and nothing on screen changes
+        pf->set_background_color(core::colors::Red);
+        w.paint();
+        EXPECT(px(10, 10) == core::colors::Green.pixel);  // sliver kept
+        EXPECT(px(5, 5) != core::colors::Red.pixel);
+    }
+
     return test::report("dirty");
 }

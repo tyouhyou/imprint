@@ -325,3 +325,9 @@ ARCHITECTURE.md §4.1。本节只保留 API 级义务：
   （`test_raster_damage` 固化）。
 - 不变量：`subtree_dirty_` 为真的节点其所有祖先均为真（冒泡置链与后序
   重算共同维护），冒泡据此可提前终止（重复 setter 为 O(1)）。
+- **子树剪枝的安全性前提（A-10）**：damage 剪枝按控件自身 bounds 裁掉
+  整棵子树，正确性依赖裁剪链不变量——每个控件先 `clip_safe` 到自身矩形
+  再下探（可见贡献 ⊆ 自身 bounds ⊆ 祖先 bounds 链），故剪枝不可能藏住
+  全帧会画出的像素（`test_dirty` 的 overflow 探针双向钉死）。任何让子
+  控件绘制到父裁剪区之外的新特性（如 `overflow: visible`）必须在同一
+  变更里重审 `Widget::draw` 的剪枝。
