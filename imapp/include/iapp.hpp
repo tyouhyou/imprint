@@ -49,9 +49,9 @@ namespace zb::app
          * @param buffer for initial data (must be writable, see Graphics)
          * @return shared pointer to the GUI instance
          */
-        virtual void create_window(const uint32_t &max_client_width, const uint32_t &max_client_height, void *buffer) = 0;
+        virtual void create_window(uint32_t max_client_width, uint32_t max_client_height, void *buffer) = 0;
 
-        virtual void create_window(const uint32_t &max_client_width, const uint32_t &max_client_height) = 0;
+        virtual void create_window(uint32_t max_client_width, uint32_t max_client_height) = 0;
 
         virtual zb::SharedPtr<IWindow> window() noexcept = 0;
 

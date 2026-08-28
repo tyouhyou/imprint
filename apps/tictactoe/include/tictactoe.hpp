@@ -20,11 +20,11 @@ namespace zb::app::tictactoe
         Tictactoe() = default;
 
         void create_window() override;
-        void create_window(const uint32_t &max_client_width, const uint32_t &max_client_height, void *buffer) override
+        void create_window(uint32_t max_client_width, uint32_t max_client_height, void *buffer) override
         {
             make_window(max_client_width, max_client_height, buffer);
         }
-        void create_window(const uint32_t &max_client_width, const uint32_t &max_client_height) override
+        void create_window(uint32_t max_client_width, uint32_t max_client_height) override
         {
             make_window(max_client_width, max_client_height);
         }
@@ -41,7 +41,7 @@ namespace zb::app::tictactoe
         void on_closed(event::CLOSE_EVENT::EventHandler) noexcept override;
 
     private:
-        void make_window(const uint32_t &max_client_width, const uint32_t &max_client_height, void *buffer = nullptr);
+        void make_window(uint32_t max_client_width, uint32_t max_client_height, void *buffer = nullptr);
 
         int32_t _width{800};
         int32_t _height{600};

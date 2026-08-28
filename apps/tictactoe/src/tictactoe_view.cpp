@@ -23,7 +23,7 @@ namespace
     const core::Color button_bg_pressed = core::Color::from(150, 150, 150);
 }  // namespace
 
-void TictactoeView::build(const uint32_t &max_client_width, const uint32_t &max_client_height, void *buffer)
+void TictactoeView::build(uint32_t max_client_width, uint32_t max_client_height, void *buffer)
 {
     if (window_)
     {
@@ -46,7 +46,7 @@ void TictactoeView::build(const uint32_t &max_client_width, const uint32_t &max_
     result_dialog_->layout();
 }
 
-void TictactoeView::build_board(const uint32_t &max_client_width, const uint32_t &max_client_height)
+void TictactoeView::build_board(uint32_t max_client_width, uint32_t max_client_height)
 {
     // the 3x3 grid is a square spanning the shorter window edge (with a
     // small margin), so it fits small screens (NDS: 256x192) as well as
@@ -75,7 +75,7 @@ void TictactoeView::build_board(const uint32_t &max_client_width, const uint32_t
     board_ = pboard;
 }
 
-void TictactoeView::build_difficulty_dialog(const uint32_t &max_client_width, const uint32_t &max_client_height)
+void TictactoeView::build_difficulty_dialog(uint32_t max_client_width, uint32_t max_client_height)
 {
     auto dlg = std::make_unique<Dialog>();
     dlg->set_size(max_client_width, max_client_height);
@@ -119,7 +119,7 @@ void TictactoeView::build_difficulty_dialog(const uint32_t &max_client_width, co
     diff_dialog_ = pdlg;
 }
 
-void TictactoeView::build_side_dialog(const uint32_t &max_client_width, const uint32_t &max_client_height)
+void TictactoeView::build_side_dialog(uint32_t max_client_width, uint32_t max_client_height)
 {
     auto dlg = std::make_unique<Dialog>();
     dlg->set_size(max_client_width, max_client_height);
@@ -154,7 +154,7 @@ void TictactoeView::build_side_dialog(const uint32_t &max_client_width, const ui
     side_dialog_ = pdlg;
 }
 
-void TictactoeView::build_result_dialog(const uint32_t &max_client_width, const uint32_t &max_client_height)
+void TictactoeView::build_result_dialog(uint32_t max_client_width, uint32_t max_client_height)
 {
     auto dlg = std::make_unique<Dialog>();
     dlg->set_size(max_client_width, max_client_height);

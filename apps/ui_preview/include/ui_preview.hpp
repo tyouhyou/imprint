@@ -24,10 +24,10 @@ namespace zb::app::ui_preview
         ~UiPreview() override = default;
 
         void create_window() override { create_window(_width, _height); }
-        void create_window(const uint32_t &max_client_width,
-                           const uint32_t &max_client_height) override;
-        void create_window(const uint32_t &max_client_width,
-                           const uint32_t &max_client_height, void *buffer) override;
+        void create_window(uint32_t max_client_width,
+                           uint32_t max_client_height) override;
+        void create_window(uint32_t max_client_width,
+                           uint32_t max_client_height, void *buffer) override;
 
         zb::SharedPtr<IWindow> window() noexcept override;
         void input(const zb::input::input_event &ev) noexcept override;
@@ -40,8 +40,8 @@ namespace zb::app::ui_preview
         void on_closed(event::CLOSE_EVENT::EventHandler) noexcept override;
 
     private:
-        void make_window(const uint32_t &max_client_width,
-                         const uint32_t &max_client_height, void *buffer = nullptr);
+        void make_window(uint32_t max_client_width,
+                         uint32_t max_client_height, void *buffer = nullptr);
         void load_documents();
         void show_screen(const std::size_t index);
 

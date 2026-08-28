@@ -96,8 +96,8 @@ int Image::read_png_file(
 int Image::read_png(
     Graphics &g,
     const std::string &file_name,
-    const int &start_x,
-    const int &start_y)
+    int start_x,
+    int start_y)
 {
     std::vector<Color> png_img;
     image_info png_inf{};

@@ -14,7 +14,7 @@ namespace zb::ui::core
     public:
         using ptr = zb::SharedPtr<Graphics>;
 
-        static ptr make_ptr(const uint32_t &width, const uint32_t &height, void *data = nullptr)
+        static ptr make_ptr(uint32_t width, uint32_t height, void *data = nullptr)
         {
             return zb::make_shared<Graphics>(width, height, data);
         }
@@ -26,7 +26,7 @@ namespace zb::ui::core
          * The optional `data` buffer is wrapped, not copied: the framework
          * writes into it, so it must be writable (no const buffer).
          */
-        Graphics(const uint32_t& width, const uint32_t& height, void* data);
+        Graphics(uint32_t width, uint32_t height, void* data);
         ~Graphics();
 
         // Graphics manages a raw pixel buffer. Copying the object itself is forbidden
@@ -38,7 +38,7 @@ namespace zb::ui::core
         Graphics &operator=(const Graphics &) = delete;
 
         /* deep-copy the specified area, and set size to the area */
-        Graphics::ptr clone(const int &x, const int &y, const int32_t &width, const int32_t &height) const;
+        Graphics::ptr clone(int x, int y, int32_t width, int32_t height) const;
 
         /* RAII restore of the draw state set up by clip_safe() */
         class ClipGuard
@@ -86,7 +86,7 @@ namespace zb::ui::core
          * Never throws: off-screen widgets produce a guard that converts to
          * false, and drawing on them is a no-op.
          */
-        [[nodiscard]] ClipGuard clip_safe(const int &x, const int &y, const int32_t &width, const int32_t &height);
+        [[nodiscard]] ClipGuard clip_safe(int x, int y, int32_t width, int32_t height);
 
         /*
          * Damage culling: when active, widgets whose bounds do not
@@ -97,7 +97,7 @@ namespace zb::ui::core
          * (r, b) exclusive — every raster entry point clips through
          * damage_contains / the fill clamp derived from it.
          */
-        void set_damage(const int &l, const int &t, const int &r, const int &b)
+        void set_damage(int l, int t, int r, int b)
         {
             damage_l_ = l;
             damage_t_ = t;
@@ -107,8 +107,8 @@ namespace zb::ui::core
         }
         void clear_damage() { damage_on_ = false; }
         [[nodiscard]] bool damage_on() const { return damage_on_; }
-        [[nodiscard]] inline bool damage_intersects(const int &x, const int &y,
-                                                    const int &w, const int &h) const
+        [[nodiscard]] inline bool damage_intersects(int x, int y,
+                                                    int w, int h) const
         {
             return x < damage_r_ && y < damage_b_ && x + w > damage_l_ && y + h > damage_t_;
         }
@@ -123,7 +123,7 @@ namespace zb::ui::core
             return imsize;
         }
 
-        inline void enable_alpha(const bool &enabled)
+        inline void enable_alpha(bool enabled)
         {
             alpha_enabled = enabled;
         }
@@ -140,40 +140,40 @@ namespace zb::ui::core
         // TODO: draw with line thickness
 
         // TODO: gamma correction
-        void draw_pixel(const int &x, const int &y, const Color &colr);
+        void draw_pixel(int x, int y, const Color &colr);
         inline void draw_pixel(const impoint_t &p, const Color &colr)
         {
             draw_pixel(p.x, p.y, colr);
         }
 
-        void draw_line(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr);
+        void draw_line(int x1, int y1, int x2, int y2, const Color &colr);
         inline void draw_line(const impoint_t &p1, const impoint_t &p2, const Color &colr)
         {
             draw_line(p1.x, p1.y, p2.x, p2.y, colr);
         }
 
         void draw_triangle(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr);
-        inline void draw_triangle(const int &x1, const int &y1, const int &x2, const int &y2, const int &x3, const int &y3, const Color &colr)
+        inline void draw_triangle(int x1, int y1, int x2, int y2, int x3, int y3, const Color &colr)
         {
             draw_triangle({x1, y1}, {x2, y2}, {x3, y3}, colr);
         }
 
         // TODO: fill triangle, draw/fill polygon
 
-        void draw_circle(const int &x, const int &y, const int &radius, const Color &colr);
-        void fill_circle(const int &x, const int &y, const int &radius, const Color &colr);
-        inline void draw_circle(const impoint_t &p, const int &radius, const Color &colr)
+        void draw_circle(int x, int y, int radius, const Color &colr);
+        void fill_circle(int x, int y, int radius, const Color &colr);
+        inline void draw_circle(const impoint_t &p, int radius, const Color &colr)
         {
             draw_circle(p.x, p.y, radius, colr);
         }
-        inline void fill_circle(const impoint_t &p, const int &radius, const Color &colr)
+        inline void fill_circle(const impoint_t &p, int radius, const Color &colr)
         {
             fill_circle(p.x, p.y, radius, colr);
         }
 
         /* draw a rectangle which left-top at (x1, y1), right-bottom at (x2, y2) */
-        void draw_rect(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr);
-        void fill_rect(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr);
+        void draw_rect(int x1, int y1, int x2, int y2, const Color &colr);
+        void fill_rect(int x1, int y1, int x2, int y2, const Color &colr);
         inline void draw_rect(const impoint_t &p, const imsize_t &s, const Color &colr)
         {
             draw_rect(p.x, p.y, p.x + s.width, p.y + s.height, colr);
@@ -183,8 +183,8 @@ namespace zb::ui::core
             fill_rect(p.x, p.y, p.x + s.width, p.y + s.height, colr);
         }
 
-        void draw_ellipse(const int &centerx, const int &centery, const int &radiusx, const int &radiusy, const Color &colr);
-        void fill_ellipse(const int &centerx, const int &centery, const int &radiusx, const int &radiusy, const Color &colr);
+        void draw_ellipse(int centerx, int centery, int radiusx, int radiusy, const Color &colr);
+        void fill_ellipse(int centerx, int centery, int radiusx, int radiusy, const Color &colr);
         inline void draw_ellipse(const impoint_t &center, const imsize_t radiuses, const Color &colr)
         {
             draw_ellipse(center.x, center.y, radiuses.width, radiuses.height, colr);
@@ -195,34 +195,34 @@ namespace zb::ui::core
         }
 
         /* fill the triangle with the given vertices, edge-inclusive */
-        void fill_triangle(const int &x1, const int &y1, const int &x2, const int &y2, const int &x3, const int &y3, const Color &colr);
+        void fill_triangle(int x1, int y1, int x2, int y2, int x3, int y3, const Color &colr);
         inline void fill_triangle(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr)
         {
             fill_triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, colr);
         }
 
-        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, const float &accuracy = 0.01);
-        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, const float &accuracy = 0.01);
-        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, const float &accuracy = 0.01);
+        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, float accuracy = 0.01);
+        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, float accuracy = 0.01);
+        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, float accuracy = 0.01);
 
         /* *
          * Draw an image, a Color pixels array, into graphics.
          * */
         void draw_image(
             const Color *img,          // bitmap buffer pointer
-            const int &img_width,      // bitmap widht
-            const int &img_height,     // bitmap height
-            const int &img_row_stride, // pixel amount in one row
-            const int &start_x,        // x coordinate in the graphic where starting to draw bitmap
-            const int &start_y         // y coordinate in the graphic where starting to draw bitmap
+            int img_width,      // bitmap widht
+            int img_height,     // bitmap height
+            int img_row_stride, // pixel amount in one row
+            int start_x,        // x coordinate in the graphic where starting to draw bitmap
+            int start_y         // y coordinate in the graphic where starting to draw bitmap
         );
 
         /* draw an image_t view; row_stride 0 means width, a malformed
            view (null pixels or stride < width) draws nothing */
         void draw_image(
             const image_t &img,
-            const int &start_x,
-            const int &start_y);
+            int start_x,
+            int start_y);
 
 #pragma endregion
 
@@ -255,18 +255,18 @@ namespace zb::ui::core
 
 #pragma region private methods
 
-        void set_draw_area(const int &x, const int &y, const int &width, const int &height);
+        void set_draw_area(int x, int y, int width, int height);
 
         // single canonical test for the damage clip (A-13): the damage
         // rect is half-open, draw_area is inclusive; every raster write
         // goes through this instead of ad-hoc clamps
-        [[nodiscard]] inline bool damage_contains(const int &x, const int &y) const
+        [[nodiscard]] inline bool damage_contains(int x, int y) const
         {
             return x >= damage_l_ && x < damage_r_ && y >= damage_t_ && y < damage_b_;
         }
 
-        void draw_8pixels(const int &x, const int &y, const int &px, const int &py, const Color &colr);
-        void draw_incir_pixels(const int &x, const int &y, const int &px, const int &py, const Color &colr);
+        void draw_8pixels(int x, int y, int px, int py, const Color &colr);
+        void draw_incir_pixels(int x, int y, int px, int py, const Color &colr);
         Color alpha_blend(const Color &front_color, const Color &back_color);
 
 #pragma endregion

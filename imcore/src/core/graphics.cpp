@@ -41,7 +41,7 @@ namespace
 }  // namespace
 #endif
 
-Graphics::Graphics(const uint32_t &width, const uint32_t &height, void *data)
+Graphics::Graphics(uint32_t width, uint32_t height, void *data)
     : pixels{nullptr}
     , is_wrapper_mode{false}
     , alpha_enabled{false}
@@ -81,7 +81,7 @@ Graphics::~Graphics()
         delete[] pixels;
 }
 
-Graphics::ptr Graphics::clone(const int &x, const int &y, const int32_t &width, const int32_t &height) const
+Graphics::ptr Graphics::clone(int x, int y, int32_t width, int32_t height) const
 {
     // 64-bit sums: x + width must not wrap the check itself
     // (2^30 + 2^30 used to go negative and pass)
@@ -101,7 +101,7 @@ Graphics::ptr Graphics::clone(const int &x, const int &y, const int32_t &width, 
     return g;
 }
 
-Graphics::ClipGuard Graphics::clip_safe(const int &x, const int &y, const int32_t &width, const int32_t &height)
+Graphics::ClipGuard Graphics::clip_safe(int x, int y, int32_t width, int32_t height)
 {
     if (width <= 0 || height <= 0)
     {
@@ -140,7 +140,7 @@ Graphics::ClipGuard Graphics::clip_safe(const int &x, const int &y, const int32_
     return ClipGuard(*this, saved_area, saved_offset_enabled, saved_offset, true);
 }
 
-void Graphics::set_draw_area(const int &x, const int &y, const int &width, const int &height)
+void Graphics::set_draw_area(int x, int y, int width, int height)
 {
     if (width <= 0 || height <= 0)
         return;
@@ -170,11 +170,11 @@ void Graphics::set_draw_area(const int &x, const int &y, const int &width, const
 
 void Graphics::draw_image(
     const Color *img,          // bitmap buffer pointer
-    const int &img_width,      // bitmap widht
-    const int &img_height,     // bitmap height
-    const int &img_row_stride, // pixel amount in one row
-    const int &start_x,        // x coordinate in the graphic where starting to draw bitmap
-    const int &start_y         // y coordinate in the graphic where starting to draw bitmap
+    int img_width,      // bitmap widht
+    int img_height,     // bitmap height
+    int img_row_stride, // pixel amount in one row
+    int start_x,        // x coordinate in the graphic where starting to draw bitmap
+    int start_y         // y coordinate in the graphic where starting to draw bitmap
 )
 {
     int sx, sy;
@@ -199,8 +199,8 @@ void Graphics::draw_image(
 
 void Graphics::draw_image(
     const image_t &img,
-    const int &start_x,
-    const int &start_y)
+    int start_x,
+    int start_y)
 {
     const int stride = img.row_stride > 0 ? img.row_stride : img.width;
     // malformed view (rows would overlap, or no pixels): refuse to draw
@@ -241,7 +241,7 @@ void Graphics::fill(const Color &colr)
     }
 }
 
-void Graphics::draw_pixel(const int &x, const int &y, const Color &colr)
+void Graphics::draw_pixel(int x, int y, const Color &colr)
 {
     int sx = x, sy = y;
     if (draw_area_offset_enabled)
@@ -304,7 +304,7 @@ Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
     return rst;
 }
 
-void Graphics::fill_rect(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr)
+void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
 {
     // the row span is normalized: y1 == y2 is a single row (the old
     // descending branch never ran and looped forever on a single row)
@@ -316,7 +316,7 @@ void Graphics::fill_rect(const int &x1, const int &y1, const int &x2, const int 
     }
 }
 
-void Graphics::draw_line(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr)
+void Graphics::draw_line(int x1, int y1, int x2, int y2, const Color &colr)
 {
     int nDx = x2 - x1;
     int nDy = y2 - y1;
@@ -386,7 +386,7 @@ void Graphics::draw_triangle(const impoint_t &p1, const impoint_t &p2, const imp
     draw_line(p3, p1, colr);
 }
 
-void Graphics::draw_circle(const int &x, const int &y, const int &radius, const Color &colr)
+void Graphics::draw_circle(int x, int y, int radius, const Color &colr)
 {
     int px, py, d, x2m1;
     py = radius;
@@ -420,7 +420,7 @@ void Graphics::draw_circle(const int &x, const int &y, const int &radius, const 
     }
 }
 
-void Graphics::fill_circle(const int &x, const int &y, const int &radius, const Color &colr)
+void Graphics::fill_circle(int x, int y, int radius, const Color &colr)
 {
 
     int px, py, d, x2m1;
@@ -451,7 +451,7 @@ void Graphics::fill_circle(const int &x, const int &y, const int &radius, const 
     }
 }
 
-void Graphics::draw_rect(const int &x1, const int &y1, const int &x2, const int &y2, const Color &colr)
+void Graphics::draw_rect(int x1, int y1, int x2, int y2, const Color &colr)
 {
     draw_line(x1, y1, x1, y2, colr);
     draw_line(x1, y1, x2, y1, colr);
@@ -460,7 +460,7 @@ void Graphics::draw_rect(const int &x1, const int &y1, const int &x2, const int 
 }
 
 /** draw 8 pixels for circle */
-void Graphics::draw_8pixels(const int &x, const int &y, const int &px, const int &py, const Color &colr)
+void Graphics::draw_8pixels(int x, int y, int px, int py, const Color &colr)
 {
     draw_pixel((x + px), (y + py), colr);
     draw_pixel((x + px), (y - py), colr);
@@ -474,9 +474,9 @@ void Graphics::draw_8pixels(const int &x, const int &y, const int &px, const int
 
 /** fill the pixels within a circle by horizontal scanlines, one line per octant */
 void Graphics::fill_triangle(
-    const int &x1, const int &y1,
-    const int &x2, const int &y2,
-    const int &x3, const int &y3,
+    int x1, int y1,
+    int x2, int y2,
+    int x3, int y3,
     const Color &colr)
 {
     // sort the vertices top to bottom; the long edge (a-c) spans the
@@ -526,7 +526,7 @@ void Graphics::fill_triangle(
     }
 }
 
-void Graphics::draw_incir_pixels(const int &x, const int &y, const int &px, const int &py, const Color &colr)
+void Graphics::draw_incir_pixels(int x, int y, int px, int py, const Color &colr)
 {
     draw_line((x - px), (y + py), (x + px), (y + py), colr);
     draw_line((x - px), (y - py), (x + px), (y - py), colr);
@@ -534,7 +534,7 @@ void Graphics::draw_incir_pixels(const int &x, const int &y, const int &px, cons
     draw_line((x - py), (y - px), (x + py), (y - px), colr);
 }
 
-void Graphics::draw_ellipse(const int &cx, const int &cy, const int &rx, const int &ry, const Color &colr)
+void Graphics::draw_ellipse(int cx, int cy, int rx, int ry, const Color &colr)
 {
     // int64 accumulators: rx*rx overflows int from rx > 46340 and
     // 2*rx*rx already from rx > 32767 -- the midpoint scan corrupted
@@ -596,7 +596,7 @@ void Graphics::draw_ellipse(const int &cx, const int &cy, const int &rx, const i
     }
 }
 
-void Graphics::fill_ellipse(const int &cx, const int &cy, const int &rx, const int &ry, const Color &colr)
+void Graphics::fill_ellipse(int cx, int cy, int rx, int ry, const Color &colr)
 {
     if (rx <= 0 || ry <= 0)
     {
@@ -637,7 +637,7 @@ void Graphics::fill_ellipse(const int &cx, const int &cy, const int &rx, const i
 #endif
 }
 
-void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, const float &accuracy)
+void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, float accuracy)
 {
     // integer step count: the endpoint (t == 1) is always sampled exactly
     // and a non-positive accuracy cannot spin the loop forever
@@ -659,7 +659,7 @@ void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const
     }
 }
 
-void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, const float &accuracy)
+void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, float accuracy)
 {
     int steps = 1;
     if (accuracy > 0.0f)
@@ -679,7 +679,7 @@ void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const
     }
 }
 
-void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, const float &accuracy)
+void Graphics::draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, float accuracy)
 {
     int steps = 1;
     if (accuracy > 0.0f)

@@ -20,7 +20,7 @@ Font::~Font()
 
 Font::Font(
     const string &font_file,
-    const int &font_face_idx)
+    int font_face_idx)
 {
     LD << "Open font file : " << font_file;
 
@@ -63,9 +63,9 @@ Font::Font(
 }
 
 Font &Font::set_char_size_in_pt(
-    const int &pt,
-    const int &canvas_width,
-    const int &canvas_height)
+    int pt,
+    int canvas_width,
+    int canvas_height)
 {
     if (FT_Err_Ok != FT_Set_Char_Size(face, 0, pt * inch_to_point, canvas_width, canvas_height))
     {
@@ -77,7 +77,7 @@ Font &Font::set_char_size_in_pt(
 }
 
 Font &Font::set_char_size_in_px(
-    const int &px)
+    int px)
 {
     if (FT_Err_Ok != FT_Set_Pixel_Sizes(face, 0, px))
     {
@@ -90,7 +90,7 @@ Font &Font::set_char_size_in_px(
 
 text_metrics Font::measure(
     const char16_t *str,
-    const int &str_len) const
+    int str_len) const
 {
     int width = 0;
     for (int i = 0; i < str_len; i++)
@@ -120,9 +120,9 @@ bool Font::covers(const char16_t ch) const
 
 const Font &Font::write(
     const char16_t *str,
-    const int &str_len,
-    const int &start_x,
-    const int &start_y,
+    int str_len,
+    int start_x,
+    int start_y,
     on_read_word draw_fun) const
 {
     if (nullptr == str || str_len <= 0 || !draw_fun)
@@ -143,17 +143,17 @@ const Font &Font::write(
 const Font &Font::write(
     Graphics &g,
     const char16_t *str,
-    const int &str_len,
-    const int &start_x,
-    const int &start_y,
+    int str_len,
+    int start_x,
+    int start_y,
     const Color &front_color) const
 {
     auto fun = [&](unsigned char *img,
-                   const int &w,
-                   const int &h,
-                   const int &p,
-                   const int &x,
-                   const int &y)
+                   int w,
+                   int h,
+                   int p,
+                   int x,
+                   int y)
     {
         draw_alphamap(g, img, w, h, p, x, y, front_color);
     };
@@ -190,11 +190,11 @@ void Font::draw_character(
 void Font::draw_alphamap(
     Graphics &g,
     const unsigned char *img, // array of pixel alpha channel values (8 bit).
-    const int &img_width,
-    const int &img_height,
-    const int &img_row_stride,
-    const int &start_x,
-    const int &start_y,
+    int img_width,
+    int img_height,
+    int img_row_stride,
+    int start_x,
+    int start_y,
     const Color &front_color) const
 {
     // reuse the map buffer across glyphs: reserve once, then resize without

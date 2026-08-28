@@ -14,7 +14,7 @@ namespace zb::app::tictactoe
         make_window(static_cast<uint32_t>(_width), static_cast<uint32_t>(_height));
     }
 
-    void Tictactoe::make_window(const uint32_t &max_client_width, const uint32_t &max_client_height, void *buffer)
+    void Tictactoe::make_window(uint32_t max_client_width, uint32_t max_client_height, void *buffer)
     {
         if (view_.window())
         {

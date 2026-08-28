@@ -18,28 +18,28 @@ namespace zb::ui::core
     {
         uint16_t value;
         operator uint8_t() const { return (uint8_t)((this->value >> 15) & 0x01); }
-        void operator=(const uint8_t &v) { this->value = (this->value & (uint16_t)~0x8000u) | ((v > 0 ? 1 : 0) << 15); }
+        void operator=(uint8_t v) { this->value = (this->value & (uint16_t)~0x8000u) | ((v > 0 ? 1 : 0) << 15); }
     } abgr1555_a_t;
 
     typedef struct _rgb_2_t
     {
         uint16_t value;
         operator uint8_t() const { return (uint8_t)(((this->value >> 10) & 0x1F) << 3); }
-        void operator=(const uint8_t &v) { this->value = (this->value & (uint16_t)~0x7C00u) | ((v >> 3) << 10); }
+        void operator=(uint8_t v) { this->value = (this->value & (uint16_t)~0x7C00u) | ((v >> 3) << 10); }
     } abgr1555_b_t;
 
     typedef struct _rgb_3_t
     {
         uint16_t value;
         operator uint8_t() const { return (uint8_t)(((this->value >> 5) & 0x1F) << 3); }
-        void operator=(const uint8_t &v) { this->value = (this->value & (uint16_t)~0x03E0u) | ((v >> 3) << 5); }
+        void operator=(uint8_t v) { this->value = (this->value & (uint16_t)~0x03E0u) | ((v >> 3) << 5); }
     } abgr1555_g_t;
 
     typedef struct _rgb_4_t
     {
         uint16_t value;
         operator uint8_t() const { return (uint8_t)((this->value & 0x1F) << 3); }
-        void operator=(const uint8_t &v) { this->value = (this->value & (uint16_t)~0x001Fu) | (v >> 3); }
+        void operator=(uint8_t v) { this->value = (this->value & (uint16_t)~0x001Fu) | (v >> 3); }
     } abgr1555_r_t;
 
     typedef union _abgr1555_t
@@ -66,7 +66,7 @@ namespace zb::ui::core
         rgb16_t rgb;
 
         operator uint16_t() const { return pixel; }
-        void operator=(const uint16_t &c) { pixel = c; }
+        void operator=(uint16_t c) { pixel = c; }
         void operator=(const _color16_t &c) { pixel = c.pixel; }
         _color16_t operator|(const _color16_t &c) const { return {static_cast<uint16_t>(c.pixel | pixel)}; }
 

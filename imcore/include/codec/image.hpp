@@ -54,8 +54,8 @@ namespace zb::ui
         int read_jpg(
             core::Graphics &g,
             const std::string &file_name,
-            const int &start_x,
-            const int &start_y);
+            int start_x,
+            int start_y);
 
         /*
          * write image data to jpeg
@@ -65,12 +65,12 @@ namespace zb::ui
             const std::string file_name,
             const image_info &img_inf,
             on_writing_image_row write_row,
-            const int &quality = 90);
+            int quality = 90);
 
         int write_jpeg(
             core::Graphics &g,
             const std::string &file_name,
-            const int &quality = 90);
+            int quality = 90);
 
 #endif
 
@@ -84,8 +84,8 @@ namespace zb::ui
         int read_png(
             core::Graphics &g,
             const std::string &file_name,
-            const int &start_x,
-            const int &start_y);
+            int start_x,
+            int start_y);
 
         int write_png_file(
             const std::string file_name,

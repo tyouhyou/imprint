@@ -32,7 +32,7 @@ namespace zb::app
 
         // creates the framebuffer and the root panel; `buffer` is used
         // directly (wrapper mode) when non-null and must be writable
-        void create(const uint32_t &width, const uint32_t &height, void *buffer = nullptr)
+        void create(uint32_t width, uint32_t height, void *buffer = nullptr)
         {
             graphics_ = zb::ui::core::Graphics::make_ptr(width, height, buffer);
             root_ = std::make_unique<zb::ui::Panel>();

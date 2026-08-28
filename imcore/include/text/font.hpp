@@ -13,7 +13,7 @@ namespace zb::ui
     /*
      * void func(bmp_buf, bmp_width, bmp_height, bmp_pitch, start_x, start_y)
      */
-    using on_read_word = std::function<void(unsigned char *, const int &, const int &, const int &, const int &, const int &)>;
+    using on_read_word = std::function<void(unsigned char *, int, int, int, int, int)>;
 
     // TODO: If needed, cache all the Font before use them to save memory and performance.
     //       Make I/F for that case.
@@ -45,17 +45,17 @@ namespace zb::ui
     public:
         Font(
             const std::string &font_file,
-            const int &font_face_idx = 0) noexcept(false);
+            int font_face_idx = 0) noexcept(false);
 
         ~Font();
 
         Font &set_char_size_in_pt(
-            const int &pt,
-            const int &canvas_width,
-            const int &canvas_height) noexcept(false);
+            int pt,
+            int canvas_width,
+            int canvas_height) noexcept(false);
 
         Font &set_char_size_in_px(
-            const int &px) noexcept(false);
+            int px) noexcept(false);
 
         /*
          * Measures a string without rendering it: the total advance width
@@ -64,7 +64,7 @@ namespace zb::ui
          */
         text_metrics measure(
             const char16_t *str,
-            const int &str_len) const;
+            int str_len) const;
 
         /* line height / ascent only, without scanning a string */
         text_metrics line_metrics() const;
@@ -74,18 +74,18 @@ namespace zb::ui
 
         const Font &write(
             const char16_t *str,
-            const int &str_len,
-            const int &start_x,
-            const int &start_y,
+            int str_len,
+            int start_x,
+            int start_y,
             on_read_word draw_fun) const;
 
         // TODO: str_len should be calculate automatically
         const Font &write(
             core::Graphics &g,
             const char16_t *str,
-            const int &str_len,
-            const int &start_x,
-            const int &start_y,
+            int str_len,
+            int start_x,
+            int start_y,
             const core::Color &front_color = core::colors::White) const;
 
     private:
@@ -105,11 +105,11 @@ namespace zb::ui
         void draw_alphamap(
             core::Graphics &g,
             const unsigned char *img, // array of pixel alpha channel values (8 bit).
-            const int &img_width,
-            const int &img_height,
-            const int &img_row_stride,
-            const int &start_x,
-            const int &start_y,
+            int img_width,
+            int img_height,
+            int img_row_stride,
+            int start_x,
+            int start_y,
             const core::Color &front_color) const;
 
         // TODO: make one set of objects for one Font into a struct,

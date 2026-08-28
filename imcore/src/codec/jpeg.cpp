@@ -23,7 +23,7 @@ using namespace zb::ui::core;
 int Image::write_jpeg(
     Graphics &g,
     const std::string &file_name,
-    const int &quality)
+    int quality)
 {
     auto cur_row = 0;
     auto gsize = g.size();
@@ -66,7 +66,7 @@ int Image::write_jpeg_file(
     const std::string file_name,
     const image_info &img_inf,
     on_writing_image_row write_row,
-    const int &quality)
+    int quality)
 {
     auto img_width = img_inf.image_width;
     auto img_height = img_inf.image_height;
@@ -116,7 +116,7 @@ int Image::write_jpeg_file(
     return 0;
 }
 
-int Image::read_jpg(Graphics &g, const std::string &file_name, const int &start_x, const int &start_y)
+int Image::read_jpg(Graphics &g, const std::string &file_name, int start_x, int start_y)
 {
     std::vector<Color> jpg_img;
     image_info jpg_inf{};

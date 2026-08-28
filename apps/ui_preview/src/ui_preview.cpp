@@ -29,20 +29,20 @@ namespace zb::app::ui_preview
         }
     }
 
-    void UiPreview::create_window(const uint32_t &max_client_width,
-                                  const uint32_t &max_client_height)
+    void UiPreview::create_window(uint32_t max_client_width,
+                                  uint32_t max_client_height)
     {
         make_window(max_client_width, max_client_height);
     }
 
-    void UiPreview::create_window(const uint32_t &max_client_width,
-                                  const uint32_t &max_client_height, void *buffer)
+    void UiPreview::create_window(uint32_t max_client_width,
+                                  uint32_t max_client_height, void *buffer)
     {
         make_window(max_client_width, max_client_height, buffer);
     }
 
-    void UiPreview::make_window(const uint32_t &max_client_width,
-                                const uint32_t &max_client_height, void *buffer)
+    void UiPreview::make_window(uint32_t max_client_width,
+                                uint32_t max_client_height, void *buffer)
     {
         _width = static_cast<int32_t>(max_client_width);
         _height = static_cast<int32_t>(max_client_height);

@@ -32,7 +32,7 @@ namespace zb::app::tictactoe
         TictactoeView() = default;
 
         // creates the window and the widget tree; throws if built twice
-        void build(const uint32_t &max_client_width, const uint32_t &max_client_height, void *buffer = nullptr);
+        void build(uint32_t max_client_width, uint32_t max_client_height, void *buffer = nullptr);
 
         [[nodiscard]] zb::SharedPtr<CanvasWindow> window() const noexcept { return window_; }
         [[nodiscard]] Board &board() const noexcept { return *board_; }
@@ -54,10 +54,10 @@ namespace zb::app::tictactoe
         void close_all_dialogs();
 
     private:
-        void build_board(const uint32_t &max_client_width, const uint32_t &max_client_height);
-        void build_difficulty_dialog(const uint32_t &max_client_width, const uint32_t &max_client_height);
-        void build_side_dialog(const uint32_t &max_client_width, const uint32_t &max_client_height);
-        void build_result_dialog(const uint32_t &max_client_width, const uint32_t &max_client_height);
+        void build_board(uint32_t max_client_width, uint32_t max_client_height);
+        void build_difficulty_dialog(uint32_t max_client_width, uint32_t max_client_height);
+        void build_side_dialog(uint32_t max_client_width, uint32_t max_client_height);
+        void build_result_dialog(uint32_t max_client_width, uint32_t max_client_height);
 
         // blit text helpers (lifetime held by images_)
         zb::ui::core::image_t make_image(const char *text, const int w, const int h,

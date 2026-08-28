@@ -68,7 +68,7 @@ namespace zb::event
             return sub(handler);
         }
 
-        void operator-=(const uint32_t &id)
+        void operator-=(uint32_t id)
         {
             unsub(id);
         }
@@ -132,7 +132,7 @@ namespace zb::event
             return Subscription<TArgs...>(*this, sub(handler));
         }
 
-        void unsub(const uint32_t &id)
+        void unsub(uint32_t id)
         {
             for (std::size_t i = 0; i < handlers.size(); ++i)
             {
