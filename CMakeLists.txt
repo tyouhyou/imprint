@@ -20,6 +20,14 @@ if (NOT MSVC AND NOT NDS_PLATFORM)
 endif()
 
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
+
+# MSVC: source and execution charset UTF-8. Hosts with a non-UTF-8
+# code page (e.g. 932) otherwise mangle the non-ASCII literals in
+# test_text (C4819) and the tests fail only on that machine
+if (MSVC)
+    add_compile_options(/utf-8)
+endif()
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)

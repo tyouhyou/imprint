@@ -29,6 +29,21 @@ static_assert(sizeof(Widget) <= 248, "Widget inline size must stay under the 64-
 // construction allocates nothing beyond the object itself. Stack
 // widgets prove the zero-allocation ctor; make_unique proves the object
 // is the only remaining allocation.
+//
+// MSVC Debug exception: the STL allocates one _Container_proxy per
+// container under _ITERATOR_DEBUG_LEVEL=2, so Widget's two string
+// members (id_, text_) add two allocations per construction that no
+// other toolchain pays. The measured baseline is pinned below; the
+// zero-allocation gate holds wherever the STL does not instrument
+// containers (gcc/clang, MSVC Release).
+#if defined(_MSC_VER) && defined(_DEBUG)
+constexpr long long kStackConstructAllocs = 200;  // 100 x 2 debug proxies
+constexpr long long kMakeUniqueAllocs = 300;      // + the object itself
+#else
+constexpr long long kStackConstructAllocs = 0;
+constexpr long long kMakeUniqueAllocs = 100;
+#endif
+
 int test_widget_size()
 {
     std::printf("host ABI sizeof: Widget=%zu Label=%zu Button=%zu Checkbox=%zu "
@@ -48,7 +63,7 @@ int test_widget_size()
             Widget w;
         }
         std::printf("allocations for 100 stack Widget constructs: %lld\n", c.delta());
-        EXPECT(c.delta() == 0);
+        EXPECT(c.delta() == kStackConstructAllocs);
     }
     {
         test::scoped_alloc_count c;
@@ -58,8 +73,8 @@ int test_widget_size()
         }
         std::printf("allocations for 100 make_unique Widget constructs: %lld\n", c.delta());
         // only the object itself allocates (J6 removed the per-widget
-        // provider)
-        EXPECT(c.delta() == 100);
+        // provider); MSVC Debug adds the two per-container debug proxies
+        EXPECT(c.delta() == kMakeUniqueAllocs);
     }
 
     return test::report("widget_size");
