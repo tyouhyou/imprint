@@ -93,7 +93,9 @@ namespace zb::ui::core
          * intersect the reported region skip rendering entirely (whole
          * subtrees never reach the rasterizer). Set by the window once
          * per paint(); cleared afterwards. Coordinates are surface
-         * (absolute) pixels.
+         * (absolute) pixels. The rect is HALF-OPEN: (l, t) inclusive,
+         * (r, b) exclusive — every raster entry point clips through
+         * damage_contains / the fill clamp derived from it.
          */
         void set_damage(const int &l, const int &t, const int &r, const int &b)
         {
@@ -253,6 +255,14 @@ namespace zb::ui::core
 #pragma region private methods
 
         void set_draw_area(const int &x, const int &y, const int &width, const int &height);
+
+        // single canonical test for the damage clip (A-13): the damage
+        // rect is half-open, draw_area is inclusive; every raster write
+        // goes through this instead of ad-hoc clamps
+        [[nodiscard]] inline bool damage_contains(const int &x, const int &y) const
+        {
+            return x >= damage_l_ && x < damage_r_ && y >= damage_t_ && y < damage_b_;
+        }
 
         void draw_8pixels(const int &x, const int &y, const int &px, const int &py, const Color &colr);
         void draw_incir_pixels(const int &x, const int &y, const int &px, const int &py, const Color &colr);

@@ -38,6 +38,7 @@ add_executable(
     test_layout_dirty.cpp
     test_alloc_guard.cpp
     test_perf_walk.cpp
+    test_raster_damage.cpp
 )
 
 target_link_libraries(

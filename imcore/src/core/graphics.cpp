@@ -216,21 +216,16 @@ void Graphics::fill(const Color &colr)
     int end_y = draw_area.end_y;
     if (damage_on_)
     {
-        if (start_x < damage_l_)
+        // half-open damage vs inclusive draw_area (A-13): intersect with
+        // [l, r-1] x [t, b-1]. A non-intersecting draw area used to yield
+        // start > end and a negative width fed to fill_n (A-12 underflow)
+        start_x = std::max(start_x, damage_l_);
+        end_x = std::min(end_x, damage_r_ - 1);
+        start_y = std::max(start_y, damage_t_);
+        end_y = std::min(end_y, damage_b_ - 1);
+        if (start_x > end_x || start_y > end_y)
         {
-            start_x = damage_l_;
-        }
-        if (end_x > damage_r_)
-        {
-            end_x = damage_r_;
-        }
-        if (start_y < damage_t_)
-        {
-            start_y = damage_t_;
-        }
-        if (end_y > damage_b_)
-        {
-            end_y = damage_b_;
+            return;
         }
     }
     auto draw_width = end_x - start_x + 1;
@@ -256,8 +251,10 @@ void Graphics::draw_pixel(const int &x, const int &y, const Color &colr)
 
     // damage mode: writes are hard-clipped to the repainted region so
     // widgets redrawn for it cannot smear over pruned neighbors whose
-    // stale pixels the region-present relies on (CanvasWindow::paint)
-    if (damage_on_ && (sx < damage_l_ || sy < damage_t_ || sx > damage_r_ || sy > damage_b_))
+    // stale pixels the region-present relies on (CanvasWindow::paint).
+    // The rect is half-open, so the exclusive edge itself is outside
+    // (A-12: `sx > damage_r_` used to permit the boundary column)
+    if (damage_on_ && !damage_contains(sx, sy))
     {
         return;
     }

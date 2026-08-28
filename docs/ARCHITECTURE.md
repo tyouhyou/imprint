@@ -395,38 +395,28 @@ masks A-12/A-13. They become real for any direct `Graphics` draw under
 `damage_on_` (host-side draw, future code path) or for a missed
 eviction handshake. None duplicates A-1..A-11.
 
-- **A-12. Damage hard-clip off-by-one + `fill()` underflow (P2).**
-  **Problem.** Damage bounds are *exclusive* (`set_damage(l,t,r=x+w,b=y+h)`,
-  see `damage_intersects` `graphics.hpp:111`), but the rasterizer mixes
-  conventions: `draw_pixel` (`graphics.cpp:260`) rejects `sx > damage_r_`
-  and so *permits* `sx == damage_r_` — one column/row written outside the
-  region. `fill` (`graphics.cpp:236`) `draw_width = end_x - start_x + 1`
-  with a one-sided damage clamp (lines 219‑234) can yield `start_x > end_x`
-  → negative width → giant `std::fill_n` count (OOB write) when the draw
-  area does not intersect the damage rect. `a7abe30` ("clip rasterizer
-  writes to the damage region") only partially clips; the real protection
-  today comes from the outer `clip_safe`, not these tests.
-  **Proposed direction.** In `draw_pixel` use `sx >= damage_r_` /
-  `sy >= damage_b_`; in `fill` clamp `end_x = damage_r_ - 1` (draw area is
-  inclusive) and early-out when `end_x < start_x`. Or fold both into the
-  A-13 unified helper.
-  **First step.** Add a `test_raster_damage` probe that calls
-  `Graphics::draw_pixel` / `fill` directly with `damage_on_` and an
-  abutting/non-intersecting draw area, asserting no write past the region
-  and no underflow.
+- **A-12. Damage hard-clip off-by-one + `fill()` underflow (P2) — DONE
+  2026-08-28.**
+  **Fixed.** `draw_pixel` clips through the `damage_contains` predicate
+  (A-13): the half-open rect means `sx == damage_r_` / `sy == damage_b_`
+  are outside, so the boundary column/row is no longer written. `fill`
+  intersects the inclusive draw area with `[l, r-1] x [t, b-1]` and
+  returns early on a degenerate result, so a draw area that does not
+  intersect the damage rect no longer produces `start > end` and a
+  negative width fed to `fill_n`. Covered by the new `test_raster_damage`
+  suite (direct `Graphics` probes under `damage_on`, bypassing
+  `clip_safe`): exclusive-edge rejection, partial-overlap clipping,
+  non-intersecting no-op, degenerate rect, `draw_image` delegation.
 
 - **A-13. Split damage/draw-area clip conventions (P2, root cause of
-  A-12).**
-  **Problem.** Damage rect is exclusive; `draw_area` is inclusive; the
-  two are reconciled in three duplicated, slightly-wrong clamp spots in
-  `graphics.cpp` (`draw_pixel`, `fill`, `draw_image`) with no single
-  canonical "clip to damage" helper. A-12 is a direct symptom.
-  **Proposed direction.** Add one `intersect_damage(area)` (returns an
-  inclusive draw area) or one `in_damage(x,y)` predicate reused by every
-  raster entry point, and delete the per-call clamp logic. Validates
-  alongside the A-12 probe.
-  **First step.** Refactor `draw_pixel` to call the single predicate;
-  keep `fill`/`draw_image` on the same helper in the same commit.
+  A-12) — DONE 2026-08-28.**
+  **Fixed.** One canonical point where the half-open damage rect and the
+  inclusive draw area meet: `Graphics::damage_contains(x, y)`
+  (`graphics.hpp`). `draw_pixel` uses it directly; `fill` derives its
+  clamp from the same bounds; `draw_image` delegates per pixel to
+  `draw_pixel` and inherits the clip (it never had its own clamp site —
+  the review listed three, the code had two). The half-open convention
+  is documented on `set_damage` and in `docs/code-contract.md` §9.
 
 - **A-14. Dispatcher cached-pointer liveness (P3, defensive).**
   **Problem.** `InputDispatcher` holds raw `Widget*` caches
