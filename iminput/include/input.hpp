@@ -1,5 +1,5 @@
-#ifndef IMEVENT_INPUT_HPP
-#define IMEVENT_INPUT_HPP
+#ifndef IMINPUT_INPUT_HPP
+#define IMINPUT_INPUT_HPP
 
 namespace zb::input
 {
@@ -89,4 +89,4 @@ namespace zb::input
     };
 } // namespace zb::input
 
-#endif // IMEVENT_INPUT_HPP
+#endif // IMINPUT_INPUT_HPP

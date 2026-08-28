@@ -5,6 +5,11 @@
 #include "imapp.hpp"
 #include "imui.hpp"
 
+#if defined(USE_FONT)
+#include <cstdio>
+#include "text/font.hpp"
+#endif
+
 using namespace zb::app;
 using namespace zb::ui;
 
@@ -135,6 +140,48 @@ int test_alloc_guard()
         std::printf("list box warm repaint allocations (5 frames): %lld\n", c.delta());
         EXPECT(c.delta() == 0);
     }
+
+#if defined(USE_FONT)
+    // 5: USE_FONT text path allocates nothing on steady-state repaint
+    //    (A-8: draw_alphamap must not allocate per-glyph)
+    {
+        FILE *f = fopen("C:/Windows/Fonts/arial.ttf", "rb");
+        if (nullptr != f)
+        {
+            fclose(f);
+            Font font("C:/Windows/Fonts/arial.ttf", 0);
+            font.set_char_size_in_px(16);
+
+            CanvasWindow w;
+            w.create(200, 80);
+            auto label = std::make_unique<Label>();
+            label->set_text(u"Hello");
+            label->set_size(100, 20);
+            label->set_position(10, 10);
+            label->set_font(&font);
+            auto btn = std::make_unique<Button>();
+            btn->set_text(u"GO");
+            btn->set_size(60, 20);
+            btn->set_position(10, 40);
+            btn->set_font(&font);
+            w.root().add_child(std::move(label));
+            w.root().add_child(std::move(btn));
+            w.paint();  // park; first frame grows _alphamap_color_map capacity
+
+            test::scoped_alloc_count c;
+            for (int i = 0; i < 10; ++i)
+            {
+                w.paint();
+            }
+            std::printf("USE_FONT label+button paint allocations (10 frames): %lld\n", c.delta());
+            EXPECT(c.delta() == 0);
+        }
+        else
+        {
+            std::printf("skip USE_FONT alloc test (arial.ttf not found)\n");
+        }
+    }
+#endif
 
     return test::report("alloc_guard");
 }

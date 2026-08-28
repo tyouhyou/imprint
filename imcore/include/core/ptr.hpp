@@ -140,8 +140,14 @@ namespace zb
         // propagating -- the OOM path must not leak the object. Returning a
         // fresh `new int(1)` (instead of in-place `new` in the ctor) keeps the
         // `release()` logic in one place.
+        // A-11 (2026-08-28): nullptr does not own a control block — skip
+        // the allocation to avoid a stray `new int(1)` for `reset(nullptr)`.
         static int *make_count(T *p)
         {
+            if (p == nullptr)
+            {
+                return nullptr;
+            }
             try
             {
                 return new int(1);

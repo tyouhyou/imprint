@@ -6,6 +6,11 @@
 
 namespace zb::ui::core
 {
+    // NOTE (A-11, 2026-08-28): the struct field order is the in-memory byte
+    // order. On x86 little-endian, `argb32_be_t {b,g,r,a}` and
+    // `bgra32_le_t {b,g,r,a}` describe the *same* BGRA bytes; the names are
+    // endian-relative and documented in ARCHITECTURE.md §4.4. Prefer reasoning
+    // about `COLOR_DEPTH`/`ENDIAN`/`RGB_MODEL` rather than the typedef name.
     typedef struct _argb32_be_t
     {
         uint8_t b;

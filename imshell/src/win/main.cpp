@@ -283,17 +283,16 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             // printable characters arrive as WM_CHAR (after
             // TranslateMessage); the space key keeps its key_code::space
             // routing for navigation activation, other printable ASCII
-            // becomes a character event (ch field, see dispatcher B1)
+            // becomes a character event (ch field, see dispatcher B1).
+            // Use send_input so the dirty→paint→present chain is not
+            // bypassed (A-5, 2026-08-28).
             const int c = static_cast<int>(wParam);
             if (c >= 0x20 && c <= 0x7e && c != ' ')
             {
                 input_event ev;
                 ev.type = input_type::key_down;
                 ev.ch = c;
-                if (g_app)
-                {
-                    g_app->input(ev);
-                }
+                send_input(ev);
             }
             return 0;
         }

@@ -197,9 +197,13 @@ void Font::draw_alphamap(
     const int &start_y,
     const Color &front_color) const
 {
-    // reuse the map buffer across glyphs: resizing only grows it, so steady
-    // state is one allocation total instead of one per character
+    // reuse the map buffer across glyphs: reserve once, then resize without
+    // allocation on the hot path (A-8, 2026-08-28)
     const auto len = img_width * img_height;
+    if (_alphamap_color_map.capacity() < static_cast<size_t>(len))
+    {
+        _alphamap_color_map.reserve(len);
+    }
     _alphamap_color_map.resize(len);
     for (int i = 0; i < len; i++)
     {

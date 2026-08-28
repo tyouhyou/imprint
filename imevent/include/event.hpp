@@ -94,13 +94,30 @@ namespace zb::event
             {
                 return INVALID_EVENT_ID;
             }
-            // wrap-around skips 0 (INVALID_EVENT_ID): a subscriber must
-            // never collide with the "no id" sentinel, however long the
-            // event lives (e.g. a long-running industrial display)
+            // wrap-around skips 0 (INVALID_EVENT_ID) and any live id: a
+            // subscriber must never collide with the "no id" sentinel nor
+            // with a still-subscribed handler, however long the event lives
+            // (e.g. a long-running industrial display). The scan is O(n)
+            // but only runs on the 2^32 wraparound edge (A-11, 2026-08-28).
+            auto id_in_use = [this](const uint32_t id) -> bool
+            {
+                for (const auto &e : handlers)
+                {
+                    if (e.first == id)
+                    {
+                        return true;
+                    }
+                }
+                return false;
+            };
             do
             {
                 ++next_id;
-            } while (next_id == INVALID_EVENT_ID);
+                if (next_id == INVALID_EVENT_ID)
+                {
+                    ++next_id;
+                }
+            } while (id_in_use(next_id));
             handlers.push_back(std::make_pair(next_id, std::move(handler)));
             return next_id;
         }

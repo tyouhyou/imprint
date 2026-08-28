@@ -318,3 +318,206 @@ recorded risks and proposed directions, not scheduled work.
   must handle; a packaging abstraction would help.
 - **A-4.3 Present logic duplication.** The region-present logic exists in
   every shell with different edge cases; A-2's `Presenter` should absorb it.
+
+### A-5..A-11. Backlog from 2026-08-28 Muse review (prioritized)
+
+Source: `reports/codereview_muse_20260828.md`. Items are **open, not
+scheduled**; priority is P0 (ship-blocker) → P3 (hygiene). Facts that
+require an API shape change have a companion entry in
+`docs/code-contract.md`.
+
+- **A-5. Shell repaint divergence — Win `WM_CHAR` bypass (P0).**
+  **Problem.** `imshell/src/win/main.cpp:281` (`WM_CHAR`) calls
+  `g_app->input(ev)` directly, bypassing the shared `send_input`
+  helper (`input → is_dirty → paint → InvalidateRect`). `TextInput`
+  edits via `ch` (`docs/code-contract.md` §3.1) therefore mark damage
+  but the Win shell never drives the next frame until the next `WM_KEYDOWN`/
+  mouse event. X11 (`main_x.cpp:201`), NDS, WASM and Python hosts go
+  through `send_input`/`zb_input`'s dirty check and are unaffected.
+  **Proposed direction.** Make `WM_CHAR` reuse `send_input`; add a
+  `ShellTest` harness or `test_dispatch` extension that asserts
+  "a `ch` edit is dirty after dispatch" on every shell path.
+  **First step.** One-line fix in `win/main.cpp` + manual Win smoke
+  (`TextInput` doc in `ui_preview`).
+
+- **A-6. Header-guard typo — `iminput` (P1, hygiene but blocks
+  future includes).**
+  **Problem.** `iminput/include/input.hpp:1` guards with
+  `IMEVENT_INPUT_HPP`, a copy-paste from `imevent`. The name collides
+  conceptually with the `imevent` module and would silently drop the
+  second header if a future file ever uses the same macro.
+  **Proposed direction.** Rename to `IMINPUT_INPUT_HPP`; add a
+  `grep` CI check for "guard matches path" (`tools/lint_guards.py`).
+  Fix is a one-line `edit` with no ABI impact.
+
+- **A-7. `FONT_SUBSET` source scan omits `.ui` documents (P2).**
+  **Problem.** `imcore/CMakeLists.txt:40` `GLOB_RECURSE` scans only
+  `apps/*/src/*.cpp`, `apps/*/include/*.hpp`, `test/*.cpp`. Strings in
+  `.ui` files (`text="…"`) — now a selling point (`docs/design-file.md`,
+  backlog I) — never reach `tools/font_subset.py`, so a non-ASCII
+  `.ui` falls back to zero-width at runtime with no warning.
+  **Proposed direction.** Extend the glob to `*.ui`; teach
+  `font_subset.py` to parse `text="…"` / `items="…"` either by reusing
+  `parse_ui_text` or by a small `*.ui` scan mode. Fallback remains
+  ASCII-only.
+
+- **A-8. `USE_FONT` text path hidden allocation (P2).**
+  **Problem.** `imcore/src/text/font.cpp:190` `draw_alphamap` `resize`s
+  the per-`Font` color map on every glyph. `USE_FONT` text therefore
+  allocates even when the hot-path gate (`test_alloc_guard`,
+  `docs/code-contract.md` §8) reports 0 for the bitmap-only path.
+  **Proposed direction.** `reserve`/`resize` once or hoist the buffer
+  to the `Graphics`/`write` batch; add a `USE_FONT` variant to the
+  allocation gate.
+
+- **A-9. `ListBox` row-cache key omits content (P2).**
+  **Problem.** `imui/include/list_box.hpp:142` / `list_box.cpp:325`
+  key is `(row,sel,w,h,fg,bg)`. A dynamic `ItemText` that changes
+  without a setter call (allowed by the current static-model doc) serves
+  stale bitmaps. The invalidation duty ("call any setter") lives only in
+  a comment (`code-contract.md` §8) and is easy to miss.
+  **Proposed direction.** Document the duty as API contract and/or
+  provide `touch_row(row)` / content-hash check (`code-contract.md`
+  §8 ListBox exemption) so the framework can auto-invalidate.
+
+- **A-10. Damage culling over-prunes overflow children (P2).**
+  **Problem.** `imui/src/widget.cpp:38` prunes a whole subtree when
+  the widget's own bounds miss the damage region. Children positioned
+  outside the parent (negative `pos`, `Dialog` mask, explicit
+  overflow) are never drawn on a partial repaint; the rasterizer's
+  per-pixel `damage` clip would have been sufficient.
+  **Proposed direction.** Replace the subtree prune with a per-widget
+  test only, or add a virtual `damage_bounds()` that containers
+  override with the union of children; validate with a `test_dirty`
+  overflow probe.
+
+- **A-11. Small correctness/hygiene items (P3, batchable).**
+  - `ptr.hpp:32,118` non-atomic `SharedPtr::reset(nullptr)` still
+    `new int(1)` — add `if (p==nullptr) return nullptr` in `make_count`.
+  - `imevent/event.hpp:97` `next_id` wraparound only skips `0` — scan
+    for live collisions on wraparound (4 B subs edge, industrial
+    displays).
+  - `imuI` `Checkbox`/`RadioButton` `draw_at` mutates `mutable
+    text_offset_` from a `const` method (`widget.hpp:264`,
+    `checkbox.cpp:104`) — make the offset a layout-time value.
+  - `demo/python/myapp.py:66` and `demo/wasm/main.js:30` map only a
+    subset of keys — add `backspace/del` there; prefer `e.key` over
+    deprecated `keyCode`.
+  - `imcore/include/core/color32.hpp:9` / `CMakeLists.txt:204`
+    32bpp `ENDIAN`/`RGB_MODEL` are mirror names for the same BGRA
+    bytes — add a one-line equivalence comment or a `static_assert` on
+    `offsetof(rgb,b)==0`.
+
+### A-12..A-18. Backlog from 2026-08-28 hy3 review (prioritized)
+
+Source: `reports/codereview_hy3_20260828.md`. Items are **open, not
+scheduled**; priority is P0 (ship-blocker) → P3 (hygiene). These are
+**not** reachable on the normal `CanvasWindow::paint → clip_safe →
+widget::paint` path today — `clip_safe` (`graphics.cpp:104`) intersects
+the draw area to the damage rect and refuses a degenerate clip, which
+masks A-12/A-13. They become real for any direct `Graphics` draw under
+`damage_on_` (host-side draw, future code path) or for a missed
+eviction handshake. None duplicates A-1..A-11.
+
+- **A-12. Damage hard-clip off-by-one + `fill()` underflow (P2).**
+  **Problem.** Damage bounds are *exclusive* (`set_damage(l,t,r=x+w,b=y+h)`,
+  see `damage_intersects` `graphics.hpp:111`), but the rasterizer mixes
+  conventions: `draw_pixel` (`graphics.cpp:260`) rejects `sx > damage_r_`
+  and so *permits* `sx == damage_r_` — one column/row written outside the
+  region. `fill` (`graphics.cpp:236`) `draw_width = end_x - start_x + 1`
+  with a one-sided damage clamp (lines 219‑234) can yield `start_x > end_x`
+  → negative width → giant `std::fill_n` count (OOB write) when the draw
+  area does not intersect the damage rect. `a7abe30` ("clip rasterizer
+  writes to the damage region") only partially clips; the real protection
+  today comes from the outer `clip_safe`, not these tests.
+  **Proposed direction.** In `draw_pixel` use `sx >= damage_r_` /
+  `sy >= damage_b_`; in `fill` clamp `end_x = damage_r_ - 1` (draw area is
+  inclusive) and early-out when `end_x < start_x`. Or fold both into the
+  A-13 unified helper.
+  **First step.** Add a `test_raster_damage` probe that calls
+  `Graphics::draw_pixel` / `fill` directly with `damage_on_` and an
+  abutting/non-intersecting draw area, asserting no write past the region
+  and no underflow.
+
+- **A-13. Split damage/draw-area clip conventions (P2, root cause of
+  A-12).**
+  **Problem.** Damage rect is exclusive; `draw_area` is inclusive; the
+  two are reconciled in three duplicated, slightly-wrong clamp spots in
+  `graphics.cpp` (`draw_pixel`, `fill`, `draw_image`) with no single
+  canonical "clip to damage" helper. A-12 is a direct symptom.
+  **Proposed direction.** Add one `intersect_damage(area)` (returns an
+  inclusive draw area) or one `in_damage(x,y)` predicate reused by every
+  raster entry point, and delete the per-call clamp logic. Validates
+  alongside the A-12 probe.
+  **First step.** Refactor `draw_pixel` to call the single predicate;
+  keep `fill`/`draw_image` on the same helper in the same commit.
+
+- **A-14. Dispatcher cached-pointer liveness (P3, defensive).**
+  **Problem.** `InputDispatcher` holds raw `Widget*` caches
+  (`pressed_target`, `focus_target`, `modal`) and dereferences
+  `pressed_target` at `dispatcher.cpp:255`
+  (`!pressed_target->is_effectively_visible()`) *before* the null guard.
+  If a widget is removed via `Panel::remove_child` /
+  `FlexPanel::remove_child` without the documented `evict()` /
+  `CanvasWindow::remove_from` handshake and then destroyed, this is a
+  use-after-free. The contract (panel.hpp:65‑73, flex_panel.hpp:79‑87)
+  requires eviction first and `evict()` (`dispatcher.cpp:75`) does clear
+  it, so it is contract-gated — but note `handle_key` *does* re-validate
+  `focus_target` liveness (line 151) while the press path does not, an
+  inconsistency.
+  **Proposed direction.** Validate liveness on every deref (e.g.
+  `is_descendant_of(root)`), or make `Panel::remove_child` itself call
+  `evict` so the safe path is the default; align the press path with the
+  focus-path check.
+  **First step.** Add a liveness guard in `dispatch` before the
+  `pressed_target` deref; cover with a `test_dispatch` "remove while
+  pressed" case.
+
+- **A-15. Cross-shell wheel delta magnitude (P3, fragile).**
+  **Problem.** `imshell/src/win/main.cpp:348` sends
+  `GET_WHEEL_DELTA_WPARAM` (±120); `imshell/src/linux/main_x.cpp:260`
+  (and other shells) send `±1`. Safe only because current consumers
+  (`list_box.cpp:265`, `slider.cpp:115`) use the *sign*; a future
+  magnitude-based wheel handler breaks on one shell.
+  **Proposed direction.** Normalize wheel delta to a shell-independent
+  unit in the `InputSource` layer (part of the A-2 Presenter/InputSource
+  extraction); document the unit in `docs/code-contract.md`.
+  **First step.** Pick a canonical unit (e.g. signed "notches"), convert
+  at each shell's `send_input`, assert sign-only consumers still work.
+
+- **A-16. FB source-size memcpy bound (P3, latent).**
+  **Problem.** `imshell/src/linux/fb.cpp:46‑49` clamps `rw/rh` against
+  `screen_width - rx` / `screen_height - ry`, but the source is buffer
+  `b` of width `w`; if app surface width `w` differs from panel width,
+  `rw` can exceed `w - rx` and the per-row `memcpy` reads past the
+  source. Latent (current `main_fb` matches sizes).
+  **Proposed direction.** Bound `rw/rh` against the *source* `w/h`
+  (and the destination separately); add a `test_fb` with mismatched
+  surface/panel widths.
+  **First step.** Clamp copy width to `min(screen_width - rx, w - rx)`.
+
+- **A-17. `font_subset` dedicated `.ui` extractor (P3, follow-up to
+  A-7).**
+  **Problem.** A-7's glob now feeds `*.ui` to `tools/font_subset.py`, but
+  the script has no `.ui` branch — it scans `.ui` via its generic
+  string-literal regex (works by accident) and emits noisy "code unit
+  not drawn" warnings for any `.ui` string whose glyphs aren't in
+  `extra_glyphs.py`. If `.ui` quoting ever changes, the scan silently
+  misses glyphs.
+  **Proposed direction.** Add a dedicated `.ui` text extractor (reuse
+  `parse_ui_text` or a small scan mode for `text="…"` / `items="…"`),
+  supressing the false warnings; keep the ASCII-only fallback.
+  **First step.** Parse `.ui` `text`/`items` attributes explicitly in
+  `font_subset.py`; verify a non-ASCII `.ui` string lands in
+  `subset_glyphs.hpp` only when drawn.
+
+- **A-18. `event.hpp` misleading comment (P3, hygiene).**
+  **Problem.** `imevent/include/event.hpp:100` says the live-id scan
+  "only runs on the 2^32 wraparound edge", but `while
+  (id_in_use(next_id))` is evaluated on **every** `sub()` (one O(n) scan
+  per subscription). Also theoretical: if all `2^32−1` ids were
+  simultaneously subscribed the loop never terminates (not reachable).
+  **Proposed direction.** Correct the comment to "scans live ids on
+  every subscribe; cost is O(n) over handlers"; optionally note the
+  all-subscribed non-termination as accepted.
+  **First step.** One-line comment fix; no ABI impact.

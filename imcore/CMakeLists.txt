@@ -40,7 +40,9 @@ if (FONT_SUBSET)
         file(GLOB_RECURSE FONT_SUBSET_INPUTS CONFIGURE_DEPENDS
             ${CMAKE_SOURCE_DIR}/apps/*/src/*.cpp
             ${CMAKE_SOURCE_DIR}/apps/*/include/*.hpp
-            ${CMAKE_SOURCE_DIR}/test/*.cpp)
+            ${CMAKE_SOURCE_DIR}/test/*.cpp
+            ${CMAKE_SOURCE_DIR}/tools/examples/*.ui
+            ${CMAKE_SOURCE_DIR}/apps/*/*.ui)
         file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/text)
         execute_process(
             COMMAND ${Python3_EXECUTABLE}
@@ -200,6 +202,9 @@ if (COLOR_DEPTH EQUAL 16)
     target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=1555)             # color16 model selector
     target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=abgr)
 else()
+    # 32bpp BGRA on little-endian x86: MSVC/APPLE use bgra32+le, UNIX uses
+    # argb32+be — both expand to the same byte order {b,g,r,a} (A-11). The
+    # typedef names are endian-relative; see ARCHITECTURE.md §4.4.
     if (MSVC OR WIN32)
         target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=le)                  #big/little endian. (le/be)
         target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=bgra32)           #rgb color model. (argb32/rgba32/rgba888/rgb565 etc.)
