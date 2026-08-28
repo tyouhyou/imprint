@@ -35,6 +35,7 @@ int test_layout_dirty();
 int test_alloc_guard();
 int test_perf_walk();
 int test_raster_damage();
+int test_pixel_convert();
 
 int main()
 {
@@ -73,6 +74,7 @@ int main()
     total += test_alloc_guard();
     total += test_perf_walk();
     total += test_raster_damage();
+    total += test_pixel_convert();
 
     if (total)
     {

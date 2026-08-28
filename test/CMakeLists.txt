@@ -39,6 +39,7 @@ add_executable(
     test_alloc_guard.cpp
     test_perf_walk.cpp
     test_raster_damage.cpp
+    test_pixel_convert.cpp
 )
 
 target_link_libraries(

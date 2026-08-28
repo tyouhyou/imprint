@@ -97,6 +97,7 @@ endif()
 add_library(
     ${IMCORELIB} SHARED
     src/core/graphics.cpp
+    src/core/pixel_convert.cpp
     src/text/text_image.cpp
     src/text/bitmap_provider.cpp
     src/text/utf8.cpp
