@@ -46,8 +46,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Configure and build
+        # no -G: GitHub retires VS toolchain versions with image updates,
+        # so take the runner's default (latest installed) generator
         run: |
-          cmake -S . -B build_ci -G "Visual Studio 17 2022"
+          cmake -S . -B build_ci
           cmake --build build_ci --config Debug
       - name: Run test suites and C-ABI smoke
         run: |

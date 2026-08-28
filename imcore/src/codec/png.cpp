@@ -207,9 +207,14 @@ int Image::write_png(
             row.push_back(cd.rgb.r);
             row.push_back(cd.rgb.g);
             row.push_back(cd.rgb.b);
-            // color16's alpha bit must expand to full opacity, not the
-            // byte 0/1: a 16bpp screenshot was ~fully transparent
+#if COLOR_DEPTH == 16
+            // color16's single alpha bit must expand to full opacity, not
+            // the byte 0/1: a 16bpp screenshot was ~fully transparent
             row.push_back(cd.rgb.a != 0 ? 0xFF : 0x00);
+#else
+            // 32bpp alpha is already a full byte: keep it, PNG is lossless
+            row.push_back(cd.rgb.a);
+#endif
         }
         cur_row++;
         return true;
