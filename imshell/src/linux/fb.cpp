@@ -66,13 +66,35 @@ void FB::draw(char *b, int w, int h, int rx, int ry, int rw, int rh)
     {
         return;
     }
-
-    // one memcpy per row instead of per pixel, restricted to the region
-    const int copy_bytes = rw * bytes_per_pixel;
-    for (int row = ry; row < ry + rh; row++)
+    if (mode == present_mode::unsupported)
     {
-        std::memcpy(buf + row * screen_line_len + rx * bytes_per_pixel,
-                    b + row * w * bytes_per_pixel + rx * bytes_per_pixel, copy_bytes);
+        return;  // named once in init(); never corrupt the panel
+    }
+
+    if (mode == present_mode::convert)
+    {
+        // A-1 seam: internal row -> panel bytes, one converter call per
+        // row; bytes_per_pixel is the panel's own width here
+        const size_t row_need =
+            static_cast<size_t>(rw) * zb::ui::core::panel_pixel_bytes(panel);
+        for (int row = ry; row < ry + rh; row++)
+        {
+            const auto *src =
+                reinterpret_cast<const zb::ui::core::Color *>(b) + row * w + rx;
+            auto *dst = reinterpret_cast<uint8_t *>(
+                buf + row * screen_line_len + rx * bytes_per_pixel);
+            zb::ui::core::convert_row(panel, src, rw, dst, row_need);
+        }
+    }
+    else
+    {
+        // one memcpy per row instead of per pixel, restricted to the region
+        const int copy_bytes = rw * bytes_per_pixel;
+        for (int row = ry; row < ry + rh; row++)
+        {
+            std::memcpy(buf + row * screen_line_len + rx * bytes_per_pixel,
+                        b + row * w * bytes_per_pixel + rx * bytes_per_pixel, copy_bytes);
+        }
     }
 
     // sync whole rows of the region: the old start offset (rx included)
@@ -108,16 +130,33 @@ int FB::init()
     }
 
     //memcpy(&bk_vinfo, &vinfo, sizeof(struct fb_var_screeninfo));
-    bits_per_pixel = vinfo.bits_per_pixel;// TODO: set or use it to determine color
+    bits_per_pixel = vinfo.bits_per_pixel;
     bytes_per_pixel = bits_per_pixel / 8;
     LD << "bits_per_pixel : " << bits_per_pixel;
     LD << "bytes_per_pixel : " << bytes_per_pixel;
-    // a format mismatch (e.g. a 32bpp build on a 16bpp panel) corrupts
-    // silently -- name it instead of swapping colors for no reason
-    if (bytes_per_pixel != static_cast<int>(sizeof(zb::ui::core::Color)))
+    // presentation seam (A-1): byte-equal panel -> the memcpy fast path;
+    // a known convertible layout -> per-row conversion; anything else
+    // refuses to present instead of corrupting the panel (the old
+    // warning-only path kept memcpy'ing mismatched bytes)
+    if (bytes_per_pixel == static_cast<int>(sizeof(zb::ui::core::Color)))
     {
+        mode = present_mode::fast_copy;
+    }
+    else if (bits_per_pixel == 16 &&
+             vinfo.red.offset == 11 && vinfo.red.length == 5 &&
+             vinfo.green.offset == 5 && vinfo.green.length == 6 &&
+             vinfo.blue.offset == 0 && vinfo.blue.length == 5)
+    {
+        panel = zb::ui::core::panel_format::bgr565;
+        mode = present_mode::convert;
+        LD << "fb: panel is RGB565; presenting through the row converter";
+    }
+    else
+    {
+        mode = present_mode::unsupported;
         LW << "fb: panel is " << bits_per_pixel << "bpp but the build renders "
-           << sizeof(zb::ui::core::Color) * 8 << "bpp; pixels will corrupt";
+           << sizeof(zb::ui::core::Color) * 8 << "bpp and no converter matches; "
+           << "presenting disabled";
     }
 
     if (ioctl(ffb, FBIOPUT_VSCREENINFO, &vinfo) < 0)

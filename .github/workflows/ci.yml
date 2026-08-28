@@ -100,6 +100,21 @@ jobs:
           cmake -S . -B build_ci -DIM_SHELL_BACKEND=X11
           cmake --build build_ci -j"$(nproc)"
 
+  linux-fb:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      # compile-only: the CI container has no /dev/fb0 (A-1: the FB
+      # shell carries the presentation-seam row converter)
+      - name: Configure and build (FB backend)
+        run: |
+          cmake -S . -B build_ci -DIM_SHELL_BACKEND=FB
+          cmake --build build_ci -j"$(nproc)"
+
   # ---------------- Tier 3: full matrix (weekly / manual) ----------------
 
   nds-rom:

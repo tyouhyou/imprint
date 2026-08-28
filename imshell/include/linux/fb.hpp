@@ -4,6 +4,8 @@
 #include <linux/fb.h>
 #include <cstddef>
 
+#include "core/pixel_convert.hpp"
+
 class FB
 {
 public:
@@ -19,6 +21,19 @@ public:
 private:
     int init();
     int dispose();
+
+    // how draw() moves pixels onto the panel, decided in init() from
+    // the vinfo: byte-equal fast copy, per-row conversion through
+    // core/pixel_convert (A-1 seam), or unsupported (refuse to present
+    // instead of corrupting the panel)
+    enum class present_mode
+    {
+        fast_copy,
+        convert,
+        unsupported
+    };
+    present_mode mode = present_mode::unsupported;
+    zb::ui::core::panel_format panel = zb::ui::core::panel_format::native;
 
     // zero-initialized: every init() failure path leaves them sane
     int screen_width = 0;   // screen width
