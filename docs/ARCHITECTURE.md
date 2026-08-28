@@ -326,29 +326,15 @@ scheduled**; priority is P0 (ship-blocker) → P3 (hygiene). Facts that
 require an API shape change have a companion entry in
 `docs/code-contract.md`.
 
-- **A-5. Shell repaint divergence — Win `WM_CHAR` bypass (P0).**
-  **Problem.** `imshell/src/win/main.cpp:281` (`WM_CHAR`) calls
-  `g_app->input(ev)` directly, bypassing the shared `send_input`
-  helper (`input → is_dirty → paint → InvalidateRect`). `TextInput`
-  edits via `ch` (`docs/code-contract.md` §3.1) therefore mark damage
-  but the Win shell never drives the next frame until the next `WM_KEYDOWN`/
-  mouse event. X11 (`main_x.cpp:201`), NDS, WASM and Python hosts go
-  through `send_input`/`zb_input`'s dirty check and are unaffected.
-  **Proposed direction.** Make `WM_CHAR` reuse `send_input`; add a
-  `ShellTest` harness or `test_dispatch` extension that asserts
-  "a `ch` edit is dirty after dispatch" on every shell path.
-  **First step.** One-line fix in `win/main.cpp` + manual Win smoke
-  (`TextInput` doc in `ui_preview`).
+- **A-5. Shell repaint divergence — Win `WM_CHAR` bypass (P0) — DONE 2026-08-28.**
+  **Fixed.** `imshell/src/win/main.cpp:283` now routes `WM_CHAR` through
+  `send_input()` so the dirty→paint→present chain runs. Verified by
+  desktop build.
 
 - **A-6. Header-guard typo — `iminput` (P1, hygiene but blocks
-  future includes).**
-  **Problem.** `iminput/include/input.hpp:1` guards with
-  `IMEVENT_INPUT_HPP`, a copy-paste from `imevent`. The name collides
-  conceptually with the `imevent` module and would silently drop the
-  second header if a future file ever uses the same macro.
-  **Proposed direction.** Rename to `IMINPUT_INPUT_HPP`; add a
-  `grep` CI check for "guard matches path" (`tools/lint_guards.py`).
-  Fix is a one-line `edit` with no ABI impact.
+  future includes) — DONE 2026-08-28.**
+  **Fixed.** `iminput/include/input.hpp` guard renamed from
+  `IMEVENT_INPUT_HPP` to `IMINPUT_INPUT_HPP`. No ABI impact.
 
 - **A-7. `FONT_SUBSET` source scan omits `.ui` documents (P2).**
   **Problem.** `imcore/CMakeLists.txt:40` `GLOB_RECURSE` scans only
@@ -361,14 +347,10 @@ require an API shape change have a companion entry in
   `parse_ui_text` or by a small `*.ui` scan mode. Fallback remains
   ASCII-only.
 
-- **A-8. `USE_FONT` text path hidden allocation (P2).**
-  **Problem.** `imcore/src/text/font.cpp:190` `draw_alphamap` `resize`s
-  the per-`Font` color map on every glyph. `USE_FONT` text therefore
-  allocates even when the hot-path gate (`test_alloc_guard`,
-  `docs/code-contract.md` §8) reports 0 for the bitmap-only path.
-  **Proposed direction.** `reserve`/`resize` once or hoist the buffer
-  to the `Graphics`/`write` batch; add a `USE_FONT` variant to the
-  allocation gate.
+- **A-8. `USE_FONT` text path hidden allocation (P2) — DONE 2026-08-28.**
+  **Fixed.** `imcore/src/text/font.cpp:190` `draw_alphamap` now reserves
+  capacity before resize; steady-state repaints allocate zero. Added
+  `USE_FONT` variant to `test_alloc_guard` (scenario 5).
 
 - **A-9. `ListBox` row-cache key omits content (P2).**
   **Problem.** `imui/include/list_box.hpp:142` / `list_box.cpp:325`
@@ -391,12 +373,11 @@ require an API shape change have a companion entry in
   override with the union of children; validate with a `test_dirty`
   overflow probe.
 
-- **A-11. Small correctness/hygiene items (P3, batchable).**
-  - `ptr.hpp:32,118` non-atomic `SharedPtr::reset(nullptr)` still
-    `new int(1)` — add `if (p==nullptr) return nullptr` in `make_count`.
-  - `imevent/event.hpp:97` `next_id` wraparound only skips `0` — scan
-    for live collisions on wraparound (4 B subs edge, industrial
-    displays).
+- **A-11. Small correctness/hygiene items (P3, batchable) — PARTIAL DONE 2026-08-28.**
+  - `ptr.hpp:140` non-atomic `SharedPtr::reset(nullptr)` no longer
+    allocates — added `if (p==nullptr) return nullptr` in `make_count`. **DONE**
+  - `imevent/event.hpp:97` `next_id` wraparound now scans live ids
+    (O(n) per subscribe on wraparound edge). Comment updated. **DONE**
   - `imuI` `Checkbox`/`RadioButton` `draw_at` mutates `mutable
     text_offset_` from a `const` method (`widget.hpp:264`,
     `checkbox.cpp:104`) — make the offset a layout-time value.
@@ -405,8 +386,7 @@ require an API shape change have a companion entry in
     deprecated `keyCode`.
   - `imcore/include/core/color32.hpp:9` / `CMakeLists.txt:204`
     32bpp `ENDIAN`/`RGB_MODEL` are mirror names for the same BGRA
-    bytes — add a one-line equivalence comment or a `static_assert` on
-    `offsetof(rgb,b)==0`.
+    bytes — added equivalence comment. **DONE**
 
 ### A-12..A-18. Backlog from 2026-08-28 hy3 review (prioritized)
 
