@@ -7,6 +7,9 @@ namespace zb::ui::core
     /*
      * A non-owning view of a pixel buffer.
      * row_stride is the number of pixels in one row; 0 means width.
+     * A set stride must be >= width (rows cannot overlap); a view that
+     * violates it or has null pixels is rejected by draw_image (nothing
+     * is drawn).
      */
     struct image_t
     {

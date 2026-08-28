@@ -99,5 +99,37 @@ int test_raster_damage()
         EXPECT(test::pixel_at(*g, 6, 3) == core::colors::Black.pixel);  // x == r
     }
 
+    // a malformed image_t view is refused, not read out of bounds
+    // (batch K / N1): stride < width would overlap rows
+    {
+        auto g = core::Graphics::make_ptr(8, 8);
+        g->fill(core::colors::Black);
+        core::Color buf[8] = {core::colors::White, core::colors::White,
+                              core::colors::White, core::colors::White,
+                              core::colors::White, core::colors::White,
+                              core::colors::White, core::colors::White};
+        core::image_t img;
+        img.pixels = buf;
+        img.width = 4;
+        img.height = 2;
+        img.row_stride = 3;  // < width: malformed
+        g->draw_image(img, 1, 1);
+        EXPECT(test::pixel_at(*g, 1, 1) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 4, 2) == core::colors::Black.pixel);
+
+        img.pixels = nullptr;
+        img.row_stride = 0;
+        g->draw_image(img, 1, 1);  // null pixels: rejected as well
+        EXPECT(test::pixel_at(*g, 1, 1) == core::colors::Black.pixel);
+
+        // the same view with a valid stride draws
+        img.pixels = buf;
+        img.row_stride = 4;
+        g->draw_image(img, 1, 1);
+        EXPECT(test::pixel_at(*g, 1, 1) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 2) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 5, 1) == core::colors::Black.pixel);
+    }
+
     return test::report("raster_damage");
 }

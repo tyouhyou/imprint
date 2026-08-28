@@ -203,6 +203,12 @@ void Graphics::draw_image(
     const int &start_y)
 {
     const int stride = img.row_stride > 0 ? img.row_stride : img.width;
+    // malformed view (rows would overlap, or no pixels): refuse to draw
+    // instead of reading past each row (batch K / N1)
+    if (img.pixels == nullptr || stride < img.width)
+    {
+        return;
+    }
     draw_image(img.pixels, img.width, img.height, stride, start_x, start_y);
 }
 

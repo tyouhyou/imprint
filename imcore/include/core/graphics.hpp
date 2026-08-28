@@ -217,7 +217,8 @@ namespace zb::ui::core
             const int &start_y         // y coordinate in the graphic where starting to draw bitmap
         );
 
-        /* draw an image_t view; row_stride 0 means width */
+        /* draw an image_t view; row_stride 0 means width, a malformed
+           view (null pixels or stride < width) draws nothing */
         void draw_image(
             const image_t &img,
             const int &start_x,

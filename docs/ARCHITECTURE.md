@@ -348,15 +348,14 @@ require an API shape change have a companion entry in
   capacity before resize; steady-state repaints allocate zero. Added
   `USE_FONT` variant to `test_alloc_guard` (scenario 5).
 
-- **A-9. `ListBox` row-cache key omits content (P2).**
-  **Problem.** `imui/include/list_box.hpp:142` / `list_box.cpp:325`
-  key is `(row,sel,w,h,fg,bg)`. A dynamic `ItemText` that changes
-  without a setter call (allowed by the current static-model doc) serves
-  stale bitmaps. The invalidation duty ("call any setter") lives only in
-  a comment (`code-contract.md` §8) and is easy to miss.
-  **Proposed direction.** Document the duty as API contract and/or
-  provide `touch_row(row)` / content-hash check (`code-contract.md`
-  §8 ListBox exemption) so the framework can auto-invalidate.
+- **A-9. `ListBox` row-cache key omits content (P2) — CLOSED
+  2026-08-28 (contract-documented).**
+  **Resolution.** The invalidation duty is the API contract, not a bug:
+  `docs/code-contract.md` §8 ("ListBox 动态模型失效") binds callers to
+  call a setter (e.g. `set_item_text` with the same args) after dynamic
+  `ItemText` content changes, and the `ListBox` class doc restates it.
+  A fine-grained `touch_row(row)` stays deferred until a consumer needs
+  it; the contract clause names the convergence point.
 
 - **A-10. Damage culling over-prunes overflow children (P2) — CLOSED
   2026-08-28 (not reachable in the current render model).**
@@ -460,12 +459,13 @@ eviction handshake. None duplicates A-1..A-11.
   mirrored from the existing screen-side clamp.
 
 - **A-17. `font_subset` dedicated `.ui` extractor (P3, follow-up to
-  A-7) — FIRST STEP DONE 2026-08-28.**
-  **Done.** `tools/font_subset.py` now has `scan_ui_file()` that parses
-  `text="…"` / `items="…"` explicitly (no generic regex). Remaining:
-  suppress "not drawn" warnings for `.ui` strings whose glyphs aren't in
-  `extra_glyphs.py` (expected — `.ui` strings may use glyphs the app
-  doesn't draw at runtime).
+  A-7) — DONE 2026-08-28.**
+  **Done.** `tools/font_subset.py` has `scan_ui_file()` that parses
+  `text="…"` / `items="…"` explicitly (no generic regex), and
+  `.ui`-sourced code units no longer trigger the "not drawn" warning
+  (a design file may carry strings the app never draws at runtime);
+  they still participate in the generated subset. Source literals keep
+  warning as before.
 
 - **A-18. `event.hpp` misleading comment (P3, hygiene) — DONE
   2026-08-28.**
@@ -474,3 +474,20 @@ eviction handshake. None duplicates A-1..A-11.
   collision-free case); the loop only iterates more than once on the
   2^32 wraparound edge, and the theoretical all-ids-live
   non-termination is documented as unreachable.
+
+### Batch K from the 2026-08-28 nemotron3 review — triage pending
+
+Source: `reports/codereview_nemotron3_2026-08-28.md` (N1..N10
+implementation items, D1..D10 architecture debt). Only the single P1
+fix has landed; the rest are **open, not triaged** and must not be
+treated as an accepted backlog until scheduled.
+
+- **K-N1. `draw_image(image_t)` row_stride lower bound — DONE
+  2026-08-28.**
+  **Fixed.** `Graphics::draw_image(const image_t &)` rejects a
+  malformed view (`pixels == nullptr`, or an explicit `row_stride`
+  below `width` — rows would overlap) instead of reading past each row;
+  nothing is drawn, matching the silent-rejection convention of the
+  other `Graphics` bounds checks. The contract is documented on
+  `image_t` (`imcore/include/core/image_view.hpp`) and covered by a
+  `test_raster_damage` block.
