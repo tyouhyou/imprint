@@ -242,7 +242,8 @@ it needs, and there is no runtime backend switching.
 
 ## 5. Known limitations (public)
 
-- No Mac shell (CMake fails with a clear `FATAL_ERROR`).
+- No Mac shell (CMake fails with a clear `FATAL_ERROR`); a
+  conditionally-planned AppKit shell is backlog item A-20.
 - `USE_FONT` needs hardcoded per-platform FreeType paths before it can be
   enabled elsewhere (`find_package`/CACHE is the intended fix).
 - 16bpp builds are embedded-only: the desktop shells and DIB/XImage present
@@ -573,3 +574,42 @@ superseded by the CI matrix (`.github/workflows/ci.yml`); D6 is closed
 by the §5.1 minimalism decision (design-file.md). D1 (min/max sizes),
 D3 (focus history), D4 (Event once/priority) and D9 (resource
 management) stay open without consumers and are not scheduled.
+
+### A-19..A-20. Condition-triggered items (added 2026-08-28)
+
+Both are **open, unscheduled** — each carries its own activation
+condition and is recorded so the analysis is not lost, not because work
+is planned now.
+
+- **A-19. Kernel pixel model as compile-time pixel traits.**
+  Proposal: re-express the §4.4 macro matrix
+  (`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) as `constexpr` pixel traits
+  (bit width, channel shifts, blend policy) selected at compile time.
+  **Runtime-neutral.** This is compile-time dispatch: exactly one
+  instantiation per build, the same machine code the macro switch
+  produces — the embedded rationale (no runtime format conversion) is
+  unaffected, and the NDS build already leans on the same technique
+  (`Event<T...>`, `zb::SharedPtr<T>`). The real costs are compile time
+  and a one-time refactor of `color*.hpp` plus the CMake option
+  plumbing. **Trigger.** Do not start on spec. Act only when the macro
+  matrix is about to grow for a need the presentation seam (A-1) cannot
+  absorb — a genuinely new *kernel-internal* format, not a new panel
+  format (those are converters). Until then the macro matrix is the
+  cheaper representation.
+
+- **A-20. macOS native shell (AppKit).**
+  Proposal: one shell, one codebase — NSWindow/NSView ownership,
+  `NSBitmapImageRep` presentation, NSEvent → `input_event` mapping —
+  reusing the A-2 `Presenter`/`InputSource` extractions so the glue
+  stays in the ~100–200-line range. **No macOS 13/14 split:** the
+  needed AppKit APIs predate both releases; set
+  `CMAKE_OSX_DEPLOYMENT_TARGET` to 11.0/12.0 and write no
+  `if (macOS >= 14)` branches. **Verification strategy:** the
+  maintainer's local machine runs macOS 13, so behavior is verified
+  locally and CI only compiles. Runner reality: `macos-13` images were
+  retired (Dec 2025) and `macos-14`+ are arm64-only with deprecation
+  underway, so the CI job targets `macos-15` (or `macos-15-intel`
+  while Intel images last). **Estimated effort:** 3.5–5.5 days, most
+  of it the A-2 extraction if not yet done; packaging must also handle
+  the A-4.2 SHARED/static duality explicitly. **Trigger.** Act when
+  macOS becomes a real requirement; the precondition is A-2.
