@@ -173,6 +173,7 @@ FreeType）+ FreeType 包装 provider 已落地于 `imcore/include/text/`；
 - 公开头文件自包含、可被 C 宿主 include 的边界文件不泄漏 C++ 类型。
 - 控件尺寸：`Widget::measure()` 返回自然尺寸（默认 = 当前 size；Label/Checkbox/RadioButton/Slider/ListBox 有内容派生覆写）。`set_size` 置 explicit 标记，布局层（FlexPanel）只对非 explicit 子项套用 measure()；`set_size_auto` 供布局内部回写尺寸并清除 explicit，应用代码不直接用。explicit 尺寸永远优先于 measure()。
 - **explicit 按轴记录**：`size_explicit_w_/h_` 两轴独立；`is_size_explicit()` = 任一轴（兼容语义），`is_width_explicit()/is_height_explicit()` 按轴查询。FlexPanel 的份额分配与尺寸落位用 `set_width_auto()/set_height_auto()` **按轴回写、只清该轴标志**——显式交叉轴尺寸在主轴 grow 时保留其值与标志。
+- **FlexPanel 换行与交叉轴语义（批次 K/N2、N3）**：换行判定只累计非 flex 子项的主轴需求，flex 子项换行贡献为 0（它吸收行内剩余空间，份额钳制 ≥ 0，故永不满溢）；交叉轴非 explicit 的子项（含 flex 子项）一律取 `measure()` 内容尺寸——框架文本不换行，内容高度不受主轴分配影响。
 - 键盘约束：modal 打开时，键盘焦点与 Tab/方向键导航限定在 modal 子树（`focus_next` 以 modal 为 scope）；焦点控件位于 modal 之外（modal 打开前聚焦）或已不可见（`is_effectively_visible()` = 自身与全部祖先可见）时，下一次按键前释放焦点。按压中目标被隐藏时，指针事件先投递 `on_cancel` 再清除按压，后续 move/release 不再送达。
 - wheel 通道：`ev.delta` 的单位是**带符号 notch**（滚轮一格 = ±1），
   壳层在派发前归一（win = `GET_WHEEL_DELTA_WPARAM / WHEEL_DELTA`，
@@ -188,6 +189,7 @@ FreeType）+ FreeType 包装 provider 已落地于 `imcore/include/text/`；
 - materialize 语义：未知 tag 打日志跳过（LW）；非容器 tag 带 children → children 静默丢弃（LW）；host 是 FlexPanel 时子节点带 flex_grow 走 flex 布局，否则按 Panel 线性布局。
 - 属性解析容错：属性缺失或类型不匹配 → 使用默认值（静默，不抛异常，init 路径无 throw 原则适用）；`text` 属性以 UTF-8 字符串接受（内部转 u16）。
 - 无 RTTI 约束：materialize 的 static_cast 合法，因为属性解析表只在工厂表创建的控件上运行——tag 表与 apply 分支必须保持一致，改动任何一侧都要同步另一侧（两处均在 ui_builder.cpp）。
+- 几何属性按**存在性**生效（批次 K/N8）：`width=0`/`pos_x=0` 是显式值而非省略，物化时照设（置 explicit）；缺省的轴取 0。解析侧对应语义：`id=` 接受未加引号的整数字面量并存为其十进制字符串（批次 K/N9，语法定义见 `docs/design-file.md`）。
 - 契约边界（不可进描述层）：动态 model（ListBox 的 ItemText 函数指针）、事件订阅（Event<> 接线）、字体/字形内容、运行时生成的文本。描述层只承载静态结构 + 属性 + id。
 - id 引用：`Widget::find_by_id` 深搜子树返回首个匹配（线性查找，仅用于接线/调试，不进热路径）；未命中返回 nullptr。事件绑定方式 = materialize 后按 id 取 Widget* 再走 Event<> 订阅（框架不引入回调注册表）。
 
@@ -302,6 +304,9 @@ FreeType）+ FreeType 包装 provider 已落地于 `imcore/include/text/`；
   setter 时变化，命中旧位图属调用方违规。调用方必须在内容变后调
   `set_item_text`（同参即可）或 `invalidate_row_cache` 语义的任意
   setter；未来若提供 `touch_row` 细粒度接口，本条随之收敛。
+  键还含**绝对行号**（批次 K/N4）：模型在中间插入/删除行时，其后
+  所有行的键整体失效，调用方同样以任意 setter（如重新
+  `set_item_count`）触发全量重建。
 - **Shell 输入→重绘链路（A-5）**：壳层字符事件（`ch` 通道）
   必须经 `is_dirty → paint → present` 链路（含 Win `WM_CHAR` 的
   `send_input` 复用），否则 `TextInput` 的 `mark_dirty` 不会落盘

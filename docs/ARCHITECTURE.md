@@ -475,12 +475,11 @@ eviction handshake. None duplicates A-1..A-11.
   2^32 wraparound edge, and the theoretical all-ids-live
   non-termination is documented as unreachable.
 
-### Batch K from the 2026-08-28 nemotron3 review — triage pending
+### Batch K from the 2026-08-28 nemotron3 review — triaged 2026-08-28
 
 Source: `reports/codereview_nemotron3_2026-08-28.md` (N1..N10
-implementation items, D1..D10 architecture debt). Only the single P1
-fix has landed; the rest are **open, not triaged** and must not be
-treated as an accepted backlog until scheduled.
+implementation items, D1..D10 architecture debt). Implementation items
+are disposed below; the debt items are recorded, not scheduled.
 
 - **K-N1. `draw_image(image_t)` row_stride lower bound — DONE
   2026-08-28.**
@@ -491,3 +490,51 @@ treated as an accepted backlog until scheduled.
   other `Graphics` bounds checks. The contract is documented on
   `image_t` (`imcore/include/core/image_view.hpp`) and covered by a
   `test_raster_damage` block.
+- **K-N2. Flex wrap ignores flex children's main demand — CLOSED
+  (by design, documented).** Flex children contribute 0 to the wrap
+  decision and absorb the leftover line space; shares are clamped at
+  0, so no overflow is possible. Semantics documented in
+  `docs/code-contract.md` §3.
+- **K-N3. Cross-axis uses `measure()` for flex children — CLOSED
+  (by design, documented).** Text never wraps in this framework, so a
+  content-derived cross size cannot overflow; this matches the CSS
+  default (no stretch). Same contract bullet as K-N2.
+- **K-N4. Row-cache key carries the absolute row index — CLOSED
+  (contract-documented).** Inserting/removing rows invalidates every
+  later row's cache entry; the caller re-triggers a full rebuild with
+  any setter. Added to the A-9 clause in `docs/code-contract.md` §8.
+- **K-N5. `TextInput` drops non-ASCII `ch` — CLOSED (contracted).**
+  The `ch` channel is ASCII by contract with UTF-32 as the stated
+  future extension (`docs/code-contract.md` §3.1); IME composition is
+  out of scope for this framework.
+- **K-N6. `input()` is `noexcept` across user handlers — CLOSED
+  (contracted).** Contract §1.5 already forbids throwing handlers;
+  termination on violation is the intended consequence, same as a
+  destroyed-widget breach.
+- **K-N7. `Dialog::layout` leaves the frame's layout flag set — DONE
+  2026-08-28.** **Fixed.** The dialog bypasses the frame's
+  `Panel::layout` by design (its linear placement would overwrite the
+  dialog geometry), so `Dialog::layout` now clears the frame's flag
+  itself. `Dialog::get_frame()` exposes the panel; `test_dialog`
+  asserts the flag clears under auto layout.
+- **K-N8. Explicit zero geometry dropped by the builder — DONE
+  2026-08-28.** **Fixed.** `apply_common` gates `width`/`height`/
+  `pos_x`/`pos_y` on property presence, not value; a declared 0 is an
+  explicit value. Covered by a `test_builder` block; contract bullet
+  in §4.
+- **K-N9. Integer `id=` silently dropped — DONE 2026-08-28.**
+  **Fixed.** The `.ui` parser accepts an unquoted integer id and
+  stores its decimal string; `docs/design-file.md` carries the grammar
+  note, `test_ui_file` the regression.
+- **K-N10. `zb_buffer` pointer lifetime — DONE 2026-08-28.**
+  **Documented.** `zbapi.h` now states the pointer is valid only until
+  the next `zb_paint` and must be copied out synchronously (caching it
+  across frames is a use-after-free).
+
+Debt items (D1..D10), triaged: D2 merges into A-9's deferred
+`touch_row`; D5 into the A-2 Presenter dirty-region protocol; D8 is
+A-3; D10 is superseded by the CI matrix (`.github/workflows/ci.yml`);
+D6 is closed by the §5.1 minimalism decision (design-file.md). D1
+(min/max sizes), D3 (focus history), D4 (Event once/priority) and D9
+(resource management) stay open without consumers and are not
+scheduled.

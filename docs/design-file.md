@@ -35,8 +35,9 @@ documents.
 - Strings are double-quoted `"..."`; escapes are `\"` and `\\` (any
   other `\x` stays literal). Integers are bare; booleans are
   `true|false`.
-- `id=` names a node for later lookup (`find_by_id`). `items=` accepts
-  multiple space-separated quoted strings.
+- `id=` names a node for later lookup (`find_by_id`); an unquoted
+  integer value is accepted and stored as its decimal string.
+  `items=` accepts multiple space-separated quoted strings.
 - A line starting with `#` is a comment.
 - **Continuation**: a single backslash at end of line joins the next
   physical line (the marker and newline are removed, the next line's

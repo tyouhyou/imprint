@@ -130,6 +130,28 @@ int test_builder()
         EXPECT(lvl != nullptr);
     }
 
+    // a declared 0 is an explicit value, not an omission (batch K / N8)
+    {
+        ui_node n;
+        n.type = "label";
+        n.id = "z";
+        n.prop("width", 0LL).prop("height", 20LL);
+        n.prop("pos_x", 0LL).prop("pos_y", 5LL);
+        ui_node doc;
+        doc.type = "column";
+        doc.children.push_back(std::move(n));
+
+        Panel host;
+        host.set_size(100, 100);
+        build(host, doc);
+
+        auto *z = host.find_by_id("z");
+        EXPECT(z != nullptr);
+        EXPECT(z->get_size().width == 0 && z->get_size().height == 20);
+        EXPECT(z->is_size_explicit());
+        EXPECT(z->get_position().x == 0 && z->get_position().y == 5);
+    }
+
     // flex layout: spacing/padding/auto sizes land on the widgets
     {
         auto doc = column({

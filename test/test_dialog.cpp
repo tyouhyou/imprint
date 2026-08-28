@@ -140,6 +140,9 @@ int test_dialog()
         root.add_child(std::move(dlg));
         w.paint();
         EXPECT(!pd->is_layout_dirty());
+        // the frame's Panel::layout is bypassed by design; Dialog must
+        // clear its flag itself or it stays set forever (batch K / N7)
+        EXPECT(!pd->get_frame().is_layout_dirty());
         w.paint();  // a settled tree stays settled
         EXPECT(!pd->is_layout_dirty());
 

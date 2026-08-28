@@ -75,6 +75,10 @@ namespace zb::ui
         title_label->layout();
         body->layout();
         buttons->layout();
+        // the frame's own Panel::layout is deliberately bypassed (its
+        // linear placement would overwrite the dialog geometry), so its
+        // flag is cleared here instead (batch K / N7)
+        frame->clear_layout_dirty();
         clear_layout_dirty();
     }
 

@@ -48,6 +48,8 @@ namespace zb::ui
         void set_title(const char *text) { title_label->set_text(text); }
         [[nodiscard]] Label &get_title() { return *title_label; }
 
+        // frame: the centered panel that hosts title/body/buttons
+        [[nodiscard]] Panel &get_frame() { return *frame; }
         // body: fill with your own widgets (vertical layout inside)
         [[nodiscard]] Panel &get_body() { return *body; }
 

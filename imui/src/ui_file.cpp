@@ -338,11 +338,19 @@ namespace zb::ui
                 {
                     if (key == "id")
                     {
-                        if (const auto *s = std::get_if<std::string>(&value))
+                        if (!have_id)
                         {
-                            if (!have_id)
+                            if (const auto *s = std::get_if<std::string>(&value))
                             {
                                 rec.node.id = *s;
+                                have_id = true;
+                            }
+                            else if (const auto *i = std::get_if<long long>(&value))
+                            {
+                                // an unquoted id is an integer literal: keep
+                                // its decimal form instead of dropping it
+                                // (batch K / N9)
+                                rec.node.id = std::to_string(*i);
                                 have_id = true;
                             }
                         }

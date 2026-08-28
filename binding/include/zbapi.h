@@ -100,9 +100,13 @@ void zb_input(zb_app_t *app, int type, int x, int y, int key, int ch, int touch_
 /* renders one frame; the host should drive this from its own loop */
 void zb_paint(zb_app_t *app);
 
-/* framebuffer: returns a pointer to the pixel data (valid until the next
- * zb_paint call) and stores the size in pixels. May return NULL when the
- * app has no window yet. */
+/* framebuffer: returns a pointer to the pixel data and stores the size
+ * in pixels. May return NULL when the app has no window yet.
+ *
+ * Lifetime: the pointer is only valid until the next zb_paint call --
+ * a later frame may reallocate the buffer (resize, wrapper mode). Hosts
+ * must copy/blit the pixels synchronously, ideally inside the painted
+ * callback; caching the pointer across frames is a use-after-free. */
 const uint8_t *zb_buffer(zb_app_t *app, uint32_t *out_width, uint32_t *out_height);
 
 /* bytes per pixel of the framebuffer: fixed at build time by COLOR_DEPTH

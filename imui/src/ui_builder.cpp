@@ -35,6 +35,20 @@ namespace zb::ui
             return false;
         }
 
+        // whether the node declares the property at all (a present 0 is
+        // not the same as absent -- explicit geometry, batch K / N8)
+        bool has_prop(const ui_node &n, const char *name)
+        {
+            for (const auto &p : n.props)
+            {
+                if (p.first == name)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         // prop `name`, or `fallback` when missing (kind must match the
         // builder that produced it; a wrong kind yields the fallback)
         template <class T>
@@ -156,17 +170,17 @@ namespace zb::ui
             {
                 w.set_id(n.id);
             }
-            const long long ww = prop_of(n, "width", 0LL);
-            const long long hh = prop_of(n, "height", 0LL);
-            if (ww != 0 || hh != 0)
+            // presence-gated: a declared 0 is an explicit value, not an
+            // omission (batch K / N8)
+            if (has_prop(n, "width") || has_prop(n, "height"))
             {
-                w.set_size(static_cast<int>(ww), static_cast<int>(hh));
+                w.set_size(static_cast<int>(prop_of(n, "width", 0LL)),
+                           static_cast<int>(prop_of(n, "height", 0LL)));
             }
-            const long long px = prop_of(n, "pos_x", 0LL);
-            const long long py = prop_of(n, "pos_y", 0LL);
-            if (px != 0 || py != 0)
+            if (has_prop(n, "pos_x") || has_prop(n, "pos_y"))
             {
-                w.set_position(static_cast<int>(px), static_cast<int>(py));
+                w.set_position(static_cast<int>(prop_of(n, "pos_x", 0LL)),
+                               static_cast<int>(prop_of(n, "pos_y", 0LL)));
             }
             const std::string text = prop_of(n, "text", std::string{});
             if (!text.empty())

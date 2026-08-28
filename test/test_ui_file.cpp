@@ -114,20 +114,24 @@ column id="main" spacing=4 padding=8
         EXPECT(std::get<bool>(col.props[0].second) == true);  // wrap
     }
 
-    // tolerant: bare token dropped, bad value dropped, id takes string only
+    // tolerant: bare token dropped, bad value dropped; an integer id
+    // is accepted as its decimal string (batch K / N9)
     {
         ui_node r = parse_ui_text(
-            "label text=Welcome id=7\n"  // bare token values: dropped
-            "button \"raw\" text=\"Go\"\n",
+            "label text=Welcome id=7\n",  // bare text value: dropped
             nullptr);
-        // the 'label' line survives with no props; 'button' keeps only
-        // its key=value pair (the bare leading token is dropped)
-        EXPECT(r.children.size() == 2);
+        EXPECT(r.children.size() == 1);
         EXPECT(r.children[0].type == "label");
         EXPECT(r.children[0].props.empty());
-        EXPECT(r.children[0].id.empty());
-        EXPECT(r.children[1].type == "button");
-        EXPECT(std::get<std::string>(r.children[1].props[0].second) == "Go");
+        EXPECT(r.children[0].id == "7");
+    }
+
+    // tolerant: a bare leading token is dropped, key=value pairs kept
+    {
+        ui_node r = parse_ui_text("button \"raw\" text=\"Go\"\n", nullptr);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "button");
+        EXPECT(std::get<std::string>(r.children[0].props[0].second) == "Go");
     }
 
     // empty / comment-only document: ok == false
