@@ -260,13 +260,23 @@ it needs, and there is no runtime backend switching.
 Items from the 2026-08-23 read-only architecture review. Status: **open** —
 recorded risks and proposed directions, not scheduled work.
 
-### A-1. Pixel-format / presentation seam (highest priority for expansion) — IN PROGRESS 2026-08-28
+### A-1. Pixel-format / presentation seam (highest priority for expansion) — DONE 2026-08-28
 
-Seam contract committed (§4.4 last bullet, `code-contract.md` §3): one
-internal format per build, conversion only at the presentation edge,
-new panel formats add a `core/pixel_convert` converter. Remaining: the
-converter itself + `test_pixel_convert`, then the FB shell RGB565
-wiring (the validation case below).
+**Resolution.** The seam landed in three steps, all contract-first:
+1. §4.4 seam rule + `code-contract.md` §3 converter contract;
+2. `core/pixel_convert` — `panel_format{native,bgr565}`,
+   `panel_pixel_bytes`, `convert_row` (depth-agnostic, silent
+   rejection), locked by the 35th suite `test_pixel_convert`;
+3. the FB shell — its validation case below — now detects the panel
+   from the vinfo: byte-equal panels keep the memcpy fast path, RGB565
+   panels go through one `convert_row` per row, unknown layouts refuse
+   to present instead of corrupting. CI Tier2 gained a `linux-fb`
+   compile job (the FB backend was never compiled in CI before).
+Verification limit: no FB hardware in CI — the convert path is
+compile-gated plus unit-covered at the converter level, not run
+against a panel. A new panel format now adds one enum value, one
+`convert_row` branch and (optionally) one shell detection clause — no
+kernel matrix entry. Dithering remains a future converter option.
 
 - **Problem.** The pixel memory model is a global compile-time macro matrix
   (`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) that the rasterizer, the shells,
@@ -325,6 +335,9 @@ wiring (the validation case below).
   "any panel format" first-class target (beyond the current warning-only
   mismatch check in `fb.cpp`), and consider a `zb_buffer_format()` export so
   hosts can adapt without recompiling their expectations.
+  (Progress: the FB warning-only check is gone — A-1's seam made FB a
+  convert-or-refuse first-class target; `zb_buffer_format()` shipped in
+  batch K / D7. Remaining: the per-target policy document.)
 
 ### A-4. Smaller items
 
