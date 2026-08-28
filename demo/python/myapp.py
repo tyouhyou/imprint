@@ -7,17 +7,17 @@ the default COLOR_DEPTH=32 / RGB_MODEL=bgra32 config), 4 bytes per pixel.
 
 Usage:
     # interactive (ESC or window close to quit)
-    python3 demo/python/myapp.py --lib build_linux/libzbapi.so
+    python3 demo/python/myapp.py --lib build/build_linux/libzbapi.so
 
     # automated run: paint N frames then exit with code 0
     SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py \
-        --lib build_linux/libzbapi.so --frames 20
+        --lib build/build_linux/libzbapi.so --frames 20
 
 Options:
     --lib <path>   path to the shared zbapi library; the default is the
                    first existing build output for the platform
-                   (build/bin/Debug/zbapi.dll on Windows,
-                    build_linux/lib/libzbapi.so on Linux)
+                   (build/build_win/bin/Debug/zbapi.dll on Windows,
+                    build/build_linux/lib/libzbapi.so on Linux)
     --width/--height  app window size, default 256x192
     --frames N     run N frames then exit (default: infinite loop)
 """
@@ -39,9 +39,9 @@ def default_lib():
     root = os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))
     candidates = (
-        ["build/bin/Debug/zbapi.dll", "build/bin/Release/zbapi.dll"]
+        ["build/build_win/bin/Debug/zbapi.dll", "build/build_win/bin/Release/zbapi.dll"]
         if sys.platform == "win32"
-        else ["build_linux/lib/libzbapi.so", "build_py/lib/libzbapi.so"]
+        else ["build/build_linux/lib/libzbapi.so", "build/build_py/lib/libzbapi.so"]
     )
     for rel in candidates:
         path = os.path.join(root, rel)

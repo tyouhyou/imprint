@@ -69,18 +69,18 @@ Pack it at build time with `ui_embed` (fails the build on invalid files), then
 platform. Preview interactively with the `ui_preview` app:
 
 ```
-UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
+UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
 ```
 
 ## Build
 
 | Target | Command | Notes |
 |---|---|---|
-| Windows (MSVC) | `cmake -S . -B build && cmake --build build` | zero-dependency default (32bpp) |
-| Windows + fonts | `cmake -S . -B build_font -DUSE_FONT=ON && cmake --build build_font` | run needs `freetype.dll` on PATH |
-| Linux (X11) | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build_linux` | input-capable backend |
-| Linux (framebuffer) | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB && cmake --build build_linux` | presents only; use X11 for interaction |
-| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` | produces `build_nds/bin/tictactoe.nds` |
+| Windows (MSVC) | `cmake -S . -B build/build_win && cmake --build build/build_win` | zero-dependency default (32bpp) |
+| Windows + fonts | `cmake -S . -B build/build_font -DUSE_FONT=ON && cmake --build build/build_font` | run needs `freetype.dll` on PATH |
+| Linux (X11) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | input-capable backend |
+| Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
+| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds` |
 | WebAssembly | `demo/wasm/build.sh` (docker emscripten) | includes a node smoke test |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
@@ -94,7 +94,7 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 ## Demo
 
-The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
+The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build/build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
 
 ## License
 

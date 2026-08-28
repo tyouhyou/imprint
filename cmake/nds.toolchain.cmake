@@ -3,11 +3,11 @@
 # Usage:
 #   export DEVKITARM=<path to devkitARM>
 #   export LIBNDS=<path to libnds>          # usually $DEVKITPRO/libnds
-#   cmake -S . -B build_nds \
+#   cmake -S . -B build/build_nds \
 #       -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake
 #
 # Produces a .elf for the NDS ARM9 and, as a POST_BUILD step of the shell
-# target, packages it with ndstool into a .nds ROM (build_nds/bin/).
+# target, packages it with ndstool into a .nds ROM (build/build_nds/bin/).
 
 set(CMAKE_SYSTEM_NAME Generic)
 set(CMAKE_SYSTEM_PROCESSOR arm)

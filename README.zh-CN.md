@@ -70,18 +70,18 @@ column id="root" spacing=6 padding=10
 `parse_ui_text` + `build()` 物化 — 所有平台同一代码路径。预览交互式查看：
 
 ```
-UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
+UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
 ```
 
 ## 构建
 
 | 目标 | 命令 | 说明 |
 |---|---|---|
-| Windows（MSVC） | `cmake -S . -B build && cmake --build build` | 零依赖默认构建（32bpp） |
-| Windows + 字体 | `cmake -S . -B build_font -DUSE_FONT=ON && cmake --build build_font` | 运行需 `freetype.dll` 在 PATH 上 |
-| Linux（X11） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build_linux` | 支持输入的后端 |
-| Linux（framebuffer） | `cmake -S . -B build_linux -DIM_SHELL_BACKEND=FB && cmake --build build_linux` | 仅显示；交互请用 X11 |
-| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds'` | 产出 `build_nds/bin/tictactoe.nds` |
+| Windows（MSVC） | `cmake -S . -B build/build_win && cmake --build build/build_win` | 零依赖默认构建（32bpp） |
+| Windows + 字体 | `cmake -S . -B build/build_font -DUSE_FONT=ON && cmake --build build/build_font` | 运行需 `freetype.dll` 在 PATH 上 |
+| Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
+| Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |
+| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds` |
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | 附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
@@ -95,7 +95,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_previe
 
 ## 示例
 
-示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
+示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
 
 ## 许可证
 

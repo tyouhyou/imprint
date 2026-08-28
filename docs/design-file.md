@@ -19,7 +19,7 @@ menu.ui ──► tools/ui_embed ──► C byte array (embedded_ui_file / find
 Desktop preview without writing an app:
 
 ```
-UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build_linux
+UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
 ```
 
 `UI_PREVIEW_FILES` takes space-separated paths; left/right keys switch
