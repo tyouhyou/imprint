@@ -162,6 +162,20 @@ extern "C" int zb_buffer_bpp()
     return static_cast<int>(sizeof(zb::ui::core::Color));
 }
 
+extern "C" int zb_buffer_format()
+{
+#if COLOR_DEPTH == 16
+    return ZB_FORMAT_ABGR1555;
+#else
+    return ZB_FORMAT_BGRA8;
+#endif
+}
+
+extern "C" int zb_version()
+{
+    return ZB_API_VERSION;
+}
+
 extern "C" void zb_set_painted_callback(zb_app_t *self, zb_painted_cb cb, void *userdata)
 {
     if (self == nullptr || self->app == nullptr)

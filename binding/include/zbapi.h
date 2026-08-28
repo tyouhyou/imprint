@@ -17,7 +17,8 @@ extern "C" {
  * (COLOR_DEPTH / ENDIAN / RGB_MODEL, see imcore/CMakeLists.txt):
  *   - COLOR_DEPTH=32: 4 bytes per pixel, bgra on Windows/x86
  *   - COLOR_DEPTH=16: 2 bytes per pixel, abgr1555
- * Hosts should be written against a fixed build configuration.
+ * A host can query the build at runtime (zb_buffer_format / zb_buffer_bpp)
+ * instead of pinning a configuration.
  *
  * The 4th byte of a 32bpp pixel is NOT part of the contract: the raster
  * may leave arbitrary values there (blend paths even write coverage
@@ -26,8 +27,20 @@ extern "C" {
  * "black" pixels (borders, default text) become transparent.
  */
 
+/* ABI version of this header; zb_version() reports the one the linked
+ * library was built with (bumped only when an existing export changes
+ * shape -- see docs/ARCHITECTURE.md 4.8) */
+#define ZB_API_VERSION 1
+
 /* opaque app handle */
 typedef struct zb_app zb_app_t;
+
+/* ---- framebuffer formats (zb_buffer_format) ---- */
+enum
+{
+    ZB_FORMAT_BGRA8 = 1,    /* COLOR_DEPTH=32 desktop builds, 4 bytes/px */
+    ZB_FORMAT_ABGR1555 = 2  /* COLOR_DEPTH=16 embedded builds, 2 bytes/px */
+};
 
 /* called after every painted frame; see zb_set_painted_callback */
 typedef void (*zb_painted_cb)(void *userdata);
@@ -112,6 +125,14 @@ const uint8_t *zb_buffer(zb_app_t *app, uint32_t *out_width, uint32_t *out_heigh
 /* bytes per pixel of the framebuffer: fixed at build time by COLOR_DEPTH
  * (4 on desktop bgra builds, 2 on embedded 16bpp) */
 int zb_buffer_bpp(void);
+
+/* pixel format of the framebuffer: one of the ZB_FORMAT_* values,
+ * fixed at build time (batch K / D7) */
+int zb_buffer_format(void);
+
+/* ABI version the linked library was built with (ZB_API_VERSION of its
+ * zbapi.h); compare against this header's ZB_API_VERSION */
+int zb_version(void);
 
 /* registers a callback called after every painted frame; the host can then
  * present the framebuffer (via zb_buffer). userdata is passed through. */

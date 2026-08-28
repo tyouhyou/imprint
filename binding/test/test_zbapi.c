@@ -48,6 +48,12 @@ int main(void)
      * every depth; the scan is bounded by the build's bytes per pixel */
     const int bpp = zb_buffer_bpp();
     assert(bpp == 4 || bpp == 2);
+
+    /* runtime capability queries (batch K / D7): the linked library
+     * speaks this header's ABI, and the format agrees with the width */
+    assert(zb_version() == ZB_API_VERSION);
+    const int fmt = zb_buffer_format();
+    assert(fmt == (bpp == 4 ? ZB_FORMAT_BGRA8 : ZB_FORMAT_ABGR1555));
     int nonzero = 0;
     for (size_t i = 0; i < (size_t)w * h * (size_t)bpp; i += (size_t)bpp)
     {

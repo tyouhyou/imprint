@@ -190,9 +190,14 @@ satisfies. Changing any of these is an architecture change.
 - **The host is the shell**: it drives `zb_input` / `zb_paint` /
   `zb_buffer` and nothing else.
 - Buffer format is fixed at build time by `COLOR_DEPTH` (32bpp = 4 bytes,
-  16bpp = 2 bytes abgr1555); `zb_buffer_bpp()` reports the byte width.
-  The 4th byte of a 32bpp pixel is **not** part of the contract — hosts must
-  present pixels as opaque.
+  16bpp = 2 bytes abgr1555); `zb_buffer_bpp()` reports the byte width and
+  `zb_buffer_format()` the format enum (`ZB_FORMAT_BGRA8` /
+  `ZB_FORMAT_ABGR1555`), so a host can adapt at runtime instead of pinning
+  a build configuration. The 4th byte of a 32bpp pixel is **not** part of
+  the contract — hosts must present pixels as opaque.
+- `zb_version()` reports the ABI version of the linked library
+  (`ZB_API_VERSION` in `zbapi.h`); adding exports bumps it only when an
+  existing export changes shape.
 - All entry points must be called from **one thread**.
 - Callbacks (`zb_set_painted_callback`, `zb_set_closed_callback`,
   `zb_set_log_callback`) fire inside the triggering `zb_*` call; a host must
@@ -531,10 +536,11 @@ are disposed below; the debt items are recorded, not scheduled.
   the next `zb_paint` and must be copied out synchronously (caching it
   across frames is a use-after-free).
 
-Debt items (D1..D10), triaged: D2 merges into A-9's deferred
-`touch_row`; D5 into the A-2 Presenter dirty-region protocol; D8 is
-A-3; D10 is superseded by the CI matrix (`.github/workflows/ci.yml`);
-D6 is closed by the §5.1 minimalism decision (design-file.md). D1
-(min/max sizes), D3 (focus history), D4 (Event once/priority) and D9
-(resource management) stay open without consumers and are not
-scheduled.
+Debt items (D1..D10), triaged: D7 is **DONE 2026-08-28** — `zb_version()`
+and `zb_buffer_format()` give hosts runtime capability queries (contract:
+§4.8, smoke: `test_zbapi`). D2 merges into A-9's deferred `touch_row`;
+D5 into the A-2 Presenter dirty-region protocol; D8 is A-3; D10 is
+superseded by the CI matrix (`.github/workflows/ci.yml`); D6 is closed
+by the §5.1 minimalism decision (design-file.md). D1 (min/max sizes),
+D3 (focus history), D4 (Event once/priority) and D9 (resource
+management) stay open without consumers and are not scheduled.
