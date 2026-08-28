@@ -181,6 +181,12 @@ FreeType）+ FreeType 包装 provider 已落地于 `imcore/include/text/`；
   依赖量级而不只是符号。C-ABI `zb_input` 的 `key` 参数对 mouse_wheel
   承载该 delta（zbapi.h 既有契约），`zbapi.cpp` 映射进 `ev.delta`；
   `ev.x/y` 必须是**指针的客户区坐标**（dispatcher 按坐标选目标）。
+- **呈现接缝行转换器（A-1）**：`core/pixel_convert` 只出现在壳层呈现
+  边缘，不进光栅器热路径。`convert_row(format, src, count, dst, cap)`
+  把一行内部 `Color` 写为面板字节，返回写入字节数；未知格式或
+  `cap` 不足 → 返回 0 且不写（静默拒绝，告警由调用方负责）。
+  `panel_pixel_bytes(format)` 报该格式的每像素字节数。新面板格式
+  加转换器，不加内核宏矩阵组合（`docs/ARCHITECTURE.md` §4.4）。
 
 ## 4. 描述式 UI builder（批次 G 契约）
 

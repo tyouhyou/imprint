@@ -147,6 +147,15 @@ satisfies. Changing any of these is an architecture change.
   `CanvasWindow::create(w, h, buffer)`).
 - `clip_safe()` returns a stack RAII `ClipGuard` (zero allocation per widget
   per frame); off-screen widgets get an invalid guard and draw nothing.
+- **Presentation seam (A-1).** The kernel renders exactly one internal
+  format per build (the `COLOR_DEPTH` matrix above); conversion to a panel
+  format happens only at the presentation edge (a shell's blit), as a row
+  conversion (`core/pixel_convert`: one row of internal `Color` → panel
+  bytes). A new panel format (RGB565, grayscale e-ink, ...) adds a
+  converter — it never adds a new `COLOR_DEPTH`/`RGB_MODEL`/`ENDIAN`
+  combination to the kernel or forks the rasterizer. The C-ABI buffer
+  keeps exposing the internal format (§4.8); conversion is a shell/host
+  duty. Dithering is a future converter option, not part of the seam.
 
 ### 4.5 Text
 
@@ -251,7 +260,13 @@ it needs, and there is no runtime backend switching.
 Items from the 2026-08-23 read-only architecture review. Status: **open** —
 recorded risks and proposed directions, not scheduled work.
 
-### A-1. Pixel-format / presentation seam (highest priority for expansion)
+### A-1. Pixel-format / presentation seam (highest priority for expansion) — IN PROGRESS 2026-08-28
+
+Seam contract committed (§4.4 last bullet, `code-contract.md` §3): one
+internal format per build, conversion only at the presentation edge,
+new panel formats add a `core/pixel_convert` converter. Remaining: the
+converter itself + `test_pixel_convert`, then the FB shell RGB565
+wiring (the validation case below).
 
 - **Problem.** The pixel memory model is a global compile-time macro matrix
   (`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) that the rasterizer, the shells,
@@ -270,7 +285,8 @@ recorded risks and proposed directions, not scheduled work.
   (shell or binding) that writes the panel's format (row-conversion,
   optional dithering). New panel formats then implement the converter once
   instead of forking the kernel. The C-ABI could later report the format via
-  a new export instead of build-time-only documentation.
+  a new export instead of build-time-only documentation. (That query is
+  done — `zb_buffer_format`, batch K / D7.)
 - **First step for a good test case.** Linux FB panels frequently expose
   RGB565 — coverting `fb.cpp`'s wrap-around blit to go through one
   `convert_row(format, ...)` would validate the seam against a real target.
