@@ -345,8 +345,15 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             // wParam HIWORD: wheel rotation delta. (> 0 roll up, < 0 roll down)
             input_event ev;
             ev.type = input_type::mouse_wheel;
-            ev.delta = GET_WHEEL_DELTA_WPARAM(wParam);
+            // normalize to signed notches (WHEEL_DELTA = one notch): the
+            // shell-independent unit every consumer may rely on (A-15);
+            // sub-notch deltas from free-spinning wheels are dropped
+            ev.delta = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
             ev.touch_id = 0;
+            if (ev.delta == 0)
+            {
+                break;
+            }
             // WM_MOUSEWHEEL carries screen coordinates; the dispatcher
             // routes the wheel to the widget under the (client) pointer
             POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};

@@ -19,7 +19,7 @@ namespace zb::ui
     class RadioButton : public Widget
     {
     public:
-        RadioButton() = default;
+        RadioButton() { sync_text_offset(); }
 
         // input hooks, driven by the input dispatcher
         void press();
@@ -42,8 +42,8 @@ namespace zb::ui
         void set_dot_color(const core::Color &c) { dot_color = c; mark_dirty(); }
         // circle_size/text_gap feed measure(): they report damage and
         // invalidate the layout too
-        void set_circle_size(const int s) { circle_size = s; mark_dirty(); mark_layout_dirty(); }
-        void set_text_gap(const int g) { text_gap = g; mark_dirty(); mark_layout_dirty(); }
+        void set_circle_size(const int s) { circle_size = s; sync_text_offset(); mark_dirty(); mark_layout_dirty(); }
+        void set_text_gap(const int g) { text_gap = g; sync_text_offset(); mark_dirty(); mark_layout_dirty(); }
 
         // fired when this button becomes selected by a user interaction
         zb::event::Event<> changed;
@@ -64,6 +64,11 @@ namespace zb::ui
 
     private:
         void select();
+
+        // the label sits right of the circle; recompute whenever
+        // circle_size or text_gap changes so the const draw path never
+        // writes state
+        void sync_text_offset() { set_text_offset(core::impoint_t{circle_size + text_gap, 0}); }
 
         int group_ = 0;
         bool checked_ = false;

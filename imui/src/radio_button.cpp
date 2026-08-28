@@ -112,8 +112,9 @@ namespace zb::ui
             const auto dot = radius / 2;
             area.fill_ellipse(center, center, dot, dot, dot_color);
         }
-        // the label to the right of the circle (draw_text applies the offset)
-        set_text_offset(core::impoint_t{circle_size + text_gap, 0});
+        // the label to the right of the circle (the offset is a
+        // layout-time value, kept current by the ctor and the
+        // circle_size/text_gap setters)
         draw_text(area);
     }
 }

@@ -174,7 +174,12 @@ FreeType）+ FreeType 包装 provider 已落地于 `imcore/include/text/`；
 - 控件尺寸：`Widget::measure()` 返回自然尺寸（默认 = 当前 size；Label/Checkbox/RadioButton/Slider/ListBox 有内容派生覆写）。`set_size` 置 explicit 标记，布局层（FlexPanel）只对非 explicit 子项套用 measure()；`set_size_auto` 供布局内部回写尺寸并清除 explicit，应用代码不直接用。explicit 尺寸永远优先于 measure()。
 - **explicit 按轴记录**：`size_explicit_w_/h_` 两轴独立；`is_size_explicit()` = 任一轴（兼容语义），`is_width_explicit()/is_height_explicit()` 按轴查询。FlexPanel 的份额分配与尺寸落位用 `set_width_auto()/set_height_auto()` **按轴回写、只清该轴标志**——显式交叉轴尺寸在主轴 grow 时保留其值与标志。
 - 键盘约束：modal 打开时，键盘焦点与 Tab/方向键导航限定在 modal 子树（`focus_next` 以 modal 为 scope）；焦点控件位于 modal 之外（modal 打开前聚焦）或已不可见（`is_effectively_visible()` = 自身与全部祖先可见）时，下一次按键前释放焦点。按压中目标被隐藏时，指针事件先投递 `on_cancel` 再清除按压，后续 move/release 不再送达。
-- wheel 通道：C-ABI `zb_input` 的 `key` 参数承载滚轮 delta（zbapi.h 既有契约），`zbapi.cpp` 映射进 `ev.delta`；壳层直发滚轮事件时直接填 `ev.delta`（win = GET_WHEEL_DELTA_WPARAM 符号，x11 = button4/5 → ±1），`ev.x/y` 必须是**指针的客户区坐标**（dispatcher 按坐标选目标）。
+- wheel 通道：`ev.delta` 的单位是**带符号 notch**（滚轮一格 = ±1），
+  壳层在派发前归一（win = `GET_WHEEL_DELTA_WPARAM / WHEEL_DELTA`，
+  自由滚轮的亚 notch 增量丢弃；x11 = button4/5 → ±1）——控件可以
+  依赖量级而不只是符号。C-ABI `zb_input` 的 `key` 参数对 mouse_wheel
+  承载该 delta（zbapi.h 既有契约），`zbapi.cpp` 映射进 `ev.delta`；
+  `ev.x/y` 必须是**指针的客户区坐标**（dispatcher 按坐标选目标）。
 
 ## 4. 描述式 UI builder（批次 G 契约）
 

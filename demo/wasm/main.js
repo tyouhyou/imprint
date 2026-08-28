@@ -24,15 +24,18 @@
   var ZB_KEY_DEL = 127;
   var ZB_KEY_UP = 256, ZB_KEY_DOWN = 257, ZB_KEY_LEFT = 258, ZB_KEY_RIGHT = 259;
 
-  // DOMKeyCodes of keys that differ from the framework codes
-  // (tab/enter/escape/space/backspace are verbatim ASCII, see above;
-  // printable characters travel through the ch field -- B5)
+  // e.key values of the navigation/editing keys; printable characters
+  // travel through the ch field instead
   var KEY_MAP = {
-    37: ZB_KEY_LEFT,
-    38: ZB_KEY_UP,
-    39: ZB_KEY_RIGHT,
-    40: ZB_KEY_DOWN,
-    46: ZB_KEY_DEL
+    ArrowLeft: ZB_KEY_LEFT,
+    ArrowUp: ZB_KEY_UP,
+    ArrowRight: ZB_KEY_RIGHT,
+    ArrowDown: ZB_KEY_DOWN,
+    Backspace: ZB_KEY_BACKSPACE,
+    Delete: ZB_KEY_DEL,
+    Tab: ZB_KEY_TAB,
+    Enter: ZB_KEY_ENTER,
+    Escape: ZB_KEY_ESCAPE
   };
 
   var canvas = document.getElementById("screen");
@@ -89,12 +92,25 @@
 
   /* navigation/editing keys fill key (ch 0); other single-char keys fill
    * ch (printable text), matching the shell convention (B2/B5) */
-  function onKeyDown(e) {
-    var code = KEY_MAP[e.keyCode] !== undefined ? KEY_MAP[e.keyCode] : e.keyCode;
-    var ch = 0;
-    if (KEY_MAP[e.keyCode] === undefined && e.key.length === 1) {
-      ch = e.key.charCodeAt(0);
+  function resolveKey(e) {
+    if (KEY_MAP[e.key] !== undefined) {
+      return [KEY_MAP[e.key], 0];
     }
+    if (e.key === " ") {
+      // space is a key (activation), never ch
+      return [ZB_KEY_SPACE, 0];
+    }
+    if (e.key.length === 1) {
+      return [0, e.key.charCodeAt(0)];
+    }
+    return null; // unknown non-printable key: send nothing
+  }
+  function onKeyDown(e) {
+    var resolved = resolveKey(e);
+    if (!resolved) {
+      return;
+    }
+    var code = resolved[0], ch = resolved[1];
     if (code === ZB_KEY_SPACE || code === ZB_KEY_UP || code === ZB_KEY_DOWN ||
         code === ZB_KEY_LEFT || code === ZB_KEY_RIGHT) {
       e.preventDefault(); // don't scroll the page
@@ -102,8 +118,11 @@
     send(ZB_INPUT_KEY_DOWN, 0, 0, code, ch, 0);
   }
   function onKeyUp(e) {
-    var code = KEY_MAP[e.keyCode] !== undefined ? KEY_MAP[e.keyCode] : e.keyCode;
-    send(ZB_INPUT_KEY_UP, 0, 0, code, 0, 0);
+    var resolved = resolveKey(e);
+    if (!resolved) {
+      return;
+    }
+    send(ZB_INPUT_KEY_UP, 0, 0, resolved[0], 0, 0);
   }
 
   canvas.addEventListener("mousedown", onDown);

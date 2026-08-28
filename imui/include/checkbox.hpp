@@ -22,7 +22,7 @@ namespace zb::ui
     class Checkbox : public Widget
     {
     public:
-        Checkbox() = default;
+        Checkbox() { sync_text_offset(); }
 
         // input hooks, driven by the input dispatcher
         void press();
@@ -36,8 +36,8 @@ namespace zb::ui
         void set_box_color(const core::Color &c) { box_color = c; mark_dirty(); }
         void set_check_color(const core::Color &c) { check_color = c; mark_dirty(); }
         // box_size/text_gap feed measure(): they invalidate the layout too
-        void set_box_size(const int s) { box_size = s; mark_dirty(); mark_layout_dirty(); }
-        void set_text_gap(const int g) { text_gap = g; mark_dirty(); mark_layout_dirty(); }
+        void set_box_size(const int s) { box_size = s; sync_text_offset(); mark_dirty(); mark_layout_dirty(); }
+        void set_text_gap(const int g) { text_gap = g; sync_text_offset(); mark_dirty(); mark_layout_dirty(); }
 
         // fired on user toggle, with the new state
         zb::event::Event<bool> changed;
@@ -54,6 +54,10 @@ namespace zb::ui
 
     private:
         void toggle();
+
+        // the label sits right of the box; recompute whenever box_size or
+        // text_gap changes so the const draw path never writes state
+        void sync_text_offset() { set_text_offset(core::impoint_t{box_size + text_gap, 0}); }
 
         bool checked_ = false;
         bool pressed_ = false;

@@ -100,8 +100,8 @@ namespace zb::ui
             area.draw_line(2, box_size * 5 / 8, box_size * 4 / 8, box_size - 3, check_color);
             area.draw_line(box_size * 4 / 8, box_size - 3, box_size - 3, 2, check_color);
         }
-        // the label to the right of the box (draw_text applies the offset)
-        set_text_offset(core::impoint_t{box_size + text_gap, 0});
+        // the label to the right of the box (the offset is a layout-time
+        // value, kept current by the ctor and the box_size/text_gap setters)
         draw_text(area);
     }
 }

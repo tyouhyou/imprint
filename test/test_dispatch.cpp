@@ -751,5 +751,48 @@ int test_dispatch()
         EXPECT(!d.dispatch(root, release_at(20, 20)));
     }
 
+    // a widget removed from the tree WITHOUT the evict handshake (the
+    // unsafe path) must not be reached by later events while it is
+    // still alive: the descendant guard drops the cached pointers
+    // (A-14; a destroyed widget remains the caller's contract breach)
+    {
+        Panel root;
+        root.set_size(100, 100);
+        auto probe = std::make_unique<CaptureProbe>();
+        probe->set_size(20, 20);
+        probe->set_position(10, 10);
+        auto *pprobe = probe.get();
+        root.add_child(std::move(probe));
+
+        InputDispatcher d;
+        EXPECT(d.dispatch(root, press_at(15, 15)));
+        EXPECT(pprobe->pressed);
+
+        // unsafe removal: no evict; ownership kept so the widget lives
+        auto removed = root.remove_child(pprobe);
+        EXPECT(removed != nullptr);
+
+        // move/release are not routed to the detached probe
+        EXPECT(!d.dispatch(root, move_to(15, 15)));
+        EXPECT(pprobe->moves_while_captured == 0);
+        EXPECT(!d.dispatch(root, release_at(15, 15)));
+
+        // same for a focused widget: removal drops the stale focus
+        root.add_child(std::move(removed));
+        auto key = std::make_unique<KeyProbe>();
+        key->set_size(20, 20);
+        key->set_position(50, 50);
+        auto *pkey = key.get();
+        root.add_child(std::move(key));
+        EXPECT(d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == pkey);
+        auto removed2 = root.remove_child(d.get_focus_target());
+        EXPECT(removed2 != nullptr);
+        // the next key must not dereference the detached focus target;
+        // the tree has no focusable left, so nothing happens
+        EXPECT(!d.dispatch(root, key_down(static_cast<int>(zb::input::key_code::tab))));
+        EXPECT(d.get_focus_target() == nullptr);
+    }
+
     return test::report("dispatch");
 }

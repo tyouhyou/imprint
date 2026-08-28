@@ -51,6 +51,17 @@ void FB::draw(char *b, int w, int h, int rx, int ry, int rw, int rh)
     {
         rh = screen_height - ry;
     }
+    // the same bound against the SOURCE surface: when the app surface is
+    // smaller than the panel, a region pinned to the panel edge would
+    // memcpy past the end of b (A-16)
+    if (rw > w - rx)
+    {
+        rw = w - rx;
+    }
+    if (rh > h - ry)
+    {
+        rh = h - ry;
+    }
     if (rw <= 0 || rh <= 0)
     {
         return;

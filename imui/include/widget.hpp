@@ -259,9 +259,10 @@ namespace zb::ui
         }
 
         // moves the text baseline start (e.g. a checkbox labelling to the
-        // right of its box); applied on top of the alignment (adjusted
-        // from the const draw path, so it never reports damage)
-        void set_text_offset(const core::impoint_t &off) const { text_offset_ = off; }
+        // right of its box); applied on top of the alignment. Set when
+        // the geometry that determines it changes (ctor/setters), never
+        // from the const draw path
+        void set_text_offset(const core::impoint_t &off) { text_offset_ = off; }
         void set_h_align(const h_align a)
         {
             halign = a;
@@ -567,10 +568,10 @@ namespace zb::ui
         // text
         std::u16string text_;
         core::Color text_color = core::colors::Black;
-        // layout hint applied at draw time; widgets may update it from
-        // their (const) draw path (e.g. a checkbox labelling next to its
-        // box)
-        mutable core::impoint_t text_offset_{0, 0};
+        // layout hint applied at draw time; widgets set it when the
+        // geometry that determines it changes (e.g. a checkbox label
+        // offset tracks box_size + text_gap)
+        core::impoint_t text_offset_{0, 0};
         h_align halign = h_align::left;
         v_align valign = v_align::top;
         zb::SharedPtr<GlyphProvider> primary_provider_;

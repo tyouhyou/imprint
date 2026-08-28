@@ -97,8 +97,12 @@ namespace zb::event
             // wrap-around skips 0 (INVALID_EVENT_ID) and any live id: a
             // subscriber must never collide with the "no id" sentinel nor
             // with a still-subscribed handler, however long the event lives
-            // (e.g. a long-running industrial display). The scan is O(n)
-            // but only runs on the 2^32 wraparound edge (A-11, 2026-08-28).
+            // (e.g. a long-running industrial display). The liveness scan
+            // is O(n) over the handlers and runs on EVERY subscribe (one
+            // pass in the common collision-free case); the loop only
+            // iterates more than once on the 2^32 wraparound edge. If all
+            // ids were live at once the scan would not terminate --
+            // unreachable at any realistic handler count (A-18).
             auto id_in_use = [this](const uint32_t id) -> bool
             {
                 for (const auto &e : handlers)

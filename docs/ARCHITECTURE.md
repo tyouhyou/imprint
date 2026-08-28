@@ -369,17 +369,20 @@ require an API shape change have a companion entry in
   override with the union of children; validate with a `test_dirty`
   overflow probe.
 
-- **A-11. Small correctness/hygiene items (P3, batchable) — PARTIAL DONE 2026-08-28.**
+- **A-11. Small correctness/hygiene items (P3, batchable) — DONE
+  2026-08-28.**
   - `ptr.hpp:140` non-atomic `SharedPtr::reset(nullptr)` no longer
     allocates — added `if (p==nullptr) return nullptr` in `make_count`. **DONE**
   - `imevent/event.hpp:97` `next_id` wraparound now scans live ids
     (O(n) per subscribe on wraparound edge). Comment updated. **DONE**
-  - `imuI` `Checkbox`/`RadioButton` `draw_at` mutates `mutable
-    text_offset_` from a `const` method (`widget.hpp:264`,
-    `checkbox.cpp:104`) — make the offset a layout-time value.
-  - `demo/python/myapp.py:66` and `demo/wasm/main.js:30` map only a
-    subset of keys — add `backspace/del` there; prefer `e.key` over
-    deprecated `keyCode`.
+  - `Checkbox`/`RadioButton` `draw_at` no longer mutates state: the
+    label offset is a layout-time value, set by the constructor and the
+    `box_size`/`text_gap` (`circle_size`/`text_gap`) setters via
+    `sync_text_offset()`; `text_offset_` lost its `mutable` and
+    `set_text_offset` its `const`. **DONE**
+  - `demo/python/myapp.py` maps `K_BACKSPACE`/`K_DELETE` now;
+    `demo/wasm/main.js` keys off `e.key` (not the deprecated
+    `keyCode`) with the full navigation/editing key set. **DONE**
   - `imcore/include/core/color32.hpp:9` / `CMakeLists.txt:204`
     32bpp `ENDIAN`/`RGB_MODEL` are mirror names for the same BGRA
     bytes — added equivalence comment. **DONE**
@@ -418,49 +421,34 @@ eviction handshake. None duplicates A-1..A-11.
   the review listed three, the code had two). The half-open convention
   is documented on `set_damage` and in `docs/code-contract.md` §9.
 
-- **A-14. Dispatcher cached-pointer liveness (P3, defensive).**
-  **Problem.** `InputDispatcher` holds raw `Widget*` caches
-  (`pressed_target`, `focus_target`, `modal`) and dereferences
-  `pressed_target` at `dispatcher.cpp:255`
-  (`!pressed_target->is_effectively_visible()`) *before* the null guard.
-  If a widget is removed via `Panel::remove_child` /
-  `FlexPanel::remove_child` without the documented `evict()` /
-  `CanvasWindow::remove_from` handshake and then destroyed, this is a
-  use-after-free. The contract (panel.hpp:65‑73, flex_panel.hpp:79‑87)
-  requires eviction first and `evict()` (`dispatcher.cpp:75`) does clear
-  it, so it is contract-gated — but note `handle_key` *does* re-validate
-  `focus_target` liveness (line 151) while the press path does not, an
-  inconsistency.
-  **Proposed direction.** Validate liveness on every deref (e.g.
-  `is_descendant_of(root)`), or make `Panel::remove_child` itself call
-  `evict` so the safe path is the default; align the press path with the
-  focus-path check.
-  **First step.** Add a liveness guard in `dispatch` before the
-  `pressed_target` deref; cover with a `test_dispatch` "remove while
-  pressed" case.
+- **A-14. Dispatcher cached-pointer liveness (P3, defensive) — DONE
+  2026-08-28.**
+  **Fixed.** `InputDispatcher::dispatch` probes the three cached
+  pointers (`pressed_target`, `focus_target`, `modal`) with
+  `is_descendant_of(&root)` before any other handling and drops the
+  ones that left the tree, so a `remove_child` without the evict
+  handshake no longer feeds moves/releases/keys to a detached widget.
+  A **destroyed** widget is still the caller's contract breach
+  (removal goes through `CanvasWindow::remove_from`, which evicts
+  first); the guard covers the removed-but-alive case. Covered by a
+  `test_dispatch` "removed without evict" block.
 
-- **A-15. Cross-shell wheel delta magnitude (P3, fragile).**
-  **Problem.** `imshell/src/win/main.cpp:348` sends
-  `GET_WHEEL_DELTA_WPARAM` (±120); `imshell/src/linux/main_x.cpp:260`
-  (and other shells) send `±1`. Safe only because current consumers
-  (`list_box.cpp:265`, `slider.cpp:115`) use the *sign*; a future
-  magnitude-based wheel handler breaks on one shell.
-  **Proposed direction.** Normalize wheel delta to a shell-independent
-  unit in the `InputSource` layer (part of the A-2 Presenter/InputSource
-  extraction); document the unit in `docs/code-contract.md`.
-  **First step.** Pick a canonical unit (e.g. signed "notches"), convert
-  at each shell's `send_input`, assert sign-only consumers still work.
+- **A-15. Cross-shell wheel delta magnitude (P3, fragile) — DONE
+  2026-08-28.**
+  **Fixed.** The unit is one signed notch (±1) on every shell: the
+  Win32 shell divides `GET_WHEEL_DELTA_WPARAM` by `WHEEL_DELTA`
+  (sub-notch deltas from free-spinning wheels are dropped), the X11
+  shell already sent ±1. Consumers may now rely on magnitude, not just
+  sign; the unit is documented in `docs/code-contract.md` §3.1. The
+  mapping will move into the A-2 `InputSource` extraction unchanged.
 
-- **A-16. FB source-size memcpy bound (P3, latent).**
-  **Problem.** `imshell/src/linux/fb.cpp:46‑49` clamps `rw/rh` against
-  `screen_width - rx` / `screen_height - ry`, but the source is buffer
-  `b` of width `w`; if app surface width `w` differs from panel width,
-  `rw` can exceed `w - rx` and the per-row `memcpy` reads past the
-  source. Latent (current `main_fb` matches sizes).
-  **Proposed direction.** Bound `rw/rh` against the *source* `w/h`
-  (and the destination separately); add a `test_fb` with mismatched
-  surface/panel widths.
-  **First step.** Clamp copy width to `min(screen_width - rx, w - rx)`.
+- **A-16. FB source-size memcpy bound (P3, latent) — DONE 2026-08-28.**
+  **Fixed.** `FB::draw` clamps the region against the *source*
+  dimensions as well (`rw <= w - rx`, `rh <= h - ry`), so an app
+  surface smaller than the panel can no longer read past the source
+  buffer when the region is pinned to a panel edge. Not unit-tested:
+  `FB::draw` needs a live `/dev/fb0`; the change is a three-line clamp
+  mirrored from the existing screen-side clamp.
 
 - **A-17. `font_subset` dedicated `.ui` extractor (P3, follow-up to
   A-7) — FIRST STEP DONE 2026-08-28.**
@@ -470,13 +458,10 @@ eviction handshake. None duplicates A-1..A-11.
   `extra_glyphs.py` (expected — `.ui` strings may use glyphs the app
   doesn't draw at runtime).
 
-- **A-18. `event.hpp` misleading comment (P3, hygiene).**
-  **Problem.** `imevent/include/event.hpp:100` says the live-id scan
-  "only runs on the 2^32 wraparound edge", but `while
-  (id_in_use(next_id))` is evaluated on **every** `sub()` (one O(n) scan
-  per subscription). Also theoretical: if all `2^32−1` ids were
-  simultaneously subscribed the loop never terminates (not reachable).
-  **Proposed direction.** Correct the comment to "scans live ids on
-  every subscribe; cost is O(n) over handlers"; optionally note the
-  all-subscribed non-termination as accepted.
-  **First step.** One-line comment fix; no ABI impact.
+- **A-18. `event.hpp` misleading comment (P3, hygiene) — DONE
+  2026-08-28.**
+  **Fixed.** The comment now states the truth: the live-id scan runs
+  on every subscribe (one O(n) pass over the handlers in the common
+  collision-free case); the loop only iterates more than once on the
+  2^32 wraparound edge, and the theoretical all-ids-live
+  non-termination is documented as unreachable.

@@ -229,6 +229,25 @@ namespace zb::ui
 
     bool InputDispatcher::dispatch(Widget &root, const input::input_event &ev)
     {
+        // defensive liveness (A-14): a cached widget that left the tree
+        // without the evict handshake must not be dereferenced by later
+        // events. The descendant probe catches removed-but-alive widgets
+        // (their parent chain no longer reaches the root); a DESTROYED
+        // widget is still the caller's contract breach -- removal goes
+        // through CanvasWindow::remove_from, which evicts first
+        if (pressed_target != nullptr && !pressed_target->is_descendant_of(&root))
+        {
+            pressed_target = nullptr;
+        }
+        if (focus_target != nullptr && !focus_target->is_descendant_of(&root))
+        {
+            set_focus(nullptr);
+        }
+        if (modal != nullptr && !modal->is_descendant_of(&root))
+        {
+            modal = nullptr;
+        }
+
         if (is_key(ev))
         {
             return handle_key(root, ev);
