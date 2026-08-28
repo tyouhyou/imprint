@@ -1,0 +1,162 @@
+# Tiered CI: Tier 1/2 run on every push and PR, Tier 3 (embedded/web
+# packaging + sanitizers) on the weekly schedule or manual dispatch.
+#
+# Discipline from the repo's build matrix (CONTEXT.md / README "Build"):
+#   - tests run in Debug only; Release distorts the allocation gates
+#   - USE_FONT stays out of CI (hardcoded per-platform FreeType paths,
+#     documented known limitation)
+
+name: CI
+
+on:
+  push:
+  pull_request:
+  schedule:
+    # Tier 3 full matrix, Mondays 03:00 UTC
+    - cron: '0 3 * * 1'
+  workflow_dispatch:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ---------------- Tier 1: desktop core ----------------
+
+  linux-desktop:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      - name: Configure and build
+        run: |
+          cmake -S . -B build_ci
+          cmake --build build_ci -j"$(nproc)"
+      - name: Run test suites and C-ABI smoke
+        run: |
+          ./build_ci/bin/test_imui
+          ./build_ci/bin/test_zbapi
+
+  windows-desktop:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build
+        run: |
+          cmake -S . -B build_ci -G "Visual Studio 17 2022"
+          cmake --build build_ci --config Debug
+      - name: Run test suites and C-ABI smoke
+        run: |
+          ./build_ci/bin/Debug/test_imui.exe
+          ./build_ci/bin/Debug/test_zbapi.exe
+
+  # ---------------- Tier 2: matrix variants ----------------
+
+  linux-16bpp:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      - name: Configure, build, test (COLOR_DEPTH=16)
+        run: |
+          cmake -S . -B build_ci -DCOLOR_DEPTH=16
+          cmake --build build_ci -j"$(nproc)"
+          ./build_ci/bin/test_imui
+
+  linux-codecs:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      - name: Configure, build, test (USE_PNG + USE_JPEG, vendored stb)
+        run: |
+          cmake -S . -B build_ci -DUSE_PNG=ON -DUSE_JPEG=ON
+          cmake --build build_ci -j"$(nproc)"
+          ./build_ci/bin/test_imui
+
+  linux-x11:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make libx11-dev
+      # compile-only: the CI container has no X server
+      - name: Configure and build (X11 backend)
+        run: |
+          cmake -S . -B build_ci -DIM_SHELL_BACKEND=X11
+          cmake --build build_ci -j"$(nproc)"
+
+  # ---------------- Tier 3: full matrix (weekly / manual) ----------------
+
+  nds-rom:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Cross-build the ROM (devkitARM container)
+        run: |
+          docker run --rm -v "$PWD:/src" -w /src devkitpro/devkitarm:20260610 \
+            sh -c 'cmake -S . -B build_nds_ci -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build_nds_ci'
+      - name: Check the packaged ROM exists
+        run: test -f build_nds_ci/bin/tictactoe.nds
+
+  wasm-smoke:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build browser + node targets, run the node smoke test
+        run: |
+          docker run --rm -v "$PWD:/src" emscripten/emsdk:5.0.1 \
+            sh -c 'cd /src && sh demo/wasm/build.sh && cd demo/wasm && node smoke.js'
+
+  python-host:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install pygame
+        run: pip3 install pygame
+      - name: Build the C-ABI host library
+        run: |
+          cmake -S . -B build_ci
+          cmake --build build_ci --target zbapi -j"$(nproc)"
+      - name: Headless host smoke (SDL dummy driver)
+        run: |
+          SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py \
+            --lib build_ci/lib/libzbapi.so --frames 20 | tee smoke.log
+          grep -q "ran 20 frames" smoke.log
+          grep -q "painted callback fired 1 times" smoke.log
+
+  asan:
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      - name: Configure, build, test (AddressSanitizer)
+        run: |
+          cmake -S . -B build_ci \
+            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+          cmake --build build_ci -j"$(nproc)"
+          ./build_ci/bin/test_imui
+          ./build_ci/bin/test_zbapi

@@ -49,13 +49,12 @@ __pycache__/
 demo/wasm/tictactoe.js
 demo/wasm/tictactoe.wasm
 
-# vendored 3rd-party headers (USE_FONT/USE_PNG/USE_JPEG need system dev packages instead)
+# vendored 3rd-party headers (USE_FONT needs system FreeType instead)
 /imcore/ext_lib/
 
 # internal dev docs (not published)
 /AGENTS.md
 /CONTEXT.md
-/docs/code-contract.md
 
 # OS
 Thumbs.db
