@@ -33,9 +33,17 @@ set(USE_NON_ATOMIC_PTR OFF CACHE BOOL "Switch it to ON for targets without atomi
 # ASCII range (tools/font_subset.py + tools/extra_glyphs.py). Needs
 # Python 3; without it the provider falls back to ASCII-only glyphs.
 set(FONT_SUBSET ON CACHE BOOL "Scan sources and generate the font subset table (needs Python 3).")
-if (FONT_SUBSET)
+# Font subset plan 2 (batch S2, code-contract 2.4): rasterize a TrueType
+# font into the subset at build time (tools/ttf_subset over the vendored
+# stb_truetype). Empty TTF_FONT = off, the build stays identical. Host
+# builds only, like ui_embed.
+set(TTF_FONT "" CACHE FILEPATH "TrueType font rasterized into the build-time glyph subset (plan 2). Empty = off.")
+set(TTF_PIXEL_SIZE 16 CACHE STRING "Pixel size of the rasterized TTF subset (plan 2).")
+
+set(IMCORE_HAS_SUBSET OFF)
+set(IMCORE_HAS_TTF_SUBSET OFF)
+if (FONT_SUBSET OR NOT TTF_FONT STREQUAL "")
     find_package(Python3 COMPONENTS Interpreter QUIET)
-    set(IMCORE_HAS_SUBSET OFF)
     if (Python3_Interpreter_FOUND)
         file(GLOB_RECURSE FONT_SUBSET_INPUTS CONFIGURE_DEPENDS
             ${CMAKE_SOURCE_DIR}/apps/*/src/*.cpp
@@ -44,6 +52,11 @@ if (FONT_SUBSET)
             ${CMAKE_SOURCE_DIR}/tools/examples/*.ui
             ${CMAKE_SOURCE_DIR}/apps/*/*.ui)
         file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/text)
+    endif()
+endif()
+
+if (FONT_SUBSET)
+    if (Python3_Interpreter_FOUND)
         execute_process(
             COMMAND ${Python3_EXECUTABLE}
                 ${CMAKE_CURRENT_SOURCE_DIR}/../tools/font_subset.py
@@ -59,8 +72,31 @@ if (FONT_SUBSET)
     else()
         message(STATUS "Python 3 not found: font subset generation disabled (ASCII-only glyphs)")
     endif()
-else()
-    set(IMCORE_HAS_SUBSET OFF)
+endif()
+
+if (NOT TTF_FONT STREQUAL "" AND NOT NDS_PLATFORM)
+    if (Python3_Interpreter_FOUND)
+        add_executable(ttf_subset ${CMAKE_SOURCE_DIR}/tools/ttf_subset.cpp)
+        target_include_directories(ttf_subset PRIVATE
+            ${CMAKE_SOURCE_DIR}/third_party/stb)
+        set(TTF_CODEPOINTS ${CMAKE_CURRENT_BINARY_DIR}/ttf_codepoints.txt)
+        set(TTF_GLYPHS ${CMAKE_CURRENT_BINARY_DIR}/include/text/ttf_glyphs.hpp)
+        add_custom_command(
+            OUTPUT ${TTF_GLYPHS}
+            COMMAND ${Python3_EXECUTABLE}
+                ${CMAKE_CURRENT_SOURCE_DIR}/../tools/font_subset.py
+                --codepoints-out ${TTF_CODEPOINTS}
+                ${FONT_SUBSET_INPUTS}
+            COMMAND ttf_subset ${TTF_FONT} ${TTF_PIXEL_SIZE} ${TTF_CODEPOINTS} ${TTF_GLYPHS}
+            DEPENDS ttf_subset ${FONT_SUBSET_INPUTS} ${TTF_FONT}
+            VERBATIM)
+        # the generated header listed as a source guarantees the custom
+        # command runs before the provider compiles (all generators)
+        set(TTF_SRC src/text/ttf_provider.cpp ${TTF_GLYPHS})
+        set(IMCORE_HAS_TTF_SUBSET ON)
+    else()
+        message(WARNING "TTF_FONT is set but Python 3 was not found; the TTF subset stays off")
+    endif()
 endif()
 
 if (USE_FONT)
@@ -69,6 +105,9 @@ if (USE_FONT)
     )
 else()
     set(FONT_SRC)
+endif()
+if (NOT IMCORE_HAS_TTF_SUBSET)
+    set(TTF_SRC)
 endif()
 # vendored single-file codecs: one implementation TU, compiled only when a
 # codec option is on (png.cpp/jpeg.cpp, the Image API, use stb internally)
@@ -102,6 +141,7 @@ add_library(
     src/text/bitmap_provider.cpp
     src/text/utf8.cpp
     ${FONT_SRC}
+    ${TTF_SRC}
     ${STB_SRC}
     ${JPEG_SRC}
     ${PNG_SRC}
@@ -182,6 +222,14 @@ if (IMCORE_HAS_SUBSET)
     # the generated table lives in the build dir; PUBLIC so the tests can
     # branch on the same macro the provider was compiled with
     target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_SUBSET)
+    target_include_directories(${IMCORELIB} PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}/include/text ${CMAKE_CURRENT_BINARY_DIR}/include)
+endif()
+
+if (IMCORE_HAS_TTF_SUBSET)
+    # the rasterized table (plan 2) follows the same pattern as the 5x7
+    # subset: PUBLIC macro + generated include dir
+    target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_TTF_SUBSET)
     target_include_directories(${IMCORELIB} PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}/include/text ${CMAKE_CURRENT_BINARY_DIR}/include)
 endif()

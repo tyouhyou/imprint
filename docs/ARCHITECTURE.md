@@ -231,8 +231,10 @@ satisfies. Changing any of these is an architecture change.
 - Plan 2 (batch S2): with `TTF_FONT` set, a build-time tool
   (`tools/ttf_subset`, vendored stb_truetype) rasterizes the font into a
   subset table for the code units the sources use; `TtfSubsetProvider`
-  becomes the default primary provider — legible proportional text with
-  no runtime font dependency (contract: code-contract.md §2.4).
+  is installable as a widget's primary provider through the
+  `set_glyph_provider` seam — legible proportional text with no runtime
+  font dependency, 5x7 stays the default (contract: code-contract.md
+  §2.4).
 - `USE_FONT` (FreeType) is optional and currently links through hardcoded
   per-platform paths — a known limitation, not a porting example.
 

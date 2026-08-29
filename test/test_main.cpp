@@ -47,6 +47,9 @@ int test_win_input();
 #if defined(IM_TEST_X11_INPUT)
 int test_x11_input();
 #endif
+#if defined(IMCORE_HAS_TTF_SUBSET)
+int test_ttf_subset();
+#endif
 
 int main()
 {
@@ -96,6 +99,9 @@ int main()
 #endif
 #if defined(IM_TEST_X11_INPUT)
     total += test_x11_input();
+#endif
+#if defined(IMCORE_HAS_TTF_SUBSET)
+    total += test_ttf_subset();
 #endif
 
     if (total)

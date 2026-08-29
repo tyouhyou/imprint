@@ -13,6 +13,12 @@ draw at runtime.
 
 Usage:
   font_subset.py --extras <table.py> --out <header.hpp> [source...]
+  font_subset.py --codepoints-out <list.txt> [source...]
+
+The first form generates the 5x7 subset header (plan 1). The second
+writes the sorted list of code units (decimal, one per line, ASCII and
+above, BMP only) the sources use — the input of the build-time TTF
+rasterizer (tools/ttf_subset, plan 2); it needs no hand-drawn table.
 
 The generator never fails the build: a missing Python or a scan failure
 falls back to an ASCII-only table.
@@ -29,8 +35,8 @@ _STRING_LITERAL = re.compile(r'"(?:[^"\\]|\\.)*"')
 _SOURCES = (".cpp", ".hpp", ".c", ".h", ".cc", ".hh", ".ui")
 
 
-def scan_ui_file(path):
-    """Yields non-ASCII code units from text= and items= attributes in .ui file."""
+def scan_ui_file(path, min_cp=128):
+    """Yields code units >= min_cp from text= and items= attributes in .ui file."""
     try:
         with open(path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -61,13 +67,13 @@ def scan_ui_file(path):
             val = raw.replace('\\"', '"').replace('\\\\', '\\')
             for ch in val:
                 cp = ord(ch)
-                if cp >= 128:
+                if cp >= min_cp:
                     found.add(cp)
     return found
 
 
-def scan_literals(path):
-    """Yields the non-ASCII code units found in the file's string literals."""
+def scan_literals(path, min_cp=128):
+    """Yields the code units >= min_cp found in the file's string literals."""
     try:
         with open(path, "rb") as f:
             data = f.read()
@@ -119,10 +125,10 @@ def scan_literals(path):
                 bytes_out += c.encode("utf-8")
                 i += 1
         for ch in bytes(bytes_out).decode("utf-8", errors="ignore"):
-            if ord(ch) >= 128:
+            if ord(ch) >= min_cp:
                 found.add(ord(ch))
         for ch in units:
-            if ord(ch) >= 128:
+            if ord(ch) >= min_cp:
                 found.add(ord(ch))
     return found
 
@@ -148,27 +154,57 @@ def load_extras(path):
     return namespace["EXTRA_GLYPHS"]
 
 
+def write_atomic(path, body_bytes):
+    tmp_path = path + ".tmp"
+    with open(tmp_path, "wb") as f:
+        f.write(body_bytes)
+    if not os.path.exists(path) or open(path, "rb").read() != body_bytes:
+        os.replace(tmp_path, path)
+    else:
+        os.unlink(tmp_path)
+
+
 def main():
     parser = argparse.ArgumentParser(description="imprint font subset generator")
-    parser.add_argument("--extras", required=True, help="hand-drawn glyph table (.py)")
-    parser.add_argument("--out", required=True, help="generated header path")
+    parser.add_argument("--extras", help="hand-drawn glyph table (.py); required with --out")
+    parser.add_argument("--out", help="generated header path (plan 1)")
+    parser.add_argument("--codepoints-out",
+                        help="write the used code units (decimal, one per line) for the TTF rasterizer (plan 2)")
     parser.add_argument("sources", nargs="*", help="source files or directories")
     args = parser.parse_args()
 
-    extras = load_extras(args.extras)
-    extras_by_cp = {ord(ch): rows for ch, rows in extras.items()}
+    if args.out and not args.extras:
+        parser.error("--out requires --extras")
+    if not args.out and not args.codepoints_out:
+        parser.error("nothing to do: pass --out and/or --codepoints-out")
+
+    # the TTF list needs every drawable unit (ASCII included); the 5x7
+    # header only adds non-ASCII units beyond the built-in range
+    threshold = 32 if args.codepoints_out else 128
 
     used = set()      # string literals in the sources
     ui_used = set()   # text=/items= attributes in .ui files
     for path in collect_sources(args.sources):
         if path.endswith(".ui"):
-            ui_used |= scan_ui_file(path)
+            ui_used |= scan_ui_file(path, threshold)
         else:
-            used |= scan_literals(path)
+            used |= scan_literals(path, threshold)
+
+    if args.codepoints_out:
+        # BMP only: the runtime text model addresses char16_t units
+        selected = sorted(cp for cp in used | ui_used if cp <= 0xFFFF)
+        body = "\n".join(str(cp) for cp in selected) + "\n"
+        write_atomic(args.codepoints_out, body.encode("utf-8"))
+
+    if not args.out:
+        return
+
+    extras = load_extras(args.extras)
+    extras_by_cp = {ord(ch): rows for ch, rows in extras.items()}
 
     # warn only about source literals: a .ui string may legitimately use
-    # a glyph the app never draws at runtime (A-17)
-    missing = sorted(cp for cp in used if cp not in extras_by_cp)
+    # a glyph the app never draws at runtime (A-17); ASCII is built in
+    missing = sorted(cp for cp in used if cp >= 128 and cp not in extras_by_cp)
     if missing:
         sys.stderr.write(
             "font_subset: sources use code units not drawn in %s: %s\n"
@@ -204,15 +240,7 @@ def main():
     lines.append("}")
     lines.append("")
 
-    body = "\n".join(lines)
-    out_path = args.out
-    tmp_path = out_path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8", newline="\n") as f:
-        f.write(body)
-    if not os.path.exists(out_path) or open(out_path, "rb").read() != open(tmp_path, "rb").read():
-        os.replace(tmp_path, out_path)
-    else:
-        os.unlink(tmp_path)
+    write_atomic(args.out, ("\n".join(lines) + "\n").encode("utf-8"))
 
 
 if __name__ == "__main__":

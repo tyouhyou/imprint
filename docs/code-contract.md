@@ -179,12 +179,14 @@ defined. Contract:
   `TTF_PIXEL_SIZE` from the font given in `TTF_FONT` and writes the
   table — sorted by code unit for binary search, per-glyph metrics
   plus 8-bit coverage bytes, line metrics as constants.
-- Runtime: `TtfSubsetProvider` (a stateless `GlyphProvider`) is the
-  widgets' default primary provider when the table is compiled in —
-  the same selection-point-only conditional rule as `USE_FONT`; the
-  fallback chain is unchanged (units absent from the table fall back
-  to the 5x7 bitmap provider, then skip). `make_text_image` picks the
-  same default provider, so ListBox row text matches widget text.
+- Runtime: compiling the table in provides `TtfSubsetProvider` (a
+  stateless `GlyphProvider`) plus `ttf_subset_provider()`, which
+  returns the shared instance; widgets opt in through the existing
+  `set_glyph_provider` seam — the same selection-point-only
+  conditional rule as `USE_FONT`. Default rendering stays 5x7 unless
+  a widget installs the provider, and the fallback chain is unchanged
+  (units absent from the table fall back to the 5x7 bitmap provider,
+  then skip). `make_text_image` stays bitmap-backed.
 - Tolerance: a code unit the font does not contain produces a build
   warning and is omitted from the table — it falls back through the
   bitmap chain at runtime, never an error. `TTF_FONT` empty (the
