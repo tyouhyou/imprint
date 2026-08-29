@@ -45,9 +45,9 @@ int Image::write_jpeg(
                 break;
 
             auto cd = dat[cur_row * gsize.width + i];
-            row.push_back(cd.rgb.r);
-            row.push_back(cd.rgb.g);
-            row.push_back(cd.rgb.b);
+            row.push_back(cd.r());
+            row.push_back(cd.g());
+            row.push_back(cd.b());
         }
         cur_row++;
         return true;

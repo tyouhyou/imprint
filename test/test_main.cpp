@@ -37,6 +37,7 @@ int test_alloc_guard();
 int test_perf_walk();
 int test_raster_damage();
 int test_pixel_convert();
+int test_pixel_traits();
 int test_shell_presenter();
 int test_theme();
 
@@ -86,6 +87,7 @@ int main()
     total += test_perf_walk();
     total += test_raster_damage();
     total += test_pixel_convert();
+    total += test_pixel_traits();
     total += test_shell_presenter();
     total += test_theme();
 

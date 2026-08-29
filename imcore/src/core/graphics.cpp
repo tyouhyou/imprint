@@ -278,16 +278,16 @@ void Graphics::draw_pixel(int x, int y, const Color &colr)
 
 Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
 {
-    const uint32_t alpha = front_color.rgb.a;
+    const uint32_t alpha = front_color.a();
     if (alpha <= 0)
     {
         return back_color;
     }
-    if constexpr (ImColor_Depth == 16)
+    if constexpr (!Color::per_channel_blend)
     {
-        // color16 carries a single alpha bit: opacity is binary. The
-        // 8-bit blend math below would treat the bit as a 1/255 weight
-        // and make every covered pixel nearly transparent
+        // a single alpha bit: opacity is binary. The 8-bit blend math
+        // below would treat the bit as a 1/255 weight and make every
+        // covered pixel nearly transparent
         return front_color;
     }
     if (alpha >= 0xFF)
@@ -297,10 +297,10 @@ Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
 
     const uint32_t inv_alpha = 0xFF - alpha;
     Color rst{};
-    rst.rgb.r = (uint8_t)((front_color.rgb.r * alpha + back_color.rgb.r * inv_alpha) / 0xFF);
-    rst.rgb.g = (uint8_t)((front_color.rgb.g * alpha + back_color.rgb.g * inv_alpha) / 0xFF);
-    rst.rgb.b = (uint8_t)((front_color.rgb.b * alpha + back_color.rgb.b * inv_alpha) / 0xFF);
-    rst.rgb.a = (uint8_t)(alpha + back_color.rgb.a * inv_alpha / 0xFF); // source-over alpha
+    rst.set_r((uint8_t)((front_color.r() * alpha + back_color.r() * inv_alpha) / 0xFF));
+    rst.set_g((uint8_t)((front_color.g() * alpha + back_color.g() * inv_alpha) / 0xFF));
+    rst.set_b((uint8_t)((front_color.b() * alpha + back_color.b() * inv_alpha) / 0xFF));
+    rst.set_a((uint8_t)(alpha + back_color.a() * inv_alpha / 0xFF));  // source-over alpha
     return rst;
 }
 

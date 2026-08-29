@@ -79,9 +79,9 @@ namespace
 #if defined(USE_JPEG) && COLOR_DEPTH == 32
     void channels(const Color &c, int &r, int &g, int &b)
     {
-        r = c.rgb.r;
-        g = c.rgb.g;
-        b = c.rgb.b;
+        r = c.r();
+        g = c.g();
+        b = c.b();
     }
 #endif
 } // namespace

@@ -41,6 +41,7 @@ add_executable(
     test_perf_walk.cpp
     test_raster_damage.cpp
     test_pixel_convert.cpp
+    test_pixel_traits.cpp
     test_shell_presenter.cpp
     test_theme.cpp
 )

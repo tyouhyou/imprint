@@ -51,18 +51,18 @@ namespace zb::ui::core
                 // 255), so the 5-bit channel is recovered and replicated
                 // to 6 bits -- full green stays full green (a plain >>2
                 // would cap it at 62/63)
-                const uint16_t r = static_cast<uint16_t>(src[i].rgb.r >> 3);
+                const uint16_t r = static_cast<uint16_t>(src[i].r() >> 3);
                 uint16_t g;
                 if constexpr (ImColor_Depth == 16)
                 {
-                    const uint16_t g5 = static_cast<uint16_t>(src[i].rgb.g >> 3);
+                    const uint16_t g5 = static_cast<uint16_t>(src[i].g() >> 3);
                     g = static_cast<uint16_t>((g5 << 1) | (g5 >> 4));
                 }
                 else
                 {
-                    g = static_cast<uint16_t>(src[i].rgb.g >> 2);
+                    g = static_cast<uint16_t>(src[i].g() >> 2);
                 }
-                const uint16_t b = static_cast<uint16_t>(src[i].rgb.b >> 3);
+                const uint16_t b = static_cast<uint16_t>(src[i].b() >> 3);
                 const uint16_t px = static_cast<uint16_t>((r << 11) | (g << 5) | b);
                 // little-endian 16-bit word: low byte first
                 dst[i * 2] = static_cast<uint8_t>(px & 0xFF);

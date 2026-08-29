@@ -208,7 +208,7 @@ void Font::draw_alphamap(
     for (int i = 0; i < len; i++)
     {
         Color c = front_color;
-        c.rgb.a = img[i];
+        c.set_a(img[i]);
         _alphamap_color_map[i] = c;
     }
     auto bak_alpha = g.is_alpha_enabled();

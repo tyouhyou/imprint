@@ -133,10 +133,10 @@ int test_graphics()
         g->fill(core::colors::Black);
         g->enable_alpha(true);
         core::Color cover = core::colors::White;
-        cover.rgb.a = 255;  // collapses to the single alpha bit
+        cover.set_a(255);  // collapses to the single alpha bit
         g->draw_pixel(1, 1, cover);
         core::Color clear = core::colors::White;
-        clear.rgb.a = 0;
+        clear.set_a(0);
         g->draw_pixel(2, 2, clear);
         EXPECT(test::pixel_at(*g, 1, 1) == core::colors::White.pixel);
         EXPECT(test::pixel_at(*g, 2, 2) == core::colors::Black.pixel);

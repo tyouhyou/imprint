@@ -204,16 +204,16 @@ int Image::write_png(
                 break;
 
             auto cd = dat[cur_row * gsize.width + i];
-            row.push_back(cd.rgb.r);
-            row.push_back(cd.rgb.g);
-            row.push_back(cd.rgb.b);
+            row.push_back(cd.r());
+            row.push_back(cd.g());
+            row.push_back(cd.b());
 #if COLOR_DEPTH == 16
             // color16's single alpha bit must expand to full opacity, not
             // the byte 0/1: a 16bpp screenshot was ~fully transparent
-            row.push_back(cd.rgb.a != 0 ? 0xFF : 0x00);
+            row.push_back(cd.a() != 0 ? 0xFF : 0x00);
 #else
             // 32bpp alpha is already a full byte: keep it, PNG is lossless
-            row.push_back(cd.rgb.a);
+            row.push_back(cd.a());
 #endif
         }
         cur_row++;

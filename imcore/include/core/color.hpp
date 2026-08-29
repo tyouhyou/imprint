@@ -1,17 +1,14 @@
 #pragma once
 
-#include "color_config.hpp"
-
-#if COLOR_DEPTH == 32
-#include "color32.hpp"
-#elif COLOR_DEPTH == 16
-#include "color16.hpp"
-#endif
+#include "pixel_traits.hpp"
 
 namespace zb::ui::core
 {
     constexpr int ImColor_Depth = COLOR_DEPTH;
-    typedef MAKECOLORTYPENAME(COLOR_DEPTH) Color;
+
+    // the build's pixel type: the COLOR_DEPTH x RGB_MODEL x ENDIAN
+    // matrix selected as compile-time traits (A-19, ARCHITECTURE.md §4.4)
+    using Color = basic_color<IM_PIXEL_TRAITS(RGB_MODEL, ENDIAN)>;
 
     namespace colors
     {
