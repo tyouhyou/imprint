@@ -306,93 +306,9 @@ it needs, and there is no runtime backend switching.
 
 ## 6. Architecture backlog
 
-Items from the 2026-08-23 read-only architecture review. Status: **open** —
-recorded risks and proposed directions, not scheduled work.
-
-### A-1. Pixel-format / presentation seam (highest priority for expansion) — DONE 2026-08-28
-
-**Resolution.** The seam landed in three steps, all contract-first:
-1. §4.4 seam rule + `code-contract.md` §3 converter contract;
-2. `core/pixel_convert` — `panel_format{native,bgr565}`,
-   `panel_pixel_bytes`, `convert_row` (one definition for every
-   COLOR_DEPTH; the bgr565 green pack adapts per depth, silent
-   rejection), locked by the 35th suite `test_pixel_convert`;
-3. the FB shell — its validation case below — now detects the panel
-   from the vinfo: byte-equal panels keep the memcpy fast path, RGB565
-   panels go through one `convert_row` per row, unknown layouts refuse
-   to present instead of corrupting. CI Tier2 gained a `linux-fb`
-   compile job (the FB backend was never compiled in CI before).
-Verification limit: no FB hardware in CI — the convert path is
-compile-gated plus unit-covered at the converter level, not run
-against a panel. A new panel format now adds one enum value, one
-`convert_row` branch and (optionally) one shell detection clause — no
-kernel matrix entry. Dithering remains a future converter option.
-
-- **Problem.** The pixel memory model is a global compile-time macro matrix
-  (`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) that the rasterizer, the shells,
-  and the C-ABI buffer contract all share. Every new embedded display
-  format (RGB565, BGR565, RGB888, grayscale e-ink, 12-bit, different
-  endianness) currently means new `#elif` branches in `color*.hpp`, new
-  CMake matrix entries, new blend behavior (16bpp is *one* abgr1555 model),
-  and updates to every shell + the C-ABI format documentation.
-- **Impact.** Each new target multiplies build/test matrix cells and forks
-  logic across headers and shells; the byte layout also occupies stable C-ABI
-  real estate. The framework has runtime seams for almost everything else
-  (`GlyphProvider`, `Event`, `IApp`) but the pixel boundary is still
-  "everything in the kernel".
-- **Proposed direction.** Introduce a presentation seam: keep one internal
-  buffer format and add a small conversion stage at the presentation edge
-  (shell or binding) that writes the panel's format (row-conversion,
-  optional dithering). New panel formats then implement the converter once
-  instead of forking the kernel. The C-ABI could later report the format via
-  a new export instead of build-time-only documentation. (That query is
-  done — `zb_buffer_format`, batch K / D7.)
-- **First step for a good test case.** Linux FB panels frequently expose
-  RGB565 — coverting `fb.cpp`'s wrap-around blit to go through one
-  `convert_row(format, ...)` would validate the seam against a real target.
-
-### A-2. Shared shell presenter / input-mapper abstraction — DONE 2026-08-29
-
-**Resolution.** Landed as the `shell/` seams inside imshell, contract-first
-(`code-contract.md` §3):
-- `region_to_present` — the shared "what do I blit" decision (the app's
-  dirty region when it drew something, the whole buffer otherwise,
-  nothing when the frame drew nothing);
-- `dirty_coalescer` — the union of painted callbacks for presenters whose
-  platform batches invalidations (win `WM_PAINT`); platforms that union
-  for themselves (mac `setNeedsDisplayInRect`, x11 immediate) present
-  straight away;
-- `feed_input` — the shared input tail (feed the app, repaint when owed);
-- per-platform translators `win_input::translate` / `x11_input::translate`
-  (and the mac NSEvent mapping) centralize the `key_code` tables and return
-  handled / swallowed / not-handled; they are pure — no window, no server,
-  no display — so dummy-driven suites (`test_shell_presenter`,
-  `test_win_input`, `test_x11_input`) lock them with synthetic messages
-  and XEvents.
-The win/x11/fb shells were rewired onto the seams; the mac shell (A-20)
-was built on them as its validation case. The NDS shell keeps its own
-loop (idle-poll; migrating it is cosmetic). Deliberately NOT extracted:
-the fb mmap/msync blit (device glue; A-1 already owns its row conversion)
-and NDS VRAM/DMA. Two behavior fixes fell out of the extraction: the win
-empty-painted path no longer drops already-coalesced regions, and the
-pending region is cleared after the present (no stale over-blit).
-
-- **Problem.** Every shell re-implements the same jobs differently: present
-  (Win32 `SetDIBitsToDevice` hard-coded 32bpp, X11 `XCreateImage`+`XPutImage`,
-  FB row-memcpy+`msync`, NDS `dmaCopy` to VRAM), region tracking, and input
-  mapping (wheel delta: Win32 `GET_WHEEL_DELTA` vs X11 button4/5 ±1; the
-  `send_input` "paint after input when dirty" helper was added twice across
-  reviews). NDS additionally hard-codes `256×192`, one VRAM bank, and DMA.
-- **Impact.** Each new target is a whole new shell (event loop + blit +
-  input mapping + packaging) with duplicated, subtly divergent logic;
-  embedded panels (SPI, e-paper, tiled, rotated) would each be hand-rolled.
-- **Proposed direction.** Extract two small interfaces used by all shells:
-  a `Presenter` (buffer format + region blit + optional dirty-region
-  protocol) and an `InputSource` (physical pointer/key/touch →
-  `input_event`, centralizing `key_code` mapping). A new embedded target
-  then implements ~100–200 lines instead of a shell.
-- **Related.** A-1 (the presenter is where the pixel conversion lives) and
-  A-3 (target attributes must not be baked into a single shell).
+Open items from the architecture reviews of 2026-08-23 .. 2026-08-29.
+Completed items are removed from this list once done — the A-numbering
+is stable, so gaps are finished work; the record lives in `git log`.
 
 ### A-4. Smaller items
 
@@ -405,319 +321,54 @@ pending region is cleared after the present (no stale over-blit).
   library (needed for host loading on Linux) yet is used as an embedded
   component in ROMs. This is intentional but is another axis new targets
   must handle; a packaging abstraction would help.
-- **A-4.3 Present logic duplication.** The region-present logic exists in
-  every shell with different edge cases; A-2's `Presenter` should absorb it.
 
-### A-5..A-11. Backlog from 2026-08-28 Muse review (prioritized)
+### A-19. Kernel pixel model as compile-time pixel traits (condition-triggered)
 
-Source: `reports/codereview_muse_20260828.md`. Items are **open, not
-scheduled**; priority is P0 (ship-blocker) → P3 (hygiene). Facts that
-require an API shape change have a companion entry in
-`docs/code-contract.md`.
+Proposal: re-express the §4.4 macro matrix
+(`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) as `constexpr` pixel traits
+(bit width, channel shifts, blend policy) selected at compile time.
+**Runtime-neutral.** This is compile-time dispatch: exactly one
+instantiation per build, the same machine code the macro switch
+produces — the embedded rationale (no runtime format conversion) is
+unaffected, and the NDS build already leans on the same technique
+(`Event<T...>`, `zb::SharedPtr<T>`). The real costs are compile time
+and a one-time refactor of `color*.hpp` plus the CMake option
+plumbing. **Trigger.** Do not start on spec. Act only when the macro
+matrix is about to grow for a need the presentation seam (§4.4) cannot
+absorb — a genuinely new *kernel-internal* format, not a new panel
+format (those are converters). Until then the macro matrix is the
+cheaper representation.
 
-- **A-5. Shell repaint divergence — Win `WM_CHAR` bypass (P0) — DONE 2026-08-28.**
-  **Fixed.** `imshell/src/win/main.cpp:283` now routes `WM_CHAR` through
-  `send_input()` so the dirty→paint→present chain runs. Verified by
-  desktop build.
+### A-21. Retire the non-atomic `SharedPtr` branch (condition-triggered)
 
-- **A-6. Header-guard typo — `iminput` (P1, hygiene but blocks
-  future includes) — DONE 2026-08-28.**
-  **Fixed.** `iminput/include/input.hpp` guard renamed from
-  `IMEVENT_INPUT_HPP` to `IMINPUT_INPUT_HPP`. No ABI impact.
+Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr`
+is an alias); the ~150-line non-atomic implementation exists only for
+targets without atomics (NDS ARM9: devkitARM ships no libatomic). Its
+semantics are locked by `test_ptr.cpp` (compiled against the custom
+branch on the host) and the CI non-atomic matrix job runs the whole
+battery against it. **What is deferred:** collapsing the duality —
+either `std::shared_ptr` on the NDS too (needs a toolchain decision:
+`__atomic` support on arm926ej-s / shipping a libatomic) or an
+intrusive refcount owned by the objects themselves. Both are
+ABI-adjacent changes with no current payoff. **Trigger.** Act when the
+custom branch needs a real fix again, or when a second non-atomic
+target appears; until then the tests keep it cheap to carry.
 
-- **A-7. `FONT_SUBSET` source scan omits `.ui` documents (P2) — DONE 2026-08-28.**
-  **Fixed.** `imcore/CMakeLists.txt:40` glob extended to `*.ui` (CMake done
-  in 6c76e66). `tools/font_subset.py` now has `scan_ui_file()` that
-  extracts `text="…"` and `items="…"` attributes, handling line
-  continuations and escapes. Non-ASCII `.ui` strings now reach the subset
-  generator; undrawn glyphs still warn (fallback remains ASCII-only).
+### A-23. Selective build/package switches (condition-triggered)
 
-- **A-8. `USE_FONT` text path hidden allocation (P2) — DONE 2026-08-28.**
-  **Fixed.** `imcore/src/text/font.cpp:190` `draw_alphamap` now reserves
-  capacity before resize; steady-state repaints allocate zero. Added
-  `USE_FONT` variant to `test_alloc_guard` (scenario 5).
+The whole tree always configures and builds; there is no
+`IMPRINT_WITH_*` switch to trim the configure. Binary granularity is
+already right — static linking drops unreferenced objects, the Linux
+host ships only `libimcore.so` + `zbapi.so`, the NDS ROM is fully
+static — and `zbapi.so` statically embeds imui + the story app, which
+is inherent to the current C-ABI contract (a foreign host drives a
+whole app). **Trigger.** Add configure-time module switches only when
+a real distribution case appears that must ship or withhold specific
+modules at configure time; until then the whole-tree build is the
+cheaper representation.
 
-- **A-9. `ListBox` row-cache key omits content (P2) — CLOSED
-  2026-08-28 (contract-documented).**
-  **Resolution.** The invalidation duty is the API contract, not a bug:
-  `docs/code-contract.md` §8 ("ListBox 动态模型失效") binds callers to
-  call a setter (e.g. `set_item_text` with the same args) after dynamic
-  `ItemText` content changes, and the `ListBox` class doc restates it.
-  A fine-grained `touch_row(row)` stays deferred until a consumer needs
-  it; the contract clause names the convergence point.
+### Unscheduled design debt (batch K triage)
 
-- **A-10. Damage culling over-prunes overflow children (P2) — CLOSED
-  2026-08-28 (not reachable in the current render model).**
-  **Resolution.** The prune is provably safe: `Widget::draw` clips
-  drawing to the widget's own rect (`clip_safe`) *before* descending,
-  so a widget's visible contribution is always a subset of its own
-  bounds (and of every ancestor's). `parent ∩ damage = ∅` therefore
-  implies no descendant pixel could show inside the damage, and the
-  subtree prune hides nothing a full frame would draw. The "overflow
-  children" named by the review (negative positions, Dialog mask,
-  explicit overflow) are clipped to invisibility on full frames too —
-  the Dialog mask fills its own size only. `test_dirty` pins the
-  invariant in both directions: an overflow child repaints its
-  in-bounds sliver on a partial repaint (the prune does not over-cull
-  it), and a fully-outside child stays invisible even when damaged.
-  The proposed `damage_bounds()` machinery was rejected as fixing an
-  unobservable problem. If a future feature renders children outside
-  their parent's clip (e.g. an `overflow: visible` mode), the prune
-  must be revisited in the same change — see `docs/code-contract.md`
-  §9.
-
-- **A-11. Small correctness/hygiene items (P3, batchable) — DONE
-  2026-08-28.**
-  - `ptr.hpp:140` non-atomic `SharedPtr::reset(nullptr)` no longer
-    allocates — added `if (p==nullptr) return nullptr` in `make_count`. **DONE**
-  - `imevent/event.hpp:97` `next_id` wraparound now scans live ids
-    (O(n) per subscribe on wraparound edge). Comment updated. **DONE**
-  - `Checkbox`/`RadioButton` `draw_at` no longer mutates state: the
-    label offset is a layout-time value, set by the constructor and the
-    `box_size`/`text_gap` (`circle_size`/`text_gap`) setters via
-    `sync_text_offset()`; `text_offset_` lost its `mutable` and
-    `set_text_offset` its `const`. **DONE**
-  - `demo/python/myapp.py` maps `K_BACKSPACE`/`K_DELETE` now;
-    `demo/wasm/main.js` keys off `e.key` (not the deprecated
-    `keyCode`) with the full navigation/editing key set. **DONE**
-  - `imcore/include/core/color32.hpp:9` / `CMakeLists.txt:204`
-    32bpp `ENDIAN`/`RGB_MODEL` are mirror names for the same BGRA
-    bytes — added equivalence comment. **DONE**
-
-### A-12..A-18. Backlog from 2026-08-28 hy3 review (prioritized)
-
-Source: `reports/codereview_hy3_20260828.md`. Items are **open, not
-scheduled**; priority is P0 (ship-blocker) → P3 (hygiene). These are
-**not** reachable on the normal `CanvasWindow::paint → clip_safe →
-widget::paint` path today — `clip_safe` (`graphics.cpp:104`) intersects
-the draw area to the damage rect and refuses a degenerate clip, which
-masks A-12/A-13. They become real for any direct `Graphics` draw under
-`damage_on_` (host-side draw, future code path) or for a missed
-eviction handshake. None duplicates A-1..A-11.
-
-- **A-12. Damage hard-clip off-by-one + `fill()` underflow (P2) — DONE
-  2026-08-28.**
-  **Fixed.** `draw_pixel` clips through the `damage_contains` predicate
-  (A-13): the half-open rect means `sx == damage_r_` / `sy == damage_b_`
-  are outside, so the boundary column/row is no longer written. `fill`
-  intersects the inclusive draw area with `[l, r-1] x [t, b-1]` and
-  returns early on a degenerate result, so a draw area that does not
-  intersect the damage rect no longer produces `start > end` and a
-  negative width fed to `fill_n`. Covered by the new `test_raster_damage`
-  suite (direct `Graphics` probes under `damage_on`, bypassing
-  `clip_safe`): exclusive-edge rejection, partial-overlap clipping,
-  non-intersecting no-op, degenerate rect, `draw_image` delegation.
-
-- **A-13. Split damage/draw-area clip conventions (P2, root cause of
-  A-12) — DONE 2026-08-28.**
-  **Fixed.** One canonical point where the half-open damage rect and the
-  inclusive draw area meet: `Graphics::damage_contains(x, y)`
-  (`graphics.hpp`). `draw_pixel` uses it directly; `fill` derives its
-  clamp from the same bounds; `draw_image` delegates per pixel to
-  `draw_pixel` and inherits the clip (it never had its own clamp site —
-  the review listed three, the code had two). The half-open convention
-  is documented on `set_damage` and in `docs/code-contract.md` §9.
-
-- **A-14. Dispatcher cached-pointer liveness (P3, defensive) — DONE
-  2026-08-28.**
-  **Fixed.** `InputDispatcher::dispatch` probes the three cached
-  pointers (`pressed_target`, `focus_target`, `modal`) with
-  `is_descendant_of(&root)` before any other handling and drops the
-  ones that left the tree, so a `remove_child` without the evict
-  handshake no longer feeds moves/releases/keys to a detached widget.
-  A **destroyed** widget is still the caller's contract breach
-  (removal goes through `CanvasWindow::remove_from`, which evicts
-  first); the guard covers the removed-but-alive case. Covered by a
-  `test_dispatch` "removed without evict" block.
-
-- **A-15. Cross-shell wheel delta magnitude (P3, fragile) — DONE
-  2026-08-28.**
-  **Fixed.** The unit is one signed notch (±1) on every shell: the
-  Win32 shell divides `GET_WHEEL_DELTA_WPARAM` by `WHEEL_DELTA`
-  (sub-notch deltas from free-spinning wheels are dropped), the X11
-  shell already sent ±1. Consumers may now rely on magnitude, not just
-  sign; the unit is documented in `docs/code-contract.md` §3.1. The
-  mapping will move into the A-2 `InputSource` extraction unchanged.
-
-- **A-16. FB source-size memcpy bound (P3, latent) — DONE 2026-08-28.**
-  **Fixed.** `FB::draw` clamps the region against the *source*
-  dimensions as well (`rw <= w - rx`, `rh <= h - ry`), so an app
-  surface smaller than the panel can no longer read past the source
-  buffer when the region is pinned to a panel edge. Not unit-tested:
-  `FB::draw` needs a live `/dev/fb0`; the change is a three-line clamp
-  mirrored from the existing screen-side clamp.
-
-- **A-17. `font_subset` dedicated `.ui` extractor (P3, follow-up to
-  A-7) — DONE 2026-08-28.**
-  **Done.** `tools/font_subset.py` has `scan_ui_file()` that parses
-  `text="…"` / `items="…"` explicitly (no generic regex), and
-  `.ui`-sourced code units no longer trigger the "not drawn" warning
-  (a design file may carry strings the app never draws at runtime);
-  they still participate in the generated subset. Source literals keep
-  warning as before.
-
-- **A-18. `event.hpp` misleading comment (P3, hygiene) — DONE
-  2026-08-28.**
-  **Fixed.** The comment now states the truth: the live-id scan runs
-  on every subscribe (one O(n) pass over the handlers in the common
-  collision-free case); the loop only iterates more than once on the
-  2^32 wraparound edge, and the theoretical all-ids-live
-  non-termination is documented as unreachable.
-
-### Batch K from the 2026-08-28 nemotron3 review — triaged 2026-08-28
-
-Source: `reports/codereview_nemotron3_2026-08-28.md` (N1..N10
-implementation items, D1..D10 architecture debt). Implementation items
-are disposed below; the debt items are recorded, not scheduled.
-
-- **K-N1. `draw_image(image_t)` row_stride lower bound — DONE
-  2026-08-28.**
-  **Fixed.** `Graphics::draw_image(const image_t &)` rejects a
-  malformed view (`pixels == nullptr`, or an explicit `row_stride`
-  below `width` — rows would overlap) instead of reading past each row;
-  nothing is drawn, matching the silent-rejection convention of the
-  other `Graphics` bounds checks. The contract is documented on
-  `image_t` (`imcore/include/core/image_view.hpp`) and covered by a
-  `test_raster_damage` block.
-- **K-N2. Flex wrap ignores flex children's main demand — CLOSED
-  (by design, documented).** Flex children contribute 0 to the wrap
-  decision and absorb the leftover line space; shares are clamped at
-  0, so no overflow is possible. Semantics documented in
-  `docs/code-contract.md` §3.
-- **K-N3. Cross-axis uses `measure()` for flex children — CLOSED
-  (by design, documented).** Text never wraps in this framework, so a
-  content-derived cross size cannot overflow; this matches the CSS
-  default (no stretch). Same contract bullet as K-N2.
-- **K-N4. Row-cache key carries the absolute row index — CLOSED
-  (contract-documented).** Inserting/removing rows invalidates every
-  later row's cache entry; the caller re-triggers a full rebuild with
-  any setter. Added to the A-9 clause in `docs/code-contract.md` §8.
-- **K-N5. `TextInput` drops non-ASCII `ch` — CLOSED (contracted).**
-  The `ch` channel is ASCII by contract with UTF-32 as the stated
-  future extension (`docs/code-contract.md` §3.1); IME composition is
-  out of scope for this framework.
-- **K-N6. `input()` is `noexcept` across user handlers — CLOSED
-  (contracted).** Contract §1.5 already forbids throwing handlers;
-  termination on violation is the intended consequence, same as a
-  destroyed-widget breach.
-- **K-N7. `Dialog::layout` leaves the frame's layout flag set — DONE
-  2026-08-28.** **Fixed.** The dialog bypasses the frame's
-  `Panel::layout` by design (its linear placement would overwrite the
-  dialog geometry), so `Dialog::layout` now clears the frame's flag
-  itself. `Dialog::get_frame()` exposes the panel; `test_dialog`
-  asserts the flag clears under auto layout.
-- **K-N8. Explicit zero geometry dropped by the builder — DONE
-  2026-08-28.** **Fixed.** `apply_common` gates `width`/`height`/
-  `pos_x`/`pos_y` on property presence, not value; a declared 0 is an
-  explicit value. Covered by a `test_builder` block; contract bullet
-  in §4.
-- **K-N9. Integer `id=` silently dropped — DONE 2026-08-28.**
-  **Fixed.** The `.ui` parser accepts an unquoted integer id and
-  stores its decimal string; `docs/design-file.md` carries the grammar
-  note, `test_ui_file` the regression.
-- **K-N10. `zb_buffer` pointer lifetime — DONE 2026-08-28.**
-  **Documented.** `zbapi.h` now states the pointer is valid only until
-  the next `zb_paint` and must be copied out synchronously (caching it
-  across frames is a use-after-free).
-
-Debt items (D1..D10), triaged: D7 is **DONE 2026-08-28** — `zb_version()`
-and `zb_buffer_format()` give hosts runtime capability queries (contract:
-§4.8, smoke: `test_zbapi`). D2 merges into A-9's deferred `touch_row`;
-D5 into the A-2 Presenter dirty-region protocol; D8 is A-3; D10 is
-superseded by the CI matrix (`.github/workflows/ci.yml`); D6 is closed
-by the §5.1 minimalism decision (design-file.md). D1 (min/max sizes),
-D3 (focus history), D4 (Event once/priority) and D9 (resource
-management) stay open without consumers and are not scheduled.
-
-### A-19..A-20. Condition-triggered items (added 2026-08-28)
-
-A-19 is **open, unscheduled** — it carries its own activation condition
-and is recorded so the analysis is not lost, not because work is planned
-now. A-20 landed on 2026-08-29.
-
-- **A-20. macOS native shell (AppKit) — LANDED 2026-08-29.**
-  Implemented as `imshell/src/mac/main.mm` on the A-2 seams
-  (`region_to_present`, `feed_input`): NSWindow/NSView ownership,
-  zero-copy CGImage presentation (32-bit little-endian ARGB, straight
-  alpha), NSEvent → `input_event` mapping following the same shape as
-  win_input/x11_input. **No macOS 13/14 split:** every AppKit/CG API
-  used predates both releases; `CMAKE_OSX_DEPLOYMENT_TARGET` defaults
-  to 11.0 and there are no `if (macOS >= 14)` branches. Packaging:
-  the glibc shim (`zbcompat`) and the `$ORIGIN` rpath stay ELF-only,
-  Cocoa links by framework, the ObjC++ TU builds with ARC.
-  **Verification status:** CI compiles the shell on `macos-15` and runs
-  the host battery; the shell's own behavior is pending the
-  maintainer's local macOS 13 verification (and presents at 1x scale —
-  no Retina mapping yet, see §5).
-
-- **A-19. Kernel pixel model as compile-time pixel traits.**
-  Proposal: re-express the §4.4 macro matrix
-  (`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) as `constexpr` pixel traits
-  (bit width, channel shifts, blend policy) selected at compile time.
-  **Runtime-neutral.** This is compile-time dispatch: exactly one
-  instantiation per build, the same machine code the macro switch
-  produces — the embedded rationale (no runtime format conversion) is
-  unaffected, and the NDS build already leans on the same technique
-  (`Event<T...>`, `zb::SharedPtr<T>`). The real costs are compile time
-  and a one-time refactor of `color*.hpp` plus the CMake option
-  plumbing. **Trigger.** Do not start on spec. Act only when the macro
-  matrix is about to grow for a need the presentation seam (A-1) cannot
-  absorb — a genuinely new *kernel-internal* format, not a new panel
-  format (those are converters). Until then the macro matrix is the
-  cheaper representation.
-
-- **A-21. Retire the non-atomic `SharedPtr` branch (deferred).**
-  Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr`
-  is an alias); the ~150-line non-atomic implementation exists only for
-  targets without atomics (NDS ARM9: devkitARM ships no libatomic). Its
-  semantics are locked by `test_ptr.cpp` (compiled against the custom
-  branch on the host) and the CI non-atomic matrix job runs the whole
-  battery against it. **What is deferred:** collapsing the duality —
-  either `std::shared_ptr` on the NDS too (needs a toolchain decision:
-  `__atomic` support on arm926ej-s / shipping a libatomic) or an
-  intrusive refcount owned by the objects themselves. Both are
-  ABI-adjacent changes with no current payoff. **Trigger.** Act when the
-  custom branch needs a real fix again, or when a second non-atomic
-  target appears; until then the tests keep it cheap to carry.
-
-### A-22..A-23. Module-map cleanup (added 2026-08-29)
-
-From the 2026-08-29 module-map review (graph acyclic, no reverse edges,
-C-ABI surface opaque). One forced dependency and one mislocated
-composition were found and fixed; the runtime control direction was
-deliberately **not** changed.
-
-- **A-22. `imapp` split + shell as a pure provider — DONE 2026-08-29.**
-  Two findings: `imapp` pulled `imui` into every consumer (breaking the
-  minimal-dependency principle for graphics-only apps), and `imshell`
-  owned the `${STORY}` executable (a framework module acting as the
-  composer). Resolution: `imapp` now carries only IApp/IWindow/IGui +
-  `make_app` (deps: imcore/imevent/iminput); the optional `CanvasWindow`
-  and the `imapp.hpp` umbrella moved to `imapp_canvas` (deps: imapp +
-  imui); story apps and the tests link `imapp_canvas`, binding keeps
-  plain `imapp` (zbapi uses `app_maker` only). imshell exports
-  `shell_backend` (INTERFACE: include paths, platform link libs,
-  `shell_common`) and the backend main sources via `IMPRINT_SHELL_*`;
-  the top level composes `${STORY}` = backend + `<story>_app` (CMake
-  rejects zero-source executables, so the mains stay exe sources); the
-  ndstool POST_BUILD packaging moved with the exe. Hygiene: dead
-  `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS` removed from the INTERFACE
-  CMakeLists (imutil/imevent). Contract: code-contract §3 "Module
-  consumption paths". **Verification:** Windows 32bpp 37/37 + 16bpp,
-  docker gcc:13 X11 37/37 (+ zbapi smoke, FB rebuild), docker NDS ROM —
-  all green; macOS compiles in CI only. The shell→`IApp` dependency
-  direction stays: driving the loop requires knowing the app contract
-  (control inversion is what lets one story build into five shells);
-  only the composition point moved.
-
-- **A-23. Selective build/package switches (condition-triggered).**
-  The whole tree always configures and builds; there is no
-  `IMPRINT_WITH_*` switch to trim the configure. Binary granularity is
-  already right — static linking drops unreferenced objects, the Linux
-  host ships only `libimcore.so` + `zbapi.so`, the NDS ROM is fully
-  static — and `zbapi.so` statically embeds imui + the story app, which
-  is inherent to the current C-ABI contract (a foreign host drives a
-  whole app). **Trigger.** Add configure-time module switches only when
-  a real distribution case appears that must ship or withhold specific
-  modules at configure time; until then the whole-tree build is the
-  cheaper representation.
+D1 (FlexPanel min/max sizes), D3 (focus history), D4 (`Event`
+once/priority) and D9 (resource management) stay open without
+consumers and are not scheduled.

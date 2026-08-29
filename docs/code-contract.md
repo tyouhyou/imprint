@@ -468,11 +468,12 @@ dispatcher's raw pointers against dangling/UAF:
   rests on it having no per-instance state; adding state to it requires
   removing the sharing first.
 - **USE_FONT text path (A-8, 2026-08-28)**: `Font::draw_alphamap`'s
-  per-glyph `resize` is a hot-path allocation; today only the bitmap path
-  is covered by `test_alloc_guard`. New code on the `USE_FONT=ON` text
-  draw path must meet the same zero-allocation requirement (reuse a
-  buffer or batch `reserve`), and the gate gains a `USE_FONT` variant
-  (see `ARCHITECTURE.md` A-8).
+  per-glyph `resize` is a hot-path allocation; `test_alloc_guard`
+  covers both the bitmap path and a `USE_FONT` variant (scenario 5:
+  label+button repaint through FreeType allocates nothing after the
+  first frame). New code on the `USE_FONT=ON` text draw path must meet
+  the same zero-allocation requirement (reuse a buffer or batch
+  `reserve`).
 - **ListBox dynamic-model invalidation (A-9, 2026-08-28)**: the row-cache
   key is `(row,sel,w,h,fg,bg)` and does not include string content. If
   `ItemText` content changes without any setter call, hitting a stale
