@@ -199,13 +199,13 @@ target_link_libraries(${IMCORELIB} imutil)
 target_compile_definitions(${IMCORELIB} PUBLIC COLOR_DEPTH=${COLOR_DEPTH})     #color depth. (32/16 etc.)
 
 if (COLOR_DEPTH EQUAL 16)
-    # 16bpp: abgr1555, the only 16bpp model provided by color16.hpp
-    target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=1555)             # color16 model selector
+    # 16bpp: abgr1555, the only 16bpp model provided by pixel_traits.hpp
+    target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=1555)             # 16bpp pixel-traits combo selector
     target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=abgr)
 else()
     # 32bpp BGRA on little-endian x86: MSVC/APPLE use bgra32+le, UNIX uses
     # argb32+be — both expand to the same byte order {b,g,r,a} (A-11). The
-    # typedef names are endian-relative; see ARCHITECTURE.md §4.4.
+    # traits alias names are endian-relative; see ARCHITECTURE.md §4.4.
     if (MSVC OR WIN32)
         target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=le)                  #big/little endian. (le/be)
         target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=bgra32)           #rgb color model. (argb32/rgba32/rgba888/rgb565 etc.)

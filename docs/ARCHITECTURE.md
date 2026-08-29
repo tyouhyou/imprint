@@ -364,23 +364,6 @@ is stable, so gaps are finished work; the record lives in `git log`.
   component in ROMs. This is intentional but is another axis new targets
   must handle; a packaging abstraction would help.
 
-### A-19. Kernel pixel model as compile-time pixel traits (condition-triggered)
-
-Proposal: re-express the §4.4 macro matrix
-(`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`) as `constexpr` pixel traits
-(bit width, channel shifts, blend policy) selected at compile time.
-**Runtime-neutral.** This is compile-time dispatch: exactly one
-instantiation per build, the same machine code the macro switch
-produces — the embedded rationale (no runtime format conversion) is
-unaffected, and the NDS build already leans on the same technique
-(`Event<T...>`, `zb::SharedPtr<T>`). The real costs are compile time
-and a one-time refactor of `color*.hpp` plus the CMake option
-plumbing. **Trigger.** Do not start on spec. Act only when the macro
-matrix is about to grow for a need the presentation seam (§4.4) cannot
-absorb — a genuinely new *kernel-internal* format, not a new panel
-format (those are converters). Until then the macro matrix is the
-cheaper representation.
-
 ### A-21. Retire the non-atomic `SharedPtr` branch (condition-triggered)
 
 Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr`
