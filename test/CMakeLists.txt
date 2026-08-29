@@ -20,6 +20,7 @@ add_executable(
     test_ai.cpp
     test_blit_font.cpp
     test_app_flow.cpp
+    test_automation.cpp
     test_quit.cpp
     test_graphics.cpp
     test_event.cpp
