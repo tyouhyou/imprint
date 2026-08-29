@@ -24,6 +24,7 @@
 - **Software rendering into a raw pixel buffer** — no GPU, no external rendering library; the buffer format is fixed at build time (`COLOR_DEPTH`)
 - **Deterministic repaint-on-demand** — dirty tracking, shell owns the loop, no hidden redraws
 - **C-ABI as a first-class citizen** — stable `zbapi` C interface with Python (ctypes), WebAssembly and C smoke-test hosts
+- **Automation-friendly by contract** — the host-drives-everything model means a script can replace the user: feed input, pump frames, assert on pixels; single-threaded and timer-free, so drivers never sleep — the test battery includes an end-to-end `automation` suite driven through the public API
 - **Embedded-grade** — no RTTI, 16-bit color (abgr1555), integer-only geometry option, non-atomic refcounting option (NDS has no libatomic)
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
 - **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback (auto-subsetted from source strings); optional FreeType (fonts) and vendored stb codecs (PNG/JPEG)

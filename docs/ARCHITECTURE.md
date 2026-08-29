@@ -16,6 +16,10 @@ targets:
 - web: WASM (Emscripten, canvas)
 - host languages: Python and any C host through the C-ABI `zbapi`
 
+Because the host drives everything (§4.1), a script can take the host's
+place unchanged: every app is drivable headlessly, which makes automation
+and end-to-end testing a property of the contract, not an add-on (§4.11).
+
 The default build is zero-dependency: no font, no image codec. Optional
 features (FreeType fonts, PNG/JPEG via vendored stb) are compile-time
 switches. The NDS toolchain forces a set of embedded-friendly options; every
@@ -286,6 +290,34 @@ it needs, and there is no runtime backend switching.
   `apps/ui_preview` is the desktop-only previewer.
 - The layer is deliberately **static**: no dynamic models (ListBox `ItemText`
   callbacks), no event wiring, no font/glyph content in the description.
+
+### 4.11 Script-driven hosts and test automation
+
+The host-drives-everything protocol (§4.1) and the C-ABI host surface
+(§4.8) mean a script can replace the human host unchanged: feed input,
+pump frames, observe the result. Automation is a property of the
+contract, not an add-on:
+
+- **Determinism.** One thread drives everything; there are no timers, no
+  animation, no background work. A frame exists only because the driver
+  pumped it, so scripts never race the UI and never need sleeps.
+- **Frame-ready signal.** The `painted` event (`zb_set_painted_callback`
+  at the C-ABI) is the synchronization point: input that changed
+  something owes exactly one frame, idle input owes none (§4.1).
+- **In-process queries.** A C++ driver locates widgets by id
+  (`Widget::find_by_id`), computes their rectangle in the input
+  coordinate system (`get_absolute_position` + `get_size`), and reads
+  focus (`InputDispatcher::get_focus_target`, `Widget::is_focused`) and
+  text (`Widget::get_text`) directly. The `automation` suite in the test
+  battery drives a real app this way through the public API only.
+- **At the C-ABI surface** a foreign host has the same driving power
+  (`zb_input` / `zb_paint`) and asserts on pixels (`zb_buffer`); widget
+  geometry comes from the design file or the app's own layout constants.
+- **Constraint on future changes.** A future cross-thread posting
+  contract (a message queue such as `zb::ui::post(closure)`) must
+  preserve all of the above: single-threaded driving semantics,
+  deterministic frame order, and the observable painted signal.
+  Automation suites are consumers of this contract.
 
 ## 5. Known limitations (public)
 
