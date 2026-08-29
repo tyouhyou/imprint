@@ -22,6 +22,7 @@ SRCS="
   imui/src/text_input.cpp
   imui/src/dialog.cpp
   imui/src/dispatcher.cpp
+  imui/src/theme.cpp
   imui/src/ui_file.cpp
   apps/tictactoe/src/app_maker.cpp
   apps/tictactoe/src/ai.cpp
