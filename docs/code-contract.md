@@ -280,6 +280,18 @@ keeps only API-level supplements.
   `DefWindowProc`). They are pure — no window, server or display — and
   their behavior is locked by the dummy-driven suites
   (`test_shell_presenter`, `test_win_input`, `test_x11_input`).
+- **Module consumption paths (A-22)**: `imapp` (`IApp`/`IWindow`/`IGui` +
+  `make_app`) has no widget dependency — a graphics-only app links
+  `imapp` plus a shell backend and implements `IApp` directly on
+  `Graphics`. `CanvasWindow`, the default `IWindow` over the widget
+  tree, is an optional add-on: link `imapp_canvas` (it pulls imui); the
+  `imapp.hpp` umbrella includes `canvas_window.hpp` and therefore
+  requires it. The shell executable is composed in exactly one place,
+  the top-level `CMakeLists.txt`: `${STORY}` = `shell_backend` (imshell's
+  per-platform usage requirements) + the backend main sources +
+  `<story>_app`. Framework modules never name story code; only the
+  shell and the binding instantiate an app, and only the top level
+  links the executable.
 
 ## 4. Declarative UI builder (batch G contract)
 
