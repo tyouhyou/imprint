@@ -3,6 +3,7 @@
 #include "app_maker.hpp"
 #include "linux/fb.hpp"
 #include "logging.hpp"
+#include "shell/platform_font.hpp"
 #include "shell/presenter.hpp"
 
 using namespace zb::app;
@@ -24,6 +25,7 @@ int main(int argc, char *argv[])
         LE << "framebuffer unavailable, exiting";
         return 1;
     }
+    zb::shell::install_platform_font();
     auto app = make_app();
     app->create_window(320, 240);
 

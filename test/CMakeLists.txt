@@ -78,10 +78,10 @@ elseif (UNIX AND IM_SHELL_BACKEND STREQUAL "X11")
     target_link_libraries(test_imui PRIVATE X11)
 endif()
 
-# plan 2: the TTF subset suite runs only when the table is compiled in
+# plan 2: the TTF subset suites run only when the table is compiled in
 # (the ttf_subset tool target exists exactly then)
 if (TARGET ttf_subset)
-    target_sources(test_imui PRIVATE test_ttf_subset.cpp)
+    target_sources(test_imui PRIVATE test_ttf_subset.cpp test_font_size.cpp)
 endif()
 
 # build-time packing smoke: ui_embed validates and embeds the example

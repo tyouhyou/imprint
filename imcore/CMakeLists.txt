@@ -39,6 +39,30 @@ set(FONT_SUBSET ON CACHE BOOL "Scan sources and generate the font subset table (
 # builds only, like ui_embed.
 set(TTF_FONT "" CACHE FILEPATH "TrueType font rasterized into the build-time glyph subset (plan 2). Empty = off.")
 set(TTF_PIXEL_SIZE 16 CACHE STRING "Pixel size of the rasterized TTF subset (plan 2).")
+# Platform default font size (code-contract 2.4): when ON, a TTF_FONT left
+# empty resolves to the platform's system font and the rasterized subset
+# becomes the process-wide default glyph provider (installed by
+# CanvasWindow). OFF keeps the 5x7 bitmap default everywhere. Host builds
+# only — the TTF pipeline never runs on NDS.
+set(USE_FONT_SIZE OFF CACHE BOOL "Render widgets with the platform default font at TTF_PIXEL_SIZE instead of the 5x7 bitmap (hosts only).")
+
+# USE_FONT_SIZE with an empty TTF_FONT resolves the platform's system font
+# (hardcoded paths, the USE_FONT style); a missing file is a config error.
+if (USE_FONT_SIZE AND NOT NDS_PLATFORM AND TTF_FONT STREQUAL "")
+    if (MSVC OR WIN32)
+        set(TTF_FONT "C:/Windows/Fonts/segoeui.ttf")
+    elseif (APPLE)
+        set(TTF_FONT "/System/Library/Fonts/Supplemental/Arial.ttf")
+    elseif (UNIX)
+        set(TTF_FONT "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+    endif()
+    if (NOT TTF_FONT STREQUAL "" AND NOT EXISTS "${TTF_FONT}")
+        message(FATAL_ERROR "USE_FONT_SIZE: platform default font not found: ${TTF_FONT} (set TTF_FONT to override)")
+    endif()
+endif()
+if (USE_FONT_SIZE AND NDS_PLATFORM)
+    message(WARNING "USE_FONT_SIZE is host-only; ignored on the NDS toolchain")
+endif()
 
 set(IMCORE_HAS_SUBSET OFF)
 set(IMCORE_HAS_TTF_SUBSET OFF)
@@ -232,6 +256,16 @@ if (IMCORE_HAS_TTF_SUBSET)
     target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_TTF_SUBSET)
     target_include_directories(${IMCORELIB} PUBLIC
         ${CMAKE_CURRENT_BINARY_DIR}/include/text ${CMAKE_CURRENT_BINARY_DIR}/include)
+endif()
+
+if (USE_FONT_SIZE)
+    if (IMCORE_HAS_TTF_SUBSET)
+        # PUBLIC so imui/CanvasWindow and the tests compile against the
+        # same macro the provider was built with
+        target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_USE_FONT_SIZE)
+    else()
+        message(WARNING "USE_FONT_SIZE is ON but the TTF subset pipeline did not run; the 5x7 bitmap stays the default")
+    endif()
 endif()
 
 if (USE_PNG)

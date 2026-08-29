@@ -233,8 +233,9 @@ satisfies. Changing any of these is an architecture change.
   subset table for the code units the sources use; `TtfSubsetProvider`
   is installable as a widget's primary provider through the
   `set_glyph_provider` seam — legible proportional text with no runtime
-  font dependency, 5x7 stays the default (contract: code-contract.md
-  §2.4).
+  font dependency, 5x7 stays the default (`USE_FONT_SIZE` switches the
+  process-wide default to a platform system font on hosts; contract:
+  code-contract.md §2.4).
 - `USE_FONT` (FreeType) is optional and currently links through hardcoded
   per-platform paths — a known limitation, not a porting example.
 
@@ -292,6 +293,7 @@ satisfies. Changing any of these is an architecture change.
 | `USE_FONT` / `USE_PNG` / `USE_JPEG` | OFF | OFF    | optional features; codecs are vendored stb |
 | `FONT_SUBSET`             | ON      | ON            | build-time 5x7 glyph subset (needs Python) |
 | `TTF_FONT` (+ `TTF_PIXEL_SIZE`) | "" (off) | "" (off) | plan 2: rasterize a TTF into the glyph subset at the given pixel size |
+| `USE_FONT_SIZE`           | OFF     | —             | plan 2: platform default system font at `TTF_PIXEL_SIZE` as the default glyph provider (hosts only; needs Python) |
 | `STORY`                   | tictactoe | —          | selects which demo app the shell links    |
 
 `USE_INTEGER_GEOMETRY` and `USE_NON_ATOMIC_PTR` are examples of the

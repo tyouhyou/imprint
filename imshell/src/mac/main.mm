@@ -24,6 +24,7 @@
 #include "input.hpp"
 #include "app_maker.hpp"
 #include "shell/input_source.hpp"
+#include "shell/platform_font.hpp"
 #include "shell/presenter.hpp"
 #include "logging.hpp"
 
@@ -219,6 +220,7 @@ int main(int argc, char *argv[])
 
     @autoreleasepool
     {
+        zb::shell::install_platform_font();
         g_app = make_app();
         g_app->create_window();
         const auto window = g_app->window();

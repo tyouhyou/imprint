@@ -195,6 +195,21 @@ defined. Contract:
   (per-pixel blend; `write` allocates nothing). At 16bpp the single
   alpha bit degrades anti-aliasing to binary opacity (the §10.5 mask
   policy). Kerning is not applied; advances are the font's own.
+- Platform default font (`USE_FONT_SIZE`, default OFF): when ON and
+  `TTF_FONT` is empty, CMake resolves a per-platform system font
+  (Windows: Segoe UI, Linux: DejaVu Sans, macOS: Arial), rasterizes it
+  through the same pipeline at `TTF_PIXEL_SIZE` (default 16), and
+  defines `IMCORE_USE_FONT_SIZE`; a missing font file fails the
+  configure step. With the macro defined, each desktop shell calls
+  `zb::shell::install_platform_font()` before `make_app()`, which runs
+  `set_default_glyph_provider(ttf_subset_provider())`; a widget with no
+  explicit `set_glyph_provider` uses the process default before the 5x7
+  fallback — the chain becomes TTF → bitmap → skip. The battery never
+  starts a shell, so it stays on the deterministic 5x7 even in a
+  `USE_FONT_SIZE=ON` build; the `[font_size]` suite exercises the seam
+  by installing and removing the default provider explicitly. Embedded
+  targets never opt in (the TTF pipeline is host-only; 5x7 remains the
+  universal fallback).
 
 ---
 

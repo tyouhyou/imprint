@@ -12,6 +12,7 @@
 #include "logging.hpp"
 #include "input.hpp"
 #include "shell/input_source.hpp"
+#include "shell/platform_font.hpp"
 #include "shell/presenter.hpp"
 #include "x11_input.hpp"
 
@@ -44,6 +45,7 @@ int start()
     XSynchronize(display, True);
 #endif
 
+    zb::shell::install_platform_font();
     const auto app = make_app();
     app->create_window();
     const auto win = app->window();

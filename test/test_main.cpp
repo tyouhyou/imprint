@@ -49,6 +49,7 @@ int test_x11_input();
 #endif
 #if defined(IMCORE_HAS_TTF_SUBSET)
 int test_ttf_subset();
+int test_font_size();
 #endif
 
 int main()
@@ -102,6 +103,7 @@ int main()
 #endif
 #if defined(IMCORE_HAS_TTF_SUBSET)
     total += test_ttf_subset();
+    total += test_font_size();
 #endif
 
     if (total)

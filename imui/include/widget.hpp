@@ -31,8 +31,9 @@ namespace zb::ui
      * color). Drawn by the base class before draw_at().
      *
      * Text: always rendered (UTF-8 input, UTF-16 storage). The primary
-     * glyph provider is either the font assigned via set_font() (USE_FONT
-     * builds) or a custom one set via set_glyph_provider(); code units the
+     * glyph provider is the font assigned via set_font() (USE_FONT
+     * builds), a custom one set via set_glyph_provider(), or the
+     * process-wide default (set_default_glyph_provider); code units the
      * primary provider does not cover fall back to the built-in 5x7
      * bitmap glyphs, and code units nothing covers are skipped (see
      * docs/code-contract.md section 2.4). draw_at() defaults to drawing
@@ -418,7 +419,9 @@ namespace zb::ui
         /*
          * Returns the primary glyph provider: the custom provider set via
          * set_glyph_provider(), else the FreeType wrapper of the assigned
-         * font (USE_FONT), else nullptr (bitmap-only rendering).
+         * font (USE_FONT), else the process-wide default
+         * (set_default_glyph_provider), else nullptr (bitmap-only
+         * rendering).
          */
         [[nodiscard]] const GlyphProvider *primary_provider() const;
 

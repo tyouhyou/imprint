@@ -5,6 +5,7 @@
 #include "input.hpp"
 #include "app_maker.hpp"
 #include "shell/input_source.hpp"
+#include "shell/platform_font.hpp"
 #include "shell/presenter.hpp"
 #include "win_input.hpp"
 
@@ -133,6 +134,7 @@ extern "C" int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrev
         return -1;
     }
 
+    zb::shell::install_platform_font();
     g_app = make_app();
     g_app->create_window();
     g_app->on_painted(handle_painted);

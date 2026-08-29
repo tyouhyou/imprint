@@ -16,7 +16,26 @@ namespace zb::ui
                 new zb::SharedPtr<BitmapProvider>(zb::make_shared<BitmapProvider>());
             return *p;
         }
+
+        // process-wide default glyph provider (code-contract 2.4, plan 2);
+        // leaked like the fallback so static-lifetime widgets never touch
+        // a dead pointer
+        zb::SharedPtr<GlyphProvider> &default_provider_state()
+        {
+            static zb::SharedPtr<GlyphProvider> *p = new zb::SharedPtr<GlyphProvider>();
+            return *p;
+        }
     }  // namespace
+
+    void set_default_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider)
+    {
+        default_provider_state() = provider;
+    }
+
+    const zb::SharedPtr<GlyphProvider> &default_glyph_provider()
+    {
+        return default_provider_state();
+    }
 
     Widget::Widget() : bitmap_fallback_(fallback_singleton())
     {
@@ -79,7 +98,11 @@ namespace zb::ui
 
     const GlyphProvider *Widget::primary_provider() const
     {
-        return primary_provider_ ? primary_provider_.get() : nullptr;
+        if (primary_provider_ != nullptr)
+        {
+            return primary_provider_.get();
+        }
+        return default_glyph_provider().get();
     }
 
     void Widget::draw_text(core::Graphics &area) const

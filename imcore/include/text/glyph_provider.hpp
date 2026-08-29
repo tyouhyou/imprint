@@ -51,4 +51,14 @@ namespace zb::ui
         virtual void write(core::Graphics &g, const char16_t *str, const int len,
                            const int x, const int y, const core::Color &color) const = 0;
     };
+
+    /*
+     * Process-wide default glyph provider (code-contract 2.4, plan 2):
+     * a widget with no explicit set_glyph_provider() uses it before the
+     * 5x7 bitmap fallback. Empty by default (bitmap-only rendering);
+     * the desktop shells install the rasterized platform font at startup
+     * under USE_FONT_SIZE. Pass an empty pointer to restore the default.
+     */
+    void set_default_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider);
+    const zb::SharedPtr<GlyphProvider> &default_glyph_provider();
 }  // namespace zb::ui
