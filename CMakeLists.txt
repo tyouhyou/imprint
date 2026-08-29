@@ -2,6 +2,15 @@ cmake_minimum_required(VERSION 3.16)
 
 project(myapp)
 
+# imshell's AppKit backend hands main.mm to the ${STORY} executable
+# assembled in THIS directory (A-22 wiring), so OBJCXX must be enabled
+# here: enable_language() covers the current directory and below only —
+# an enable inside imshell's subdirectory leaves this scope without
+# CMAKE_OBJCXX_COMPILE_OBJECT and the generate step fails
+if (APPLE)
+    enable_language(OBJCXX)
+endif()
+
 set(IMAPPLIB imapp)
 set(IMCORELIB imcore)
 set(IMUTILLIB imutil)

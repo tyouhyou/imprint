@@ -18,14 +18,15 @@ elseif(NDS_PLATFORM)
 elseif(APPLE)
     # A-20: the AppKit shell (NSWindow/NSView, CGImage presentation).
     # One codebase for every macOS the C++ standard supports: no 13/14
-    # splits, the deployment target decides
+    # splits, the deployment target decides. OBJCXX itself is enabled at
+    # the top level: the ${STORY} exe consumes main.mm there, and
+    # enable_language() does not propagate upward from this subdirectory
     set(IM_SHELL_BACKEND "AppKit" CACHE STRING "macOS shell backend to build: AppKit")
     set_property(CACHE IM_SHELL_BACKEND PROPERTY STRINGS AppKit)
     if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
         set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING
             "macOS deployment target (A-20: one codebase, no 13/14 split)" FORCE)
     endif()
-    enable_language(OBJCXX)
     set(build_src main.mm)
     set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/mac)
     set(build_lib "-framework Cocoa")
