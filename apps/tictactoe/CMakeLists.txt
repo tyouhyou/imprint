@@ -12,7 +12,7 @@ add_library(
 target_link_libraries(
     tictactoe_app
     PUBLIC
-    imapp
+    imapp_canvas
 )
 
 target_include_directories(

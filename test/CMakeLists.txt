@@ -48,6 +48,7 @@ target_link_libraries(
     PRIVATE
     imui
     imapp
+    imapp_canvas
     imutil
     tictactoe_app
     shell_common
