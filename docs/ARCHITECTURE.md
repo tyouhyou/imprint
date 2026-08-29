@@ -30,15 +30,21 @@ other target uses the desktop defaults.
 | `iminput` | `input_event` POD + `key_code` enum                                                         | INTERFACE    | —                                   |
 | `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap, optional FreeType, UTF-8), codecs (`png`/`jpeg`, vendored stb) | SHARED | `imutil`                            |
 | `imui`    | Widget tree: `Panel`, `FlexPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ListBox`, `TextInput`, `Dialog`, `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`) | STATIC | `imcore`, `imevent`, `iminput`      |
-| `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + default `CanvasWindow` implementation             | INTERFACE    | `imcore`, `imevent`, `imui`, `iminput` |
-| `apps/<story>_app` | Demo app implementing `make_app()` (the only place app code lives)                 | STATIC       | `imapp`                             |
-| `imshell` | Platform shells (win / linux-x11 / linux-fb / mac / nds); each owns the main loop. Shared A-2 seams in `shell/`: `region_to_present` + `dirty_coalescer` (what to present), `feed_input` (input tail), per-platform translators (`win_input`, `x11_input`) | executable + `shell_common` (STATIC) | all modules + `<story>_app` |
+| `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
+| `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
+| `apps/<story>_app` | Demo app implementing `make_app()` (the only place app code lives)                 | STATIC       | `imapp_canvas`                      |
+| `imshell` | Platform shells (win / linux-x11 / linux-fb / mac / nds), each owning its main loop. Shared A-2 seams in `shell/`: `region_to_present` + `dirty_coalescer` (what to present), `feed_input` (input tail), per-platform translators (`win_input`, `x11_input`). Pure provider: no story code, no executable | `shell_common` (STATIC) + `shell_backend` (INTERFACE usage requirements; backend main sources exported to the top level) | `imapp`, `iminput`, `<platform libs>` |
 | `binding` | `zbapi` C-ABI shared library + C smoke test                                                | SHARED       | `imapp`, `<story>_app`              |
 
 Dependency rule (enforced by review): framework libraries never depend on
 apps; apps never become framework code; only the shell and the binding
-instantiate an app. `imcore` is a CMake `SHARED` library so the Linux host
-`zbapi` can load it as a sibling `.so`; module boundaries are logical.
+instantiate an app. The executable is composed in exactly one place — the
+top level `CMakeLists.txt` links `${STORY}` from `shell_backend` (usage
+requirements + backend main sources) and `<story>_app` — so no framework
+module names story code. Library-type policy: `INTERFACE` for pure-header
+modules, `STATIC` for everything else, `SHARED` only at foreign-host
+boundaries (`imcore`, so the Linux host `zbapi` can load it as a sibling
+`.so`, and `zbapi` itself); module boundaries are logical.
 
 ## 3. Targets
 
@@ -667,3 +673,45 @@ now. A-20 landed on 2026-08-29.
   ABI-adjacent changes with no current payoff. **Trigger.** Act when the
   custom branch needs a real fix again, or when a second non-atomic
   target appears; until then the tests keep it cheap to carry.
+
+### A-22..A-23. Module-map cleanup (added 2026-08-29)
+
+From the 2026-08-29 module-map review (graph acyclic, no reverse edges,
+C-ABI surface opaque). One forced dependency and one mislocated
+composition were found and fixed; the runtime control direction was
+deliberately **not** changed.
+
+- **A-22. `imapp` split + shell as a pure provider — DONE 2026-08-29.**
+  Two findings: `imapp` pulled `imui` into every consumer (breaking the
+  minimal-dependency principle for graphics-only apps), and `imshell`
+  owned the `${STORY}` executable (a framework module acting as the
+  composer). Resolution: `imapp` now carries only IApp/IWindow/IGui +
+  `make_app` (deps: imcore/imevent/iminput); the optional `CanvasWindow`
+  and the `imapp.hpp` umbrella moved to `imapp_canvas` (deps: imapp +
+  imui); story apps and the tests link `imapp_canvas`, binding keeps
+  plain `imapp` (zbapi uses `app_maker` only). imshell exports
+  `shell_backend` (INTERFACE: include paths, platform link libs,
+  `shell_common`) and the backend main sources via `IMPRINT_SHELL_*`;
+  the top level composes `${STORY}` = backend + `<story>_app` (CMake
+  rejects zero-source executables, so the mains stay exe sources); the
+  ndstool POST_BUILD packaging moved with the exe. Hygiene: dead
+  `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS` removed from the INTERFACE
+  CMakeLists (imutil/imevent). Contract: code-contract §3 "Module
+  consumption paths". **Verification:** Windows 32bpp 37/37 + 16bpp,
+  docker gcc:13 X11 37/37 (+ zbapi smoke, FB rebuild), docker NDS ROM —
+  all green; macOS compiles in CI only. The shell→`IApp` dependency
+  direction stays: driving the loop requires knowing the app contract
+  (control inversion is what lets one story build into five shells);
+  only the composition point moved.
+
+- **A-23. Selective build/package switches (condition-triggered).**
+  The whole tree always configures and builds; there is no
+  `IMPRINT_WITH_*` switch to trim the configure. Binary granularity is
+  already right — static linking drops unreferenced objects, the Linux
+  host ships only `libimcore.so` + `zbapi.so`, the NDS ROM is fully
+  static — and `zbapi.so` statically embeds imui + the story app, which
+  is inherent to the current C-ABI contract (a foreign host drives a
+  whole app). **Trigger.** Add configure-time module switches only when
+  a real distribution case appears that must ship or withhold specific
+  modules at configure time; until then the whole-tree build is the
+  cheaper representation.
