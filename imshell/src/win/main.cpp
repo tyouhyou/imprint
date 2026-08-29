@@ -4,6 +4,9 @@
 #include "imcore.hpp"
 #include "input.hpp"
 #include "app_maker.hpp"
+#include "shell/input_source.hpp"
+#include "shell/presenter.hpp"
+#include "win_input.hpp"
 
 using namespace zb::app;
 using namespace zb::input;
@@ -17,10 +20,10 @@ namespace
     const void *g_framebuffer = nullptr; // framebuffer blitted on WM_PAINT
     LONG g_buffer_width = 0;
     LONG g_buffer_height = 0;
-    LONG g_dirty_x = 0;
-    LONG g_dirty_y = 0;
-    LONG g_dirty_w = 0;
-    LONG g_dirty_h = 0;
+    // painted events coalesce before WM_PAINT runs (it is the
+    // lowest-priority message): the union of every invalidated region
+    // survives here until the present (A-2 presentation seam)
+    zb::shell::dirty_coalescer g_pending;
 
     // called on every "painted" event, requests a repaint by invalidating
     // only the region that was actually drawn
@@ -31,59 +34,28 @@ namespace
             return;
         }
         g_framebuffer = data;
-        if (nullptr != g_hwnd)
-        {
-            int x = 0, y = 0, w = 0, h = 0;
-            if (g_app->dirty_region(x, y, w, h))
-            {
-                if (w <= 0 || h <= 0)
-                {
-                    g_dirty_w = 0;  // nothing drawn, nothing invalid
-                    return;
-                }
-                // painted events can coalesce before WM_PAINT runs (it is
-                // the lowest-priority message): keep the union of every
-                // invalidated region or all but the last one is lost
-                LONG l = x, t = y, r = x + w, b = y + h;
-                if (g_dirty_w > 0)
-                {
-                    if (g_dirty_x < l) l = g_dirty_x;
-                    if (g_dirty_y < t) t = g_dirty_y;
-                    if (g_dirty_x + g_dirty_w > r) r = g_dirty_x + g_dirty_w;
-                    if (g_dirty_y + g_dirty_h > b) b = g_dirty_y + g_dirty_h;
-                }
-                g_dirty_x = l;
-                g_dirty_y = t;
-                g_dirty_w = r - l;
-                g_dirty_h = b - t;
-                RECT rc{l, t, r, b};
-                InvalidateRect(g_hwnd, &rc, FALSE);
-            }
-            else
-            {
-                g_dirty_x = 0;
-                g_dirty_y = 0;
-                g_dirty_w = g_buffer_width;
-                g_dirty_h = g_buffer_height;
-                InvalidateRect(g_hwnd, nullptr, FALSE);
-            }
-        }
-    }
-
-    // feeds the app and repaints when a frame is owed: apps may consume
-    // an event as an app-level command without routing it through
-    // CanvasWindow::input, and their widget changes still get presented
-    void send_input(const input_event &ev)
-    {
-        if (g_app == nullptr)
+        if (nullptr == g_hwnd)
         {
             return;
         }
-        g_app->input(ev);
-        if (g_app->is_dirty())
+        int x = 0, y = 0, w = 0, h = 0;
+        const bool dirty = g_app->dirty_region(x, y, w, h);
+        if (!dirty)
         {
-            g_app->paint();
+            // no dirty tracking: present the whole buffer
+            g_pending.add(0, 0, g_buffer_width, g_buffer_height);
+            InvalidateRect(g_hwnd, nullptr, FALSE);
+            return;
         }
+        // an empty frame adds nothing and must not drop pending regions
+        g_pending.add(x, y, w, h);
+        const zb::shell::present_rect p = g_pending.get();
+        if (p.w <= 0)
+        {
+            return;
+        }
+        RECT rc{p.x, p.y, p.x + p.w, p.y + p.h};
+        InvalidateRect(g_hwnd, &rc, FALSE);
     }
 
     void paint_app(HWND hwnd, HDC hDC, const RECT &rc_paint)
@@ -95,23 +67,18 @@ namespace
 
         // a system-triggered repaint (first show, resize) invalidates the
         // whole client area: blit the entire buffer; otherwise only the
-        // region the last paint() drew
-        LONG x = g_dirty_x;
-        LONG y = g_dirty_y;
-        LONG w = g_dirty_w;
-        LONG h = g_dirty_h;
+        // region the painted callbacks accumulated
+        zb::shell::present_rect p = g_pending.get();
         if (rc_paint.left <= 0 && rc_paint.top <= 0 &&
             rc_paint.right >= g_buffer_width && rc_paint.bottom >= g_buffer_height)
         {
-            x = 0;
-            y = 0;
-            w = g_buffer_width;
-            h = g_buffer_height;
+            p = zb::shell::present_rect{0, 0, g_buffer_width, g_buffer_height};
         }
-        if (w <= 0 || h <= 0)
+        if (p.w <= 0 || p.h <= 0)
         {
             return;
         }
+        g_pending.clear();  // presented; the next painted callback accumulates afresh
 
         // NOTE: this blit assumes 32bpp (biBitCount = 32, BI_RGB). A
         // COLOR_DEPTH=16 build would produce an abgr1555 buffer while the
@@ -134,9 +101,9 @@ namespace
         // region below the first row
         SetDIBitsToDevice(
             hDC,
-            x, y,
-            w, h,
-            x, y,
+            p.x, p.y,
+            p.w, p.h,
+            p.x, p.y,
             0, g_buffer_height,
             g_framebuffer, &bmi,
             DIB_RGB_COLORS);
@@ -245,134 +212,46 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             EndPaint(hwnd, &ps);
             return 0;
         }
-        case WM_MOUSEMOVE:
-        {
-            // hover/drag moves drive the dispatcher: slop cancel, captured
-            // moves (slider/listbox drag) and hover repaints all read them
-            input_event ev;
-            ev.type = input_type::mouse_move;
-            ev.touch_id = 0;
-            ev.x = GET_X_LPARAM(lParam);
-            ev.y = GET_Y_LPARAM(lParam);
-            send_input(ev);
-            break;
-        }
-        case WM_KEYDOWN:
-        {
-            input_event ev;
-            ev.type = input_type::key_down;
-            switch (wParam)
-            {
-                case VK_RETURN: ev.key = static_cast<int>(key_code::enter); break;
-                case VK_TAB: ev.key = static_cast<int>(key_code::tab); break;
-                case VK_ESCAPE: ev.key = static_cast<int>(key_code::escape); break;
-                case VK_SPACE: ev.key = static_cast<int>(key_code::space); break;
-                case VK_BACK: ev.key = static_cast<int>(key_code::backspace); break;
-                case VK_DELETE: ev.key = static_cast<int>(key_code::del); break;
-                case VK_UP: ev.key = static_cast<int>(key_code::up); break;
-                case VK_DOWN: ev.key = static_cast<int>(key_code::down); break;
-                case VK_LEFT: ev.key = static_cast<int>(key_code::left); break;
-                case VK_RIGHT: ev.key = static_cast<int>(key_code::right); break;
-                default: return 0;
-            }
-            send_input(ev);
-            return 0;
-        }
-        case WM_CHAR:
-        {
-            // printable characters arrive as WM_CHAR (after
-            // TranslateMessage); the space key keeps its key_code::space
-            // routing for navigation activation, other printable ASCII
-            // becomes a character event (ch field, see dispatcher B1).
-            // Use send_input so the dirty→paint→present chain is not
-            // bypassed (A-5, 2026-08-28).
-            const int c = static_cast<int>(wParam);
-            if (c >= 0x20 && c <= 0x7e && c != ' ')
-            {
-                input_event ev;
-                ev.type = input_type::key_down;
-                ev.ch = c;
-                send_input(ev);
-            }
-            return 0;
-        }
-        case WM_LBUTTONDOWN:
-        {
-            input_event ev;
-            ev.type = input_type::mouse_left_down;
-            ev.touch_id = 0;
-            ev.button = mouse_button_t::left;
-            ev.x = GET_X_LPARAM(lParam);
-            ev.y = GET_Y_LPARAM(lParam);
-            send_input(ev);
-            break;
-        }
-        case WM_LBUTTONUP:
-        {
-            input_event ev;
-            ev.type = input_type::mouse_left_up;
-            ev.touch_id = 0;
-            ev.button = mouse_button_t::left;
-            ev.x = GET_X_LPARAM(lParam);
-            ev.y = GET_Y_LPARAM(lParam);
-            send_input(ev);
-            break;
-        }
-        case WM_RBUTTONDOWN:
-        {
-            input_event ev;
-            ev.type = input_type::mouse_right_down;
-            ev.touch_id = 0;
-            ev.button = mouse_button_t::right;
-            ev.x = GET_X_LPARAM(lParam);
-            ev.y = GET_Y_LPARAM(lParam);
-            send_input(ev);
-            break;
-        }
-        case WM_RBUTTONUP:
-        {
-            input_event ev;
-            ev.type = input_type::mouse_right_up;
-            ev.touch_id = 0;
-            ev.button = mouse_button_t::right;
-            ev.x = GET_X_LPARAM(lParam);
-            ev.y = GET_Y_LPARAM(lParam);
-            send_input(ev);
-            break;
-        }
-        case WM_MOUSEWHEEL:
-        {
-            // wParam HIWORD: wheel rotation delta. (> 0 roll up, < 0 roll down)
-            input_event ev;
-            ev.type = input_type::mouse_wheel;
-            // normalize to signed notches (WHEEL_DELTA = one notch): the
-            // shell-independent unit every consumer may rely on (A-15);
-            // sub-notch deltas from free-spinning wheels are dropped
-            ev.delta = GET_WHEEL_DELTA_WPARAM(wParam) / WHEEL_DELTA;
-            ev.touch_id = 0;
-            if (ev.delta == 0)
-            {
-                break;
-            }
-            // WM_MOUSEWHEEL carries screen coordinates; the dispatcher
-            // routes the wheel to the widget under the (client) pointer
-            POINT pt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-            ScreenToClient(hwnd, &pt);
-            ev.x = pt.x;
-            ev.y = pt.y;
-            send_input(ev);
-            break;
-        }
         case WM_DESTROY:
         {
             PostQuitMessage(0);
-            break;
+            return 0;
         }
         default:
         {
-            return (int)DefWindowProc(hwnd, msg, wParam, lParam);
+            break;
         }
     }
 
-    return 0;
+    // A-2 InputSource: the message -> input_event mapping (key codes,
+    // character rules, wheel normalization) lives in win_input::translate,
+    // dummy-driven unit-tested; this loop only converts the wheel's screen
+    // point (the one message that is not in client coordinates) and feeds
+    // the app through the shared seam
+    if (g_app != nullptr)
+    {
+        POINT wheel_client{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
+        if (msg == WM_MOUSEWHEEL)
+        {
+            ScreenToClient(hwnd, &wheel_client);
+        }
+        input_event ev;
+        switch (zb::shell::win_input::translate(msg, wParam, lParam, wheel_client, ev))
+        {
+            case zb::shell::win_input::result::handled:
+            {
+                zb::shell::feed_input(*g_app, ev);
+                return 0;
+            }
+            case zb::shell::win_input::result::swallowed:
+            {
+                return 0;
+            }
+            case zb::shell::win_input::result::not_handled:
+            {
+                break;
+            }
+        }
+    }
+    return (int)DefWindowProc(hwnd, msg, wParam, lParam);
 }

@@ -40,6 +40,7 @@ add_executable(
     test_perf_walk.cpp
     test_raster_damage.cpp
     test_pixel_convert.cpp
+    test_shell_presenter.cpp
 )
 
 target_link_libraries(
@@ -49,7 +50,29 @@ target_link_libraries(
     imapp
     imutil
     tictactoe_app
+    shell_common
 )
+
+target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/include)
+
+# A-2 dummy-driven platform input mapping tests: the win32 translation
+# compiles only on Windows, the x11 translation only where the X11 shell
+# builds (the FB backend has no X11 dependency to link)
+if (WIN32)
+    target_sources(test_imui PRIVATE
+        test_win_input.cpp
+        ${CMAKE_SOURCE_DIR}/imshell/src/win/win_input.cpp
+    )
+    target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/src/win)
+elseif (UNIX AND IM_SHELL_BACKEND STREQUAL "X11")
+    target_sources(test_imui PRIVATE
+        test_x11_input.cpp
+        ${CMAKE_SOURCE_DIR}/imshell/src/linux/x11_input.cpp
+    )
+    target_compile_definitions(test_imui PRIVATE IM_TEST_X11_INPUT=1)
+    target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/src/linux)
+    target_link_libraries(test_imui PRIVATE X11)
+endif()
 
 # build-time packing smoke: ui_embed validates and embeds the example
 # document; test_ui_file parses the packed bytes back

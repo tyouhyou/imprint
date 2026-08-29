@@ -32,7 +32,7 @@ other target uses the desktop defaults.
 | `imui`    | Widget tree: `Panel`, `FlexPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ListBox`, `TextInput`, `Dialog`, `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`) | STATIC | `imcore`, `imevent`, `iminput`      |
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + default `CanvasWindow` implementation             | INTERFACE    | `imcore`, `imevent`, `imui`, `iminput` |
 | `apps/<story>_app` | Demo app implementing `make_app()` (the only place app code lives)                 | STATIC       | `imapp`                             |
-| `imshell` | Platform shells (win / linux-x11 / linux-fb / nds); each owns the main loop                | executable   | all modules + `<story>_app`         |
+| `imshell` | Platform shells (win / linux-x11 / linux-fb / mac / nds); each owns the main loop. Shared A-2 seams in `shell/`: `region_to_present` + `dirty_coalescer` (what to present), `feed_input` (input tail), per-platform translators (`win_input`, `x11_input`) | executable + `shell_common` (STATIC) | all modules + `<story>_app` |
 | `binding` | `zbapi` C-ABI shared library + C smoke test                                                | SHARED       | `imapp`, `<story>_app`              |
 
 Dependency rule (enforced by review): framework libraries never depend on
@@ -48,13 +48,16 @@ knowledge and lives with the quick-start material.
 | Target | Implementation | Fixed characteristics |
 |---|---|---|
 | Windows | `imshell/win` (Win32) | 32bpp BGRA presentation; a `COLOR_DEPTH=16` build compiles and passes tests but has no presenting shell |
+| macOS | `imshell/mac` (AppKit) | 32bpp ARGB presentation through a zero-copy CGImage; behavior verified on the maintainer's macOS 13 machine, CI compiles the shell and runs the host battery |
 | Linux | `imshell/fb`, `imshell/x11` | X11 is the input-capable backend; the framebuffer backend presents only (no input source) |
 | Nintendo DS | `imshell/nds` + `cmake/nds.toolchain.cmake` | ARM9, 4 MB RAM, no FPU/RTTI/libatomic; 16bpp abgr1555; ROM packaged by ndstool (POST_BUILD) |
 | WebAssembly | `demo/wasm` (Emscripten) | JS host wraps the pixel buffer as canvas; node smoke test in-tree |
 | Host languages | `binding` (`zbapi` shared library) | Python/ctypes demo and a C smoke test drive the C-ABI |
 
 Tests (`test/test_imui`) run on hosts only (embedded builds skip them)
-and cover 30+ suites with plain asserts.
+and cover 30+ suites with plain asserts; the platform input-mapping
+suites follow their platform (win32 suite on Windows, x11 suite where
+the X11 shell builds).
 
 ## 4. Architecture contract (as implemented, 2026-08-23)
 
@@ -72,8 +75,16 @@ satisfies. Changing any of these is an architecture change.
   actually drew.
 - **Always-on displays** (linux-fb, NDS) poll `is_dirty()` in their own
   loop and skip `paint()` while no frame is owed. **Event-driven shells**
-  (win32, x11) call `paint()` after input only when `is_dirty()` became true
-  (the shared `send_input` helper) and present on the `painted` event.
+  (win32, x11, mac) feed translated events through the shared `feed_input`
+  seam (A-2), which calls `paint()` only when `is_dirty()` became true,
+  and present on the `painted` event.
+- **Present region (A-2):** what a shell blits is decided by the shared
+  `region_to_present` rule (the app's dirty region when it drew something,
+  the whole buffer otherwise, nothing when the frame drew nothing).
+  Presenters whose platform batches invalidations (win `WM_PAINT`) keep
+  the union of painted callbacks in `dirty_coalescer` until the present;
+  presenters whose platform unions for them (mac `setNeedsDisplayInRect`,
+  x11 immediate) present straight away.
 - `CanvasWindow` (the default window): owns a `Graphics` framebuffer, a root
   `Panel`, and an `InputDispatcher`. Paint order is
   **auto-layout → damage walk → clear damaged region → draw tree → `painted`**.
@@ -97,12 +108,17 @@ satisfies. Changing any of these is an architecture change.
   release always delivers to the claimed target; a move cancels the press
   only if the pointer left the target by more than the **slop** (8 px),
   unless the widget `captures_pointer()` (slider/ListBox thumb drag).
-- **Key mapping lives in the shells.** Physical keys → `key_code`
-  (navigation/editing) and printable characters → `ch` (a Unicode code
-  point; ASCII today) are mapped per platform (Win32 `WM_KEYDOWN`/`WM_CHAR`,
-  X11 `XLookupString`, NDS D-pad/A/B, JS `e.key`, pygame unicode). The
-  framework never derives `ch` from `key`. Space is a key (activation), not
-  `ch`.
+- **Key mapping lives in the shell InputSource (A-2).** Each platform
+  translator centralizes its `key_code` table in one testable place
+  (`win_input::key_from_virtual_key`, `x11_input::key_from_keysym`, the
+  mac NSEvent mapping) and maps printable characters into `ch` (a Unicode
+  code point; ASCII today) per platform (Win32 `WM_KEYDOWN`/`WM_CHAR`,
+  X11 `XLookupString`, NSEvent characters, NDS D-pad/A/B, JS `e.key`,
+  pygame unicode). The framework never derives `ch` from `key`. Space is
+  a key (activation), not `ch`. The translators are pure (no window,
+  no server, no display) and dummy-driven unit-tested with synthetic
+  messages; each returns handled / swallowed / not-handled so the shell
+  keeps only its blit and its non-input event cases.
 - Focus is keyboard-only and modal-scoped; `Tab`/arrows cycle focusable
   widgets; `Enter`/`Space` activate. Focus does not travel through hidden
   widgets or closed dialogs.
@@ -242,8 +258,9 @@ it needs, and there is no runtime backend switching.
 
 ## 5. Known limitations (public)
 
-- No Mac shell (CMake fails with a clear `FATAL_ERROR`); a
-  conditionally-planned AppKit shell is backlog item A-20.
+- The macOS AppKit shell (A-20) is verified behaviorally only on the
+  maintainer's macOS 13 machine so far; CI compiles it and runs the host
+  test battery, and the shell presents at 1x scale (no Retina mapping yet).
 - `USE_FONT` needs hardcoded per-platform FreeType paths before it can be
   enabled elsewhere (`find_package`/CACHE is the intended fix).
 - 16bpp builds are embedded-only: the desktop shells and DIB/XImage present
@@ -303,7 +320,31 @@ kernel matrix entry. Dithering remains a future converter option.
   RGB565 — coverting `fb.cpp`'s wrap-around blit to go through one
   `convert_row(format, ...)` would validate the seam against a real target.
 
-### A-2. Shared shell presenter / input-mapper abstraction
+### A-2. Shared shell presenter / input-mapper abstraction — DONE 2026-08-29
+
+**Resolution.** Landed as the `shell/` seams inside imshell, contract-first
+(`code-contract.md` §3):
+- `region_to_present` — the shared "what do I blit" decision (the app's
+  dirty region when it drew something, the whole buffer otherwise,
+  nothing when the frame drew nothing);
+- `dirty_coalescer` — the union of painted callbacks for presenters whose
+  platform batches invalidations (win `WM_PAINT`); platforms that union
+  for themselves (mac `setNeedsDisplayInRect`, x11 immediate) present
+  straight away;
+- `feed_input` — the shared input tail (feed the app, repaint when owed);
+- per-platform translators `win_input::translate` / `x11_input::translate`
+  (and the mac NSEvent mapping) centralize the `key_code` tables and return
+  handled / swallowed / not-handled; they are pure — no window, no server,
+  no display — so dummy-driven suites (`test_shell_presenter`,
+  `test_win_input`, `test_x11_input`) lock them with synthetic messages
+  and XEvents.
+The win/x11/fb shells were rewired onto the seams; the mac shell (A-20)
+was built on them as its validation case. The NDS shell keeps its own
+loop (idle-poll; migrating it is cosmetic). Deliberately NOT extracted:
+the fb mmap/msync blit (device glue; A-1 already owns its row conversion)
+and NDS VRAM/DMA. Two behavior fixes fell out of the extraction: the win
+empty-painted path no longer drops already-coalesced regions, and the
+pending region is cleared after the present (no stale over-blit).
 
 - **Problem.** Every shell re-implements the same jobs differently: present
   (Win32 `SetDIBitsToDevice` hard-coded 32bpp, X11 `XCreateImage`+`XPutImage`,
@@ -578,9 +619,24 @@ management) stay open without consumers and are not scheduled.
 
 ### A-19..A-20. Condition-triggered items (added 2026-08-28)
 
-Both are **open, unscheduled** — each carries its own activation
-condition and is recorded so the analysis is not lost, not because work
-is planned now.
+A-19 is **open, unscheduled** — it carries its own activation condition
+and is recorded so the analysis is not lost, not because work is planned
+now. A-20 landed on 2026-08-29.
+
+- **A-20. macOS native shell (AppKit) — LANDED 2026-08-29.**
+  Implemented as `imshell/src/mac/main.mm` on the A-2 seams
+  (`region_to_present`, `feed_input`): NSWindow/NSView ownership,
+  zero-copy CGImage presentation (32-bit little-endian ARGB, straight
+  alpha), NSEvent → `input_event` mapping following the same shape as
+  win_input/x11_input. **No macOS 13/14 split:** every AppKit/CG API
+  used predates both releases; `CMAKE_OSX_DEPLOYMENT_TARGET` defaults
+  to 11.0 and there are no `if (macOS >= 14)` branches. Packaging:
+  the glibc shim (`zbcompat`) and the `$ORIGIN` rpath stay ELF-only,
+  Cocoa links by framework, the ObjC++ TU builds with ARC.
+  **Verification status:** CI compiles the shell on `macos-15` and runs
+  the host battery; the shell's own behavior is pending the
+  maintainer's local macOS 13 verification (and presents at 1x scale —
+  no Retina mapping yet, see §5).
 
 - **A-19. Kernel pixel model as compile-time pixel traits.**
   Proposal: re-express the §4.4 macro matrix
@@ -598,19 +654,16 @@ is planned now.
   format (those are converters). Until then the macro matrix is the
   cheaper representation.
 
-- **A-20. macOS native shell (AppKit).**
-  Proposal: one shell, one codebase — NSWindow/NSView ownership,
-  `NSBitmapImageRep` presentation, NSEvent → `input_event` mapping —
-  reusing the A-2 `Presenter`/`InputSource` extractions so the glue
-  stays in the ~100–200-line range. **No macOS 13/14 split:** the
-  needed AppKit APIs predate both releases; set
-  `CMAKE_OSX_DEPLOYMENT_TARGET` to 11.0/12.0 and write no
-  `if (macOS >= 14)` branches. **Verification strategy:** the
-  maintainer's local machine runs macOS 13, so behavior is verified
-  locally and CI only compiles. Runner reality: `macos-13` images were
-  retired (Dec 2025) and `macos-14`+ are arm64-only with deprecation
-  underway, so the CI job targets `macos-15` (or `macos-15-intel`
-  while Intel images last). **Estimated effort:** 3.5–5.5 days, most
-  of it the A-2 extraction if not yet done; packaging must also handle
-  the A-4.2 SHARED/static duality explicitly. **Trigger.** Act when
-  macOS becomes a real requirement; the precondition is A-2.
+- **A-21. Retire the non-atomic `SharedPtr` branch (deferred).**
+  Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr`
+  is an alias); the ~150-line non-atomic implementation exists only for
+  targets without atomics (NDS ARM9: devkitARM ships no libatomic). Its
+  semantics are locked by `test_ptr.cpp` (compiled against the custom
+  branch on the host) and the CI non-atomic matrix job runs the whole
+  battery against it. **What is deferred:** collapsing the duality —
+  either `std::shared_ptr` on the NDS too (needs a toolchain decision:
+  `__atomic` support on arm926ej-s / shipping a libatomic) or an
+  intrusive refcount owned by the objects themselves. Both are
+  ABI-adjacent changes with no current payoff. **Trigger.** Act when the
+  custom branch needs a real fix again, or when a second non-atomic
+  target appears; until then the tests keep it cheap to carry.

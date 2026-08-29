@@ -262,6 +262,24 @@ keeps only API-level supplements.
   truncated from the 8-bit channel at 32bpp, replicated from the 5-bit
   internal channel at 16bpp (full internal green packs to full panel
   green).
+- **Shell presentation/input seams (A-2)**: shells keep only their
+  platform blit and their non-input event cases; the shared decisions
+  live in `imshell/include/shell/`. `region_to_present(...)` decides what
+  a shell blits: the app's dirty region when the frame drew something,
+  the whole buffer when dirty tracking is absent, nothing when the frame
+  drew nothing. `dirty_coalescer` unions painted callbacks until the
+  present and must never lose pending regions (an empty frame adds
+  nothing; the win `WM_PAINT` presenter clears after presenting).
+  `feed_input(app, ev)` feeds one event and repaints exactly when
+  `is_dirty()` — shells never bypass it to present. Platform input
+  translators (`win_input::translate`, `x11_input::translate`, the mac
+  NSEvent mapping) centralize the `key_code` table per platform and
+  return **handled** (feed the event), **swallowed** (an input-shaped
+  event the framework deliberately drops — unmapped keydown, sub-notch
+  wheel delta, middle button) or **not-handled** (the shell's own cases /
+  `DefWindowProc`). They are pure — no window, server or display — and
+  their behavior is locked by the dummy-driven suites
+  (`test_shell_presenter`, `test_win_input`, `test_x11_input`).
 
 ## 4. Declarative UI builder (batch G contract)
 

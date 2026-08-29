@@ -9,7 +9,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
 
-**一个像素缓冲，跑遍所有目标。** Imprint 是一个零依赖、软件渲染的 C++17 UI 框架。同一份源码可以跑在任天堂 DS、Linux（framebuffer 或 X11）、Windows、浏览器（WebAssembly）以及通过 C-ABI 调用的 Python 宿主上。
+**一个像素缓冲，跑遍所有目标。** Imprint 是一个零依赖、软件渲染的 C++17 UI 框架。同一份源码可以跑在任天堂 DS、Linux（framebuffer 或 X11）、Windows、macOS（AppKit）、浏览器（WebAssembly）以及通过 C-ABI 调用的 Python 宿主上。
 
 | Windows | Linux (X11) | WebAssembly |
 |:---:|:---:|:---:|
@@ -79,6 +79,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 |---|---|---|
 | Windows（MSVC） | `cmake -S . -B build/build_win && cmake --build build/build_win` | 零依赖默认构建（32bpp） |
 | Windows + 字体 | `cmake -S . -B build/build_font -DUSE_FONT=ON && cmake --build build/build_font` | 运行需 `freetype.dll` 在 PATH 上 |
+| macOS（AppKit） | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0，无需额外选项 |
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
 | Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |
 | 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds` |
@@ -89,7 +90,17 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 ## 文档
 
+**建议阅读顺序**（新维护者的第一遍）：
+1. 本 README → **构建**（先把二进制跑起来）
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2——系统是什么、模块图与依赖规则
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5——规范性契约、目标平台、已知限制
+4. [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约
+5. [`docs/design-file.md`](docs/design-file.md)——处理 `.ui` 文件时再读
+
+**按任务找文档**：改公开 API → 先改 `code-contract.md`（契约先于 API）· 新目标 / 新像素格式 / 新构建选项 → ARCHITECTURE §6 · `.ui` 语法或打包 → `design-file.md` · C-ABI 宿主 → `zbapi.h` + ARCHITECTURE §4.8 · 构建/运行命令 → 下方**构建**。
+
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——按现状实装的架构：模块图与依赖规则、契约（帧生命周期、输入、像素模型、文本、事件、错误处理、C-ABI 宿主、构建选项）、已知限制与架构 backlog
+- [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约：错误路径、UTF-8/文本、glyph provider、树变更、布局失效、分配预算、呈现接缝转换器
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` 设计文件格式：语法、打包管线、物化语义
 - [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI 宿主接口；宿主规则见 ARCHITECTURE §4.8
 

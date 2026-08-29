@@ -72,6 +72,24 @@ jobs:
           cmake --build build_ci -j"$(nproc)"
           ./build_ci/bin/test_imui
 
+  # the whole framework linked against the non-atomic SharedPtr branch
+  # (the NDS build): test_ptr.cpp locks its semantics, this job locks the
+  # rest of the framework on top of it
+  linux-nonatomic-ptr:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      - name: Configure, build, test (USE_NON_ATOMIC_PTR=ON)
+        run: |
+          cmake -S . -B build_ci -DUSE_NON_ATOMIC_PTR=ON
+          cmake --build build_ci -j"$(nproc)"
+          ./build_ci/bin/test_imui
+          ./build_ci/bin/test_zbapi
+
   linux-codecs:
     runs-on: ubuntu-latest
     container: gcc:13
@@ -114,6 +132,23 @@ jobs:
         run: |
           cmake -S . -B build_ci -DIM_SHELL_BACKEND=FB
           cmake --build build_ci -j"$(nproc)"
+
+  # A-20: the AppKit shell compiles on every push; the desktop core
+  # battery runs too (it needs no display). Behavior of the shell itself
+  # is verified on the maintainer's macOS 13 machine, not in CI
+  macos-desktop:
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Configure and build (AppKit backend)
+        run: |
+          cmake -S . -B build_ci
+          cmake --build build_ci -j"$(sysctl -n hw.ncpu)"
+      - name: Run test suites and C-ABI smoke
+        run: |
+          ./build_ci/bin/test_imui
+          ./build_ci/bin/test_zbapi
 
   # ---------------- Tier 3: full matrix (weekly / manual) ----------------
 

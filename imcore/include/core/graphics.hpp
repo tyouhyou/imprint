@@ -38,7 +38,7 @@ namespace zb::ui::core
         Graphics &operator=(const Graphics &) = delete;
 
         /* deep-copy the specified area, and set size to the area */
-        Graphics::ptr clone(int x, int y, int32_t width, int32_t height) const;
+        ptr clone(int x, int y, int32_t width, int32_t height) const;
 
         /* RAII restore of the draw state set up by clip_safe() */
         class ClipGuard

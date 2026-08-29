@@ -11,6 +11,9 @@
 #include "app_maker.hpp"
 #include "logging.hpp"
 #include "input.hpp"
+#include "shell/input_source.hpp"
+#include "shell/presenter.hpp"
+#include "x11_input.hpp"
 
 using namespace zb::app;
 
@@ -107,39 +110,22 @@ int start()
 
     // rendering loop protocol (see IApp): this shell is event-driven --
     // paint() is requested on the first Expose, and the app repaints after
-    // every input event; the "painted" event asks the shell to present
+    // every input event; the "painted" event asks the shell to present.
+    // The "what do I blit" decision is the shared A-2 seam.
     app->on_painted([&display, &app, &window, &xi, &gc](const void *)
     {
         int x = 0, y = 0, w = 0, h = 0;
-        if (app->dirty_region(x, y, w, h))
+        const zb::shell::present_rect r = zb::shell::region_to_present(
+            app->dirty_region(x, y, w, h), x, y, w, h, xi->width, xi->height);
+        if (r.w <= 0)
         {
-            if (w <= 0 || h <= 0)
-            {
-                return;  // nothing was drawn, nothing to present
-            }
+            return;  // nothing was drawn, nothing to present
         }
-        else
-        {
-            w = xi->width;
-            h = xi->height;
-        }
-        XPutImage(display, window, gc, xi, x, y, x, y, w, h);
+        XPutImage(display, window, gc, xi, r.x, r.y, r.x, r.y, r.w, r.h);
         XFlush(display);
     });
 
     auto hasExposed = false;
-
-    // feeds the app and repaints when a frame is owed: apps may consume
-    // an event as an app-level command without routing it through
-    // CanvasWindow::input, and their widget changes still get presented
-    const auto send_input = [&app](const zb::input::input_event &ev)
-    {
-        app->input(ev);
-        if (app->is_dirty())
-        {
-            app->paint();
-        }
-    };
 
     // the app requests to quit by closing its window (e.g. a QUIT button)
     bool app_closed = false;
@@ -149,162 +135,21 @@ int start()
     while (!app_closed)
     {
         XNextEvent(display, &event);
+        if (event.type == ClientMessage && event.xclient.message_type == wm_delete)
+        {
+            break;
+        }
+        // A-2 InputSource: the event -> input_event mapping (key codes,
+        // characters, wheel buttons) lives in x11_input::translate,
+        // dummy-driven unit-tested; the loop only feeds the app through
+        // the shared seam
+        zb::input::input_event ev;
+        if (zb::shell::x11_input::translate(event, ev) == zb::shell::x11_input::result::handled)
+        {
+            zb::shell::feed_input(*app, ev);
+        }
         switch (event.type)
         {
-        case KeyPress:
-        {
-            // navigation/editing keys -> key field; printable ASCII ->
-            // ch field (chars are routed to the focused widget; see
-            // dispatcher B1)
-            const KeySym ks = XLookupKeysym(&event.xkey, 0);
-            zb::input::input_event ev;
-            ev.type = zb::input::input_type::key_down;
-            switch (ks)
-            {
-            case XK_Return:
-                ev.key = static_cast<int>(zb::input::key_code::enter);
-                break;
-            case XK_Tab:
-                ev.key = static_cast<int>(zb::input::key_code::tab);
-                break;
-            case XK_Escape:
-                ev.key = static_cast<int>(zb::input::key_code::escape);
-                break;
-            case XK_space:
-                ev.key = static_cast<int>(zb::input::key_code::space);
-                break;
-            case XK_BackSpace:
-                ev.key = static_cast<int>(zb::input::key_code::backspace);
-                break;
-            case XK_Delete:
-                ev.key = static_cast<int>(zb::input::key_code::del);
-                break;
-            case XK_Up:
-                ev.key = static_cast<int>(zb::input::key_code::up);
-                break;
-            case XK_Down:
-                ev.key = static_cast<int>(zb::input::key_code::down);
-                break;
-            case XK_Left:
-                ev.key = static_cast<int>(zb::input::key_code::left);
-                break;
-            case XK_Right:
-                ev.key = static_cast<int>(zb::input::key_code::right);
-                break;
-            default:
-                break;
-            }
-            // printable character (latin-1 from XLookupString; only
-            // single-byte, handles shift via the modifier state). Keys
-            // that produced a key field keep their key semantics (space
-            // is the navigation-activation key, not a character)
-            if (ev.key == 0)
-            {
-                char buf[4];
-                if (const int len = XLookupString(&event.xkey, buf, sizeof(buf), nullptr, nullptr);
-                    len == 1 && static_cast<unsigned char>(buf[0]) >= 0x20 &&
-                    static_cast<unsigned char>(buf[0]) <= 0x7e)
-                {
-                    ev.ch = buf[0];
-                }
-            }
-            if (ev.key != 0 || ev.ch != 0)
-            {
-                send_input(ev);
-            }
-            break;
-        }
-        case ClientMessage:
-        {
-            if (event.xclient.message_type == wm_delete)
-            {
-                goto endwhile;
-            }
-            break;
-        }
-        case ButtonPress:
-        {
-            if (auto *bp = reinterpret_cast<XButtonEvent *>(&event); bp != nullptr)
-            {
-                if (bp->button == 1)
-                {
-                    zb::input::input_event ev;
-                    ev.type = zb::input::input_type::mouse_left_down;
-                    ev.touch_id = 0;
-                    ev.button = zb::input::mouse_button_t::left;
-                    ev.x = bp->x;
-                    ev.y = bp->y;
-                    send_input(ev);
-                }
-                if (bp->button == 3)
-                {
-                    // right press: mapped symmetrically to the release
-                    // (Win32 sends both, the dispatcher ignores them for
-                    // now but the pair must arrive consistently)
-                    zb::input::input_event ev;
-                    ev.type = zb::input::input_type::mouse_right_down;
-                    ev.touch_id = 0;
-                    ev.button = zb::input::mouse_button_t::right;
-                    ev.x = bp->x;
-                    ev.y = bp->y;
-                    send_input(ev);
-                }
-                if (bp->button == 4 || bp->button == 5)
-                {
-                    // the wheel arrives as button 4/5 presses; delta
-                    // carries the direction and x/y the pointer (the
-                    // dispatcher routes the wheel by position)
-                    zb::input::input_event ev;
-                    ev.type = zb::input::input_type::mouse_wheel;
-                    ev.touch_id = 0;
-                    ev.delta = (bp->button == 4) ? 1 : -1;
-                    ev.x = bp->x;
-                    ev.y = bp->y;
-                    send_input(ev);
-                }
-            }
-            break;
-        }
-        case ButtonRelease:
-        {
-            if (auto *br = reinterpret_cast<XButtonEvent *>(&event); br != nullptr)
-            {
-                if (br->button == 1) // Left mouse button
-                {
-                    zb::input::input_event ev;
-                    ev.type = zb::input::input_type::mouse_left_up;
-                    ev.touch_id = 0;
-                    ev.button = zb::input::mouse_button_t::left;
-                    ev.x = br->x;
-                    ev.y = br->y;
-                    send_input(ev);
-                }
-                if (br->button == 3) // Right mouse button
-                {
-                    zb::input::input_event ev;
-                    ev.type = zb::input::input_type::mouse_right_up;
-                    ev.touch_id = 0;
-                    ev.button = zb::input::mouse_button_t::right;
-                    ev.x = br->x;
-                    ev.y = br->y;
-                    send_input(ev);
-                }
-            }
-            break;
-        }
-        case MotionNotify:
-        {
-            if (auto *mm = reinterpret_cast<XMotionEvent *>(&event); mm != nullptr)
-            {
-                zb::input::input_event ev;
-                ev.type = zb::input::input_type::mouse_move;
-                ev.x = mm->x;
-                ev.y = mm->y;
-                ev.touch_id = 0;
-                send_input(ev);
-            }
-            break;
-        }
         case Expose:
         {
             if (!hasExposed)
@@ -337,7 +182,6 @@ int start()
         // XNextEvent already blocks while no event is pending, so a sleep
         // here only delays input/paint response by 30ms per event
     }
-endwhile:
 
     // XDestroyImage frees ximage->data with Xfree; the buffer belongs to
     // the app's Graphics (delete[]) and is freed again by its destructor

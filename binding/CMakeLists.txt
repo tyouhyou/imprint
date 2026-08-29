@@ -9,7 +9,7 @@ endif()
 #     (python+pygame segfaults in locale/codecvt state) -- two libstdc++
 #     copies in one process are unsupported. ZBAPI_STATIC_LIBSTDCXX=ON
 #     embeds it anyway for the "copy the .so to an older host" case.
-if (UNIX AND NOT NDS_PLATFORM)
+if (UNIX AND NOT APPLE AND NOT NDS_PLATFORM)
     option(ZBAPI_STATIC_LIBSTDCXX "Embed libstdc++ into the host .so (breaks hosts that load another libstdc++, e.g. python+pygame)" OFF)
     set(ZBAPI_HOST_LINK_OPTIONS -Wl,-rpath,$ORIGIN)
     if (ZBAPI_STATIC_LIBSTDCXX)
@@ -18,8 +18,9 @@ if (UNIX AND NOT NDS_PLATFORM)
 endif()
 
 # glibc shim (__libc_single_threaded, see host_compat.c) for host-facing
-# shared libraries
-if (UNIX AND NOT NDS_PLATFORM)
+# shared libraries -- ELF/glibc only; BSD/macOS libc has its own symbols
+# and clang never emits the gcc fast-path references
+if (UNIX AND NOT APPLE AND NOT NDS_PLATFORM)
     add_library(zbcompat STATIC src/host_compat.c)
 endif()
 

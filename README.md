@@ -7,7 +7,7 @@
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
 
-**One pixel buffer, every target.** Imprint is a dependency-free, software-rendered C++17 UI framework. The same source tree runs on a Nintendo DS, Linux (framebuffer or X11), Windows, in the browser via WebAssembly, and behind a C-ABI driven from Python.
+**One pixel buffer, every target.** Imprint is a dependency-free, software-rendered C++17 UI framework. The same source tree runs on a Nintendo DS, Linux (framebuffer or X11), Windows, macOS (AppKit), in the browser via WebAssembly, and behind a C-ABI driven from Python.
 
 | Windows | Linux (X11) | WebAssembly |
 |:---:|:---:|:---:|
@@ -78,6 +78,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 |---|---|---|
 | Windows (MSVC) | `cmake -S . -B build/build_win && cmake --build build/build_win` | zero-dependency default (32bpp) |
 | Windows + fonts | `cmake -S . -B build/build_font -DUSE_FONT=ON && cmake --build build/build_font` | run needs `freetype.dll` on PATH |
+| macOS (AppKit) | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0, no extra options |
 | Linux (X11) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | input-capable backend |
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
 | Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds` |
@@ -88,7 +89,17 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 ## Documentation
 
+**Suggested reading order** (first pass for a new maintainer):
+1. this README → **Build** (get a binary running)
+2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2 — what the system is, module map & dependency rules
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5 — the normative contracts, targets, limitations
+4. [`docs/code-contract.md`](docs/code-contract.md) — the API-level contracts
+5. [`docs/design-file.md`](docs/design-file.md) — when working with `.ui` files
+
+**Where to look by task:** touching public API → `code-contract.md` first (the contract changes before the API) · new target / pixel format / build option → ARCHITECTURE §6 · `.ui` grammar or packaging → `design-file.md` · C-ABI host → `zbapi.h` + ARCHITECTURE §4.8 · build & run commands → **Build** below.
+
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the as-built architecture: module map & dependency rules, contracts (frame lifecycle, input, pixel model, text, events, errors, C-ABI hosts, build options), known limitations, and the architecture backlog
+- [`docs/code-contract.md`](docs/code-contract.md) — the API-level interface contract: error paths, UTF-8/text, glyph provider, tree mutation, layout invalidation, alloc budget, the presentation-seam converter
 - [`docs/design-file.md`](docs/design-file.md) — the `.ui` design-file format: grammar, packaging pipeline, materialization semantics
 - [`binding/include/zbapi.h`](binding/include/zbapi.h) — the C-ABI surface for hosts (Python, WASM, C); host rules in ARCHITECTURE §4.8
 
