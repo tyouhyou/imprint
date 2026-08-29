@@ -42,6 +42,41 @@ add_subdirectory(apps)
 add_subdirectory(binding)
 add_subdirectory(imshell)
 
+# A-22: the one composition point. imshell provides shell_backend (the
+# selected backend's usage requirements) + shell_common (A-2 seams) and
+# exports its backend main sources via IMPRINT_SHELL_*; apps provide
+# <story>_app. The executable is assembled here so framework modules
+# never name story code.
+add_executable(${STORY})
+target_sources(${STORY} PRIVATE ${IMPRINT_SHELL_SRC})
+target_include_directories(${STORY} PRIVATE ${IMPRINT_SHELL_SRCDIR})
+if (IMPRINT_EXE_WIN32)
+    set_property(TARGET ${STORY} PROPERTY WIN32_EXECUTABLE ON)
+endif()
+if (IMPRINT_SHELL_OBJC_ARC)
+    set_source_files_properties(${IMPRINT_SHELL_SRC} PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
+endif()
+target_link_libraries(${STORY} PRIVATE shell_backend ${STORY}_app)
+
+if (NDS_PLATFORM)
+    # package the ARM9 executable into a .nds ROM after linking (moved
+    # from imshell in A-22: the exe target lives here)
+    set(NDS_ARM7 $ENV{DEVKITPRO}/calico/bin/ds7_maine.elf)
+    if (NOT EXISTS ${NDS_ARM7})
+        message(FATAL_ERROR "ARM7 binary not found: ${NDS_ARM7}")
+    endif()
+    set(NDS_ROM ${CMAKE_BINARY_DIR}/bin/${STORY}.nds)
+    add_custom_command(
+        TARGET ${STORY} POST_BUILD
+        COMMAND $ENV{DEVKITPRO}/tools/bin/ndstool
+                -c ${NDS_ROM}
+                -9 $<TARGET_FILE:${STORY}>
+                -7 ${NDS_ARM7}
+        COMMENT "Packaging ${NDS_ROM}"
+        VERBATIM
+    )
+endif()
+
 # build-time UI design file packer (validates with the library parser,
 # embeds documents as byte arrays). Host tool only: embedded targets
 # ship pre-packed documents from their own build.
