@@ -525,3 +525,87 @@ obligations:
   feature letting children draw outside the parent's clip region (e.g.
   `overflow: visible`) must re-audit `Widget::draw`'s pruning in the same
   change.
+
+## 10. Theme (batch S1 contract)
+
+### 10.1 Form
+
+`zb::ui::Theme` is a flat token struct — a fixed set of named
+`core::Color` values. No stylesheet engine, no nesting, no per-state
+tables:
+
+```cpp
+struct Theme
+{
+    core::Color text;          // default text
+    core::Color text_inverted; // text drawn over `selection`
+    core::Color border;        // outlines: button frame, checkbox box,
+                               // radio ring, text-input frame, slider track
+    core::Color accent;        // interactive fill: pressed button, check
+                               // mark, radio dot, slider thumb, caret,
+                               // focused border
+    core::Color selection;     // selected list-row background
+    core::Color field_bg;      // list / text-field background
+    core::Color scroll_track;
+    core::Color scroll_thumb;
+    core::Color focus_mark;    // keyboard-focus indicator rect
+    core::Color mask;          // modal overlay (alpha meaningful at 32bpp)
+};
+```
+
+The token inventory is closed: adding a token is a contract change
+(this section first). Framework widgets draw no raw color literals —
+every color a widget draws is either a per-widget override or a theme
+token.
+
+### 10.2 Scope and lifetime
+
+- One **process-wide active theme**; widgets read it at draw time.
+  Storage follows the shared BitmapProvider rationale (ARCHITECTURE
+  §6 A-4.1): the active theme is an intentionally leaked singleton,
+  created on first use, so a static-lifetime widget can never touch a
+  dead theme.
+- Built-in presets: `light_theme()` (the default active theme) and
+  `dark_theme()`. The light preset reproduces the pre-theme look
+  pixel-exactly — the existing pixel-asserting suites lock it.
+- `theme()` returns the active theme; `set_theme(const Theme&)`
+  replaces it value-wise and bumps the theme generation counter.
+
+### 10.3 Per-widget overrides
+
+- The existing color setters (`set_text_color`,
+  `Button::set_pressed_color`, `Button::set_border_color`, ...) keep
+  their signatures and now set **overrides**: a set value wins over its
+  token; an unset widget follows the active theme. Overrides are stored
+  unset-by-default (empty `std::optional`), so a freshly constructed
+  tree tracks theme switches with no re-apply step.
+- Draw-time lookup is the contract: tokens are read inside the draw
+  path, never snapshotted at construction — a `set_theme` after tree
+  construction recolors every non-overridden widget on the next frame.
+
+### 10.4 Invalidation
+
+- `set_theme` bumps the generation; `CanvasWindow::paint` compares its
+  last-seen generation and, on mismatch, forces a whole-frame repaint
+  (damage pruning is bypassed for that frame). Apps do not invalidate
+  manually after switching themes.
+- The ListBox row-image cache needs no extra invalidation: the cache
+  key already contains the fg/bg `Color` values (§8, A-9), so
+  recolored rows miss the old entries automatically.
+
+### 10.5 Path classification
+
+- `theme()` reads and the draw-time token lookups are hot paths: zero
+  allocation (plain object access). `set_theme` copies a fixed-size
+  value type and never throws; it is callable from input handlers.
+- The `mask` token's alpha channel is meaningful only at 32bpp; 16bpp
+  builds bake an opaque approximation — the same policy the modal
+  overlay uses today. Theme colors intended for 16bpp targets must
+  stay legible after bgr565 quantization (presentation seam, §3).
+
+### 10.6 Not contracted
+
+Per-window themes, `.ui` design-file theme attributes, hover/disabled
+state tokens (widgets have no such states today), and spacing/radius
+tokens are explicitly out of scope; introducing any of them amends
+this section first.
