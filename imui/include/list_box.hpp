@@ -69,6 +69,16 @@ namespace zb::ui
         [[nodiscard]] size_t get_top() const { return top; }
 
         /*
+         * Observability seam (code-contract §8): the number of row
+         * rasterizations (row-image cache misses) since construction.
+         * The invalidation tests assert deltas of it: unlike allocation
+         * counting, it works across the shared-library boundary — on
+         * Windows the test binary's operator-new replacement cannot see
+         * allocations made inside the imcore DLL.
+         */
+        [[nodiscard]] long long rasterization_count() const { return rasterizations_; }
+
+        /*
          * Static string model owned by the widget: fills the rows from a
          * plain list (no ItemText callback needed). The dynamic model
          * (ItemText) takes precedence when both are set.
@@ -137,6 +147,7 @@ namespace zb::ui
         // render-affecting setter (see the class doc)
         mutable std::vector<row_cache_entry> row_cache_;
         mutable size_t row_cache_bytes_ = 0;
+        mutable long long rasterizations_ = 0;  // cache-miss counter (§8)
 
         [[nodiscard]] const row_cache_entry *find_row_cache(const size_t row, const bool sel,
                                                             const int w, const int h,

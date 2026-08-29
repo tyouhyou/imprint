@@ -462,6 +462,15 @@ dispatcher's raw pointers against dangling/UAF:
     the exact rebuild count is locked by `test_list_box`, steady-state
     drawing allocates 0; invalidation duty for dynamic ItemText content
     changes lies with the caller (call any setter).
+    Rebuild observability (batch S1): `rasterization_count()` is a
+    monotonic count of row rasterizations (cache misses); the
+    invalidation gates assert its deltas because allocation deltas are
+    not portable proof — on hosts where imcore is a shared library
+    (Windows DLL) the test binary's operator-new replacement cannot see
+    imcore-side allocations; ELF interposition sees them on Linux. The
+    zero-allocation (warm-path) gates stay allocation-based: they lock
+    the test-binary side, which is exactly where hot-path allocations
+    are forbidden.
   - Init paths (construction, resource loading) are outside this budget
     (§1).
 - Shared obligation: the process-wide shared BitmapProvider (batch J6)

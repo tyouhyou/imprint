@@ -21,6 +21,15 @@
  * Not replaced: the aligned (align_val_t) overloads — nothing in the
  * framework or the tests allocates over-aligned types dynamically; such
  * an allocation would run uncounted through the runtime's own new.
+ *
+ * Visibility boundary: the replacement only covers allocations made by
+ * code linked into the test binary. imcore is a SHARED library on
+ * Windows, and on MSVC a DLL binds its own CRT allocation entry points
+ * — allocations inside imcore.dll (row images, Graphics buffers) are
+ * invisible here, so the list-box rebuild gates use
+ * ListBox::rasterization_count() instead of allocation deltas
+ * (code-contract §8). On ELF hosts the executable's operator new
+ * interposes the shared libraries too, so the counter sees everything.
  */
 
 #include <cstddef>

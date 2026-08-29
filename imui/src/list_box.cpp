@@ -379,6 +379,7 @@ namespace zb::ui
                 }
                 else
                 {
+                    ++rasterizations_;
                     std::string text = text_fn(text_arg, r);
                     auto img = make_text_image(text.c_str(), text_w, row_height, fg, bg);
                     const auto sz = img->size();

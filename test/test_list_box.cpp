@@ -305,14 +305,23 @@ int test_list_box()
             EXPECT(same());
 
             // warm repaint: cache hits, no row re-rasterization, no text
-            // fetch -- zero allocations
+            // fetch -- zero allocations and zero rasterizations
             {
                 test::scoped_alloc_count c;
+                const long long r0 = meas.list->rasterization_count();
                 paint(meas, gm);
                 std::printf("warm list repaint allocations: %lld\n", c.delta());
                 EXPECT(c.delta() == 0);
+                EXPECT(meas.list->rasterization_count() == r0);
             }
             EXPECT(same());
+
+            // Rebuild proof is the rasterization counter, not the
+            // allocation delta: the row images are allocated inside
+            // imcore, which on Windows is a DLL the test binary's
+            // operator-new replacement cannot see (code-contract §8).
+            // A full invalidation re-rasterizes exactly the visible
+            // window (3 rows).
 
             // selection change (value): invalidated, rebuilt on paint
             dref.dispatch(ref.root, press_at(70, 34));  // local (60, 24): row 1
@@ -320,9 +329,11 @@ int test_list_box()
             paint(ref, gr);
             {
                 test::scoped_alloc_count c;
+                const long long r0 = meas.list->rasterization_count();
                 paint(meas, gm);
-                std::printf("selection rebuild allocations: %lld\n", c.delta());
-                EXPECT(c.delta() > 0);
+                std::printf("selection rebuild rasterizations: %lld (allocations %lld)\n",
+                            meas.list->rasterization_count() - r0, c.delta());
+                EXPECT(meas.list->rasterization_count() - r0 == 3);
             }
             EXPECT(same());
 
@@ -332,9 +343,11 @@ int test_list_box()
             paint(ref, gr);
             {
                 test::scoped_alloc_count c;
+                const long long r0 = meas.list->rasterization_count();
                 paint(meas, gm);
-                std::printf("scroll rebuild allocations: %lld\n", c.delta());
-                EXPECT(c.delta() > 0);
+                std::printf("scroll rebuild rasterizations: %lld (allocations %lld)\n",
+                            meas.list->rasterization_count() - r0, c.delta());
+                EXPECT(meas.list->rasterization_count() - r0 == 3);
             }
             EXPECT(same());
 
@@ -344,18 +357,22 @@ int test_list_box()
             paint(ref, gr);
             {
                 test::scoped_alloc_count c;
+                const long long r0 = meas.list->rasterization_count();
                 paint(meas, gm);
-                std::printf("model swap rebuild allocations: %lld\n", c.delta());
-                EXPECT(c.delta() > 0);
+                std::printf("model swap rebuild rasterizations: %lld (allocations %lld)\n",
+                            meas.list->rasterization_count() - r0, c.delta());
+                EXPECT(meas.list->rasterization_count() - r0 == 3);
             }
             EXPECT(same());
 
             // ... and the rebuilt cache is warm again
             {
                 test::scoped_alloc_count c;
+                const long long r0 = meas.list->rasterization_count();
                 paint(meas, gm);
                 std::printf("post-rebuild warm allocations: %lld\n", c.delta());
                 EXPECT(c.delta() == 0);
+                EXPECT(meas.list->rasterization_count() == r0);
             }
             EXPECT(same());
         }
