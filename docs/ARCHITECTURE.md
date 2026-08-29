@@ -65,6 +65,31 @@ and cover 30+ suites with plain asserts; the platform input-mapping
 suites follow their platform (win32 suite on Windows, x11 suite where
 the X11 shell builds).
 
+### 3.1 Per-target policy (what belongs where)
+
+Adding or adapting a target is glue, not framework surgery. Each layer
+owns exactly what is listed; anything not listed is framework code and
+stays target-agnostic.
+
+| Layer | Owns |
+|---|---|
+| Toolchain file (`cmake/*.toolchain.cmake`) | Cross-compilation (compiler, sysroot, ABI/CPU) and FORCE of the §4.9 options an embedded target needs (NDS: `COLOR_DEPTH=16`, `USE_INTEGER_GEOMETRY`, `USE_NON_ATOMIC_PTR`) |
+| Shell (`imshell/src/<platform>`) | The event loop, window/surface creation including screen geometry (`create_window(256, 192)` on NDS, `(320, 240)` on the FB shell), the platform blit, input translation, platform link libraries and backend main sources (exported via `IMPRINT_SHELL_*`). Shared present/input decisions come from the `shell/` seams (§4.1, §4.2), so a new target lands as ~100–200 lines of glue, not a new event loop |
+| Composition & packaging (top-level `CMakeLists.txt`) | The `${STORY}` executable — the only composition point (§2) — and target packaging: the NDS `ndstool` POST_BUILD step, ELF rpath, framework linking |
+| Binding (`zbapi`) | The foreign-host boundary only; hosts introspect the linked build at runtime (`zb_buffer_format()`, `zb_buffer_bpp()`, `zb_version()`, §4.8) instead of pinning build configurations |
+
+Consequences:
+
+- Target attributes — screen geometry, VRAM/DMA, ROM packaging, panel
+  format — never enter a framework module or a story app; one story
+  builds into every shell unchanged.
+- A new panel format is a presentation-edge row converter (§4.4), never
+  a kernel matrix entry; a new embedded constraint is a §4.9-style
+  compile-time option (default OFF on desktop, FORCE ON in the
+  toolchain), never runtime backend switching.
+- Shared shell code never grows per-target branches; a target's facts
+  live in that target's own shell main and toolchain file.
+
 ## 4. Architecture contract (as implemented, 2026-08-23)
 
 This section states the contracts the current implementation actually
@@ -368,25 +393,6 @@ pending region is cleared after the present (no stale over-blit).
   then implements ~100–200 lines instead of a shell.
 - **Related.** A-1 (the presenter is where the pixel conversion lives) and
   A-3 (target attributes must not be baked into a single shell).
-
-### A-3. Target-attribute policy (de-harden the NDS path; runtime format query)
-
-- **Problem.** The "embedded target" story is the NDS story: toolchain
-  `FORCE`s, ROM packaging (`ndstool` + ARM7 binary), screen geometry,
-  `MODE_FB0`/VRAM/DMA, and the C-ABI "format fixed at build time" wording
-  are all NDS-specific. A second handheld/MCU target would copy the NDS
-  shell and tweak magic numbers, or fork a new platform scheme.
-- **Impact.** Every new ARM/embedded target pays for NDS assumptions and
-  re-implements packaging; hosts cannot introspect the buffer format at
-  runtime.
-- **Proposed direction.** Document a per-target policy (what belongs in the
-  toolchain file vs the shell vs the binding), add a generic Linux-FB+
-  "any panel format" first-class target (beyond the current warning-only
-  mismatch check in `fb.cpp`), and consider a `zb_buffer_format()` export so
-  hosts can adapt without recompiling their expectations.
-  (Progress: the FB warning-only check is gone — A-1's seam made FB a
-  convert-or-refuse first-class target; `zb_buffer_format()` shipped in
-  batch K / D7. Remaining: the per-target policy document.)
 
 ### A-4. Smaller items
 
