@@ -537,6 +537,7 @@ tables:
 ```cpp
 struct Theme
 {
+    core::Color background;    // window base fill (CanvasWindow)
     core::Color text;          // default text
     core::Color text_inverted; // text drawn over `selection`
     core::Color border;        // outlines: button frame, checkbox box,

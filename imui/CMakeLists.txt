@@ -9,6 +9,7 @@ add_library(
     src/radio_button.cpp
     src/slider.cpp
     src/list_box.cpp
+    src/theme.cpp
     src/ui_builder.cpp
     src/ui_file.cpp
     src/text_input.cpp

@@ -57,7 +57,8 @@ namespace zb::ui
 
         size_t caret = 0;
         int text_gap = 2;
-        core::Color border_color = core::colors::Black;
-        core::Color caret_color = core::colors::Blue;
+        // unset = follow the active theme (contract 10.3)
+        std::optional<core::Color> border_color;  // override of theme border
+        std::optional<core::Color> caret_color;   // override of theme accent
     };
 }  // namespace zb::ui

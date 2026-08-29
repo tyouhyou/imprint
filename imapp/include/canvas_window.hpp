@@ -140,9 +140,23 @@ namespace zb::app
             }
             // the damage: the union of every widget's reported rect
             const bool requested = dirty_;  // a repaint was owed
+            // theme switch (contract 10.4): recolor the whole frame
+            const unsigned gen = zb::ui::theme_generation();
+            const bool theme_changed = gen != theme_gen_;
+            if (theme_changed)
+            {
+                theme_gen_ = gen;
+            }
             int l = width(), t = height(), r = -1, b = -1;
             root_->walk_damage(&l, &t, &r, &b);
-            if (r < l || b < t)
+            if (theme_changed)
+            {
+                l = 0;
+                t = 0;
+                r = width();
+                b = height();
+            }
+            else if (r < l || b < t)
             {
                 // nothing reported: a full-frame repaint was requested but
                 // no widget claimed damage (e.g. an app drawing outside
@@ -181,7 +195,7 @@ namespace zb::app
                 auto guard = graphics_->clip_safe(l, t, r - l, b - t);
                 if (guard)
                 {
-                    graphics_->fill(zb::ui::core::colors::White);
+                    graphics_->fill(zb::ui::theme().background);
                 }
             }
             root_->draw(*graphics_);
@@ -198,11 +212,13 @@ namespace zb::app
 
         // true while a frame is owed: until the first paint, after input
         // changed something, after any widget setter reported damage
-        // (the tree's pending flag), or after invalidate(). Idle-polling
-        // shells (linux-fb, NDS) skip paint() entirely while false
+        // (the tree's pending flag), after invalidate(), or after a theme
+        // switch (generation bump, contract 10.4). Idle-polling shells
+        // (linux-fb, NDS) skip paint() entirely while false
         [[nodiscard]] bool is_dirty() const noexcept override
         {
-            return dirty_ || (root_ != nullptr && root_->is_subtree_dirty());
+            return dirty_ || (root_ != nullptr && root_->is_subtree_dirty()) ||
+                   zb::ui::theme_generation() != theme_gen_;
         }
 
         /*
@@ -241,6 +257,9 @@ namespace zb::app
         zb::ui::InputDispatcher dispatcher_;
         bool dirty_ = true;
         bool auto_layout_ = false;
+
+        // last theme generation this window painted (contract 10.4)
+        unsigned theme_gen_ = zb::ui::theme_generation();
 
         // half-open damage rect of the last paint(), in buffer pixels
         int damage_l_ = 0;

@@ -38,9 +38,10 @@ namespace zb::ui
             frame_padding = p;
             mark_layout_dirty();
         }
+        // per-widget override of the theme's `mask` token (contract 10.3)
         void set_mask_color(const core::Color &c)
         {
-            mask = c;
+            mask_override_ = c;
             mark_dirty();
         }
 
@@ -109,8 +110,7 @@ namespace zb::ui
         int button_width = 48;
         int button_height = 18;
 
-        core::Color mask = core::Color::from(0, 0, 0, 128);
-        core::Color mask_16 = core::Color::from(50, 50, 50);
+        std::optional<core::Color> mask_override_;  // override of theme mask
         bool open_ = false;
     };
 }

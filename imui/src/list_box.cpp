@@ -7,11 +7,6 @@ namespace zb::ui
 {
     namespace
     {
-        const core::Color kBackground = core::Color::from(240, 240, 240);
-        const core::Color kSelection = core::Color::from(0, 80, 200);
-        const core::Color kScrollTrack = core::Color::from(200, 200, 200);
-        const core::Color kScrollThumb = core::Color::from(120, 120, 120);
-
         // static string model callback (see ListBox::set_items)
         std::string static_items_text(const void *arg, const size_t i)
         {
@@ -355,8 +350,9 @@ namespace zb::ui
 
     void ListBox::draw_at(core::Graphics &area) const
     {
+        const auto &th = theme();
         const auto s = get_size();
-        area.fill_rect(0, 0, s.width - 1, s.height - 1, kBackground);
+        area.fill_rect(0, 0, s.width - 1, s.height - 1, th.field_bg);
 
         const bool bar = count > visible && s.width > gutter;
         const int text_w = bar ? s.width - gutter : s.width;
@@ -368,8 +364,8 @@ namespace zb::ui
         {
             const int y0 = static_cast<int>(r - top) * row_height;
             const bool sel = r == value;
-            const core::Color bg = sel ? kSelection : kBackground;
-            const core::Color fg = sel ? core::colors::White : core::colors::Black;
+            const core::Color bg = sel ? th.selection : th.field_bg;
+            const core::Color fg = sel ? th.text_inverted : th.text;
             if (sel)
             {
                 area.fill_rect(0, y0, text_w - 1, y0 + row_height - 1, bg);
@@ -397,16 +393,16 @@ namespace zb::ui
         // scrollbar
         if (bar)
         {
-            int tx, ty, th, thumb_y, thumb_h;
-            scrollbar_rect(&tx, &ty, &th, &thumb_y, &thumb_h);
-            area.fill_rect(tx, ty, s.width - 1, ty + th - 1, kScrollTrack);
+            int tx, ty, th_height, thumb_y, thumb_h;
+            scrollbar_rect(&tx, &ty, &th_height, &thumb_y, &thumb_h);
+            area.fill_rect(tx, ty, s.width - 1, ty + th_height - 1, th.scroll_track);
             area.fill_rect(tx, thumb_y, s.width - 1, thumb_y + thumb_h - 1,
-                           kScrollThumb);
+                           th.scroll_thumb);
         }
 
         if (is_focused())
         {
-            area.draw_rect(0, 0, s.width - 1, s.height - 1, core::colors::Red);
+            area.draw_rect(0, 0, s.width - 1, s.height - 1, th.focus_mark);
         }
     }
 }  // namespace zb::ui

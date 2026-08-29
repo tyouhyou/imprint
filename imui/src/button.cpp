@@ -76,13 +76,16 @@ namespace zb::ui
             }
             else
             {
-                area.fill(pressed_color);
+                area.fill(pressed_color.value_or(theme().accent));
             }
         }
         if (show_border)
         {
             const auto s = get_size();
-            area.draw_rect(0, 0, s.width - 1, s.height - 1, is_focused() ? focus_border : border);
+            const core::Color edge = is_focused()
+                                         ? focus_border.value_or(theme().accent)
+                                         : border.value_or(theme().border);
+            area.draw_rect(0, 0, s.width - 1, s.height - 1, edge);
         }
         draw_text(area);
     }

@@ -269,7 +269,7 @@ namespace zb::ui
             }
             if (cur != nullptr)
             {
-                cur->write(area, data + i, j - i, x + pen, y, text_color);
+                cur->write(area, data + i, j - i, x + pen, y, effective_text_color());
                 pen += cur->measure(data + i, j - i).width;
             }
             i = j;

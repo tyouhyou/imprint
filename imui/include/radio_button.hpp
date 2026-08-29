@@ -76,7 +76,8 @@ namespace zb::ui
 
         int circle_size = 12;
         int text_gap = 4;
-        core::Color circle_color = core::colors::Black;
-        core::Color dot_color = core::colors::Blue;
+        // unset = follow the active theme (contract 10.3)
+        std::optional<core::Color> circle_color;  // override of theme border
+        std::optional<core::Color> dot_color;     // override of theme accent
     };
 }

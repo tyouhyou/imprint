@@ -135,7 +135,8 @@ namespace zb::ui
 
         // track
         const int track_y0 = cy - track_h / 2;
-        area.fill_rect(0, track_y0, s.width - 1, track_y0 + track_h - 1, track_color);
+        area.fill_rect(0, track_y0, s.width - 1, track_y0 + track_h - 1,
+                       track_color.value_or(theme().border));
 
         // thumb: center travels [thumb_w/2 .. width-1-thumb_w/2]
         const int span = s.width - thumb_w;
@@ -145,10 +146,12 @@ namespace zb::ui
         const int half = thumb_w / 2;
         const int thumb_h = track_h + 8;
         const int ty0 = cy - thumb_h / 2;
-        area.fill_rect(vx - half, ty0, vx + half - 1, ty0 + thumb_h - 1, thumb_color);
+        area.fill_rect(vx - half, ty0, vx + half - 1, ty0 + thumb_h - 1,
+                       thumb_color.value_or(theme().accent));
         if (is_focused())
         {
-            area.draw_rect(vx - half, ty0, vx + half - 1, ty0 + thumb_h - 1, core::colors::Red);
+            area.draw_rect(vx - half, ty0, vx + half - 1, ty0 + thumb_h - 1,
+                           theme().focus_mark);
         }
     }
 }

@@ -42,6 +42,7 @@ add_executable(
     test_raster_damage.cpp
     test_pixel_convert.cpp
     test_shell_presenter.cpp
+    test_theme.cpp
 )
 
 target_link_libraries(

@@ -7,6 +7,7 @@
 
 #include "imcore.hpp"
 #include "input.hpp"
+#include "theme.hpp"
 
 #if defined(USE_FONT)
 #include "text/font.hpp"
@@ -252,9 +253,10 @@ namespace zb::ui
             mark_layout_dirty();
         }
         [[nodiscard]] const std::u16string &get_text() const { return text_; }
+        // per-widget override of the theme's `text` token (contract 10.3)
         void set_text_color(const core::Color &c)
         {
-            text_color = c;
+            text_color_ = c;
             mark_dirty();
         }
 
@@ -378,6 +380,16 @@ namespace zb::ui
 
         // draws the background (color then image); called by draw()
         void draw_background(core::Graphics &area) const;
+
+        /*
+         * Effective text color (theme contract 10.3): the per-widget
+         * override when set, else the active theme's `text` token,
+         * resolved at draw time so theme switches recolor live trees.
+         */
+        [[nodiscard]] core::Color effective_text_color() const
+        {
+            return text_color_.value_or(theme().text);
+        }
 
         // draws the text via the primary provider with bitmap fallback
         void draw_text(core::Graphics &area) const;
@@ -567,7 +579,8 @@ namespace zb::ui
 
         // text
         std::u16string text_;
-        core::Color text_color = core::colors::Black;
+        // unset = follow the active theme's `text` token (contract 10.3)
+        std::optional<core::Color> text_color_;
         // layout hint applied at draw time; widgets set it when the
         // geometry that determines it changes (e.g. a checkbox label
         // offset tracks box_size + text_gap)

@@ -91,6 +91,7 @@ namespace zb::ui
 
         // semi-transparent mask over the whole dialog area
         const auto s = get_size();
+        const core::Color mask = mask_override_.value_or(theme().mask);
         if (core::ImColor_Depth == 32)
         {
             const auto bak = area.is_alpha_enabled();
@@ -103,7 +104,7 @@ namespace zb::ui
             // 16bpp has a single alpha bit, so per-pixel blending is both
             // wrong and slow (it would run every frame of the whole
             // screen); a plain solid fill dims the board just as well
-            area.fill(mask_16);
+            area.fill(mask);
         }
 
         frame->draw(area);

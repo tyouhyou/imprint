@@ -191,7 +191,9 @@ namespace zb::ui
         }
 
         // frame; the focus ring marks the active editor
-        const core::Color edge = is_focused() ? caret_color : border_color;
+        const core::Color caret = caret_color.value_or(theme().accent);
+        const core::Color edge = is_focused() ? caret
+                                              : border_color.value_or(theme().border);
         area.draw_rect(0, 0, s.width - 1, s.height - 1, edge);
 
         // text baseline: gap + vertical centering (like draw_text)
@@ -208,7 +210,7 @@ namespace zb::ui
         if (is_focused())
         {
             const int cx = x0 + advance_of(data, static_cast<int>(c));
-            area.fill_rect(cx, (s.height - line_h) / 2, cx + 1, (s.height + line_h) / 2 - 1, caret_color);
+            area.fill_rect(cx, (s.height - line_h) / 2, cx + 1, (s.height + line_h) / 2 - 1, caret);
         }
     }
 }  // namespace zb::ui

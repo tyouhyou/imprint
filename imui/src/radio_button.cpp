@@ -106,11 +106,14 @@ namespace zb::ui
         const auto radius = circle_size / 2 - 1;
 
         // the ring highlights while focused (like the Button border)
-        area.draw_ellipse(center, center, radius, radius, is_focused() ? dot_color : circle_color);
+        const core::Color dot = dot_color.value_or(theme().accent);
+        const core::Color ring = is_focused() ? dot
+                                              : circle_color.value_or(theme().border);
+        area.draw_ellipse(center, center, radius, radius, ring);
         if (checked_)
         {
-            const auto dot = radius / 2;
-            area.fill_ellipse(center, center, dot, dot, dot_color);
+            const auto r = radius / 2;
+            area.fill_ellipse(center, center, r, r, dot);
         }
         // the label to the right of the circle (the offset is a
         // layout-time value, kept current by the ctor and the

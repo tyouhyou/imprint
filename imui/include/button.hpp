@@ -42,6 +42,8 @@ namespace zb::ui
         // width/height
         [[nodiscard]] core::imsize_t measure() const override;
 
+        // per-widget overrides of theme tokens; unset follows the active
+        // theme (contract 10.3)
         void set_pressed_color(const core::Color &c) { pressed_color = c; }
         void set_pressed_image(const core::image_t &img) { pressed_image = img; }
         void set_border_color(const core::Color &c) { border = c; }
@@ -60,10 +62,10 @@ namespace zb::ui
 
     private:
         state state_ = state::normal;
-        core::Color pressed_color = core::colors::Blue;
+        std::optional<core::Color> pressed_color;  // override of theme accent
         std::optional<core::image_t> pressed_image;
-        core::Color border = core::colors::Black;
-        core::Color focus_border = core::colors::Blue;
+        std::optional<core::Color> border;        // override of theme border
+        std::optional<core::Color> focus_border;  // override of theme accent
         bool show_border = true;
     };
 }

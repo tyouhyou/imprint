@@ -64,7 +64,8 @@ namespace zb::ui
 
         int box_size = 14;
         int text_gap = 4;
-        core::Color box_color = core::colors::Black;
-        core::Color check_color = core::colors::Blue;
+        // unset = follow the active theme (contract 10.3)
+        std::optional<core::Color> box_color;    // override of theme border
+        std::optional<core::Color> check_color;  // override of theme accent
     };
 }

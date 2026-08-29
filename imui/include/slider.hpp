@@ -57,7 +57,8 @@ namespace zb::ui
 
         int thumb_w = 10;
         int track_h = 4;
-        core::Color track_color = core::colors::Black;
-        core::Color thumb_color = core::colors::Blue;
+        // unset = follow the active theme (contract 10.3)
+        std::optional<core::Color> track_color;  // override of theme border
+        std::optional<core::Color> thumb_color;  // override of theme accent
     };
 }

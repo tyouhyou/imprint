@@ -87,18 +87,20 @@ namespace zb::ui
         const auto s = get_size();
         (void)s;
 
+        const core::Color check = check_color.value_or(theme().accent);
         // the box; the border highlights while focused (like Button)
-        const auto box_edge = is_focused() ? check_color : box_color;
+        const core::Color box_edge = is_focused() ? check
+                                                  : box_color.value_or(theme().border);
         area.draw_rect(0, 0, box_size, box_size, box_edge);
         if (pressed_)
         {
-            area.fill_rect(1, 1, box_size - 2, box_size - 2, check_color);
+            area.fill_rect(1, 1, box_size - 2, box_size - 2, check);
         }
         if (checked_)
         {
             // a simple two-stroke check mark
-            area.draw_line(2, box_size * 5 / 8, box_size * 4 / 8, box_size - 3, check_color);
-            area.draw_line(box_size * 4 / 8, box_size - 3, box_size - 3, 2, check_color);
+            area.draw_line(2, box_size * 5 / 8, box_size * 4 / 8, box_size - 3, check);
+            area.draw_line(box_size * 4 / 8, box_size - 3, box_size - 3, 2, check);
         }
         // the label to the right of the box (the offset is a layout-time
         // value, kept current by the ctor and the box_size/text_gap setters)
