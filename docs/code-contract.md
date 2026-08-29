@@ -179,6 +179,17 @@ keeps only API-level supplements.
   enums) are passed **by value**; `const T&` is reserved for class types.
   (2026-08-28 sweep removed all scalar pass-by-const-ref signatures across
   the public API.)
+- **Pixel model (A-19)**: `core::Color` is `basic_color<Traits>` — a
+  fixed-size pixel word (`pixel`) plus channel accessors
+  (`r()/g()/b()/a()`, `set_r()/set_g()/set_b()/set_a()`). Accessors are
+  8-bit normalized: 16bpp 5-bit channels read expanded (`bits << 3`,
+  0..248) and write truncated (`v >> 3`); the single alpha bit reads
+  0/1 and writes `v > 0`; 32bpp channels are plain bytes. `from(r,g,b,a)`
+  stays the only construction entry. The traits (bit depth, channel
+  placement, `per_channel_blend`) are selected at compile time from the
+  build options (ARCHITECTURE §4.4); one instantiation per build, no
+  runtime dispatch. Code never reaches into the pixel word for channel
+  work — the accessors are the API.
 - Close-notification contract: host responsibility and reentry ban are in
   ARCHITECTURE.md §4.8; API-level supplement — wasm hosts register the
   callback via `addFunction` (build needs `ALLOW_TABLE_GROWTH=1`).

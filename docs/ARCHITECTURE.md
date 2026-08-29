@@ -180,19 +180,29 @@ satisfies. Changing any of these is an architecture change.
 
 ### 4.4 Graphics and pixel model
 
-- **The pixel format is fixed at build time** by a macro matrix in
-  `imcore/include/core/color.hpp` + `imcore/CMakeLists.txt`:
-  `COLOR_DEPTH` (32 or 16) selects `color32_t`/`color16_t`;
-  `RGB_MODEL` + `ENDIAN` select the field layout via token-pasting
-  (`MAKERGBNAME`, `MAKECOLORTYPENAME`).
-- NDS forces `COLOR_DEPTH=16`, `RGB_MODEL=abgr`, `ENDIAN=1555` (memory layout
-  `XBBBBBGGGGGRRRRR`). Desktop uses 32bpp; the actual byte order on x86
-  little-endian is BGRA. **The typedef names are endian-relative and
-  confusing** (`argb32_be_t` holds bytes b,g,r,a); porters should reason
-  about byte order, not names.
-- 32bpp has an 8-bit alpha channel; alpha blending is opt-in
-  (`Graphics::enable_alpha`). 16bpp has a single alpha bit, so the blend
-  path is replaced by binary opacity.
+- **The pixel format is fixed at build time** (A-19). The option matrix
+  (`COLOR_DEPTH` × `RGB_MODEL` × `ENDIAN`, wired in
+  `imcore/CMakeLists.txt`) selects compile-time **pixel traits**
+  (`imcore/include/core/pixel_traits.hpp`) by token-pasting the build
+  options; `Color` is `basic_color<Traits>` — exactly one
+  instantiation per build, runtime-neutral. The traits carry the bit
+  depth, the channel placement, and the blend policy
+  (`per_channel_blend`): 32bpp formats place their channels at **byte
+  offsets** inside the pixel word (the endian-neutral memory byte
+  order); the 16bpp format places them as **bit shifts/masks**
+  (`XBBBBBGGGGGRRRRR`).
+- NDS forces `COLOR_DEPTH=16`, `RGB_MODEL=abgr`, `ENDIAN=1555` (memory
+  layout `XBBBBBGGGGGRRRRR`). Desktop uses 32bpp; the actual byte
+  order on x86 little-endian is BGRA. **The traits alias names are
+  endian-relative and confusing** (the `argb32_be` combo holds bytes
+  b,g,r,a); porters should reason about byte order, not names.
+- Channel accessors (`r()/g()/b()/a()`, `set_r()…`) are 8-bit
+  normalized: 16bpp 5-bit channels read expanded (`bits << 3`) and
+  write truncated (`v >> 3`); the single alpha bit reads 0/1 and
+  writes `v > 0`. 32bpp has an 8-bit alpha channel; alpha blending is
+  opt-in (`Graphics::enable_alpha`) and runs the per-channel
+  source-over blend (`per_channel_blend`). 16bpp has a single alpha
+  bit, so the blend collapses to binary opacity.
 - `Graphics` can wrap an external writable buffer (wrapper mode) — the
   shape used by hosts that supply the framebuffer (WASM, Python,
   `CanvasWindow::create(w, h, buffer)`).
