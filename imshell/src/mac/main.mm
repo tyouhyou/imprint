@@ -29,7 +29,12 @@
 
 using namespace zb::app;
 
-@class ImprintView;
+// the full @interface must precede the helpers: nsevent_to_pointer sends
+// messages to g_view, and under ARC a forward-declared receiver is a
+// hard error (the send needs the method return types for ownership),
+// not a warning like in manual reference counting
+@interface ImprintView : NSView
+@end
 
 namespace
 {
@@ -105,9 +110,6 @@ namespace
         return ev;
     }
 }
-
-@interface ImprintView : NSView
-@end
 
 @implementation ImprintView
 
