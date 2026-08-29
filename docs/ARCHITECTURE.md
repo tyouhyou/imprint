@@ -228,6 +228,11 @@ satisfies. Changing any of these is an architecture change.
 - The 5x7 table covers ASCII (plus lowercase → uppercase) and, when Python
   is available at configure time, a build-generated subset of code units
   actually used in app/test sources (`FONT_SUBSET`).
+- Plan 2 (batch S2): with `TTF_FONT` set, a build-time tool
+  (`tools/ttf_subset`, vendored stb_truetype) rasterizes the font into a
+  subset table for the code units the sources use; `TtfSubsetProvider`
+  becomes the default primary provider — legible proportional text with
+  no runtime font dependency (contract: code-contract.md §2.4).
 - `USE_FONT` (FreeType) is optional and currently links through hardcoded
   per-platform paths — a known limitation, not a porting example.
 
@@ -284,6 +289,7 @@ satisfies. Changing any of these is an architecture change.
 | `USE_NON_ATOMIC_PTR`      | OFF     | ON (FORCE)    | non-atomic `SharedPtr` refcount (no libatomic) |
 | `USE_FONT` / `USE_PNG` / `USE_JPEG` | OFF | OFF    | optional features; codecs are vendored stb |
 | `FONT_SUBSET`             | ON      | ON            | build-time 5x7 glyph subset (needs Python) |
+| `TTF_FONT` (+ `TTF_PIXEL_SIZE`) | "" (off) | "" (off) | plan 2: rasterize a TTF into the glyph subset at the given pixel size |
 | `STORY`                   | tictactoe | —          | selects which demo app the shell links    |
 
 `USE_INTEGER_GEOMETRY` and `USE_NON_ATOMIC_PTR` are examples of the

@@ -167,6 +167,33 @@ sources and intersect them with the hand-drawn table in
   plan 2 (stb_truetype build-time TTF→bitmap layer converter) and is not
   covered by batch E plan 1.
 
+**Font subset plan 2 (batch S2)**: a build-time TTF→bitmap
+converter rasterizes a TrueType font into a glyph subset table
+(`ttf_glyphs.hpp`), compiled only when `IMCORE_HAS_TTF_SUBSET` is
+defined. Contract:
+
+- Pipeline: `tools/font_subset.py --codepoints-out` emits the sorted
+  list of code units the sources (`apps/`, `test/`, `.ui`
+  `text=`/`items=`) actually use; `tools/ttf_subset` (a build-time
+  tool over the vendored stb_truetype) rasterizes each listed unit at
+  `TTF_PIXEL_SIZE` from the font given in `TTF_FONT` and writes the
+  table — sorted by code unit for binary search, per-glyph metrics
+  plus 8-bit coverage bytes, line metrics as constants.
+- Runtime: `TtfSubsetProvider` (a stateless `GlyphProvider`) is the
+  widgets' default primary provider when the table is compiled in —
+  the same selection-point-only conditional rule as `USE_FONT`; the
+  fallback chain is unchanged (units absent from the table fall back
+  to the 5x7 bitmap provider, then skip). `make_text_image` picks the
+  same default provider, so ListBox row text matches widget text.
+- Tolerance: a code unit the font does not contain produces a build
+  warning and is omitted from the table — it falls back through the
+  bitmap chain at runtime, never an error. `TTF_FONT` empty (the
+  default) leaves the build identical to pre-S2.
+- Rendering: coverage bytes are drawn as the foreground color's alpha
+  (per-pixel blend; `write` allocates nothing). At 16bpp the single
+  alpha bit degrades anti-aliasing to binary opacity (the §10.5 mask
+  policy). Kerning is not applied; advances are the font's own.
+
 ---
 
 ## 3. Other API-shape rules
