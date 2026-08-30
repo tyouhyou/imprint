@@ -1,5 +1,7 @@
 #include "test.hpp"
 
+#include "button.hpp"
+#include "dispatcher.hpp"
 #include "flex_panel.hpp"
 #include "widget.hpp"
 
@@ -185,6 +187,59 @@ int test_flex()
         EXPECT(at(*c[1].child, 0, 10));
         EXPECT(c[2].child->get_size().width == 20);  // line 2 leftover
         EXPECT(at(*c[2].child, 40, 10));             // same line, after c[1]
+    }
+
+    // intrinsic measure (contract §3, S3): content-derived size keeps
+    // auto-sized containers hittable; flex items contribute 0 on the
+    // main axis, spacing and padding included
+    {
+        FlexPanel r;
+        r.set_direction(FlexPanel::flex_direction::row);
+        r.set_spacing(5);
+        r.set_padding(3);
+        r.add_child(make_child(20, 10));
+        r.add_child(make_child(20, 12));
+        EXPECT(r.measure().width == 6 + 20 + 5 + 20);
+        EXPECT(r.measure().height == 6 + 12);
+        r.add_child(make_child(20, 10), 1);  // flex: no main contribution
+        EXPECT(r.measure().width == 6 + 20 + 5 + 20 + 5);
+        FlexPanel c;  // column: axes swap
+        c.set_spacing(4);
+        c.add_child(make_child(20, 10));
+        c.add_child(make_child(30, 10));
+        EXPECT(c.measure().width == 30 && c.measure().height == 10 + 4 + 10);
+    }
+
+    // a nested auto-sized row picks up its content size from measure
+    // during the parent layout, so its children stay clickable
+    {
+        FlexPanel page;  // stand-in for a .ui column page
+        page.set_direction(FlexPanel::flex_direction::column);
+        page.set_size(200, 200);
+        auto row = std::make_unique<FlexPanel>();
+        row->set_direction(FlexPanel::flex_direction::row);
+        auto *row_ptr = row.get();
+        auto b = std::make_unique<Button>();
+        b->set_text("X");
+        auto *btn = b.get();
+        row->add_child(std::move(b));
+        page.add_child(std::move(row));
+        page.layout();
+
+        // the row got its content size, not 0x0
+        EXPECT(row_ptr->get_size().width == btn->get_size().width);
+        EXPECT(row_ptr->get_size().height == btn->get_size().height);
+
+        // ...and the button inside is pickable by the dispatcher
+        InputDispatcher d;
+        const auto bp = btn->get_absolute_position();
+        const auto bs = btn->get_size();
+        zb::input::input_event down = {};
+        down.type = zb::input::input_type::mouse_left_down;
+        down.x = bp.x + bs.width / 2;
+        down.y = bp.y + bs.height / 2;
+        EXPECT(d.dispatch(page, down));
+        EXPECT(d.get_focus_target() == btn);
     }
 
     return test::report("flex");

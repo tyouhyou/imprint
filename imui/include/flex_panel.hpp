@@ -90,6 +90,11 @@ namespace zb::ui
         // container marker for generic host code (ui_builder, layout)
         [[nodiscard]] bool is_flex_container() const override { return true; }
 
+        // intrinsic size from the items' demands (contract §3, S3): an
+        // auto-sized container must stay hittable/drawable when nested.
+        // Wrap is ignored — the natural size is the unwrapped line
+        [[nodiscard]] core::imsize_t measure() const override;
+
         void layout() override;
 
     protected:

@@ -92,6 +92,20 @@ int test_measure()
         EXPECT(p.measure().width == 100 && p.measure().height == 12);
     }
 
+    // FlexPanel: intrinsic measure from the items' demands (S3)
+    {
+        FlexPanel r;
+        r.set_direction(FlexPanel::flex_direction::row);
+        r.set_spacing(2);
+        auto a = std::make_unique<Widget>();
+        a->set_size(10, 5);
+        auto b = std::make_unique<Widget>();
+        b->set_size(20, 7);
+        r.add_child(std::move(a));
+        r.add_child(std::move(b));
+        EXPECT(r.measure().width == 32 && r.measure().height == 7);
+    }
+
     // ListBox: 100 wide, visible rows tall
     {
         ListBox l;

@@ -94,6 +94,25 @@ namespace zb::ui
         mark_layout_dirty();
     }
 
+    core::imsize_t FlexPanel::measure() const
+    {
+        int main = 0;
+        int cross = 0;
+        for (size_t i = 0; i < items.size(); ++i)
+        {
+            const Widget &child = *items[i].child;
+            const int m = items[i].flex_grow > 0 ? 0 : main_demand(child, direction);
+            main += m + (i == 0 ? 0 : spacing);
+            cross = std::max(cross, cross_demand(child, direction));
+        }
+        const int pad = 2 * padding;
+        if (is_row(direction))
+        {
+            return {main + pad, cross + pad};
+        }
+        return {cross + pad, main + pad};
+    }
+
     void FlexPanel::layout()
     {
         // the layout owns all child geometry writes: report the whole
