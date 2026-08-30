@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Imprint Showcase — WASM Demo</title>
+<style>
+  body {
+    margin: 0;
+    background: #1e1e28;
+    color: #ddd;
+    font-family: sans-serif;
+    text-align: center;
+    padding: 16px;
+  }
+  h1 { font-size: 20px; margin: 8px 0 12px; }
+  #screen {
+    width: 512px;
+    height: 384px;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+    border: 2px solid #555;
+    background: #000;
+    touch-action: none;
+    cursor: pointer;
+  }
+  p.hint { font-size: 13px; color: #999; margin-top: 12px; }
+  #status { font-size: 12px; color: #7c7; margin-top: 6px; min-height: 1em; }
+</style>
+</head>
+<body>
+<h1>Imprint Showcase — WASM</h1>
+<canvas id="screen" width="256" height="192"></canvas>
+<p class="hint">
+  可直接双击打开（wasm 已内嵌进 showcase.js，无需 HTTP 服务器）<br>
+  操作：鼠标点击按钮（256×192 帧缓冲，CSS 放大 2 倍，pixelated 显示）<br>
+  键盘：方向键 / Enter / Tab / Space 操作
+</p>
+<div id="status">loading…</div>
+<script src="main.js"></script>
+<script src="showcase.js"></script>
+</body>
+</html>
