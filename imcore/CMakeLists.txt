@@ -105,6 +105,10 @@ if (NOT TTF_FONT STREQUAL "" AND NOT NDS_PLATFORM)
             ${CMAKE_SOURCE_DIR}/third_party/stb)
         set(TTF_CODEPOINTS ${CMAKE_CURRENT_BINARY_DIR}/ttf_codepoints.txt)
         set(TTF_GLYPHS ${CMAKE_CURRENT_BINARY_DIR}/include/text/ttf_glyphs.hpp)
+        # the rasterizer writes into this directory; a fresh build tree
+        # must have it before the custom command runs (the FONT_SUBSET
+        # branch makes the same call for the same reason)
+        file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/text)
         add_custom_command(
             OUTPUT ${TTF_GLYPHS}
             COMMAND ${Python3_EXECUTABLE}

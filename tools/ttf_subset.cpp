@@ -86,6 +86,10 @@ namespace
             std::remove(tmp.c_str());
             return true;
         }
+        // Windows rename does not replace an existing target: drop the
+        // old header first (a build tool; the brief non-atomic window
+        // costs nothing)
+        std::remove(path);
         return std::rename(tmp.c_str(), path) == 0;
     }
 }  // namespace
