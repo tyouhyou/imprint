@@ -99,7 +99,11 @@ namespace zb::ui::core
         static constexpr bool per_channel_blend = Traits::per_channel_blend;
 
         pixel_t pixel = 0;
-        uint8_t bytes[4];  // 32bpp only: endian-neutral byte view
+        // endian-neutral byte view of the pixel word (32bpp channel
+        // placement). Sized to the pixel word, NOT hardcoded 4: the color
+        // object must be exactly depth/8 bytes (pre-A-19 contract; the NDS
+        // shell's dmaCopy counts depth/8-per-pixel bytes)
+        uint8_t bytes[sizeof(pixel_t)];  // 32bpp only: endian-neutral byte view
 
         operator pixel_t() const { return pixel; }
         void operator=(const pixel_t c) { pixel = c; }
@@ -218,4 +222,9 @@ namespace zb::ui::core
             return c;
         }
     };
+
+    // the color object IS the pixel word: hosts size buffers and count
+    // presentation bytes as depth/8 per pixel (e.g. the NDS dmaCopy)
+    static_assert(sizeof(basic_color<im_pixel_traits_abgr_1555>) == 2);
+    static_assert(sizeof(basic_color<pixel_traits_detail::bytes_bgra>) == 4);
 }  // namespace zb::ui::core

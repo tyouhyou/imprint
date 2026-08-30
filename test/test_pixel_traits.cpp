@@ -16,6 +16,14 @@ int test_pixel_traits()
         EXPECT(Color::from(0, 0, 0, 0).pixel == 0);
     }
 
+    // the color object IS the pixel word (depth/8 bytes): shells count
+    // presentation bytes per pixel (NDS dmaCopy); regression lock for the
+    // bytes[4] union slip that doubled 16bpp sizeof (striped NDS frames)
+    {
+        EXPECT(sizeof(Color) == Color::depth / 8);
+        EXPECT(sizeof(Color) == sizeof(decltype(Color{}.pixel)));
+    }
+
     // channel accessors round-trip (8-bit normalized at every depth;
     // 248 is exact on both 8-bit channels and 5-bit channels)
     {
