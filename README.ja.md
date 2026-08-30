@@ -1,23 +1,47 @@
-# Imprint
+# Imprint UI
 
-> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-08-23 時点）。
+> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-08-30 時点）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-blue)](README.ja.md)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
+**GUI は一度書くだけ。どこでも動く——ニンテンドーDS でも。**
 
-**一つのピクセルバッファで、すべてのターゲットへ。** Imprint は依存ゼロ・ソフトウェアレンダリングの C++17 UI フレームワークです。同じソースツリーが、ニンテンドーDS、Linux（フレームバッファまたは X11）、Windows、macOS（AppKit）、ブラウザ（WebAssembly）、そして C-ABI 経由の Python ホストで動作します。
+Imprint UI は、組み込みと非典型的なターゲットのための、極小・依存ゼロ・ソフトウェアレンダリングの C++17 UI フレームワークです。同じ UI ソースツリーが Windows、Linux、macOS、ブラウザ（WebAssembly）、ニンテンドーDS 向けにコンパイルできます——PC で開発・プレビューし、**まったく同じコード**をデバイスへ。
 
-| Windows | Linux (X11) | WebAssembly |
-|:---:|:---:|:---:|
-| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> |
+**1 つの UI ソースツリー。1 つのピクセルバッファ。複数のターゲット。**
 
-| ニンテンドーDS | Python ホスト |
-|:---:|:---:|
-| <img src="assets/nds.png" width="240"> | <img src="assets/py256.png" width="240"> |
+![1 つの UI ソースツリー、4 つのターゲット](assets/showcase/montage.png)
+
+**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— 上のページは WebAssembly ビルド。ニンテンドーDS のフレームは同じソースの devkitARM ビルドです。
+
+GPU 不要。OS の GUI ツールキット不要。プラットフォーム固有の UI コードも不要。
+
+```
+              同じ UI ソース
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+     Windows      Linux       macOS
+        │        (X11/FB)       │
+        └───────────┼───────────┘
+                    ↓
+             WebAssembly  ←  ブラウザで試す
+                    ↓
+              ニンテンドーDS
+                    ↓
+        あなたの組み込みボード（C-ABI）
+```
+
+上記 `showcase` アプリの実測フットプリント（Release ビルド）：
+
+| ターゲット | UI コード+データ | RAM（静的） | フレームバッファ | 配置サイズ |
+|---|---|---|---|---|
+| ニンテンドーDS | 543 KB text + 11 KB data | 7.7 KB BSS | 96 KB（256×192×2 B） | 646 KB `.nds` |
+| WebAssembly | — | — | 256×192×4 B | 250 KB の単一 `.js`、`file://` で直接動作 |
 
 ## 特徴
 
@@ -31,6 +55,13 @@
 - **ゼロアロケーションのホットパス** — RAII の `ClipGuard`、イベントのトゥームストーン、`Subscription`
 - **テキストは全体で UTF-8** — 組み込みの 5x7 ビットマップグリフフォールバック（ソース文字列から自動サブセット化）。FreeType（フォント）と vendored stb コーデック（PNG/JPEG）はオプション
 - **C++17、CMake、静的ライブラリ** — すべて組み合わせ可能、強制されるものはなし
+
+## 非目標
+
+GPU 描画アクセラレーション（レンダリングカーネルは CPU ソフトウェアラスタライズのまま）·
+アニメーション/トランジションシステム · 実行時バックエンド切替 · マルチスレッド描画 ·
+IME 合成 · RTL レイアウト。Imprint UI は意図的に極小を保ちます：1 つのウィジェットツリー、
+1 つのピクセルバッファ、1 つの入力ストリーム——それ以外はホストの仕事です。
 
 ## クイックサンプル
 
@@ -108,7 +139,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 ## デモ
 
-デモアプリは三目並べ（人間 vs コンピュータ）。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。2 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。3 つ目のアプリ `showcase`（`-DSTORY=showcase`）は、マルチターゲット・モンタージュの元になるウィジェットギャラリーです。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と全ウィジェットページを備え、どちらも `.ui` デザインファイルで宣言します。`assets/showcase/` のフレームは WASM ビルド（`demo/wasm/index_showcase.html`）でキャプチャしたもので、同じソースが NDS ROM（`-DSTORY=showcase`）もビルドします。
+デモアプリは三目並べ（人間 vs コンピュータ）。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。2 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。3 つ目のアプリ `showcase`（`-DSTORY=showcase`）は、マルチターゲット・モンタージュの元になるウィジェットギャラリーです。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と全ウィジェットページを備え、どちらも `.ui` デザインファイルで宣言します。`assets/showcase/` のフレームはこれらのビルドから生成。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします（`-DSTORY=showcase`）。
 
 ## ライセンス
 

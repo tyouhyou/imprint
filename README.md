@@ -1,21 +1,48 @@
-# Imprint
+# Imprint UI
 
 [![English](https://img.shields.io/badge/English-blue)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
+**Write your GUI once. Run it anywhere — even on a Nintendo DS.**
 
-**One pixel buffer, every target.** Imprint is a dependency-free, software-rendered C++17 UI framework. The same source tree runs on a Nintendo DS, Linux (framebuffer or X11), Windows, macOS (AppKit), in the browser via WebAssembly, and behind a C-ABI driven from Python.
+Imprint UI is a tiny, dependency-free, software-rendered C++17 GUI framework for
+embedded and unusual targets. The same UI source tree compiles for Windows,
+Linux, macOS, the browser (WebAssembly) and the Nintendo DS — develop and
+preview on your PC, then ship the very same code to the device.
 
-| Windows | Linux (X11) | WebAssembly |
-|:---:|:---:|:---:|
-| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> |
+**One UI source tree. One pixel buffer. Many targets.**
 
-| Nintendo DS | Python host |
-|:---:|:---:|
-| <img src="assets/nds.png" width="240"> | <img src="assets/py256.png" width="240"> |
+![One UI source tree, four targets](assets/showcase/montage.png)
+
+**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** — the page above runs the WebAssembly build; the Nintendo DS frame comes from the same source compiled with devkitARM.
+
+No GPU required. No OS GUI toolkit required. No platform-specific UI code.
+
+```
+              same UI source
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+     Windows       Linux      macOS
+        │        (X11/FB)       │
+        └───────────┼───────────┘
+                    ↓
+             WebAssembly  ←  try it in your browser
+                    ↓
+              Nintendo DS
+                    ↓
+         your embedded board (C-ABI)
+```
+
+Measured footprints (Release builds of the `showcase` app above):
+
+| Target | UI code+data | RAM (statics) | Framebuffer | Shipped size |
+|---|---|---|---|---|
+| Nintendo DS | 543 KB text + 11 KB data | 7.7 KB BSS | 96 KB (256×192×2 B) | 646 KB `.nds` |
+| WebAssembly | — | — | 256×192×4 B | 250 KB single `.js` file, runs from `file://` |
 
 ## Highlights
 
@@ -29,6 +56,14 @@
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
 - **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback (auto-subsetted from source strings); optional FreeType (fonts) and vendored stb codecs (PNG/JPEG)
 - **C++17, CMake, static libraries** — everything is composable, nothing is forced
+
+## Non-goals
+
+GPU-accelerated drawing (the render kernel stays CPU software rasterization) ·
+animation/transition system · runtime backend switching · multithreaded
+rendering · IME composition · RTL layout. Imprint UI deliberately stays small:
+one widget tree, one pixel buffer, one input stream — everything else is the
+host's job.
 
 ## Quick Example
 
@@ -82,7 +117,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 | macOS (AppKit) | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0, no extra options |
 | Linux (X11) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | input-capable backend |
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
-| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds` |
+| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the showcase ROM |
 | WebAssembly | `demo/wasm/build.sh` (docker emscripten) | includes a node smoke test |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
@@ -106,7 +141,7 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 ## Demo
 
-The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build/build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents). A third app, `showcase` (`-DSTORY=showcase`), is the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from the WASM build (`demo/wasm/index_showcase.html`); the same sources build the NDS ROM (`-DSTORY=showcase`).
+The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build/build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents). A third app, `showcase` (`-DSTORY=showcase`), is the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from these builds; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM (`-DSTORY=showcase`).
 
 ## License
 

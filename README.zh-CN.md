@@ -1,23 +1,47 @@
-# Imprint
+# Imprint UI
 
-> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-08-23）。
+> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-08-30）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
-[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
+[![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
+**一套 GUI 代码，到处运行——甚至包括任天堂 DS。**
 
-**一个像素缓冲，跑遍所有目标。** Imprint 是一个零依赖、软件渲染的 C++17 UI 框架。同一份源码可以跑在任天堂 DS、Linux（framebuffer 或 X11）、Windows、macOS（AppKit）、浏览器（WebAssembly）以及通过 C-ABI 调用的 Python 宿主上。
+Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，面向嵌入式与非传统目标。同一份 UI 源码树可以编译到 Windows、Linux、macOS、浏览器（WebAssembly）和任天堂 DS——在 PC 上开发预览，然后把**完全相同的代码**发布到设备上。
 
-| Windows | Linux (X11) | WebAssembly |
-|:---:|:---:|:---:|
-| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> |
+**一份 UI 源码树。一个像素缓冲。多个目标。**
 
-| 任天堂 DS | Python 宿主 |
-|:---:|:---:|
-| <img src="assets/nds.png" width="240"> | <img src="assets/py256.png" width="240"> |
+![一份 UI 源码树，四个目标](assets/showcase/montage.png)
+
+**[在浏览器里直接试](https://tyouhyou.github.io/imprint/)** —— 上面的页面是 WebAssembly 构建；任天堂 DS 画面来自同一份源码的 devkitARM 构建。
+
+不需要 GPU。不需要操作系统 GUI 工具包。不需要平台专属 UI 代码。
+
+```
+              同一份 UI 源码
+                    │
+        ┌───────────┼───────────┐
+        ↓           ↓           ↓
+     Windows      Linux       macOS
+        │        (X11/FB)       │
+        └───────────┼───────────┘
+                    ↓
+             WebAssembly  ←  浏览器直接试
+                    ↓
+               任天堂 DS
+                    ↓
+          你的嵌入式板子（C-ABI）
+```
+
+上例 `showcase` 应用的实测体积（Release 构建）：
+
+| 目标 | UI 代码+数据 | RAM（静态） | 帧缓冲 | 交付体积 |
+|---|---|---|---|---|
+| 任天堂 DS | 543 KB text + 11 KB data | 7.7 KB BSS | 96 KB（256×192×2 B） | 646 KB `.nds` |
+| WebAssembly | — | — | 256×192×4 B | 250 KB 单 `.js` 文件，`file://` 直开 |
 
 ## 特性
 
@@ -31,6 +55,12 @@
 - **零分配热路径** — RAII `ClipGuard`、事件墓碑删除、`Subscription`
 - **全链路 UTF-8 文本** — 内置 5x7 位图字形兜底（按源码字符串自动子集化）；可选 FreeType / libpng / libjpeg
 - **C++17、CMake、静态库** — 一切可组合，不强加任何东西
+
+## 非目标
+
+GPU 加速绘制（渲染内核保持 CPU 软件光栅）· 动画/过渡系统 · 运行时后端切换 ·
+多线程渲染 · IME 组合 · RTL 排版。Imprint UI 刻意保持极小：一棵控件树、
+一个像素缓冲、一路输入流——其余都是宿主的事。
 
 ## 快速示例
 
@@ -107,7 +137,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 ## 示例
 
-示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。第三个应用 `showcase`（`-DSTORY=showcase`）是多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面截自 WASM 构建（`demo/wasm/index_showcase.html`）；同一份源码也构建 NDS ROM（`-DSTORY=showcase`）。
+示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。第三个应用 `showcase`（`-DSTORY=showcase`）是多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面来自这些构建；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM（`-DSTORY=showcase`）。
 
 ## 许可证
 
