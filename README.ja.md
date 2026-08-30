@@ -108,7 +108,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 ## デモ
 
-デモアプリは三目並べ（人間 vs コンピュータ）。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。2 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。
+デモアプリは三目並べ（人間 vs コンピュータ）。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。2 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。3 つ目のアプリ `showcase`（`-DSTORY=showcase`）は、マルチターゲット・モンタージュの元になるウィジェットギャラリーです。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と全ウィジェットページを備え、どちらも `.ui` デザインファイルで宣言します。`assets/showcase/` のフレームは WASM ビルド（`demo/wasm/index_showcase.html`）でキャプチャしたもので、同じソースが NDS ROM（`-DSTORY=showcase`）もビルドします。
 
 ## ライセンス
 

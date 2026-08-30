@@ -106,7 +106,7 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 ## Demo
 
-The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build/build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
+The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build/build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents). A third app, `showcase` (`-DSTORY=showcase`), is the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from the WASM build (`demo/wasm/index_showcase.html`); the same sources build the NDS ROM (`-DSTORY=showcase`).
 
 ## License
 

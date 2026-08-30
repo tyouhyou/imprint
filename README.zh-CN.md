@@ -107,7 +107,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 ## 示例
 
-示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
+示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。第三个应用 `showcase`（`-DSTORY=showcase`）是多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面截自 WASM 构建（`demo/wasm/index_showcase.html`）；同一份源码也构建 NDS ROM（`-DSTORY=showcase`）。
 
 ## 许可证
 
