@@ -175,6 +175,10 @@ jobs:
         run: |
           docker run --rm -v "$PWD:/src" emscripten/emsdk:5.0.1 \
             sh -c 'cd /src && sh demo/wasm/build.sh && cd demo/wasm && node smoke.js'
+      - name: Build the showcase story, run its node smoke test
+        run: |
+          docker run --rm -v "$PWD:/src" emscripten/emsdk:5.0.1 \
+            sh -c 'cd /src && sh demo/wasm/build.sh showcase && node demo/wasm/smoke.js /src/demo/wasm/showcase_mod.js'
 
   python-host:
     if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'

@@ -1,8 +1,9 @@
-// node smoke test for the wasm tictactoe build (run in the emscripten image)
-// usage: node demo/wasm/smoke.js [path to tictactoe_mod.js]
+// node smoke test for the wasm story builds (run in the emscripten image)
+// usage: node demo/wasm/smoke.js [path to <story>_mod.js]
 const path = require("path");
 const OUT = process.argv[2] || path.join(__dirname, "tictactoe_mod.js");
 const DIR = path.dirname(OUT);
+const IS_SHOWCASE = path.basename(OUT).indexOf("showcase") === 0;
 
 const createModule = require(path.resolve(OUT));
 
@@ -42,13 +43,34 @@ createModule({
       const first = [Module.HEAPU8[ptr], Module.HEAPU8[ptr + 1], Module.HEAPU8[ptr + 2], Module.HEAPU8[ptr + 3]];
       console.log("non-zero pixels:", nonzero, "first px (bgra):", first.join(","));
 
-      Module._zb_app_destroy(app);
-      Module._free(w); Module._free(h);
-
       if (ww !== 256 || hh !== 192 || nonzero === 0) {
         console.error("SMOKE TEST FAILED");
         process.exit(1);
       }
+
+      if (IS_SHOWCASE) {
+        // page-switch round trip on the same app: GALLERY (86,164)
+        // mounts the gallery page, BACK (122,18) returns — geometry
+        // matches the desktop smoke suite (content-height layout)
+        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+          [app, 9, 86, 164, 0, 0, 0]);
+        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+          [app, 10, 86, 164, 0, 0, 0]);
+        Module.ccall("zb_paint", null, ["number"], [app]);
+        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+          [app, 9, 122, 18, 0, 0, 0]);
+        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+          [app, 10, 122, 18, 0, 0, 0]);
+        Module.ccall("zb_paint", null, ["number"], [app]);
+        Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("showcase page switch: ok");
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      Module._zb_app_destroy(app);
+      Module._free(w); Module._free(h);
 
       // close-flow E2E: play a draw, click QUIT, the closed callback must
       // fire and AGAIN's pixels must survive the partial repaint (the
