@@ -13,4 +13,4 @@ column spacing=6 padding=8
       slider id="demo_slider" min=0 max=100 step=5
       progress_bar id="demo_bar" value=60
       text_input text="type here"
-      list_box id="demo_list" rows=2 items="Alpha" "Beta" "Gamma"
+      list_box id="demo_list" width=100 rows=2 items="Alpha" "Beta" "Gamma"
