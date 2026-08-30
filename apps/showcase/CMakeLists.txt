@@ -1,0 +1,37 @@
+add_library(showcase_app STATIC src/app_maker.cpp src/showcase.cpp)
+target_link_libraries(showcase_app PUBLIC imapp_canvas)
+target_include_directories(showcase_app
+    PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+# design documents packed at build time (contract: build-time validation
+# with the same parser; NDS has no filesystem, so the embedded bytes are
+# the shipping form on every target)
+set(SHOWCASE_UI
+    ${CMAKE_CURRENT_SOURCE_DIR}/hero.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/gallery.ui)
+set(SHOWCASE_UI_HEADER ${CMAKE_CURRENT_BINARY_DIR}/showcase_ui.gen.hpp)
+if (NDS_PLATFORM)
+    # the ui_embed host tool does not build under the ARM toolchain; the
+    # cross build must be handed a host-built executable instead of
+    # skipping validation silently
+    set(UI_EMBED_EXECUTABLE "" CACHE FILEPATH
+        "Host-built ui_embed executable for embedded showcase builds")
+    if (UI_EMBED_EXECUTABLE STREQUAL "")
+        message(FATAL_ERROR
+            "showcase on NDS requires -DUI_EMBED_EXECUTABLE=<path to a host-built ui_embed>")
+    endif()
+    add_custom_command(
+        OUTPUT ${SHOWCASE_UI_HEADER}
+        COMMAND ${UI_EMBED_EXECUTABLE} ${SHOWCASE_UI_HEADER} ${SHOWCASE_UI}
+        DEPENDS ${SHOWCASE_UI}
+        VERBATIM)
+else()
+    add_custom_command(
+        OUTPUT ${SHOWCASE_UI_HEADER}
+        COMMAND ui_embed ${SHOWCASE_UI_HEADER} ${SHOWCASE_UI}
+        DEPENDS ui_embed ${SHOWCASE_UI}
+        VERBATIM)
+endif()
+add_custom_target(showcase_ui_gen DEPENDS ${SHOWCASE_UI_HEADER})
+add_dependencies(showcase_app showcase_ui_gen)
+target_include_directories(showcase_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
