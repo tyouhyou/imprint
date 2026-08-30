@@ -19,6 +19,8 @@ preview on your PC, then ship the very same code to the device.
 
 **[Try it live in your browser](https://tyouhyou.github.io/imprint/)** — the page above runs the WebAssembly build; the Nintendo DS frame comes from the same source compiled with devkitARM.
 
+<img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: START fills the progress bars, the dark theme, the widget gallery, the slider driving the demo bar">
+
 No GPU required. No OS GUI toolkit required. No platform-specific UI code.
 
 ```

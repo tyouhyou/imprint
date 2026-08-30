@@ -18,6 +18,8 @@ Imprint UI は、組み込みと非典型的なターゲットのための、極
 
 **[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— 上のページは WebAssembly ビルド。ニンテンドーDS のフレームは同じソースの devkitARM ビルドです。
 
+<img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：START でプログレスバーが充填、ダークテーマ、全ウィジェットページ、スライダーがデモバーを駆動">
+
 GPU 不要。OS の GUI ツールキット不要。プラットフォーム固有の UI コードも不要。
 
 ```
