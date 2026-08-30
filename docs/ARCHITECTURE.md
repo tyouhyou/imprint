@@ -33,7 +33,7 @@ other target uses the desktop defaults.
 | `imevent` | Zero-allocation pub/sub `Event<T...>` + RAII `Subscription`; `PAINT_EVENT`/`CLOSE_EVENT`   | INTERFACE    | —                                   |
 | `iminput` | `input_event` POD + `key_code` enum                                                         | INTERFACE    | —                                   |
 | `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap, optional FreeType, UTF-8), codecs (`png`/`jpeg`, vendored stb) | SHARED | `imutil`                            |
-| `imui`    | Widget tree: `Panel`, `FlexPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ListBox`, `TextInput`, `Dialog`, `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`) | STATIC | `imcore`, `imevent`, `iminput`      |
+| `imui`    | Widget tree: `Panel`, `FlexPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`) | STATIC | `imcore`, `imevent`, `iminput`      |
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
 | `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
 | `apps/<story>_app` | Demo app implementing `make_app()` (the only place app code lives)                 | STATIC       | `imapp_canvas`                      |

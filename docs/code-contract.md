@@ -268,7 +268,8 @@ keeps only API-level supplements.
   hosts; they must not leak C++ types.
 - Widget sizing: `Widget::measure()` returns the natural size (default =
   current size; Label/Checkbox/RadioButton/Slider/ListBox override with
-  content-derived sizes). `set_size` sets the explicit flag; the layout
+  content-derived sizes; ProgressBar overrides with a fixed intrinsic
+  100×12). `set_size` sets the explicit flag; the layout
   layer (FlexPanel) applies measure() only to non-explicit children;
   `set_size_auto` is for layouts to write sizes back and clear explicit —
   app code does not call it directly. Explicit sizes always win over
@@ -352,11 +353,12 @@ keeps only API-level supplements.
 
 - `ui_node` is the sole entry for static descriptions:
   type/id/ordered props/children/items/flex_grow. The fluent builder
-  (column/row/panel/label/button/checkbox/radio/slider/list_box/text_input
-  + .size/.pos/.text/.named/.checked/.group/.step/.rows/.spacing/.padding/
-  .wrap/.flex/.visible) and the future design-file deserializer (G6) share
-  one intermediate representation — the props produced by either must be
-  consumable by the same property-resolution table.
+  (column/row/panel/label/button/checkbox/radio/slider/progress_bar/
+  list_box/text_input
+  + .size/.pos/.text/.named/.checked/.group/.step/.value/.rows/.spacing/
+  .padding/.wrap/.flex/.visible) and the future design-file deserializer
+  (G6) share one intermediate representation — the props produced by
+  either must be consumable by the same property-resolution table.
 - `build(host, root)`: the root node itself is the document (the host is
   the real container; the root tag does not instantiate a widget); root's
   spacing/padding/wrap apply when the host is a FlexPanel, spacing/padding

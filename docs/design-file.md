@@ -65,9 +65,10 @@ column id="root" spacing=6 padding=10
 The tag and property set is defined by the factory/property tables in
 `imui/src/ui_builder.cpp`: containers (`panel`, `column`, `row`) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
-`list_box`, `text_input`), with properties including `id`, `text`,
-`size`, `pos`, `named`, `checked`, `group`, `step`, `rows`, `spacing`,
-`padding`, `wrap`, `flex`, `visible`. Both the fluent builder and the
+`progress_bar`, `list_box`, `text_input`), with properties including
+`id`, `text`, `size`, `pos`, `named`, `checked`, `group`, `step`,
+`min`, `max`, `value`, `rows`, `spacing`, `padding`, `wrap`, `flex`,
+`visible`. Both the fluent builder and the
 parser feed the same tables, so anything expressible in C++ builder
 form parses identically from text.
 
