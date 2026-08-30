@@ -5,7 +5,7 @@ column spacing=6 padding=8
   row spacing=6
     column spacing=4
       label text="Label"
-      button text="Button"
+      button id="demo_button" text="Button"
       checkbox text="Check" checked=true
       radio text="Option A" group=1 checked=true
       radio text="Option B" group=1

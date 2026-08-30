@@ -13,6 +13,28 @@
 
 namespace zb::app::showcase
 {
+    namespace
+    {
+        // the design-file grammar carries no alignment attribute yet
+        // (backlog): center each materialized caption vertically; buttons
+        // additionally center horizontally (wire_controls). Descends
+        // through flex containers — the is_flex_container() guard is the
+        // ui_builder pattern (only FlexPanel overrides it, so the cast is
+        // safe without RTTI)
+        void center_text(zb::ui::Widget &w)
+        {
+            w.set_v_align(zb::ui::Widget::v_align::center);
+            if (w.is_flex_container())
+            {
+                for (const auto &item :
+                     static_cast<zb::ui::FlexPanel &>(w).get_items())
+                {
+                    center_text(*item.child);
+                }
+            }
+        }
+    }
+
     void Showcase::create_window(uint32_t max_client_width,
                                  uint32_t max_client_height)
     {
@@ -61,6 +83,7 @@ namespace zb::app::showcase
             auto page = std::make_unique<zb::ui::FlexPanel>();
             page->set_size(_width, _height);
             zb::ui::build(*page, tree);
+            center_text(*page);
             pages_[i] = std::move(page);
         }
     }
@@ -108,6 +131,26 @@ namespace zb::app::showcase
                 sub_slider_ = demo_slider_->changed.subscribe(
                     [this](const int v) { demo_bar_->set_value(v); });
             }
+        }
+
+        // button captions also center horizontally (every widget is
+        // vertically centered at materialization)
+        const auto center_button = [this](const char *id) {
+            for (auto &page : pages_)
+            {
+                if (page != nullptr)
+                {
+                    if (auto *w = page->find_by_id(id))
+                    {
+                        w->set_h_align(zb::ui::Widget::h_align::center);
+                    }
+                }
+            }
+        };
+        for (const char *id : {"start_btn", "stop_btn", "gallery_btn", "theme_btn",
+                               "back_btn", "demo_button"})
+        {
+            center_button(id);
         }
     }
 
