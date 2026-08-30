@@ -274,6 +274,16 @@ keeps only API-level supplements.
   `set_size_auto` is for layouts to write sizes back and clear explicit —
   app code does not call it directly. Explicit sizes always win over
   measure().
+- **FlexPanel intrinsic measure (S3)**: `FlexPanel::measure()` overrides
+  with a content-derived size so auto-sized (nested) containers are
+  hittable and drawable: main axis = sum of the items' main-axis demands
+  plus spacing between them, cross axis = the largest cross-axis demand,
+  both plus `2*padding`. The demands follow the layout rules exactly —
+  an explicit axis uses the current size, otherwise the child's
+  `measure()`, and flex items contribute 0 on the main axis — so a
+  measured container lays out identically to the size its parent assigns
+  from that measure. The computation is allocation-free (the layout path
+  calls it on every demand pass).
 - **Explicitness is tracked per axis**: `size_explicit_w_/h_` are
   independent; `is_size_explicit()` = either axis (compatibility
   semantics), `is_width_explicit()/is_height_explicit()` query per axis.
