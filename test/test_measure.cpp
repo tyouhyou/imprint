@@ -86,6 +86,12 @@ int test_measure()
         EXPECT(s.measure().width == 100 && s.measure().height == 20);
     }
 
+    // ProgressBar: intrinsic 100x12 (fixed)
+    {
+        ProgressBar p;
+        EXPECT(p.measure().width == 100 && p.measure().height == 12);
+    }
+
     // ListBox: 100 wide, visible rows tall
     {
         ListBox l;

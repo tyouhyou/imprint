@@ -7,6 +7,7 @@
 #include "flex_panel.hpp"
 #include "label.hpp"
 #include "panel.hpp"
+#include "progress_bar.hpp"
 #include "radio_button.hpp"
 #include "slider.hpp"
 #include "list_box.hpp"

@@ -64,6 +64,7 @@ namespace zb::ui
         ui_node &checked(const bool c) { return prop("checked", c); }
         ui_node &group(const long long g) { return prop("group", g); }
         ui_node &step(const long long s) { return prop("step", s); }
+        ui_node &value(const long long v) { return prop("value", v); }
         ui_node &rows(const long long n) { return prop("rows", n); }
 
         // container properties (FlexPanel)
@@ -140,6 +141,13 @@ namespace zb::ui
     {
         ui_node n;
         n.type = "slider";
+        n.prop("min", min).prop("max", max);
+        return n;
+    }
+    inline ui_node progress_bar(const long long min, const long long max)
+    {
+        ui_node n;
+        n.type = "progress_bar";
         n.prop("min", min).prop("max", max);
         return n;
     }

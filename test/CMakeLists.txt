@@ -31,6 +31,7 @@ add_executable(
     test_checkbox.cpp
     test_radio.cpp
     test_slider.cpp
+    test_progress_bar.cpp
     test_list_box.cpp
     test_measure.cpp
     test_ui_file.cpp

@@ -8,6 +8,7 @@ add_library(
     src/label.cpp
     src/radio_button.cpp
     src/slider.cpp
+    src/progress_bar.cpp
     src/list_box.cpp
     src/theme.cpp
     src/ui_builder.cpp

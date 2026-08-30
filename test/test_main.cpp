@@ -23,6 +23,7 @@ int test_codec();
 int test_checkbox();
 int test_radio();
 int test_slider();
+int test_progress_bar();
 int test_list_box();
 int test_text_input();
 int test_builder();
@@ -78,6 +79,7 @@ int main()
     total += test_checkbox();
     total += test_radio();
     total += test_slider();
+    total += test_progress_bar();
     total += test_list_box();
     total += test_text_input();
     total += test_builder();

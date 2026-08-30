@@ -7,6 +7,7 @@
 #include "list_box.hpp"
 #include "logging.hpp"
 #include "panel.hpp"
+#include "progress_bar.hpp"
 #include "radio_button.hpp"
 #include "slider.hpp"
 #include "text_input.hpp"
@@ -117,6 +118,10 @@ namespace zb::ui
             {
                 return std::make_unique<Slider>();
             }
+            if (t == "progress_bar")
+            {
+                return std::make_unique<ProgressBar>();
+            }
             if (t == "list_box")
             {
                 return std::make_unique<ListBox>();
@@ -148,6 +153,10 @@ namespace zb::ui
         Slider *as_slider(Widget &w)
         {
             return static_cast<Slider *>(&w);
+        }
+        ProgressBar *as_progress_bar(Widget &w)
+        {
+            return static_cast<ProgressBar *>(&w);
         }
         ListBox *as_list(Widget &w)
         {
@@ -223,6 +232,14 @@ namespace zb::ui
                 s.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
                             static_cast<int>(prop_of(n, "max", 100LL)));
                 s.set_step(static_cast<int>(prop_of(n, "step", 1LL)));
+                return;
+            }
+            if (t == "progress_bar")
+            {
+                ProgressBar &p = *as_progress_bar(w);
+                p.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
+                            static_cast<int>(prop_of(n, "max", 100LL)));
+                p.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
                 return;
             }
             if (t == "list_box")
