@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <memory>
 
 #include "canvas_window.hpp"
 #include "event.hpp"
@@ -65,7 +66,7 @@ namespace zb::app::showcase
         void advance();
 
         // default desktop size (4:3, like FB 320x240 and NDS/WASM
-        // 256x192 — the flex pages scale to whatever the shell passes)
+        // 256x192 — the pages scale to whatever the shell passes)
         int32_t _width{640};
         int32_t _height{480};
 
@@ -73,7 +74,11 @@ namespace zb::app::showcase
         bool running_ = false;
 
         zb::SharedPtr<CanvasWindow> window_;
-        zb::ui::FlexPanel *pages_[2] = {nullptr, nullptr};
+        // Panel layout stacks children unconditionally, so exactly one
+        // page is mounted under the root at a time; parked pages live in
+        // the array, mounted_ points at the one in the tree (owned by it)
+        std::unique_ptr<zb::ui::FlexPanel> pages_[2];
+        zb::ui::FlexPanel *mounted_ = nullptr;
         int current_ = 0;
 
         zb::ui::ProgressBar *cpu_bar_ = nullptr;

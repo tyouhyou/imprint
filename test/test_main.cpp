@@ -41,6 +41,7 @@ int test_pixel_convert();
 int test_pixel_traits();
 int test_shell_presenter();
 int test_theme();
+int test_showcase();
 
 #if defined(_WIN32)
 int test_win_input();
@@ -96,6 +97,7 @@ int main()
     total += test_pixel_traits();
     total += test_shell_presenter();
     total += test_theme();
+    total += test_showcase();
 
 #if defined(_WIN32)
     total += test_win_input();

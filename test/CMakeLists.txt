@@ -45,6 +45,7 @@ add_executable(
     test_pixel_traits.cpp
     test_shell_presenter.cpp
     test_theme.cpp
+    test_showcase.cpp
 )
 
 target_link_libraries(
@@ -55,6 +56,7 @@ target_link_libraries(
     imapp_canvas
     imutil
     tictactoe_app
+    showcase_app
     shell_common
 )
 

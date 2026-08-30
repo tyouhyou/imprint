@@ -1,17 +1,16 @@
 column spacing=6 padding=8
   row spacing=6
     label text="WIDGET GALLERY"
-    panel flex=1
     button id="back_btn" text="PANEL"
-  row spacing=6 flex=1
+  row spacing=6
     column spacing=4
       label text="Label"
       button text="Button"
       checkbox text="Check" checked=true
       radio text="Option A" group=1 checked=true
       radio text="Option B" group=1
-    column spacing=4 flex=1
+    column spacing=4
       slider id="demo_slider" min=0 max=100 step=5
       progress_bar id="demo_bar" value=60
       text_input text="type here"
-      list_box rows=2 items="Alpha" "Beta" "Gamma"
+      list_box id="demo_list" rows=2 items="Alpha" "Beta" "Gamma"

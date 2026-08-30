@@ -1,23 +1,17 @@
 column spacing=6 padding=8
+  label text="DEVICE STATUS"
+  label text="CPU"
+  progress_bar id="cpu_bar"
+  label text="MEMORY"
+  progress_bar id="mem_bar"
+  label text="TEMP"
+  progress_bar id="temp_bar"
   row spacing=6
-    label text="DEVICE STATUS"
-    panel flex=1
-    button id="theme_btn" text="DARK"
-  column spacing=4 flex=1
-    row spacing=6
-      label text="CPU"
-      progress_bar id="cpu_bar" flex=1
-    row spacing=6
-      label text="MEMORY"
-      progress_bar id="mem_bar" flex=1
-    row spacing=6
-      label text="TEMP"
-      progress_bar id="temp_bar" flex=1
-    row spacing=6
-      label text="STATE"
-      label id="state_value" text="IDLE"
+    label text="STATE"
+    label id="state_value" text="IDLE"
   row spacing=6
     button id="start_btn" text="START"
     button id="stop_btn" text="STOP"
-    panel flex=1
+  row spacing=6
+    button id="theme_btn" text="DARK"
     button id="gallery_btn" text="GALLERY"

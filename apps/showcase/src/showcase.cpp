@@ -42,7 +42,6 @@ namespace zb::app::showcase
     void Showcase::load_pages()
     {
         static const char *const names[2] = {"hero.ui", "gallery.ui"};
-        zb::ui::Panel &root = window_->root();
         for (int i = 0; i < 2; ++i)
         {
             const embedded_ui_file *doc = find_ui_file(names[i]);
@@ -61,66 +60,80 @@ namespace zb::app::showcase
             }
             auto page = std::make_unique<zb::ui::FlexPanel>();
             page->set_size(_width, _height);
-            zb::ui::FlexPanel *raw = page.get();
             zb::ui::build(*page, tree);
-            root.add_child(std::move(page));
-            pages_[i] = raw;
+            pages_[i] = std::move(page);
         }
     }
 
     void Showcase::wire_controls()
     {
-        zb::ui::Widget &root = window_->root();
-        auto *start_btn = static_cast<zb::ui::Button *>(root.find_by_id("start_btn"));
-        auto *stop_btn = static_cast<zb::ui::Button *>(root.find_by_id("stop_btn"));
-        auto *gallery_btn = static_cast<zb::ui::Button *>(root.find_by_id("gallery_btn"));
-        auto *back_btn = static_cast<zb::ui::Button *>(root.find_by_id("back_btn"));
-        theme_btn_ = static_cast<zb::ui::Button *>(root.find_by_id("theme_btn"));
-        state_label_ = static_cast<zb::ui::Label *>(root.find_by_id("state_value"));
-        cpu_bar_ = static_cast<zb::ui::ProgressBar *>(root.find_by_id("cpu_bar"));
-        mem_bar_ = static_cast<zb::ui::ProgressBar *>(root.find_by_id("mem_bar"));
-        temp_bar_ = static_cast<zb::ui::ProgressBar *>(root.find_by_id("temp_bar"));
-        demo_slider_ = static_cast<zb::ui::Slider *>(root.find_by_id("demo_slider"));
-        demo_bar_ = static_cast<zb::ui::ProgressBar *>(root.find_by_id("demo_bar"));
-
-        if (start_btn != nullptr)
+        if (pages_[0] != nullptr)
         {
-            sub_start_ = start_btn->clicked.subscribe([this] { start(); });
+            auto *start_btn = static_cast<zb::ui::Button *>(pages_[0]->find_by_id("start_btn"));
+            auto *stop_btn = static_cast<zb::ui::Button *>(pages_[0]->find_by_id("stop_btn"));
+            auto *gallery_btn = static_cast<zb::ui::Button *>(pages_[0]->find_by_id("gallery_btn"));
+            theme_btn_ = static_cast<zb::ui::Button *>(pages_[0]->find_by_id("theme_btn"));
+            state_label_ = static_cast<zb::ui::Label *>(pages_[0]->find_by_id("state_value"));
+            cpu_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[0]->find_by_id("cpu_bar"));
+            mem_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[0]->find_by_id("mem_bar"));
+            temp_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[0]->find_by_id("temp_bar"));
+            if (start_btn != nullptr)
+            {
+                sub_start_ = start_btn->clicked.subscribe([this] { start(); });
+            }
+            if (stop_btn != nullptr)
+            {
+                sub_stop_ = stop_btn->clicked.subscribe([this] { stop(); });
+            }
+            if (gallery_btn != nullptr)
+            {
+                sub_gallery_ = gallery_btn->clicked.subscribe([this] { show_page(1); });
+            }
+            if (theme_btn_ != nullptr)
+            {
+                sub_theme_ = theme_btn_->clicked.subscribe([this] { toggle_theme(); });
+            }
         }
-        if (stop_btn != nullptr)
+        if (pages_[1] != nullptr)
         {
-            sub_stop_ = stop_btn->clicked.subscribe([this] { stop(); });
-        }
-        if (gallery_btn != nullptr)
-        {
-            sub_gallery_ = gallery_btn->clicked.subscribe([this] { show_page(1); });
-        }
-        if (back_btn != nullptr)
-        {
-            sub_back_ = back_btn->clicked.subscribe([this] { show_page(0); });
-        }
-        if (theme_btn_ != nullptr)
-        {
-            sub_theme_ = theme_btn_->clicked.subscribe([this] { toggle_theme(); });
-        }
-        if (demo_slider_ != nullptr && demo_bar_ != nullptr)
-        {
-            sub_slider_ = demo_slider_->changed.subscribe(
-                [this](const int v) { demo_bar_->set_value(v); });
+            auto *back_btn = static_cast<zb::ui::Button *>(pages_[1]->find_by_id("back_btn"));
+            demo_slider_ = static_cast<zb::ui::Slider *>(pages_[1]->find_by_id("demo_slider"));
+            demo_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[1]->find_by_id("demo_bar"));
+            if (back_btn != nullptr)
+            {
+                sub_back_ = back_btn->clicked.subscribe([this] { show_page(0); });
+            }
+            if (demo_slider_ != nullptr && demo_bar_ != nullptr)
+            {
+                sub_slider_ = demo_slider_->changed.subscribe(
+                    [this](const int v) { demo_bar_->set_value(v); });
+            }
         }
     }
 
     void Showcase::show_page(const int index)
     {
-        for (int i = 0; i < 2; ++i)
+        if (index < 0 || index > 1 || pages_[index] == nullptr)
         {
-            if (pages_[i] != nullptr)
-            {
-                pages_[i]->set_visible(i == index);
-            }
+            return;
         }
+        zb::ui::Panel &root = window_->root();
+        if (mounted_ != nullptr)
+        {
+            // park the outgoing page back into the array (the tree owns
+            // it while mounted, so pages_[current_] was empty)
+            if (auto parked = root.remove_child(mounted_))
+            {
+                pages_[current_].reset(
+                    static_cast<zb::ui::FlexPanel *>(parked.release()));
+            }
+            mounted_ = nullptr;
+        }
+        zb::ui::FlexPanel *raw = pages_[index].get();
+        root.add_child(std::move(pages_[index]));
+        mounted_ = raw;
         current_ = index;
-        window_->root().layout();
+        root.layout();
     }
 
     void Showcase::set_state(const char *text)
