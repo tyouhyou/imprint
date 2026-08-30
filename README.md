@@ -141,7 +141,13 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 ## Demo
 
-The demo app is a TicTacToe game (human vs computer), exercising dialogs, buttons, layout and repaint-on-demand. The NDS build produces `build/build_nds/bin/tictactoe.nds`. A second app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents). A third app, `showcase` (`-DSTORY=showcase`), is the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from these builds; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM (`-DSTORY=showcase`).
+**Showcase** (`-DSTORY=showcase`) — the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from these builds; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
+
+**TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
+
+| Windows | Linux (X11) | WebAssembly | Nintendo DS | Python host |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> | <img src="assets/nds.png" width="200"> | <img src="assets/py256.png" width="240"> |
 
 ## License
 

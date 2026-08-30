@@ -137,7 +137,13 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 ## 示例
 
-示例应用是井字棋（人机对战），覆盖对话框、按钮、布局与按需重绘。NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第二个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。第三个应用 `showcase`（`-DSTORY=showcase`）是多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面来自这些构建；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM（`-DSTORY=showcase`）。
+**showcase**（`-DSTORY=showcase`）——多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面来自这些构建；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM。
+
+**井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
+
+| Windows | Linux (X11) | WebAssembly | 任天堂 DS | Python 宿主 |
+|:---:|:---:|:---:|:---:|:---:|
+| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> | <img src="assets/nds.png" width="200"> | <img src="assets/py256.png" width="240"> |
 
 ## 许可证
 
