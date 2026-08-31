@@ -15,6 +15,10 @@
 #include "theme.hpp"
 #include "widget.hpp"
 
+#if defined(IMCORE_USE_FONT_SIZE) && defined(IMCORE_HAS_TTF_SUBSET)
+#include "text/ttf_provider.hpp"
+#endif
+
 #include <cstdio>
 #include <memory>
 #include <utility>
@@ -80,6 +84,12 @@ namespace
 int main(int argc, char **argv)
 {
     const char *out_path = argc > 1 ? argv[1] : "showcase.gif";
+
+#if defined(IMCORE_USE_FONT_SIZE) && defined(IMCORE_HAS_TTF_SUBSET)
+    // shell-less recorder: no shell install point, mirror it here so
+    // USE_FONT_SIZE builds record the README asset with the platform font
+    zb::ui::set_default_glyph_provider(zb::ui::ttf_subset_provider());
+#endif
 
     Showcase app;
     app.create_window(320, 240);
