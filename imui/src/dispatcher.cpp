@@ -295,6 +295,7 @@ namespace zb::ui
                 press_x = ev.x;
                 press_y = ev.y;
                 press_touch_id = ev.touch_id;
+                touch_outside_count = 0;
                 LD << "press claimed at " << ev.x << "," << ev.y;
                 if (t->is_focusable())
                 {
@@ -344,11 +345,27 @@ namespace zb::ui
                     const int dy = ev.y - press_y;
                     if (dx * dx + dy * dy > press_slop * press_slop)
                     {
+                        // touch panels occasionally report one glitch
+                        // sample far from the real position; a single
+                        // off-target touch move must not eat the press --
+                        // the cancel needs two consecutive off-target
+                        // moves (mouse moves are exact and cancel at once)
+                        if (ev.type == input::input_type::touch_move &&
+                            ++touch_outside_count < 2)
+                        {
+                            LD << "off-target touch move tolerated at " << ev.x << "," << ev.y;
+                            return false;
+                        }
                         LD << "press cancelled by move to " << ev.x << "," << ev.y;
                         pressed_target->on_cancel();
                         pressed_target = nullptr;
+                        touch_outside_count = 0;
                         return true;
                     }
+                }
+                else
+                {
+                    touch_outside_count = 0;
                 }
             }
             return false;

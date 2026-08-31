@@ -281,6 +281,53 @@ int test_dispatch()
         EXPECT(clicks == 1);
     }
 
+    // a single glitch sample far away (touch panels report occasional
+    // readings far from the real position) must not cancel the press
+    {
+        Tree t;
+        InputDispatcher d;
+        int clicks = 0;
+        t.button->clicked += [&clicks]() { ++clicks; };
+
+        d.dispatch(t.root, touch_press_at(15, 15, 0));
+        d.dispatch(t.root, touch_move_to(0, 0, 0));  // glitch spike
+        EXPECT(t.button->get_state() == Button::state::pressed);
+        d.dispatch(t.root, touch_release_at(15, 15, 0));
+        EXPECT(clicks == 1);
+    }
+
+    // two consecutive off-target touch moves are a real drag away: cancel
+    {
+        Tree t;
+        InputDispatcher d;
+        int clicks = 0;
+        t.button->clicked += [&clicks]() { ++clicks; };
+
+        d.dispatch(t.root, touch_press_at(15, 15, 0));
+        d.dispatch(t.root, touch_move_to(80, 80, 0));
+        EXPECT(t.button->get_state() == Button::state::pressed);  // tolerated
+        d.dispatch(t.root, touch_move_to(82, 82, 0));
+        EXPECT(t.button->get_state() == Button::state::normal);  // cancelled
+        d.dispatch(t.root, touch_release_at(82, 82, 0));
+        EXPECT(clicks == 0);
+    }
+
+    // a move back onto the pressed target resets the glitch tolerance
+    {
+        Tree t;
+        InputDispatcher d;
+        int clicks = 0;
+        t.button->clicked += [&clicks]() { ++clicks; };
+
+        d.dispatch(t.root, touch_press_at(15, 15, 0));
+        d.dispatch(t.root, touch_move_to(80, 80, 0));   // tolerated
+        d.dispatch(t.root, touch_move_to(15, 15, 0));   // back on the button
+        d.dispatch(t.root, touch_move_to(80, 80, 0));   // tolerated again
+        EXPECT(t.button->get_state() == Button::state::pressed);
+        d.dispatch(t.root, touch_release_at(80, 80, 0));
+        EXPECT(clicks == 1);
+    }
+
     // right button does not press the button
     {
         Tree t;

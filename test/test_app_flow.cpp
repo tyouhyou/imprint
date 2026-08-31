@@ -127,5 +127,113 @@ int test_app_flow()
         EXPECT(pixel_at_window(w, mask_probe_x, mask_probe_y) != board_bg.pixel);
     }
 
+    // the NDS shell delta: a 256x192 window driven exclusively by touch
+    // events (touch_id 0). Locks the ROM regression where dialog buttons
+    // claimed the press but never activated (the release arrived with no
+    // pressed target); geometry is derived like the view does for NDS
+    {
+        auto app = zb::make_shared<Tictactoe>();
+        app->create_window(256, 192);
+        app->paint();
+
+        const int bsize = 192 - 2 * (192 / board_margin_den);   // board 174
+        const int bx = (256 - bsize) / 2;
+        const int by = (192 - bsize) / 2;
+        const int bcell = bsize / 3;
+        const int fx = (256 - step_frame_w) / 2;
+        const int fy = (192 - step_frame_h) / 2;
+        // dialog button-row packing (Dialog::layout, spacing 4)
+        const int btn_cy = fy + step_frame_h - dialog_padding - diff_button_h / 2;
+        const int normal_cx = fx + dialog_padding + diff_button_w + 4 + diff_button_w / 2;
+        const int first_cx = fx + dialog_padding + side_button_w / 2;
+
+        // down, then the shell's idle-loop frames while held, then up
+        // (the NDS shell paints owed frames between the two events)
+        auto touch = [&app](const int x, const int y, const int hold_frames = 0)
+        {
+            zb::input::input_event ev{};
+            ev.type = zb::input::input_type::touch_down;
+            ev.x = x;
+            ev.y = y;
+            ev.touch_id = 0;
+            app->input(ev);
+            for (int i = 0; i < hold_frames; ++i)
+            {
+                if (app->is_dirty())
+                {
+                    app->paint();
+                }
+            }
+            ev.type = zb::input::input_type::touch_up;
+            app->input(ev);
+        };
+
+        touch(normal_cx, btn_cy, 8);  // NORMAL -> side dialog
+        touch(first_cx, btn_cy);      // X FIRST -> round starts, the mask clears
+        const auto w = app->window();
+        // left of the board the dialog mask is gone: root background again
+        EXPECT(pixel_at_window(w, 20, 100) == core::Color::from(28, 148, 64).pixel);
+        touch(bx + bcell / 2, by + bcell / 2);  // human X at cell (0,0)
+        EXPECT(pixel_at_window(w, bx + bcell / 2, by + bcell / 2) == core::colors::White.pixel);
+
+        // touch jitter while held (the panel drifts a pixel or two) must
+        // not eat the click: the O SECOND path here ends the round setup
+        // with the computer (X) opening center
+        auto touch_with_moves = [](const zb::SharedPtr<IApp> &target, const int x, const int y,
+                                   const std::initializer_list<std::pair<int, int>> &moves)
+        {
+            zb::input::input_event ev{};
+            ev.type = zb::input::input_type::touch_down;
+            ev.x = x;
+            ev.y = y;
+            ev.touch_id = 0;
+            target->input(ev);
+            ev.type = zb::input::input_type::touch_move;
+            for (const auto &m : moves)
+            {
+                ev.x = x + m.first;
+                ev.y = y + m.second;
+                target->input(ev);
+            }
+            ev.type = zb::input::input_type::touch_up;
+            ev.x = x;
+            ev.y = y;
+            target->input(ev);
+        };
+        auto plain_touch = [](const zb::SharedPtr<IApp> &target, const int x, const int y)
+        {
+            zb::input::input_event ev{};
+            ev.type = zb::input::input_type::touch_down;
+            ev.x = x;
+            ev.y = y;
+            ev.touch_id = 0;
+            target->input(ev);
+            ev.type = zb::input::input_type::touch_up;
+            target->input(ev);
+        };
+
+        {
+            auto app2 = zb::make_shared<Tictactoe>();
+            app2->create_window(256, 192);
+            app2->paint();
+            touch_with_moves(app2, normal_cx, btn_cy, {{1, 0}, {-1, 1}, {0, -1}});
+            plain_touch(app2, first_cx, btn_cy);
+            const auto w2 = app2->window();
+            EXPECT(pixel_at_window(w2, 20, 100) == core::Color::from(28, 148, 64).pixel);
+        }
+
+        // a single glitch reading far away (touch-panel spike) must not
+        // eat the click either
+        {
+            auto app3 = zb::make_shared<Tictactoe>();
+            app3->create_window(256, 192);
+            app3->paint();
+            touch_with_moves(app3, normal_cx, btn_cy, {{-normal_cx, -btn_cy}});  // spike to (0,0)
+            plain_touch(app3, first_cx, btn_cy);
+            const auto w3 = app3->window();
+            EXPECT(pixel_at_window(w3, 20, 100) == core::Color::from(28, 148, 64).pixel);
+        }
+    }
+
     return test::report("app_flow");
 }
