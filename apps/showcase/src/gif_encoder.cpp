@@ -164,7 +164,8 @@ namespace zb::app::showcase
         out_.put('\x04');
         out_.put('\x04');
         u16(out_, delay_cs_);
-        out_.put('\0');
+        out_.put('\0');  // transparent color index (unused)
+        out_.put('\0');  // block terminator
 
         // image descriptor: full frame
         out_.put(',');
