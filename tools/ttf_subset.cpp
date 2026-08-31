@@ -164,7 +164,7 @@ int main(const int argc, const char **argv)
             continue;
         }
         int advance = 0, lsb = 0;
-        stbtt_GetCodepointHMetrics(&font, glyph, &advance, &lsb);
+        stbtt_GetGlyphHMetrics(&font, glyph, &advance, &lsb);
 
         int w = 0, h = 0, xoff = 0, yoff = 0;
         unsigned char *bmp = stbtt_GetCodepointBitmap(
