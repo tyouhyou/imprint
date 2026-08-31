@@ -125,17 +125,24 @@ int test_button()
         EXPECT(test::pixel_at(*g, 3, 3) == core::colors::White.pixel);  // beyond image: base background
     }
 
-    // text state: without a font, text draws via the built-in bitmap glyphs
+    // text placement: centered clear of the border (a flush top-left
+    // placement used to merge the text into the 1px border)
     {
-        auto g = core::Graphics::make_ptr(8, 8);
         Button b;
-        b.set_size(4, 4);
+        b.set_glyph_provider(zb::make_shared<BitmapProvider>());
         b.set_text("OK");
-        b.set_text_color(core::colors::White);
-        b.set_show_border(false);
+        b.set_text_color(core::colors::Black);
+        b.set_background_color(core::colors::White);
+        b.set_border_color(core::colors::Red);
+        const auto s = b.measure();
+        b.set_size(s.width, s.height);
+        auto g = core::Graphics::make_ptr(s.width, s.height);
         b.draw(*g);
-        EXPECT(test::pixel_at(*g, 0, 0) == 0);  // 'O' top row starts at x=1
-        EXPECT(test::pixel_at(*g, 1, 0) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Red.pixel);   // border
+        EXPECT(test::pixel_at(*g, 1, 1) == core::colors::White.pixel); // padding ring
+        // 'O' top bar of the centered text (5x7: advance 6/char, height 7)
+        EXPECT(test::pixel_at(*g, (s.width - 12) / 2 + 1, (s.height - 7) / 2) ==
+               core::colors::Black.pixel);
     }
 
     return test::report("button");

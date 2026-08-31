@@ -8,6 +8,12 @@ namespace zb::ui
         constexpr int kVerticalPadding = 6;
     }
 
+    Button::Button()
+    {
+        set_h_align(h_align::center);
+        set_v_align(v_align::center);
+    }
+
     core::imsize_t Button::measure() const
     {
         const int w = (get_text().empty() ? 0 : text_advance()) + 2 * kSidePadding + 2;

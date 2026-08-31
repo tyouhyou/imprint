@@ -28,7 +28,9 @@ namespace zb::ui
             pressed
         };
 
-        Button() = default;
+        // text is centered: measure() promises padding + border around it,
+        // so a flush top-left placement would collide with the border
+        Button();
 
         // input hooks, driven by the input dispatcher
         void press();
