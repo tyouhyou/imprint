@@ -126,20 +126,24 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 ## ドキュメント
 
 **推奨読書順序**（新しいメンテナーの初回）：
-1. この README → **ビルド**（まずバイナリを動かす）
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2——システムの全体像、モジュールマップと依存ルール
-3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5——規範的契約、ターゲット、既知の制限
-4. [`docs/code-contract.md`](docs/code-contract.md)——API レベルのインターフェース契約
-5. [`docs/design-file.md`](docs/design-file.md)——`.ui` ファイルを扱うときに読む
+1. [`docs/getting-started.md`](docs/getting-started.md)——最初のアプリを動かして自分のものにする（約 5 分）
+2. この README → **ビルド**（各ターゲットでバイナリを動かす）
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2——システムの全体像、モジュールマップと依存ルール
+4. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5——規範的契約、ターゲット、既知の制限
+5. [`docs/code-contract.md`](docs/code-contract.md)——API レベルのインターフェース契約
+6. [`docs/design-file.md`](docs/design-file.md)——`.ui` ファイルを扱うときに読む
 
 **タスク別の参照先**：公開 API に触れる → 先に `code-contract.md`（契約が API に先行）· 新ターゲット / 新ピクセルフォーマット / 新ビルドオプション → ARCHITECTURE §6 · `.ui` 文法やパッケージング → `design-file.md` · C-ABI ホスト → `zbapi.h` + ARCHITECTURE §4.8 · ビルド/実行コマンド → 下の**ビルド**。
 
+- [`docs/getting-started.md`](docs/getting-started.md)——クローンから自分のアプリまで：`hello` ストーリーの実行、`IApp`/`CanvasWindow` の継ぎ目の理解、自分の story の登録
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——実装済みアーキテクチャ：モジュールマップと依存ルール、契約（フレームライフサイクル、入力、ピクセルモデル、テキスト、イベント、エラー処理、C-ABI ホスト、ビルドオプション）、既知の制限、アーキテクチャバックログ
 - [`docs/code-contract.md`](docs/code-contract.md)——API レベルのインターフェース契約：エラーパス、UTF-8/テキスト、glyph provider、ツリー変更、レイアウト無効化、アロケーション予算、プレゼンテーションシームのコンバータ
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` デザインファイル形式：文法、パッケージングパイプライン、実体化セマンティクス
 - [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI ホストインターフェース。ホストルールは ARCHITECTURE §4.8
 
 ## デモ
+
+**Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
 
 **showcase**（`-DSTORY=showcase`）——マルチターゲット・モンタージュの元になるウィジェットギャラリー。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と全ウィジェットページを備え、どちらも `.ui` デザインファイルで宣言します。`assets/showcase/` のフレームはこれらのビルドから生成。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
 

@@ -124,20 +124,24 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 ## 文档
 
 **建议阅读顺序**（新维护者的第一遍）：
-1. 本 README → **构建**（先把二进制跑起来）
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2——系统是什么、模块图与依赖规则
-3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5——规范性契约、目标平台、已知限制
-4. [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约
-5. [`docs/design-file.md`](docs/design-file.md)——处理 `.ui` 文件时再读
+1. [`docs/getting-started.md`](docs/getting-started.md)——跑起第一个应用并改成自己的（约 5 分钟）
+2. 本 README → **构建**（在各目标上把二进制跑起来）
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2——系统是什么、模块图与依赖规则
+4. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5——规范性契约、目标平台、已知限制
+5. [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约
+6. [`docs/design-file.md`](docs/design-file.md)——处理 `.ui` 文件时再读
 
 **按任务找文档**：改公开 API → 先改 `code-contract.md`（契约先于 API）· 新目标 / 新像素格式 / 新构建选项 → ARCHITECTURE §6 · `.ui` 语法或打包 → `design-file.md` · C-ABI 宿主 → `zbapi.h` + ARCHITECTURE §4.8 · 构建/运行命令 → 下方**构建**。
 
+- [`docs/getting-started.md`](docs/getting-started.md)——从克隆到跑起自己的应用：运行 `hello` 示例、理解 `IApp`/`CanvasWindow` 接缝、注册自己的 story
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——按现状实装的架构：模块图与依赖规则、契约（帧生命周期、输入、像素模型、文本、事件、错误处理、C-ABI 宿主、构建选项）、已知限制与架构 backlog
 - [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约：错误路径、UTF-8/文本、glyph provider、树变更、布局失效、分配预算、呈现接缝转换器
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` 设计文件格式：语法、打包管线、物化语义
 - [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI 宿主接口；宿主规则见 ARCHITECTURE §4.8
 
 ## 示例
+
+**Hello**（`-DSTORY=hello`）——入门应用：一个标签加一个点击计数的按钮；复制它即可开始写自己的应用（见 [`docs/getting-started.md`](docs/getting-started.md)）。
 
 **showcase**（`-DSTORY=showcase`）——多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面来自这些构建；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM。
 

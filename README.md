@@ -128,20 +128,24 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 ## Documentation
 
 **Suggested reading order** (first pass for a new maintainer):
-1. this README → **Build** (get a binary running)
-2. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2 — what the system is, module map & dependency rules
-3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5 — the normative contracts, targets, limitations
-4. [`docs/code-contract.md`](docs/code-contract.md) — the API-level contracts
-5. [`docs/design-file.md`](docs/design-file.md) — when working with `.ui` files
+1. [`docs/getting-started.md`](docs/getting-started.md) — run your first app and make it your own (~5 minutes)
+2. this README → **Build** (get a binary running on every target)
+3. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §1–§2 — what the system is, module map & dependency rules
+4. [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) §3–§5 — the normative contracts, targets, limitations
+5. [`docs/code-contract.md`](docs/code-contract.md) — the API-level contracts
+6. [`docs/design-file.md`](docs/design-file.md) — when working with `.ui` files
 
 **Where to look by task:** touching public API → `code-contract.md` first (the contract changes before the API) · new target / pixel format / build option → ARCHITECTURE §6 · `.ui` grammar or packaging → `design-file.md` · C-ABI host → `zbapi.h` + ARCHITECTURE §4.8 · build & run commands → **Build** below.
 
+- [`docs/getting-started.md`](docs/getting-started.md) — from a fresh clone to your own app: run the `hello` story, understand the `IApp`/`CanvasWindow` seam, register your own story
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — the as-built architecture: module map & dependency rules, contracts (frame lifecycle, input, pixel model, text, events, errors, C-ABI hosts, build options), known limitations, and the architecture backlog
 - [`docs/code-contract.md`](docs/code-contract.md) — the API-level interface contract: error paths, UTF-8/text, glyph provider, tree mutation, layout invalidation, alloc budget, the presentation-seam converter
 - [`docs/design-file.md`](docs/design-file.md) — the `.ui` design-file format: grammar, packaging pipeline, materialization semantics
 - [`binding/include/zbapi.h`](binding/include/zbapi.h) — the C-ABI surface for hosts (Python, WASM, C); host rules in ARCHITECTURE §4.8
 
 ## Demo
+
+**Hello** (`-DSTORY=hello`) — the getting-started app: a label and a click-counting button; copy it to start your own app (see [`docs/getting-started.md`](docs/getting-started.md)).
 
 **Showcase** (`-DSTORY=showcase`) — the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from these builds; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
 
