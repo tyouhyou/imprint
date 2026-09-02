@@ -1,9 +1,9 @@
 # Imprint — Architecture
 
-> Living document. Describes the system **as built** and tracks the
-> architecture backlog. Public: intended for anyone reading, porting, or
-> extending the framework. This is the foundation of the documentation:
-> it is self-contained and references no other document.
+> Living document. Describes the system **as built**. Public: intended
+> for anyone reading, porting, or extending the framework. This is the
+> foundation of the documentation: it is self-contained and references
+> no other document.
 
 ## 1. What Imprint is
 
@@ -356,54 +356,3 @@ contract, not an add-on:
   would be presentation-only), no animation/transition system, no runtime
   backend switching, no multi-threaded rendering, no IME, no RTL/bidi.
 
-## 6. Architecture backlog
-
-Open items from the architecture reviews of 2026-08-23 .. 2026-08-29.
-Completed items are removed from this list once done — the A-numbering
-is stable, so gaps are finished work; the record lives in `git log`.
-
-### A-4. Smaller items
-
-- **A-4.1 Singleton lifetime.** `Widget` shares one process-wide
-  `BitmapProvider`, intentionally leaked so widgets outliving `main` never
-  touch a dead provider. Fine today; if a target ever needs a teardown/
-  shutdown phase, this must be revisited (and it must stay stateless while
-  shared — see the note in `widget.hpp`).
-- **A-4.2 Shared/static duality of `imcore`.** The kernel is a CMake SHARED
-  library (needed for host loading on Linux) yet is used as an embedded
-  component in ROMs. This is intentional but is another axis new targets
-  must handle; a packaging abstraction would help.
-
-### A-21. Retire the non-atomic `SharedPtr` branch (condition-triggered)
-
-Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr`
-is an alias); the ~150-line non-atomic implementation exists only for
-targets without atomics (NDS ARM9: devkitARM ships no libatomic). Its
-semantics are locked by `test_ptr.cpp` (compiled against the custom
-branch on the host) and the CI non-atomic matrix job runs the whole
-battery against it. **What is deferred:** collapsing the duality —
-either `std::shared_ptr` on the NDS too (needs a toolchain decision:
-`__atomic` support on arm926ej-s / shipping a libatomic) or an
-intrusive refcount owned by the objects themselves. Both are
-ABI-adjacent changes with no current payoff. **Trigger.** Act when the
-custom branch needs a real fix again, or when a second non-atomic
-target appears; until then the tests keep it cheap to carry.
-
-### A-23. Selective build/package switches (condition-triggered)
-
-The whole tree always configures and builds; there is no
-`IMPRINT_WITH_*` switch to trim the configure. Binary granularity is
-already right — static linking drops unreferenced objects, the Linux
-host ships only `libimcore.so` + `zbapi.so`, the NDS ROM is fully
-static — and `zbapi.so` statically embeds imui + the story app, which
-is inherent to the current C-ABI contract (a foreign host drives a
-whole app). **Trigger.** Add configure-time module switches only when
-a real distribution case appears that must ship or withhold specific
-modules at configure time; until then the whole-tree build is the
-cheaper representation.
-
-### Unscheduled design debt (batch K triage)
-
-D1 (FlexPanel min/max sizes), D3 (focus history), D4 (`Event`
-once/priority) and D9 (resource management) stay open without
-consumers and are not scheduled.

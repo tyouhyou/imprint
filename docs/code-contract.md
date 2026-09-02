@@ -638,8 +638,8 @@ token.
 ### 10.2 Scope and lifetime
 
 - One **process-wide active theme**; widgets read it at draw time.
-  Storage follows the shared BitmapProvider rationale (ARCHITECTURE
-  §6 A-4.1): the active theme is an intentionally leaked singleton,
+  Storage follows the shared BitmapProvider rationale (docs/backlog.md
+  A-4.1): the active theme is an intentionally leaked singleton,
   created on first use, so a static-lifetime widget can never touch a
   dead theme.
 - Built-in presets: `light_theme()` (the default active theme) and
