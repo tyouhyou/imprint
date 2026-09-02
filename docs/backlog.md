@@ -11,13 +11,14 @@
 
 - **Promotion & Release Follow-up (Immediate)**:
   - Promotion material and drafts: [`reports/promotion_drafts.md`](../reports/promotion_drafts.md) (Show HN, Reddit r/cpp + r/NDShomebrew, Chinese communities, awesome-cpp PR, blog draft).
-  - Version v0.1 was tagged at `667a2e5`. Since v0.1, several important fixes have landed on `main`:
+  - Version v0.1 was tagged at `667a2e5`; Version v0.1.1 tagged at `da64ed6` with the following fixes packaged into release assets:
     - melonDS touch glitch debounce (`6f60658`)
     - `ttf_subset` advance calculation on glyph index (`5ccc508`)
     - GIF encoder missing GCE block terminator (`bb916e7`)
     - Button text vertical centering (`65087b8`)
     - Showcase GIF re-recorded with platform default font (`872cdc9`)
-  - Target: Release v0.1.1 with updated release binaries (win-x64 zip, showcase NDS ROM) and proceed with external promotion after user approval.
+    - Backlog documentation separated into `docs/backlog.md` (`da64ed6`)
+  - Target: Push `main` and `v0.1.1` tag to GitHub origin, publish v0.1.1 Release with updated assets (`imprint-showcase-v0.1.1-win-x64.zip`, `imprint-showcase-v0.1.1.nds`), and proceed with community promotion.
 
 ## 2. Product & Feature Backlog
 
