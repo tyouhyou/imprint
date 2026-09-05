@@ -52,7 +52,7 @@ widget redesign, no animation system.
 - **I-2. Target screen simulation**:
   - Desktop-hosted simulation / emulation overlay matching target screen constraints (e.g., dual NDS 256x192 screens, framebuffer 320x240).
 
-### Batch F — Asynchronous Posting & Event Loop Extension (Long-term)
+### Batch F — Event Loop Extension & Frame Automation (Long-term)
 
 - **F-1. Cross-thread message posting `zb::ui::post(closure)`**:
   - Contract-first design before implementation.
@@ -60,6 +60,22 @@ widget redesign, no animation system.
     - Single-threaded driving semantics at the core.
     - Deterministic frame ordering for automation and headless runners.
     - Observable `painted` synchronization signal.
+
+- **F-2. Frame automation helper (`Tween` / pacer)** (added 2026-09-05;
+  ruling refined the same day: app-side frame automation is allowed,
+  widget-built-in tween / a framework animation scheduler remain
+  non-goals):
+  - `Tween` is a pure value interpolation (from / to / duration /
+    easing), a pure function of the frame index — no threads, no core
+    state; the app advances it in its painted callback and invalidates.
+  - Pacing belongs to the host (desktop invalidate loop / WASM rAF /
+    NDS vblank); the helper owns only the math and invalidation
+    requests, keeping the A-2 seams untouched. Single-threaded by
+    contract; F-1 remains the separate cross-thread track.
+  - Contract-first design before implementation; first lands as
+    showcase demo glue (V-2 hero), promoted to an optional helper
+    beside `imapp_canvas` when a second user appears (§2 tool-placement
+    rule).
 
 ## 2. Architecture Backlog
 
