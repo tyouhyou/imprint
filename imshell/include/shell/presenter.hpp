@@ -30,6 +30,14 @@ namespace zb::shell
      * (empty dirty region), present nothing; otherwise (system-driven
      * repaint, first frame, no dirty tracking) present the whole buffer.
      */
+    /*
+     * Call-site rule: fill the region with a standalone dirty_region()
+     * statement, then pass the values. Inlining dirty_region(...) as an
+     * argument while the later arguments read its out-params is an
+     * unspecified evaluation order -- the out-params can be read before
+     * they are filled, the region reads 0x0 and nothing ever presents
+     * (shipped in main_x.cpp and main_fb.cpp, fixed 2026-09-05).
+     */
     inline present_rect region_to_present(const bool dirty_valid, const int x, const int y,
                                           const int w, const int h,
                                           const int buf_w, const int buf_h)

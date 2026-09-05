@@ -42,8 +42,10 @@ int main(int argc, char *argv[])
     app->on_painted([&fb, &app, &window](const void *)
     {
         int x = 0, y = 0, w = 0, h = 0;
+        // own statement: see the evaluation-order note in main_x.cpp
+        const bool dirty = app->dirty_region(x, y, w, h);
         const zb::shell::present_rect r = zb::shell::region_to_present(
-            app->dirty_region(x, y, w, h), x, y, w, h, window->width(), window->height());
+            dirty, x, y, w, h, window->width(), window->height());
         if (r.w <= 0)
         {
             return;  // nothing was drawn, nothing to present

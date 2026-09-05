@@ -117,8 +117,15 @@ int start()
     app->on_painted([&display, &app, &window, &xi, &gc](const void *)
     {
         int x = 0, y = 0, w = 0, h = 0;
+        // dirty_region fills x/y/w/h through its out-params: the call
+        // MUST be its own statement. Inline in region_to_present's
+        // argument list, the compiler may evaluate the later x/y/w/h
+        // arguments before the first argument fills them (unspecified
+        // order) -- the shell then reads 0,0 0x0 and never presents
+        // (this exact bug shipped: the X11 window stayed black)
+        const bool dirty = app->dirty_region(x, y, w, h);
         const zb::shell::present_rect r = zb::shell::region_to_present(
-            app->dirty_region(x, y, w, h), x, y, w, h, xi->width, xi->height);
+            dirty, x, y, w, h, xi->width, xi->height);
         if (r.w <= 0)
         {
             return;  // nothing was drawn, nothing to present
