@@ -50,7 +50,9 @@ namespace
 
     // diagnostic (repaint investigation): append one line per repaint
     // event so the present chain (painted -> invalidate -> drawRect) can
-    // be compared end to end for one click sequence
+    // be compared end to end for one click sequence. EVERY diagnostic
+    // lands in this single file (draw-state included) so no other log
+    // paths exist.
     void log_repaint(const char *what, const double x, const double y,
                      const double w, const double h)
     {
@@ -70,6 +72,42 @@ namespace
                                      .count() %
                                  1000),
                 what, x, y, w, h);
+        fclose(f);
+    }
+
+    // diagnostic: the draw-state that dictates how CGContextDrawImage
+    // lands in the view (isFlipped, layer path, base CTM). Appended to
+    // the same repaint log, timestamped, so the CTM can be compared
+    // across every drawRect call of one run.
+    void log_draw_state(NSView *view)
+    {
+        NSGraphicsContext *nsc = [NSGraphicsContext currentContext];
+        CGContextRef ctx = nsc ? nsc.CGContext : nullptr;
+        const CGAffineTransform base = ctx ? CGContextGetCTM(ctx) : CGAffineTransformIdentity;
+        FILE *f = fopen("/tmp/imprint_repaint.log", "a");
+        if (f == nullptr)
+        {
+            return;
+        }
+        const auto now = std::chrono::system_clock::now();
+        const auto t = std::chrono::system_clock::to_time_t(now);
+        std::tm buf{};
+        localtime_r(&t, &buf);
+        fprintf(f, "[%02d:%02d:%02d.%03d] draw-state isFlipped=%d wantsLayer=%d "
+                   "layer=%p layerBacked=%d windowBacking=%lu "
+                   "baseCTM a=%g b=%g c=%g d=%g tx=%g ty=%g "
+                   "bounds=%gx%g windowContentScale=%g\n",
+                buf.tm_hour, buf.tm_min, buf.tm_sec,
+                static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     now.time_since_epoch())
+                                     .count() %
+                                 1000),
+                (int)view.isFlipped, (int)view.wantsLayer, view.layer,
+                (int)view.layerContentsRedrawPolicy,
+                (unsigned long)(view.window ? view.window.backingType : 0),
+                base.a, base.b, base.c, base.d, base.tx, base.ty,
+                view.bounds.size.width, view.bounds.size.height,
+                (double)(view.window ? view.window.backingScaleFactor : 1.0));
         fclose(f);
     }
 
@@ -195,32 +233,6 @@ namespace
     }
     // unmapped keys without a character are dropped, like win_input's
     // swallowed keydowns
-}
-
-// diagnostic (vertical-flip investigation): record the draw-state that
-// dictates how CGContextDrawImage lands in the view (isFlipped, layer
-// path, base CTM) so the macOS 10.13 vs 13 contexts can be compared.
-static void log_draw_state(NSView *view)
-{
-    NSGraphicsContext *nsc = [NSGraphicsContext currentContext];
-    CGContextRef ctx = nsc ? nsc.CGContext : nullptr;
-    const CGAffineTransform base = ctx ? CGContextGetCTM(ctx) : CGAffineTransformIdentity;
-    FILE *f = fopen("/tmp/imprint_ctm.log", "w");
-    if (f == nullptr)
-    {
-        return;
-    }
-    fprintf(f, "isFlipped=%d wantsLayer=%d layer=%p layerBacked=%d "
-               "windowBacking=%lu\n"
-               "baseCTM a=%g b=%g c=%g d=%g tx=%g ty=%g\n"
-               "bounds=%gx%g windowContentScale=%g\n",
-            (int)view.isFlipped, (int)view.wantsLayer, view.layer,
-            (int)view.layerContentsRedrawPolicy,
-            (unsigned long)(view.window ? view.window.backingType : 0),
-            base.a, base.b, base.c, base.d, base.tx, base.ty,
-            view.bounds.size.width, view.bounds.size.height,
-            (double)(view.window ? view.window.backingScaleFactor : 1.0));
-    fclose(f);
 }
 
 - (void)drawRect:(NSRect)dirtyRect
