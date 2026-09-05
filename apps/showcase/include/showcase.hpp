@@ -6,18 +6,21 @@
 #include "canvas_window.hpp"
 #include "event.hpp"
 #include "iapp.hpp"
+#include "tween.hpp"
 
 namespace zb::ui
 {
     class Button;
     class FlexPanel;
     class Label;
+    class Panel;
     class ProgressBar;
     class Slider;
 }
 
 namespace zb::app::showcase
 {
+    class HeroChart;
     /*
      * S3 showcase: two embedded .ui pages behind one window.
      *
@@ -57,11 +60,13 @@ namespace zb::app::showcase
         void make_window(uint32_t max_client_width,
                          uint32_t max_client_height, void *buffer);
         void load_pages();
+        void install_chart();
         void wire_controls();
         void show_page(int index);
         void set_state(const char *text);
         void start();
         void stop();
+        void replay();
         void toggle_theme();
         void advance();
 
@@ -73,6 +78,9 @@ namespace zb::app::showcase
         bool dark_ = false;
         bool running_ = false;
 
+        // F-2 preview glue: the chart reveal, one step per paint request
+        Tween reveal_{};
+
         zb::SharedPtr<CanvasWindow> window_;
         // Panel layout stacks children unconditionally, so exactly one
         // page is mounted under the root at a time; parked pages live in
@@ -80,6 +88,8 @@ namespace zb::app::showcase
         std::unique_ptr<zb::ui::FlexPanel> pages_[2];
         zb::ui::FlexPanel *mounted_ = nullptr;
         int current_ = 0;
+
+        HeroChart *chart_ = nullptr;
 
         zb::ui::ProgressBar *cpu_bar_ = nullptr;
         zb::ui::ProgressBar *mem_bar_ = nullptr;
@@ -92,6 +102,7 @@ namespace zb::app::showcase
         zb::event::Subscription<> sub_theme_;
         zb::event::Subscription<> sub_start_;
         zb::event::Subscription<> sub_stop_;
+        zb::event::Subscription<> sub_replay_;
         zb::event::Subscription<> sub_gallery_;
         zb::event::Subscription<> sub_back_;
         zb::event::Subscription<int> sub_slider_;

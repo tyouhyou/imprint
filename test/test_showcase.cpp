@@ -113,9 +113,16 @@ int test_showcase()
         auto &app = *holder;
         auto *gallery_btn = static_cast<Button *>(root(app).find_by_id("gallery_btn"));
         auto *cpu = static_cast<ProgressBar *>(root(app).find_by_id("cpu_bar"));
-        EXPECT(gallery_btn != nullptr && cpu != nullptr);
+        // the chart slot spans nearly the full frame width and only the
+        // hero page draws it, so its far end is the repaint-away probe
+        // (layout-derived: the old fixed point now lands on gallery
+        // content after the V-2 restructure)
+        auto *slot = root(app).find_by_id("chart_slot");
+        EXPECT(gallery_btn != nullptr && cpu != nullptr && slot != nullptr);
         const auto cp = cpu->get_absolute_position();
         const auto cs = cpu->get_size();
+        const auto sp = slot->get_absolute_position();
+        const auto ss = slot->get_size();
 
         click_center(app, *gallery_btn);
         app.paint();
@@ -131,7 +138,7 @@ int test_showcase()
         EXPECT(px(app, bp.x + 1, bp.y + demo_bar->get_size().height / 2) ==
                theme().accent.pixel);
         // the hero region was repainted away: plain background
-        EXPECT(px(app, cp.x + cs.width / 2, cp.y + cs.height / 2) ==
+        EXPECT(px(app, sp.x + ss.width - 8, sp.y + ss.height / 2) ==
                theme().background.pixel);
 
         click_center(app, *back_btn);
@@ -204,21 +211,24 @@ int test_showcase()
                    {"back_btn", "demo_slider", "demo_bar", "demo_list"});
     }
 
-    // theme toggle repaints the frame in the dark palette; restore the
-    // light theme afterwards (theme is process-global)
+    // theme toggle repaints the frame; the showcase boots dark (V-2),
+    // so the first click goes light and the second restores dark — then
+    // the light theme is restored for later suites (theme is
+    // process-global)
     {
         const auto holder = make_app(640, 480);
         auto &app = *holder;
         auto *theme_btn = static_cast<Button *>(root(app).find_by_id("theme_btn"));
-        click_center(app, *theme_btn);
-        app.paint();
-        EXPECT(px(app, 3, 3) == dark_theme().background.pixel);
         EXPECT(theme_btn->get_text() == u"LIGHT");
-
         click_center(app, *theme_btn);
         app.paint();
         EXPECT(px(app, 3, 3) == light_theme().background.pixel);
         EXPECT(theme_btn->get_text() == u"DARK");
+
+        click_center(app, *theme_btn);
+        app.paint();
+        EXPECT(px(app, 3, 3) == dark_theme().background.pixel);
+        EXPECT(theme_btn->get_text() == u"LIGHT");
         zb::ui::set_theme(light_theme());
     }
 

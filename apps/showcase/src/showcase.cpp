@@ -2,8 +2,10 @@
 
 #include "button.hpp"
 #include "flex_panel.hpp"
+#include "hero_chart.hpp"
 #include "label.hpp"
 #include "logging.hpp"
+#include "panel.hpp"
 #include "progress_bar.hpp"
 #include "slider.hpp"
 #include "theme.hpp"
@@ -56,9 +58,19 @@ namespace zb::app::showcase
         window_->create(max_client_width, max_client_height, buffer);
         // design-file host: layout is driven by the window (batch J5)
         window_->set_auto_layout(true);
+        // V-2: the showcase ships dark (the README face); the theme
+        // button offers the switch back. The generation bump makes the
+        // first frame present the whole buffer
+        dark_ = true;
+        zb::ui::set_theme(zb::ui::dark_theme());
         load_pages();
+        install_chart();
         wire_controls();
         show_page(0);
+        // F-2 glue: the chart reveal runs on its own once a host pumps
+        // frames (wasm rAF, the NDS vblank poll, the shell-less
+        // recorder); event-driven shells advance it on input events
+        replay();
     }
 
     void Showcase::load_pages()
@@ -88,6 +100,32 @@ namespace zb::app::showcase
         }
     }
 
+    // V-2: mount the hero chart into its design-file slot. The slot is a
+    // plain panel with no declared size (the L-3 trap sets undeclared
+    // widths to zero), so the app sizes it here -- the frame width is
+    // shell-owned knowledge the .ui file must not guess
+    void Showcase::install_chart()
+    {
+        if (pages_[0] == nullptr)
+        {
+            return;
+        }
+        auto *slot = pages_[0]->find_by_id("chart_slot");
+        if (slot == nullptr)
+        {
+            LW << "showcase: chart_slot missing from hero.ui";
+            return;
+        }
+        // keep the 256x192 embedded fit: the compact rows free the
+        // vertical budget, the chart takes what the frame can spare
+        const int chart_h = _height >= 240 ? 56 : 40;
+        slot->set_size(_width - 16, chart_h);
+        auto chart = std::make_unique<HeroChart>();
+        chart->set_size(_width - 16, chart_h);
+        chart_ = chart.get();
+        static_cast<zb::ui::Panel *>(slot)->add_child(std::move(chart));
+    }
+
     void Showcase::wire_controls()
     {
         if (pages_[0] != nullptr)
@@ -100,6 +138,7 @@ namespace zb::app::showcase
             cpu_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[0]->find_by_id("cpu_bar"));
             mem_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[0]->find_by_id("mem_bar"));
             temp_bar_ = static_cast<zb::ui::ProgressBar *>(pages_[0]->find_by_id("temp_bar"));
+            auto *replay_btn = static_cast<zb::ui::Button *>(pages_[0]->find_by_id("replay_btn"));
             if (start_btn != nullptr)
             {
                 sub_start_ = start_btn->clicked.subscribe([this] { start(); });
@@ -108,6 +147,10 @@ namespace zb::app::showcase
             {
                 sub_stop_ = stop_btn->clicked.subscribe([this] { stop(); });
             }
+            if (replay_btn != nullptr)
+            {
+                sub_replay_ = replay_btn->clicked.subscribe([this] { replay(); });
+            }
             if (gallery_btn != nullptr)
             {
                 sub_gallery_ = gallery_btn->clicked.subscribe([this] { show_page(1); });
@@ -115,6 +158,9 @@ namespace zb::app::showcase
             if (theme_btn_ != nullptr)
             {
                 sub_theme_ = theme_btn_->clicked.subscribe([this] { toggle_theme(); });
+                // the design file ships the light-theme caption; the
+                // showcase boots dark, so the button offers light first
+                theme_btn_->set_text(dark_ ? "LIGHT" : "DARK");
             }
         }
         if (pages_[1] != nullptr)
@@ -148,7 +194,7 @@ namespace zb::app::showcase
             }
         };
         for (const char *id : {"start_btn", "stop_btn", "gallery_btn", "theme_btn",
-                               "back_btn", "demo_button"})
+                               "replay_btn", "back_btn", "demo_button"})
         {
             center_button(id);
         }
@@ -216,6 +262,19 @@ namespace zb::app::showcase
         }
     }
 
+    // F-2 preview glue: restart the chart reveal. One Tween step per
+    // paint() request (frame index = paint call), deterministic for the
+    // recorder and the automation suites; hosts that pump frames see the
+    // full animation, event-driven shells advance it on input
+    void Showcase::replay()
+    {
+        reveal_.start(0, 255, 8);
+        if (chart_ != nullptr)
+        {
+            chart_->set_progress(0);
+        }
+    }
+
     // one deterministic step per input event while running (repaint on
     // demand: there is no animation loop); the status label changes only
     // on the discrete DONE transition, never in this per-event path
@@ -250,6 +309,18 @@ namespace zb::app::showcase
 
     void Showcase::paint() noexcept
     {
+        // one deterministic tween step per paint request, BEFORE the
+        // frame renders; marking the chart dirty keeps is_dirty() true
+        // while a frame is owed, so idle-polling shells (NDS, linux-fb)
+        // keep pumping and stop the moment the reveal lands
+        if (reveal_.active())
+        {
+            reveal_.step();
+            if (chart_ != nullptr)
+            {
+                chart_->set_progress(reveal_.value());
+            }
+        }
         window_->paint();
     }
 
