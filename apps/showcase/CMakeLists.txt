@@ -67,6 +67,6 @@ if (NOT NDS_PLATFORM)
     # S4 frame recorder: drives the app through the public API and dumps
     # the frames as an animated GIF (the README showcase asset); the
     # encoder is tool-local, not part of the shipping app library
-    add_executable(showcase_gif src/gif_record.cpp src/gif_encoder.cpp)
+    add_executable(showcase_gif src/gif_record.cpp)  # the encoder lives in imcore/codec (V-0)
     target_link_libraries(showcase_gif PRIVATE showcase_app)
 endif()

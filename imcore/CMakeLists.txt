@@ -160,6 +160,10 @@ if (USE_PNG)
 else()
     set(PNG_SRC)
 endif()
+# hand-written GIF writer: dependency-free, always available (V-0)
+set(GIF_SRC
+    src/codec/gif.cpp
+)
 
 add_library(
     ${IMCORELIB} SHARED
@@ -173,6 +177,7 @@ add_library(
     ${STB_SRC}
     ${JPEG_SRC}
     ${PNG_SRC}
+    ${GIF_SRC}
 )
 
 if (USE_FONT)

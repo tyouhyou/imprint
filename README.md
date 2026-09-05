@@ -63,7 +63,7 @@ Measured footprints (Release builds of the `showcase` app above):
 - **Automation-friendly by contract** — the host-drives-everything model means a script can replace the user: feed input, pump frames, assert on pixels; single-threaded and timer-free, so drivers never sleep — the test battery includes an end-to-end `automation` suite driven through the public API
 - **Embedded-grade** — no RTTI, 16-bit color (abgr1555), integer-only geometry option, non-atomic refcounting option (NDS has no libatomic)
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
-- **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback (auto-subsetted from source strings); optional FreeType (fonts) and vendored stb codecs (PNG/JPEG)
+- **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback (auto-subsetted from source strings); optional FreeType (fonts), vendored stb codecs (PNG/JPEG) and a hand-written GIF writer
 - **C++17, CMake, static libraries** — everything is composable, nothing is forced
 
 ## Non-goals

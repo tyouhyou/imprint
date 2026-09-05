@@ -28,6 +28,7 @@ add_executable(
     test_flex.cpp
     test_ptr.cpp
     test_codec.cpp
+    test_gif.cpp
     test_checkbox.cpp
     test_radio.cpp
     test_slider.cpp

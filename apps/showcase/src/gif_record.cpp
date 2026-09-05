@@ -7,9 +7,8 @@
  * Usage: showcase_gif [out.gif]   (default showcase.gif, 320x240)
  */
 
-#include "gif_encoder.hpp"
-
 #include "canvas_window.hpp"
+#include "codec/gif.hpp"
 #include "input.hpp"
 #include "showcase.hpp"
 #include "theme.hpp"
@@ -29,13 +28,13 @@ namespace
     using zb::input::input_event;
     using zb::input::input_type;
 
-    std::unique_ptr<GifWriter> g_gif;
+    std::unique_ptr<zb::ui::GifWriter> g_gif;
 
     /* one captured frame = one paint of the current app state */
     void frame(Showcase &app)
     {
         app.paint();
-        g_gif->add_frame(static_cast<const uint8_t *>(app.window()->data()));
+        g_gif->add_frame(static_cast<const zb::ui::core::Color *>(app.window()->data()));
     }
 
     input_event touch_ev(const input_type type, const int x, const int y)
@@ -101,7 +100,7 @@ int main(int argc, char **argv)
     std::printf("gif_record: %ux%u buffer\n",
                 static_cast<unsigned>(win.width()), static_cast<unsigned>(win.height()));
 
-    g_gif = std::make_unique<GifWriter>(out_path, 320, 240, 5);
+    g_gif = std::make_unique<zb::ui::GifWriter>(out_path, 320, 240, 5);
 
     // 1: dark boot. The chart reveal auto-starts and advances one step
     // per captured frame, so the opening is the animation itself

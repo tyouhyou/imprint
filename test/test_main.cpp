@@ -20,6 +20,7 @@ int test_text();
 int test_flex();
 int test_ptr();
 int test_codec();
+int test_gif();
 int test_checkbox();
 int test_radio();
 int test_slider();
@@ -77,6 +78,7 @@ int main()
     total += test_flex();
     total += test_ptr();
     total += test_codec();
+    total += test_gif();
     total += test_checkbox();
     total += test_radio();
     total += test_slider();

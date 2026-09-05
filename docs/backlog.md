@@ -42,9 +42,13 @@ widget redesign, no animation system.
   generator covers the demo.
 - **V-3. Re-record & re-shoot**: GIF + per-platform static frames
   (win / X11 / mac), README hero layout, three-language READMEs aligned.
-- **V-0. Promote `gif_encoder`** (showcase app) into `imcore/codec/gif`
-  per the §2 tool-placement rule (+ battery suite); recorder glue stays
-  app-side until a second user appears.
+- **V-0. Promote `gif_encoder`** — **done** (2026-09-05):
+  `zb::ui::GifWriter` lives in `imcore/codec/gif` beside png/jpeg; input
+  is `const core::Color*` through the normalized accessors (A-19, so
+  16bpp quantizes through the same path); the recorder glue (frame
+  pacing, file driving) stays app-side. `test_gif` pins the block
+  structure (GCE terminator included, bb916e7) and determinism; the
+  recorder builds against the codec unchanged.
 
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 

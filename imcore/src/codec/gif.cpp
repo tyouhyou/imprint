@@ -1,11 +1,21 @@
-#include "gif_encoder.hpp"
+/*
+ * GIF89a writer implementation (codec/gif.hpp). Promoted from the
+ * showcase frame recorder (Batch V-0, tool-placement rule): a pure
+ * encode capability of the codec family, no framework state. The
+ * block structure it emits is pinned by test_gif (signature, GCT,
+ * NETSCAPE loop, per-frame GCE with its block terminator — the missing
+ * terminator once made strict decoders reject the file, bb916e7 —
+ * image descriptor, sub-block stream, trailer).
+ */
+
+#include "codec/gif.hpp"
 
 #include <array>
 #include <cstring>
 #include <unordered_map>
 #include <vector>
 
-namespace zb::app::showcase
+namespace zb::ui
 {
     namespace
     {
@@ -150,12 +160,15 @@ namespace zb::app::showcase
         out_.put('\0');
     }
 
-    void GifWriter::add_frame(const uint8_t *bgra)
+    void GifWriter::add_frame(const core::Color *pixels)
     {
         std::vector<uint8_t> indexed(static_cast<std::size_t>(width_ * height_));
         for (std::size_t i = 0; i < indexed.size(); ++i)
         {
-            indexed[i] = palette_index(bgra[i * 4 + 2], bgra[i * 4 + 1], bgra[i * 4]);
+            // 8-bit-normalized accessors (A-19): correct at 32bpp and a
+            // documented quantize at 16bpp; the alpha byte is ignored
+            const core::Color &c = pixels[i];
+            indexed[i] = palette_index(c.r(), c.g(), c.b());
         }
 
         // graphic control extension: delay, no transparency, disposal keep
