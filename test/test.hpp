@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdio>
+#include <variant>
 
 #include "imcore.hpp"
 
@@ -30,6 +31,28 @@ namespace test
     {
         const auto s = g.size();
         return g.data()[y * s.width + x].pixel;
+    }
+
+    /*
+     * Value access for prop_value variants in the tests. The type-based
+     * std::get<T>(variant) is availability-gated "introduced in macOS
+     * 10.14" in Xcode 10's libc++ and the macOS deployment target is
+     * deliberately unpinned, so the tests go through the ungated
+     * pointer form (std::get_if, the same accessor the framework uses).
+     * A wrong-alternative probe records a failure and returns a
+     * value-initialized fallback instead of dereferencing null.
+     */
+    template <typename T, typename... Ts>
+    const T &vget(const std::variant<Ts...> &v)
+    {
+        static const T fallback{};
+        if (const T *p = std::get_if<T>(&v))
+        {
+            return *p;
+        }
+        ++failures;
+        std::printf("FAIL (vget): variant does not hold the requested type\n");
+        return fallback;
     }
 }
 

@@ -49,27 +49,27 @@ column id="main" spacing=4 padding=8
 
         EXPECT(root.props.size() == 2);
         EXPECT(root.props[0].first == "spacing");
-        EXPECT(std::get<long long>(root.props[0].second) == 4);
+        EXPECT(test::vget<long long>(root.props[0].second) == 4);
         EXPECT(root.props[1].first == "padding");
-        EXPECT(std::get<long long>(root.props[1].second) == 8);
+        EXPECT(test::vget<long long>(root.props[1].second) == 8);
 
         const auto &title = root.children[0];
         EXPECT(title.type == "label");
         EXPECT(title.id == "title");
-        EXPECT(std::get<std::string>(title.props[0].second) == "Welcome");
+        EXPECT(test::vget<std::string>(title.props[0].second) == "Welcome");
 
         const auto &slider = root.children[2];
         EXPECT(slider.type == "slider");
-        EXPECT(std::get<long long>(slider.props[0].second) == 0);
-        EXPECT(std::get<long long>(slider.props[1].second) == 100);
-        EXPECT(std::get<long long>(slider.props[2].second) == 5);
+        EXPECT(test::vget<long long>(slider.props[0].second) == 0);
+        EXPECT(test::vget<long long>(slider.props[1].second) == 100);
+        EXPECT(test::vget<long long>(slider.props[2].second) == 5);
 
         const auto &list = root.children[3];
         EXPECT(list.type == "list_box");
         EXPECT(list.items.size() == 2);
         EXPECT(list.items[0] == "item one");
         EXPECT(list.items[1] == "item two");
-        EXPECT(std::get<long long>(list.props[0].second) == 3);
+        EXPECT(test::vget<long long>(list.props[0].second) == 3);
     }
 
     // multiple top-level nodes -> pseudo root
@@ -97,21 +97,21 @@ column id="main" spacing=4 padding=8
         EXPECT(r.children.size() == 3);
 
         const auto &p = r;
-        EXPECT(std::get<long long>(p.props[0].second) == -50);
-        EXPECT(std::get<long long>(p.props[1].second) == 100);
-        EXPECT(std::get<long long>(p.props[2].second) == 30);
-        EXPECT(std::get<bool>(p.props[3].second) == false);
+        EXPECT(test::vget<long long>(p.props[0].second) == -50);
+        EXPECT(test::vget<long long>(p.props[1].second) == 100);
+        EXPECT(test::vget<long long>(p.props[2].second) == 30);
+        EXPECT(test::vget<bool>(p.props[3].second) == false);
 
         const auto &cb = r.children[0];
-        EXPECT(std::get<bool>(cb.props[0].second) == true);
-        EXPECT(std::get<std::string>(cb.props[1].second) == "say \"hi\"");
+        EXPECT(test::vget<bool>(cb.props[0].second) == true);
+        EXPECT(test::vget<std::string>(cb.props[1].second) == "say \"hi\"");
 
         const auto &rad = r.children[1];
-        EXPECT(std::get<long long>(rad.props[0].second) == 7);
+        EXPECT(test::vget<long long>(rad.props[0].second) == 7);
 
         const auto &col = r.children[2];
         EXPECT(col.flex_grow == 2);
-        EXPECT(std::get<bool>(col.props[0].second) == true);  // wrap
+        EXPECT(test::vget<bool>(col.props[0].second) == true);  // wrap
     }
 
     // tolerant: bare token dropped, bad value dropped; an integer id
@@ -131,7 +131,7 @@ column id="main" spacing=4 padding=8
         ui_node r = parse_ui_text("button \"raw\" text=\"Go\"\n", nullptr);
         EXPECT(r.children.size() == 1);
         EXPECT(r.children[0].type == "button");
-        EXPECT(std::get<std::string>(r.children[0].props[0].second) == "Go");
+        EXPECT(test::vget<std::string>(r.children[0].props[0].second) == "Go");
     }
 
     // empty / comment-only document: ok == false
@@ -153,7 +153,7 @@ column id="main" spacing=4 padding=8
         EXPECT(r.type == "column");
         EXPECT(r.children.size() == 1);
         EXPECT(r.children[0].children.size() == 1);
-        EXPECT(std::get<std::string>(r.children[0].children[0].props[0].second) == "b");
+        EXPECT(test::vget<std::string>(r.children[0].children[0].props[0].second) == "b");
     }
 
     // materialize drops the children of a leaf tag: parsing keeps them
@@ -217,13 +217,13 @@ column id="main" spacing=4 padding=8
         EXPECT(list.items[1] == "b");
         EXPECT(list.items[2] == "c");
         EXPECT(list.items[3] == "d");
-        EXPECT(std::get<long long>(list.props[0].second) == 3);
+        EXPECT(test::vget<long long>(list.props[0].second) == 3);
 
         const auto &lbl = r.children[1];
-        EXPECT(std::get<std::string>(lbl.props[0].second) == "hello world");
+        EXPECT(test::vget<std::string>(lbl.props[0].second) == "hello world");
 
         const auto &lbl2 = r.children[2];
-        EXPECT(std::get<std::string>(lbl2.props[0].second) == "C:\\path");
+        EXPECT(test::vget<std::string>(lbl2.props[0].second) == "C:\\path");
     }
 
     // an unterminated follow-up items string: the reader does not advance

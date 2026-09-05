@@ -61,35 +61,35 @@ int test_builder()
         EXPECT(doc.children.size() == 5);
 
         EXPECT(doc.children[0].type == "label");
-        EXPECT(std::get<std::string>(doc.children[0].props[0].second) == "Level");
+        EXPECT(test::vget<std::string>(doc.children[0].props[0].second) == "Level");
         EXPECT(doc.children[0].id == "lvl");
         EXPECT(doc.children[0].flex_grow == 0);
 
         EXPECT(doc.children[1].type == "slider");
-        EXPECT(std::get<long long>(doc.children[1].props[0].second) == 50);
-        EXPECT(std::get<long long>(doc.children[1].props[1].second) == 200);
-        EXPECT(std::get<long long>(doc.children[1].props[2].second) == 10);
+        EXPECT(test::vget<long long>(doc.children[1].props[0].second) == 50);
+        EXPECT(test::vget<long long>(doc.children[1].props[1].second) == 200);
+        EXPECT(test::vget<long long>(doc.children[1].props[2].second) == 10);
         EXPECT(doc.children[1].id == "sld");
 
         EXPECT(doc.children[2].type == "checkbox");
-        EXPECT(std::get<bool>(doc.children[2].props[1].second));
+        EXPECT(test::vget<bool>(doc.children[2].props[1].second));
 
         EXPECT(doc.children[3].type == "list_box");
         EXPECT(doc.children[3].items.size() == 3);
         EXPECT(doc.children[3].items[2] == "C");
-        EXPECT(std::get<long long>(doc.children[3].props[0].second) == 2);
+        EXPECT(test::vget<long long>(doc.children[3].props[0].second) == 2);
 
         const auto &bar = doc.children[4];
         EXPECT(bar.type == "row");
         EXPECT(bar.flex_grow == 2);
         EXPECT(bar.children.size() == 2);
         EXPECT(bar.children[0].type == "radio");
-        EXPECT(std::get<long long>(bar.children[0].props[1].second) == 1);
+        EXPECT(test::vget<long long>(bar.children[0].props[1].second) == 1);
         EXPECT(bar.children[0].id == "rx");
-        EXPECT(std::get<bool>(bar.children[1].props[2].second));  // checked
+        EXPECT(test::vget<bool>(bar.children[1].props[2].second));  // checked
 
-        EXPECT(std::get<long long>(doc.props[0].second) == 4);  // spacing
-        EXPECT(std::get<long long>(doc.props[1].second) == 2);  // padding
+        EXPECT(test::vget<long long>(doc.props[0].second) == 4);  // spacing
+        EXPECT(test::vget<long long>(doc.props[1].second) == 2);  // padding
     }
 
     // materialize into a flex host: tree shape, ids, property landing
@@ -236,7 +236,7 @@ int test_builder()
 
         EXPECT(doc.children[1].type == "text_input");
         EXPECT(doc.children[1].props[0].first == "text");
-        EXPECT(std::get<std::string>(doc.children[1].props[0].second) == "hello");
+        EXPECT(test::vget<std::string>(doc.children[1].props[0].second) == "hello");
 
         auto *ti = static_cast<TextInput *>(host.find_by_id("name"));
         EXPECT(ti != nullptr && ti->get_text() == u"hello");
