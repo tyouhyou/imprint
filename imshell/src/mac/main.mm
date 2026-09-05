@@ -210,9 +210,20 @@ static void log_draw_state(NSView *view)
     log_draw_state(self);
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
-    // the framework buffer is top-down; CG draws bottom-up
-    CGContextTranslateCTM(ctx, 0.0, self.bounds.size.height);
-    CGContextScaleCTM(ctx, 1.0, -1.0);
+    // buffer row 0 belongs at the view top. AppKit hands drawRect a base
+    // context whose Y orientation differs across window backing paths:
+    // buffered windows (macOS 10.13: base.d > 0, y-up, identity CTM) vs
+    // layer-backed windows (macOS >= 10.14: base.d < 0, y-down).
+    // CGContextDrawImage puts the first data row at the rect top when the
+    // effective CTM is y-up, so flip Y exactly when the base is y-down.
+    // (Measured on 10.13.6 + verified logic on macOS 13; a retina base.d
+    // keeps its sign, so the check is scale-invariant.)
+    const CGAffineTransform base = CGContextGetCTM(ctx);
+    if (base.d < 0.0)
+    {
+        CGContextTranslateCTM(ctx, 0.0, self.bounds.size.height);
+        CGContextScaleCTM(ctx, 1.0, -1.0);
+    }
     CGContextDrawImage(ctx, self.bounds, g_image);
     CGContextRestoreGState(ctx);
 }
