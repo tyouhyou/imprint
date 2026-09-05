@@ -18,19 +18,22 @@ elseif(NDS_PLATFORM)
 elseif(APPLE)
     # A-20: the AppKit shell (NSWindow/NSView, CGImage presentation).
     # One codebase for every macOS the C++ standard supports: no 13/14
-    # splits, the deployment target decides. OBJCXX itself is enabled at
-    # the top level: the ${STORY} exe consumes main.mm there, and
-    # enable_language() does not propagate upward from this subdirectory
+    # splits. The deployment target is deliberately NOT pinned -- each
+    # known build host is covered by its SDK default, and both pins we
+    # tried broke one of them: Xcode 10 (the macOS 10.13.6 verification
+    # machine) rejects two-digit targets like 11.0 at the clang driver
+    # ("invalid version number"), while a 10.13 pin trips libc++
+    # availability gates (std::get<T>(variant) is marked "introduced in
+    # macOS 10.14" -- 31 call sites in the tests alone). The shell's own
+    # AppKit/CG API floor predates both SDKs, so the un-pinned SDK
+    # default compiles everywhere. Pass -DCMAKE_OSX_DEPLOYMENT_TARGET=
+    # <ver> explicitly only if a pinned distribution build is ever
+    # needed (and mind the 10.14 availability gates). OBJCXX itself is
+    # enabled at the top level: the ${STORY} exe consumes main.mm there,
+    # and enable_language() does not propagate upward from this
+    # subdirectory
     set(IM_SHELL_BACKEND "AppKit" CACHE STRING "macOS shell backend to build: AppKit")
     set_property(CACHE IM_SHELL_BACKEND PROPERTY STRINGS AppKit)
-    if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        # 10.13 = the oldest supported machine (the maintainer's Xcode 10
-        # clang rejects two-digit deployment targets like 11.0) and the
-        # shell's API floor -- every AppKit/CG call predates it; the CI
-        # macos-15 clang accepts the same target
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING
-            "macOS deployment target (A-20: one codebase, no 13/14 split)" FORCE)
-    endif()
     set(build_src main.mm)
     set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/mac)
     set(build_lib "-framework Cocoa")
