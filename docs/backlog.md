@@ -1,26 +1,15 @@
 # Imprint — Backlog
 
 > Living backlog document. Tracks active, condition-triggered, and unscheduled
-> work items across architecture and product layers.
+> work items across architecture and product layers. Release/promotion status
+> is operator state, not roadmap — it lives in the local handoff notes, not
+> here.
 > Architecture contracts live in [`docs/ARCHITECTURE.md`](ARCHITECTURE.md);
 > API contracts live in [`docs/code-contract.md`](code-contract.md).
 > Completed items are removed upon completion (A-numbering is stable, gaps
 > represent finished work; history lives in `git log`).
 
-## 1. Active & Promotion Work
-
-- **Promotion & Release Follow-up (Immediate)**:
-  - Promotion material and drafts: [`reports/promotion_drafts.md`](../reports/promotion_drafts.md) (Show HN, Reddit r/cpp + r/NDShomebrew, Chinese communities, awesome-cpp PR, blog draft).
-  - Version v0.1 was tagged at `667a2e5`; Version v0.1.1 tagged at `da64ed6` with the following fixes packaged into release assets:
-    - melonDS touch glitch debounce (`6f60658`)
-    - `ttf_subset` advance calculation on glyph index (`5ccc508`)
-    - GIF encoder missing GCE block terminator (`bb916e7`)
-    - Button text vertical centering (`65087b8`)
-    - Showcase GIF re-recorded with platform default font (`872cdc9`)
-    - Backlog documentation separated into `docs/backlog.md` (`da64ed6`)
-  - Status: `main` pushed, v0.1.1 Release published on GitHub (2026-09-02) with both assets. Remaining: community promotion only (priority lowered 2026-09-05). Before any promotion copy mentions macOS support, re-verify the mac shell on a real macOS 13+ machine (layer-backed path, see CONTEXT.md verify matrix).
-
-## 2. Product & Feature Backlog
+## 1. Product & Feature Backlog
 
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 
@@ -48,7 +37,7 @@
     - Deterministic frame ordering for automation and headless runners.
     - Observable `painted` synchronization signal.
 
-## 3. Architecture Backlog
+## 2. Architecture Backlog
 
 ### A-4. Smaller Items
 

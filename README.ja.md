@@ -137,7 +137,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 - [`docs/getting-started.md`](docs/getting-started.md)——クローンから自分のアプリまで：`hello` ストーリーの実行、`IApp`/`CanvasWindow` の継ぎ目の理解、自分の story の登録
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——実装済みアーキテクチャ：モジュールマップと依存ルール、契約（フレームライフサイクル、入力、ピクセルモデル、テキスト、イベント、エラー処理、C-ABI ホスト、ビルドオプション）、既知の制限
-- [`docs/backlog.md`](docs/backlog.md)——生きたバックログ：アーキテクチャ項目、プロモーション作業、製品機能バッチ（L/I/F）、条件トリガー項目
+- [`docs/backlog.md`](docs/backlog.md)——生きたバックログ：アーキテクチャ項目、製品機能バッチ（L/I/F）、条件トリガー項目
 - [`docs/code-contract.md`](docs/code-contract.md)——API レベルのインターフェース契約：エラーパス、UTF-8/テキスト、glyph provider、ツリー変更、レイアウト無効化、アロケーション予算、プレゼンテーションシームのコンバータ
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` デザインファイル形式：文法、パッケージングパイプライン、実体化セマンティクス
 - [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI ホストインターフェース。ホストルールは ARCHITECTURE §4.8
