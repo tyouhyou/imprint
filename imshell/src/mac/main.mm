@@ -18,7 +18,9 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <chrono>
 #include <cstdio>
+#include <ctime>
 #include <iostream>
 
 #include "imcore.hpp"
@@ -45,6 +47,31 @@ namespace
     CGImageRef g_image = nullptr;
     int g_buffer_width = 0;
     int g_buffer_height = 0;
+
+    // diagnostic (repaint investigation): append one line per repaint
+    // event so the present chain (painted -> invalidate -> drawRect) can
+    // be compared end to end for one click sequence
+    void log_repaint(const char *what, const double x, const double y,
+                     const double w, const double h)
+    {
+        FILE *f = fopen("/tmp/imprint_repaint.log", "a");
+        if (f == nullptr)
+        {
+            return;
+        }
+        const auto now = std::chrono::system_clock::now();
+        const auto t = std::chrono::system_clock::to_time_t(now);
+        std::tm buf{};
+        localtime_r(&t, &buf);
+        fprintf(f, "[%02d:%02d:%02d.%03d] %s rect=%g,%g,%g,%g\n",
+                buf.tm_hour, buf.tm_min, buf.tm_sec,
+                static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
+                                     now.time_since_epoch())
+                                     .count() %
+                                 1000),
+                what, x, y, w, h);
+        fclose(f);
+    }
 
     void feed(const zb::input::input_event &ev)
     {
@@ -208,6 +235,8 @@ static void log_draw_state(NSView *view)
         return;
     }
     log_draw_state(self);
+    log_repaint("drawRect", dirtyRect.origin.x, dirtyRect.origin.y,
+                dirtyRect.size.width, dirtyRect.size.height);
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
     // buffer row 0 belongs at the view top. AppKit hands drawRect a base
@@ -370,9 +399,11 @@ int main(int argc, char *argv[])
                 dirty, x, y, w, h, g_buffer_width, g_buffer_height);
             if (r.w <= 0)
             {
+                log_repaint("painted-empty", 0, 0, 0, 0);
                 return;  // nothing was drawn, nothing to present
             }
             // top-left surface pixels -> bottom-left view points
+            log_repaint("painted-invalidate", r.x, g_buffer_height - r.y - r.h, r.w, r.h);
             [g_view setNeedsDisplayInRect:NSMakeRect(r.x, g_buffer_height - r.y - r.h, r.w, r.h)];
         });
 
