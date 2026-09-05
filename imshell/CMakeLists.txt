@@ -24,7 +24,11 @@ elseif(APPLE)
     set(IM_SHELL_BACKEND "AppKit" CACHE STRING "macOS shell backend to build: AppKit")
     set_property(CACHE IM_SHELL_BACKEND PROPERTY STRINGS AppKit)
     if (NOT CMAKE_OSX_DEPLOYMENT_TARGET)
-        set(CMAKE_OSX_DEPLOYMENT_TARGET "11.0" CACHE STRING
+        # 10.13 = the oldest supported machine (the maintainer's Xcode 10
+        # clang rejects two-digit deployment targets like 11.0) and the
+        # shell's API floor -- every AppKit/CG call predates it; the CI
+        # macos-15 clang accepts the same target
+        set(CMAKE_OSX_DEPLOYMENT_TARGET "10.13" CACHE STRING
             "macOS deployment target (A-20: one codebase, no 13/14 split)" FORCE)
     endif()
     set(build_src main.mm)
