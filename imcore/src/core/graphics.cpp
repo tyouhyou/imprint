@@ -70,6 +70,26 @@ namespace
         c.set_a(static_cast<uint8_t>((from.a() * (steps - i) + to.a() * i) / steps));
         return c;
     }
+
+    /*
+     * floor(sqrt(n)) by Newton for screen-sized n (radius^2 stays far
+     * below int64 range); used by the AA circle chord coverage. Works
+     * on every depth/geometry configuration, no FPU needed.
+     */
+    int64_t isqrt_floor(const int64_t n)
+    {
+        if (n <= 0)
+        {
+            return 0;
+        }
+        int64_t x = n, y = (x + 1) / 2;
+        while (y < x)
+        {
+            x = y;
+            y = (x + n / x) / 2;
+        }
+        return x;
+    }
 }  // namespace
 
 Graphics::Graphics(uint32_t width, uint32_t height, void *data)
@@ -379,6 +399,50 @@ void Graphics::draw_pixel(int x, int y, const Color &colr)
     }
 }
 
+void Graphics::plot_aa(int x, int y, int coverage, const Color &colr)
+{
+    if (coverage <= 0)
+    {
+        return;
+    }
+    int sx = x, sy = y;
+    if (draw_area_offset_enabled)
+    {
+        sx = draw_area_offset.x + x;
+        sy = draw_area_offset.y + y;
+    }
+    if (sx < draw_area.start_x || sy < draw_area.start_y || sx > draw_area.end_x || sy > draw_area.end_y)
+    {
+        return;
+    }
+    if (damage_on_ && !damage_contains(sx, sy))
+    {
+        return;
+    }
+    Color &px = pixels[imsize.width * sy + sx];
+    if constexpr (Color::per_channel_blend)
+    {
+        // the coverage is the weight, stacked on the color's own alpha
+        const uint32_t a = static_cast<uint32_t>(coverage) * colr.a() / 0xFF;
+        if (a == 0)
+        {
+            return;
+        }
+        Color front = colr;
+        front.set_a(static_cast<uint8_t>(a));
+        px = alpha_blend(front, px);
+    }
+    else
+    {
+        // binary alpha: coverage quantizes to plot/skip at half, so the
+        // stroke stays one pixel wide instead of doubling
+        if (coverage >= 128)
+        {
+            px = colr;
+        }
+    }
+}
+
 Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
 {
     const uint32_t alpha = front_color.a();
@@ -661,6 +725,110 @@ void Graphics::fill_gradient(int x1, int y1, int x2, int y2, const Color &from, 
         {
             const Color c = steps == 0 ? from : lerp_color(from, to, row - top, steps);
             draw_line(left, row, right, row, c);
+        }
+    }
+}
+
+void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr)
+{
+    if (x1 == x2 || y1 == y2)
+    {
+        draw_line(x1, y1, x2, y2, colr);  // axis-aligned runs need no coverage
+        return;
+    }
+
+    // transpose steep lines so x always drives the walk
+    const bool steep = std::abs(y2 - y1) > std::abs(x2 - x1);
+    if (steep)
+    {
+        std::swap(x1, y1);
+        std::swap(x2, y2);
+    }
+    if (x2 < x1)
+    {
+        std::swap(x1, x2);
+        std::swap(y1, y2);
+    }
+    const int dx = x2 - x1;
+    const int dy = y2 - y1;
+    const auto plot = [&](const int cx, const int cy, const int cov)
+    {
+        if (steep)
+        {
+            plot_aa(cy, cx, cov, colr);
+        }
+        else
+        {
+            plot_aa(cx, cy, cov, colr);
+        }
+    };
+
+    plot(x1, y1, 255);
+    plot(x2, y2, 255);
+
+    // exact rational walk (no fixed-point drift): ideal y = y1 +
+    // dy*(cx-x1)/dx; pixel floor(y) gets 255-frac8, pixel floor(y)+1
+    // gets frac8 -- Wu's two-pixel split with the remainder's weight
+    int64_t p = 0;
+    for (int cx = x1 + 1; cx < x2; ++cx)
+    {
+        p += dy;
+        int64_t q = p / dx;
+        if (p % dx < 0)
+        {
+            --q;  // floor division: the ideal line may dip below y1
+        }
+        const int64_t rem = p - q * dx;
+        const int yy = y1 + static_cast<int>(q);
+        const int frac8 = static_cast<int>(rem * 255 / dx);
+        plot(cx, yy, 255 - frac8);
+        plot(cx, yy + 1, frac8);
+    }
+}
+
+void Graphics::draw_circle_aa(int x, int y, int radius, const Color &colr)
+{
+    if (radius <= 0)
+    {
+        draw_pixel(x, y, colr);
+        return;
+    }
+
+    // one chord per column offset: the exact boundary between py and
+    // py+1 splits the coverage by the remainder's fraction. px == py is
+    // impossible for integer radii (r*r == 2*px*px has no solution), and
+    // each point belongs to exactly one iteration, so nothing is drawn
+    // twice and the blend never stacks
+    const auto plot4 = [&](const int dx_, const int dy_, const int cov)
+    {
+        if (dx_ == 0)
+        {
+            plot_aa(x, y + dy_, cov, colr);
+            plot_aa(x, y - dy_, cov, colr);
+        }
+        else if (dy_ == 0)
+        {
+            plot_aa(x + dx_, y, cov, colr);
+            plot_aa(x - dx_, y, cov, colr);
+        }
+        else
+        {
+            plot_aa(x + dx_, y + dy_, cov, colr);
+            plot_aa(x - dx_, y + dy_, cov, colr);
+            plot_aa(x + dx_, y - dy_, cov, colr);
+            plot_aa(x - dx_, y - dy_, cov, colr);
+        }
+    };
+    for (int px = 0; px <= radius; ++px)
+    {
+        const int64_t t = 1LL * radius * radius - 1LL * px * px;
+        const int py = static_cast<int>(isqrt_floor(t));
+        const int64_t rem = t - 1LL * py * py;
+        const int frac8 = static_cast<int>(rem * 255 / (2 * py + 1));
+        plot4(px, py, 255 - frac8);
+        if (frac8 > 0)
+        {
+            plot4(px, py + 1, frac8);
         }
     }
 }

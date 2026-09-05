@@ -222,6 +222,20 @@ namespace zb::ui::core
         void draw_round_rect(int x1, int y1, int x2, int y2, int radius, const Color &colr);
         void fill_round_rect(int x1, int y1, int x2, int y2, int radius, const Color &colr);
 
+        /*
+         * Anti-aliased opt-in variants (Batch V-1): Wu's two-pixel
+         * coverage split for lines, exact-chord coverage for circles.
+         * They ALWAYS blend -- the coverage is the weight -- regardless
+         * of the alpha_enabled switch that governs the plain primitives;
+         * at 16bpp (binary alpha) coverage quantizes to plot/skip at
+         * half coverage and the stroke stays one pixel wide. Endpoints
+         * plot solid. Integer-only math (FPU-less targets included);
+         * every write goes through plot_aa, so the clip/damage
+         * conventions (A-12/A-13) hold.
+         */
+        void draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr);
+        void draw_circle_aa(int x, int y, int radius, const Color &colr);
+
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, float accuracy = 0.01);
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, float accuracy = 0.01);
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, float accuracy = 0.01);
@@ -317,6 +331,11 @@ namespace zb::ui::core
         void draw_8pixels(int x, int y, int px, int py, const Color &colr);
         void draw_incir_pixels(int x, int y, int px, int py, const Color &colr);
         Color alpha_blend(const Color &front_color, const Color &back_color);
+
+        // the AA primitives' single write path: one pixel with a 0..255
+        // coverage weight (V-1); same offset/bounds/damage gate as
+        // draw_pixel, then a coverage-weighted source-over blend
+        void plot_aa(int x, int y, int coverage, const Color &colr);
 
 #pragma endregion
     };

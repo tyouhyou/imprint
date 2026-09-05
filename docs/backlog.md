@@ -18,13 +18,10 @@ frameworks. Principle: modern look = rasterizer primitives (imcore
 Graphics) + themed demo content; widgets stay theme-token driven, no
 widget redesign, no animation system.
 
-- **V-1. Rasterizer primitives** (imcore `Graphics`):
-  - Linear gradient fill (rect span, two colors; 16bpp quantizes — accepted).
-  - Rounded rect draw/fill (single radius).
-  - Tinted `draw_image` (modulate color multiply) — one PNG, any palette.
-  - Anti-aliased line/circle as **opt-in per-primitive calls**
-    (`*_aa`), never a global default switch — decision 2026-09-05;
-    battery expectations update as calls migrate.
+- **V-1. Rasterizer primitives** — **done** (2026-09-05): linear
+  gradient fill, rounded rect draw/fill, tinted `draw_image`, AA
+  line/circle as opt-in `*_aa` calls (never a global default switch);
+  see `git log` for the exact contracts.
 - **V-2. Showcase content & assets**: dark-theme hero page with a
   chart drawn by the framework's own primitives; alpha-PNG gallery
   entries; 9-slice/shadow via pre-blurred PNG assets (no framework

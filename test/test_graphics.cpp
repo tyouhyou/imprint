@@ -433,5 +433,87 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 4, 1) == core::Color::from(255, 128, 128).pixel);
     }
 
+    // draw_line_aa: axis-aligned runs fall back to the exact plain line
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->draw_line_aa(2, 4, 7, 4, core::colors::White);
+        for (int x = 2; x <= 7; ++x)
+        {
+            EXPECT(test::pixel_at(*g, x, 4) == core::colors::White.pixel);
+        }
+        EXPECT(test::pixel_at(*g, 4, 3) != core::colors::White.pixel);
+    }
+
+    // AA always blends regardless of the alpha_enabled switch
+    if (core::ImColor_Depth == 32)
+    {
+        // shallow line: endpoints solid, each body column splits its
+        // coverage between the two nearest pixels (Wu pair); column 4 of
+        // (0,0)-(7,3): ideal y = 12/7, remainder 5 -> frac8 = 182
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->draw_line_aa(0, 0, 7, 3, core::colors::White);
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 1) == core::Color::from(73, 73, 73).pixel);
+        EXPECT(test::pixel_at(*g, 4, 2) == core::Color::from(182, 182, 182).pixel);
+        EXPECT(test::pixel_at(*g, 4, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 4, 3) == core::colors::Black.pixel);
+
+        // steep line: the transposed walk mirrors the coverage exactly
+        auto gs = core::Graphics::make_ptr(10, 10);
+        gs->fill(core::colors::Black);
+        gs->draw_line_aa(0, 0, 3, 7, core::colors::White);
+        EXPECT(test::pixel_at(*gs, 0, 0) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*gs, 3, 7) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*gs, 1, 4) == core::Color::from(73, 73, 73).pixel);
+        EXPECT(test::pixel_at(*gs, 2, 4) == core::Color::from(182, 182, 182).pixel);
+
+        // circle: exact axis extremes (integer chords), coverage pair on
+        // the non-integer chords (px=4 of r=7: py=5, rem=8 -> frac8=185),
+        // interior and one-past-the-boundary untouched
+        auto gc = core::Graphics::make_ptr(21, 21);
+        gc->fill(core::colors::Black);
+        gc->draw_circle_aa(10, 10, 7, core::colors::White);
+        EXPECT(test::pixel_at(*gc, 17, 10) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*gc, 10, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*gc, 18, 10) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*gc, 10, 2) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*gc, 10, 10) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*gc, 14, 15) == core::Color::from(70, 70, 70).pixel);
+        EXPECT(test::pixel_at(*gc, 14, 16) == core::Color::from(185, 185, 185).pixel);
+
+        // the AA write path respects clip_safe like every raster entry
+        {
+            auto gk = core::Graphics::make_ptr(10, 10);
+            gk->fill(core::colors::Black);
+            {
+                auto guard = gk->clip_safe(0, 0, 4, 10);
+                EXPECT(static_cast<bool>(guard));
+                gk->draw_line_aa(0, 0, 7, 3, core::colors::White);
+            }
+            EXPECT(test::pixel_at(*gk, 0, 0) == core::colors::White.pixel);
+            EXPECT(test::pixel_at(*gk, 7, 3) != core::colors::White.pixel);  // endpoint clipped
+            EXPECT(test::pixel_at(*gk, 2, 1) == core::Color::from(218, 218, 218).pixel);
+            EXPECT(test::pixel_at(*gk, 5, 2) == core::colors::Black.pixel);
+        }
+    }
+
+    // 16bpp: binary coverage -- exactly one pixel of each Wu pair plots
+    // (the half-coverage threshold), endpoints stay solid
+    if (core::ImColor_Depth == 16)
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->draw_line_aa(0, 0, 7, 3, core::colors::White);
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 3) == core::colors::White.pixel);
+        const bool lower = test::pixel_at(*g, 4, 1) == core::colors::White.pixel;
+        const bool upper = test::pixel_at(*g, 4, 2) == core::colors::White.pixel;
+        EXPECT(lower != upper);
+        EXPECT(test::pixel_at(*g, 4, 0) != core::colors::White.pixel);
+    }
+
     return test::report("graphics");
 }

@@ -593,8 +593,12 @@ obligations:
   `fill` clamps by the same boundaries then intersects, degenerating to
   an early exit). `draw_image` (plain and tinted), `fill_gradient` and
   the round-rect pair all plot per-pixel through `draw_pixel`/`draw_line`
-  and inherit the same clipping. Direct drawing without `clip_safe` is
-  therefore also safe in damage mode (`test_raster_damage` pins this).
+  and inherit the same clipping; the AA pair (`draw_line_aa` /
+  `draw_circle_aa`) writes through `plot_aa` — the same
+  offset/bounds/damage gate, then a coverage-weighted source-over blend
+  that runs regardless of the `alpha_enabled` switch. Direct drawing
+  without `clip_safe` is therefore also safe in damage mode
+  (`test_raster_damage` pins this).
 - Invariant: a node with `subtree_dirty_` true implies all its ancestors
   are true (maintained jointly by bubble-set on the way up and
   post-order recomputation); bubbling may terminate early on that
