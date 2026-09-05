@@ -26,7 +26,7 @@
 
 - **L-1. Widget-level margin/padding API**:
   - Context: Button `measure()` vs draw padding discrepancy fixed in `65087b8`. A general margin/padding model across widgets and containers remains unscheduled.
-- **L-2. `.ui` alignment attributes (`halign` / `valign`)**:
+- **L-2. `.ui` alignment attributes (`halign` / `valign`)** — **externally claimed** (GitHub issue #2 assigned to @tecnolgd, 2026-09-05; do not implement here — review their PR against `docs/design-file.md` grammar when it lands):
   - Context: Declarative `.ui` alignment syntax. Currently apps use explicit `set_v_align` / `set_h_align` in application code (`f74ab48`). Good-first-issue #2 opened.
   - Review default framework alignment strategy (e.g. text centering vs top-left default).
 - **L-3. `list_box rows=` declaration width trap**:
