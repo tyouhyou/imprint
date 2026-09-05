@@ -58,6 +58,7 @@ namespace zb::app::showcase
         _height = static_cast<int32_t>(max_client_height);
         window_ = zb::make_shared<CanvasWindow>();
         window_->create(max_client_width, max_client_height, buffer);
+        window_->set_title("Imprint UI -- showcase");
         // design-file host: layout is driven by the window (batch J5)
         window_->set_auto_layout(true);
         // V-2: the showcase ships dark (the README face); the theme
