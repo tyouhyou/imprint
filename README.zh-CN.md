@@ -20,11 +20,13 @@ Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，�
 
 <img src="assets/showcase/showcase.gif" width="480" alt="逐帧录制的 showcase：暗色启动、图表逐步生长、START 填充进度条、REPLAY 重放图表、浅色全控件页与阴影卡资产、回到暗色收尾">
 
-同一份 showcase，原样跑在任天堂 DS 模拟器上——690 KB ROM、60 fps，图表与 alpha 资产一个不少：
+同一份 showcase，原样跑在四个原生壳上——包括任天堂 DS 上的 690 KB ROM、60 fps：
 
 <p>
-  <img src="assets/showcase/nds.png" width="256" alt="NDS 上的 showcase 主页：暗色主题、抗锯齿曲线图表">
-  <img src="assets/showcase/nds_gallery.png" width="256" alt="NDS 上的 showcase 全控件页：全部控件加球体与阴影卡资产">
+  <img src="assets/showcase/win.png" width="200" alt="Windows (Win32) 上的 showcase：暗色主题、抗锯齿曲线图表">
+  <img src="assets/showcase/mac.png" width="200" alt="macOS (AppKit) 上的 showcase：同一暗色主页">
+  <img src="assets/showcase/linux.png" width="200" alt="Linux (X11) 上的 showcase：同一暗色主页">
+  <img src="assets/showcase/nds.png" width="200" alt="任天堂 DS (melonDS) 上的 showcase：16bpp 的同一暗色主页">
 </p>
 
 不需要 GPU。不需要操作系统 GUI 工具包。不需要平台专属 UI 代码。

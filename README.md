@@ -21,11 +21,13 @@ preview on your PC, then ship the very same code to the device.
 
 <img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: boots dark while the chart reveals itself, START fills the progress bars, REPLAY replays the chart, the light widget gallery with its shadow-card assets, back to dark">
 
-The same showcase, unmodified, on a Nintendo DS emulator — 690 KB ROM, 60 fps, the chart and the alpha assets included:
+The same showcase, unmodified, on four native shells — including a 690 KB ROM at 60 fps on the Nintendo DS:
 
 <p>
-  <img src="assets/showcase/nds.png" width="256" alt="The showcase hero page on NDS: dark theme, the chart with its anti-aliased curve">
-  <img src="assets/showcase/nds_gallery.png" width="256" alt="The showcase widget gallery on NDS: all widgets plus the ball and shadow-card assets">
+  <img src="assets/showcase/win.png" width="200" alt="The showcase on Windows (Win32): dark theme, the chart with its anti-aliased curve">
+  <img src="assets/showcase/mac.png" width="200" alt="The showcase on macOS (AppKit): the same dark hero">
+  <img src="assets/showcase/linux.png" width="200" alt="The showcase on Linux (X11): the same dark hero">
+  <img src="assets/showcase/nds.png" width="200" alt="The showcase on a Nintendo DS (melonDS): the same dark hero at 16 bpp">
 </p>
 
 No GPU required. No OS GUI toolkit required. No platform-specific UI code.

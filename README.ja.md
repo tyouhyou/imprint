@@ -20,11 +20,13 @@ Imprint UI は、組み込みと非典型的なターゲットのための、極
 
 <img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：ダークで起動しチャートが描き出され、START でプログレスバーが充填、REPLAY でチャートを再生、ライトの全ウィジェットページと影カード資産、ダークで締める">
 
-同じ showcase がそのまま Nintendo DS エミュレータでも動作——690 KB ROM、60 fps、チャートもアルファ資産もそのまま:
+同じ showcase がそのまま 4 つのネイティブシェルで動作——Nintendo DS では 690 KB ROM・60 fps:
 
 <p>
-  <img src="assets/showcase/nds.png" width="256" alt="NDS 上の showcase ホーム: ダークテーマ、アンチエイリアス曲線のチャート">
-  <img src="assets/showcase/nds_gallery.png" width="256" alt="NDS 上の showcase ウィジェットギャラリー: 全ウィジェットとボール・影カード資産">
+  <img src="assets/showcase/win.png" width="200" alt="Windows (Win32) の showcase: ダークテーマ、アンチエイリアス曲線のチャート">
+  <img src="assets/showcase/mac.png" width="200" alt="macOS (AppKit) の showcase: 同じダークホーム">
+  <img src="assets/showcase/linux.png" width="200" alt="Linux (X11) の showcase: 同じダークホーム">
+  <img src="assets/showcase/nds.png" width="200" alt="Nintendo DS (melonDS) の showcase: 16bpp の同じダークホーム">
 </p>
 
 GPU 不要。OS の GUI ツールキット不要。プラットフォーム固有の UI コードも不要。
