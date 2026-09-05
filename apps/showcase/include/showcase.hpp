@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <vector>
 
 #include "canvas_window.hpp"
 #include "event.hpp"
@@ -21,6 +22,8 @@ namespace zb::ui
 namespace zb::app::showcase
 {
     class HeroChart;
+    class ShadowCard;
+    class AlphaImage;
     /*
      * S3 showcase: two embedded .ui pages behind one window.
      *
@@ -61,6 +64,7 @@ namespace zb::app::showcase
                          uint32_t max_client_height, void *buffer);
         void load_pages();
         void install_chart();
+        void install_assets();
         void wire_controls();
         void show_page(int index);
         void set_state(const char *text);
@@ -90,6 +94,13 @@ namespace zb::app::showcase
         int current_ = 0;
 
         HeroChart *chart_ = nullptr;
+
+        // V-2 asset materialization: the RGBA8 arrays from asset_gen
+        // converted once into the build's pixel layout (the buffers the
+        // gallery's image views point at must outlive the widgets)
+        std::vector<zb::ui::core::Color> asset_pixels_;
+        zb::ui::core::image_t ball_img_{};
+        zb::ui::core::image_t shadow_img_{};
 
         zb::ui::ProgressBar *cpu_bar_ = nullptr;
         zb::ui::ProgressBar *mem_bar_ = nullptr;

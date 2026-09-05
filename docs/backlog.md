@@ -22,10 +22,24 @@ widget redesign, no animation system.
   gradient fill, rounded rect draw/fill, tinted `draw_image`, AA
   line/circle as opt-in `*_aa` calls (never a global default switch);
   see `git log` for the exact contracts.
-- **V-2. Showcase content & assets**: dark-theme hero page with a
-  chart drawn by the framework's own primitives; alpha-PNG gallery
-  entries; 9-slice/shadow via pre-blurred PNG assets (no framework
-  blur).
+- **V-2. Showcase content & assets** — **done** (2026-09-05): dark-boot
+  hero with the animated chart (the F-2 preview tween reveals it one
+  step per paint), compact rows keeping the 256x192 embedded fit;
+  gallery alpha-asset row (9-slice shadow card, accent-tinted ball).
+  Assets are PROCEDURAL, generated at build time by
+  `tools/asset_gen` into RGBA8 arrays (the `ttf_subset` precedent:
+  build-time materialization, no runtime decode, no USE_PNG
+  dependency); the shadow blur lives in the generator — no framework
+  blur. A plain `set_background_image()` panel cannot show soft alpha
+  (background draws run with the alpha switch off); apps opt in via
+  their own `draw_at()` (`AlphaImage` in the showcase).
+- **V-4. codec: memory-source image decode** (condition-triggered):
+  `Image::read_png*` accepts only file names; embedded targets shipping
+  compressed art need `read_png_memory(bytes, n, ...)` (stb offers
+  `stbi_load_from_memory`). Gated together with the USE_PNG
+  default-OFF question — decide both when the first real
+  compressed-asset use case appears; until then the procedural
+  generator covers the demo.
 - **V-3. Re-record & re-shoot**: GIF + per-platform static frames
   (win / X11 / mac), README hero layout, three-language READMEs aligned.
 - **V-0. Promote `gif_encoder`** (showcase app) into `imcore/codec/gif`

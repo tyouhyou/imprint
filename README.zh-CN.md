@@ -115,7 +115,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 | macOS（AppKit） | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0，无需额外选项 |
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
 | Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |
-| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds` |
+| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 showcase ROM（还需传入宿主构建的 `ui_embed` 与 `asset_gen`：`-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=`） |
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | 附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
@@ -144,7 +144,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 **Hello**（`-DSTORY=hello`）——入门应用：一个标签加一个点击计数的按钮；复制它即可开始写自己的应用（见 [`docs/getting-started.md`](docs/getting-started.md)）。
 
-**showcase**（`-DSTORY=showcase`）——多目标蒙太奇背后的控件陈列馆：设备状态控制面板（进度条、START/STOP、深/浅主题切换）加一个全控件页面，均以 `.ui` 设计文件声明。`assets/showcase/` 中的画面来自这些构建；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM。
+**showcase**（`-DSTORY=showcase`）——多目标蒙太奇背后的控件陈列馆：暗色启动，开场是一幅用框架自身光栅器绘制的动画图表（圆角卡片上的抗锯齿曲线 + 渐变面积，由 app 侧 tween 逐步揭示）；设备状态控制面板（进度条、START/STOP、深/浅主题切换）与全控件页面带 alpha 资产合成（9-slice 阴影卡、accent 染色球；资产由 `tools/asset_gen` 构建期生成）。`assets/showcase/` 中的画面来自这些构建；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM。
 
 **井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
 

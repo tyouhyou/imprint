@@ -117,7 +117,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 | macOS（AppKit） | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0、追加オプション不要 |
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 入力対応バックエンド |
 | Linux（フレームバッファ） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 表示のみ。操作は X11 で |
-| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成 |
+| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` でショーケース ROM をビルド（ホスト製の `ui_embed` と `asset_gen` を `-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=` で渡す必要あり） |
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | node スモークテスト付き |
 | Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 
@@ -146,7 +146,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 **Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
 
-**showcase**（`-DSTORY=showcase`）——マルチターゲット・モンタージュの元になるウィジェットギャラリー。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と全ウィジェットページを備え、どちらも `.ui` デザインファイルで宣言します。`assets/showcase/` のフレームはこれらのビルドから生成。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
+**showcase**（`-DSTORY=showcase`）——マルチターゲット・モンタージュの元になるウィジェットギャラリー。ダークで起動し、フレームワーク自身のラスタライザで描いたアニメーションチャート（角丸カード上のアンチエイリアス曲線＋グラデーション領域、app 側 tween が少しずつ描き出す）で開始。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と、アルファ資産合成付きの全ウィジェットページ（9-slice 影カード、アクセント色にティントしたボール。資産は `tools/asset_gen` がビルド時に生成）。`assets/showcase/` のフレームはこれらのビルドから生成。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
 
 **三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。
 

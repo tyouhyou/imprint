@@ -119,7 +119,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 | macOS (AppKit) | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0, no extra options |
 | Linux (X11) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | input-capable backend |
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
-| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the showcase ROM |
+| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the showcase ROM (it additionally needs the host-built `ui_embed` and `asset_gen` passed as `-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=`) |
 | WebAssembly | `demo/wasm/build.sh` (docker emscripten) | includes a node smoke test |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
@@ -148,7 +148,7 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 **Hello** (`-DSTORY=hello`) — the getting-started app: a label and a click-counting button; copy it to start your own app (see [`docs/getting-started.md`](docs/getting-started.md)).
 
-**Showcase** (`-DSTORY=showcase`) — the widget gallery behind the multi-target montage: a device-status control panel (progress bars, START/STOP, dark/light theme) plus an all-widgets page, both declared in `.ui` design files. The frames in `assets/showcase/` come from these builds; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
+**Showcase** (`-DSTORY=showcase`) — the widget gallery behind the multi-target montage: boots dark, opens on an animated chart drawn with the framework's own rasterizer (anti-aliased curve over a gradient area on a rounded card, revealed step by step by an app-side tween), a device-status control panel (progress bars, START/STOP, dark/light theme), and an all-widgets page with alpha asset compositing (a 9-slice shadow card and an accent-tinted ball; the assets are generated at build time by `tools/asset_gen`). The frames in `assets/showcase/` come from these builds; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
 
 **TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
 

@@ -14,3 +14,7 @@ column spacing=6 padding=8
       progress_bar id="demo_bar" value=60
       text_input text="type here"
       list_box id="demo_list" width=100 rows=2 items="Alpha" "Beta" "Gamma"
+  row spacing=6
+    label text="ASSET"
+    panel id="logo_slot" width=32 height=32
+    panel id="shadow_slot" width=132 height=44

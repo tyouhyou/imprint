@@ -95,6 +95,10 @@ if (NOT NDS_PLATFORM)
         ${CMAKE_SOURCE_DIR}/imui/include
         ${CMAKE_SOURCE_DIR}/imutil/include
     )
+    # procedural showcase asset generator (V-2): emits RGBA8 arrays at
+    # build time — the ttf_subset precedent (build-time materialization
+    # of a shipping asset), no runtime decode and no USE_PNG dependency
+    add_executable(asset_gen tools/asset_gen.cpp)
 endif()
 
 add_subdirectory(test)

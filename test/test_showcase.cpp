@@ -208,7 +208,39 @@ int test_showcase()
         click_center(app, *gallery_btn);
         app.paint();
         expect_fit(app, 256, 192,
-                   {"back_btn", "demo_slider", "demo_bar", "demo_list"});
+                   {"back_btn", "demo_slider", "demo_bar", "demo_list",
+                    "logo_slot", "shadow_slot"});
+    }
+
+    // V-2 assets: the procedural ball composites with alpha and the
+    // 9-slice shadow card draws behind its card (probes structural,
+    // depth-independent facts)
+    {
+        const auto holder = make_app(640, 480);
+        auto &app = *holder;
+        auto *gallery_btn = static_cast<Button *>(root(app).find_by_id("gallery_btn"));
+        click_center(app, *gallery_btn);
+        app.paint();
+
+        // ball: opaque body in the middle, page background outside the
+        // soft edge (the slot is exactly the ball size)
+        auto *logo = root(app).find_by_id("logo_slot");
+        EXPECT(logo != nullptr);
+        const auto lp = logo->get_absolute_position();
+        EXPECT(px(app, lp.x + 16, lp.y + 16) != theme().background.pixel);
+        EXPECT(px(app, lp.x + 1, lp.y + 16) == theme().background.pixel);
+
+        // shadow card: interior is the field token (card over shadow);
+        // the ball is tinted by the accent token, not the raw asset
+        auto *slot = root(app).find_by_id("shadow_slot");
+        EXPECT(slot != nullptr);
+        const auto sp = slot->get_absolute_position();
+        const auto ss = slot->get_size();
+        EXPECT(px(app, sp.x + 20, sp.y + ss.height / 2) == theme().field_bg.pixel);
+        EXPECT(px(app, sp.x + ss.width / 2, sp.y + ss.height / 2) !=
+               theme().field_bg.pixel);
+        // the corner outside card and shadow tail stays the page
+        EXPECT(px(app, sp.x + 1, sp.y + 1) == theme().background.pixel);
     }
 
     // theme toggle repaints the frame; the showcase boots dark (V-2),
