@@ -591,9 +591,10 @@ obligations:
   `draw_area` is closed; their single point of contact is the private
   predicate `damage_contains(x, y)` (`draw_pixel` uses it directly;
   `fill` clamps by the same boundaries then intersects, degenerating to
-  an early exit). `draw_image` delegates per-pixel to `draw_pixel` and
-  inherits the clipping. Direct drawing without `clip_safe` is therefore
-  also safe in damage mode (`test_raster_damage` pins this).
+  an early exit). `draw_image` (plain and tinted), `fill_gradient` and
+  the round-rect pair all plot per-pixel through `draw_pixel`/`draw_line`
+  and inherit the same clipping. Direct drawing without `clip_safe` is
+  therefore also safe in damage mode (`test_raster_damage` pins this).
 - Invariant: a node with `subtree_dirty_` true implies all its ancestors
   are true (maintained jointly by bubble-set on the way up and
   post-order recomputation); bubbling may terminate early on that

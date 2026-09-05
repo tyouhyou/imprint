@@ -275,5 +275,163 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 30, 10) == core::colors::Red.pixel);
     }
 
+    // fill_gradient (vertical): both ends exact, middle interpolated,
+    // every column of the span covered
+    {
+        auto g = core::Graphics::make_ptr(4, 9);
+        g->fill(core::colors::Black);
+        g->fill_gradient(0, 0, 3, 8, core::colors::Black, core::colors::White, false);
+        EXPECT(test::pixel_at(*g, 1, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 1, 8) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 1, 4) == core::Color::from(127, 127, 127).pixel);  // (0*4 + 255*4) / 8
+        EXPECT(test::pixel_at(*g, 0, 4) == test::pixel_at(*g, 3, 4));  // constant per row
+    }
+
+    // fill_gradient (horizontal): the default direction interpolates
+    // along columns, rows stay constant
+    {
+        auto g = core::Graphics::make_ptr(9, 4);
+        g->fill(core::colors::Black);
+        g->fill_gradient(0, 0, 8, 3, core::colors::Black, core::colors::White);
+        EXPECT(test::pixel_at(*g, 0, 1) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 8, 1) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 1) == core::Color::from(127, 127, 127).pixel);
+        EXPECT(test::pixel_at(*g, 2, 0) == test::pixel_at(*g, 2, 3));  // constant per column
+    }
+
+    // fill_gradient: a reversed corner order and a single-column span
+    // (degenerate to the flat `from` color) both behave
+    {
+        auto g = core::Graphics::make_ptr(6, 6);
+        g->fill(core::colors::Black);
+        g->fill_gradient(5, 3, 2, 3, core::colors::White, core::colors::White, false);
+        EXPECT(test::pixel_at(*g, 2, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 5, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 2) != core::colors::White.pixel);
+        g->fill(core::colors::Black);
+        g->fill_gradient(2, 0, 2, 5, core::colors::White, core::colors::Black, false);
+        EXPECT(test::pixel_at(*g, 2, 0) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 1, 0) != core::colors::White.pixel);
+    }
+
+    // fill_gradient respects clip_safe like every other raster path
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        {
+            auto guard = g->clip_safe(2, 2, 5, 5);
+            EXPECT(static_cast<bool>(guard));
+            g->fill_gradient(0, 0, 9, 9, core::colors::White, core::colors::White, false);
+        }
+        EXPECT(test::pixel_at(*g, 1, 4) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 1) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 6, 6) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 7) != core::colors::White.pixel);
+    }
+
+    // fill_round_rect: corner pixels are rounded away, the flat edges
+    // and the interior are full; the arc chord matches the geometry
+    {
+        auto g = core::Graphics::make_ptr(16, 16);
+        g->fill(core::colors::Black);
+        g->fill_round_rect(2, 2, 13, 13, 4, core::colors::White);
+        EXPECT(test::pixel_at(*g, 2, 2) != core::colors::White.pixel);   // corner cut
+        EXPECT(test::pixel_at(*g, 13, 2) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 2, 13) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 13, 13) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 2) == core::colors::White.pixel);   // flat top edge
+        EXPECT(test::pixel_at(*g, 7, 13) == core::colors::White.pixel);  // flat bottom edge
+        EXPECT(test::pixel_at(*g, 2, 7) == core::colors::White.pixel);   // flat left edge
+        EXPECT(test::pixel_at(*g, 13, 7) == core::colors::White.pixel);  // flat right edge
+        EXPECT(test::pixel_at(*g, 7, 7) == core::colors::White.pixel);   // interior
+        // row 4 sits dy=2 above the top-left arc center (6,6): the chord
+        // half-width is floor(sqrt(16-4)) = 3, so columns 3..9 fill
+        EXPECT(test::pixel_at(*g, 4, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 3, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 2, 4) != core::colors::White.pixel);
+    }
+
+    // fill_round_rect: radius 0 is the plain fill, an oversized radius
+    // clamps to the shorter half-side
+    {
+        auto g = core::Graphics::make_ptr(10, 10);
+        g->fill(core::colors::Black);
+        g->fill_round_rect(2, 2, 7, 7, 0, core::colors::White);
+        EXPECT(test::pixel_at(*g, 2, 2) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 7) == core::colors::White.pixel);
+        g->fill(core::colors::Black);
+        g->fill_round_rect(1, 1, 8, 6, 100, core::colors::White);  // clamps to r = 2
+        EXPECT(test::pixel_at(*g, 1, 1) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 1) == core::colors::White.pixel);
+    }
+
+    // draw_round_rect: the outline traces the fill boundary -- straight
+    // edges, arc points at the chord ends, hollow center and corners
+    {
+        auto g = core::Graphics::make_ptr(16, 16);
+        g->fill(core::colors::Black);
+        g->draw_round_rect(2, 2, 13, 13, 4, core::colors::White);
+        EXPECT(test::pixel_at(*g, 7, 2) == core::colors::White.pixel);    // top edge
+        EXPECT(test::pixel_at(*g, 7, 13) == core::colors::White.pixel);   // bottom edge
+        EXPECT(test::pixel_at(*g, 2, 7) == core::colors::White.pixel);    // left edge
+        EXPECT(test::pixel_at(*g, 13, 7) == core::colors::White.pixel);   // right edge
+        EXPECT(test::pixel_at(*g, 3, 5) == core::colors::White.pixel);    // arc (dy=1)
+        EXPECT(test::pixel_at(*g, 12, 5) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 4, 3) == core::colors::White.pixel);    // arc (dy=3)
+        EXPECT(test::pixel_at(*g, 11, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 7) != core::colors::White.pixel);    // hollow center
+        EXPECT(test::pixel_at(*g, 2, 2) != core::colors::White.pixel);    // no corner
+    }
+
+    // tinted draw_image: an opaque-white tint is the exact plain
+    // draw_image identity on every depth (the *255/255 modulate
+    // collapses back through the same setters)
+    {
+        auto g = core::Graphics::make_ptr(6, 2);
+        auto plain = core::Graphics::make_ptr(6, 2);
+        g->fill(core::colors::Black);
+        plain->fill(core::colors::Black);
+        g->enable_alpha(false);
+        plain->enable_alpha(false);
+        const core::Color src[2] = {core::colors::White, core::Color::from(255, 128, 0, 200)};
+        g->draw_image(src, 2, 1, 2, 0, 0, core::Color::from(255, 255, 255));
+        plain->draw_image(src, 2, 1, 2, 0, 0);
+        for (int x = 0; x < 2; ++x)
+        {
+            EXPECT(test::pixel_at(*g, x, 0) == test::pixel_at(*plain, x, 0));
+        }
+    }
+
+    // tinted draw_image scales channels by the tint. Exact pixels are
+    // asserted at 32bpp only: at 16bpp the modulated value requantizes
+    // through the 5/6/5-bit setters (128 expands to 123, which collapses
+    // to a different bit pattern than a direct 128), so the useful
+    // 16bpp contract is the white-tint identity above
+    if (core::ImColor_Depth == 32)
+    {
+        auto g = core::Graphics::make_ptr(6, 2);
+        g->fill(core::colors::Black);
+        g->enable_alpha(false);
+        const core::Color src[2] = {core::colors::White, core::Color::from(255, 128, 0, 200)};
+        g->draw_image(src, 2, 1, 2, 0, 0, core::Color::from(128, 255, 64));
+        EXPECT(test::pixel_at(*g, 0, 0) == core::Color::from(128, 255, 64).pixel);
+        EXPECT(test::pixel_at(*g, 1, 0) == core::Color::from(128, 128, 0, 200).pixel);
+    }
+
+    // tinted draw_image under alpha_enabled: the modulated source alpha
+    // flows into the source-over blend (32bpp per-channel blend only --
+    // at 16bpp the alpha bit is binary and the blend returns the front)
+    if (core::ImColor_Depth == 32)
+    {
+        auto g = core::Graphics::make_ptr(6, 2);
+        g->fill(core::colors::Red);
+        g->enable_alpha(true);
+        const core::Color white[1] = {core::colors::White};
+        g->draw_image(white, 1, 1, 1, 4, 1, core::Color::from(255, 255, 255, 128));
+        // white at tint-alpha 128 over red: source-over gives (255,128,128)
+        EXPECT(test::pixel_at(*g, 4, 1) == core::Color::from(255, 128, 128).pixel);
+    }
+
     return test::report("graphics");
 }

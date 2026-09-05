@@ -201,6 +201,27 @@ namespace zb::ui::core
             fill_triangle(p1.x, p1.y, p2.x, p2.y, p3.x, p3.y, colr);
         }
 
+        /*
+         * Fill the rect with a linear interpolation from `from` to `to`,
+         * along columns (horizontal, left->right) or rows (vertical,
+         * top->bottom). Channels interpolate through the 8-bit-normalized
+         * accessors (A-19); a single-column/row span degenerates to the
+         * flat `from` color. Every row goes through draw_pixel, so the
+         * clip/damage/alpha conventions hold (A-12/A-13).
+         */
+        void fill_gradient(int x1, int y1, int x2, int y2, const Color &from, const Color &to, bool horizontal = true);
+
+        /*
+         * Rectangle with circular corners of the given radius (clamped to
+         * half the shorter side; <= 0 falls back to the plain rect).
+         * draw_round_rect outlines exactly the coverage fill_round_rect
+         * fills, one pixel thick. Corner chords are integer math under
+         * USE_INTEGER_GEOMETRY (FPU-less targets), like draw_circle's
+         * octant bound. Both plot through draw_pixel (A-12/A-13).
+         */
+        void draw_round_rect(int x1, int y1, int x2, int y2, int radius, const Color &colr);
+        void fill_round_rect(int x1, int y1, int x2, int y2, int radius, const Color &colr);
+
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, float accuracy = 0.01);
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, float accuracy = 0.01);
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, float accuracy = 0.01);
@@ -223,6 +244,34 @@ namespace zb::ui::core
             const image_t &img,
             int start_x,
             int start_y);
+
+        /* *
+         * Modulate blit: like draw_image, but every source channel
+         * (alpha included) scales by the matching tint channel through
+         * the 8-bit-normalized accessors. A tint whose channels all sit
+         * at the normalized maximum (255 at 32bpp; the 0xF8 expansion
+         * maximum and a set alpha bit at 16bpp) is the 1.0 multiplier
+         * and takes the plain draw_image path, so the identity is
+         * pixel-exact on every depth. draw_pixel still owns blending:
+         * at 32bpp alpha_enabled stacks the tint's alpha over the
+         * modulated source alpha; at 16bpp the alpha bit is a binary
+         * gate -- a transparent tint clears the source alpha, an opaque
+         * one keeps it.
+         * */
+        void draw_image(
+            const Color *img,
+            int img_width,
+            int img_height,
+            int img_row_stride,
+            int start_x,
+            int start_y,
+            const Color &tint);
+
+        void draw_image(
+            const image_t &img,
+            int start_x,
+            int start_y,
+            const Color &tint);
 
 #pragma endregion
 

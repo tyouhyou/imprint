@@ -41,6 +41,37 @@ namespace
 }  // namespace
 #endif
 
+namespace
+{
+    /*
+     * Half-chord of the corner circle at vertical distance dy (1..r):
+     * floor(sqrt(r*r - dy*dy)). Float-free under USE_INTEGER_GEOMETRY,
+     * the same split as draw_circle's octant bound.
+     */
+    int corner_chord(const int r, const int dy)
+    {
+#if defined(USE_INTEGER_GEOMETRY)
+        return static_cast<int>(isqrt_u64(static_cast<uint64_t>(r * r - dy * dy)));
+#else
+        return static_cast<int>(std::sqrt(static_cast<double>(r * r - dy * dy)));
+#endif
+    }
+
+    /*
+     * Channel-wise linear interpolation through the 8-bit-normalized
+     * accessors (A-19); `steps` must be > 0, `i` in [0, steps].
+     */
+    Color lerp_color(const Color &from, const Color &to, const int i, const int steps)
+    {
+        Color c{};
+        c.set_r(static_cast<uint8_t>((from.r() * (steps - i) + to.r() * i) / steps));
+        c.set_g(static_cast<uint8_t>((from.g() * (steps - i) + to.g() * i) / steps));
+        c.set_b(static_cast<uint8_t>((from.b() * (steps - i) + to.b() * i) / steps));
+        c.set_a(static_cast<uint8_t>((from.a() * (steps - i) + to.a() * i) / steps));
+        return c;
+    }
+}  // namespace
+
 Graphics::Graphics(uint32_t width, uint32_t height, void *data)
     : pixels{nullptr}
     , is_wrapper_mode{false}
@@ -210,6 +241,78 @@ void Graphics::draw_image(
         return;
     }
     draw_image(img.pixels, img.width, img.height, stride, start_x, start_y);
+}
+
+void Graphics::draw_image(
+    const Color *img,
+    int img_width,
+    int img_height,
+    int img_row_stride,
+    int start_x,
+    int start_y,
+    const Color &tint)
+{
+    // a tint whose channels all sit at the normalized maximum is the
+    // 1.0 multiplier: take the plain path so the identity is pixel-exact
+    // even at 16bpp, where the <<3 expansion would otherwise darken the
+    // modulate (255 reads back 248, and 248*248/255 requantizes off by
+    // one bit step). The 16bpp alpha bit reads back 0/1, so opacity
+    // there is "any bit set", not a 8-bit threshold
+    constexpr int max8 = Color::depth == 32 ? 0xFF : 0xF8;
+    const bool tint_opaque = Color::per_channel_blend ? tint.a() >= 0xFF : tint.a() != 0;
+    if (tint.r() >= max8 && tint.g() >= max8 && tint.b() >= max8 && tint_opaque)
+    {
+        draw_image(img, img_width, img_height, img_row_stride, start_x, start_y);
+        return;
+    }
+    int sx, sy;
+    for (int row = 0; row < img_height; row++)
+    {
+        sy = row + start_y;
+        if (sy < 0)
+            continue;
+        if (sy >= imsize.height)
+            break;
+        for (int col = 0; col < img_width; col++)
+        {
+            sx = col + start_x;
+            if (sx < 0)
+                continue;
+            if (sx >= imsize.width)
+                break;
+            const Color &src = img[row * img_row_stride + col];
+            Color c{};
+            c.set_r(static_cast<uint8_t>(src.r() * tint.r() / 0xFF));
+            c.set_g(static_cast<uint8_t>(src.g() * tint.g() / 0xFF));
+            c.set_b(static_cast<uint8_t>(src.b() * tint.b() / 0xFF));
+            // alpha: a real weight at 32bpp; a binary gate at 16bpp (the
+            // single alpha bit has no 8-bit weight to multiply -- an
+            // 8-bit modulate there would clear every pixel's bit)
+            if constexpr (Color::per_channel_blend)
+            {
+                c.set_a(static_cast<uint8_t>(src.a() * tint.a() / 0xFF));
+            }
+            else
+            {
+                c.set_a(static_cast<uint8_t>(tint.a() != 0 ? src.a() : 0));
+            }
+            draw_pixel(sx, sy, c);
+        }
+    }
+}
+
+void Graphics::draw_image(
+    const image_t &img,
+    int start_x,
+    int start_y,
+    const Color &tint)
+{
+    const int stride = img.row_stride > 0 ? img.row_stride : img.width;
+    if (img.pixels == nullptr || stride < img.width)
+    {
+        return;
+    }
+    draw_image(img.pixels, img.width, img.height, stride, start_x, start_y, tint);
 }
 
 void Graphics::fill(const Color &colr)
@@ -457,6 +560,109 @@ void Graphics::draw_rect(int x1, int y1, int x2, int y2, const Color &colr)
     draw_line(x1, y1, x2, y1, colr);
     draw_line(x1, y2, x2, y2, colr);
     draw_line(x2, y1, x2, y2, colr);
+}
+
+void Graphics::fill_round_rect(int x1, int y1, int x2, int y2, int radius, const Color &colr)
+{
+    const int left = x1 < x2 ? x1 : x2;
+    const int right = x1 < x2 ? x2 : x1;
+    const int top = y1 < y2 ? y1 : y2;
+    const int bottom = y1 < y2 ? y2 : y1;
+
+    int r = radius < 0 ? 0 : radius;
+    const int half = std::min(right - left, bottom - top) / 2;
+    if (r > half)
+    {
+        r = half;
+    }
+    if (r == 0)
+    {
+        fill_rect(left, top, right, bottom, colr);
+        return;
+    }
+
+    // one span per row: corner rows get the circle chord, middle rows
+    // degenerate to dy == 0 == full width, so a single formula covers all
+    for (int row = top; row <= bottom; ++row)
+    {
+        int dy;
+        if (row < top + r)
+        {
+            dy = top + r - row;
+        }
+        else if (row > bottom - r)
+        {
+            dy = row - (bottom - r);
+        }
+        else
+        {
+            dy = 0;
+        }
+        const int dx = dy == 0 ? r : corner_chord(r, dy);
+        draw_line(left + r - dx, row, right - r + dx, row, colr);
+    }
+}
+
+void Graphics::draw_round_rect(int x1, int y1, int x2, int y2, int radius, const Color &colr)
+{
+    const int left = x1 < x2 ? x1 : x2;
+    const int right = x1 < x2 ? x2 : x1;
+    const int top = y1 < y2 ? y1 : y2;
+    const int bottom = y1 < y2 ? y2 : y1;
+
+    int r = radius < 0 ? 0 : radius;
+    const int half = std::min(right - left, bottom - top) / 2;
+    if (r > half)
+    {
+        r = half;
+    }
+    if (r == 0)
+    {
+        draw_rect(left, top, right, bottom, colr);
+        return;
+    }
+
+    // four straight edges first; the arc extremes (dy == 0 and dy == r)
+    // coincide with their endpoints, so no pixel is drawn twice
+    draw_line(left + r, top, right - r, top, colr);
+    draw_line(left + r, bottom, right - r, bottom, colr);
+    draw_line(left, top + r, left, bottom - r, colr);
+    draw_line(right, top + r, right, bottom - r, colr);
+    for (int i = 1; i < r; ++i)
+    {
+        const int dx = corner_chord(r, i);
+        draw_pixel(left + r - dx, top + r - i, colr);
+        draw_pixel(right - r + dx, top + r - i, colr);
+        draw_pixel(left + r - dx, bottom - r + i, colr);
+        draw_pixel(right - r + dx, bottom - r + i, colr);
+    }
+}
+
+void Graphics::fill_gradient(int x1, int y1, int x2, int y2, const Color &from, const Color &to, const bool horizontal)
+{
+    const int left = x1 < x2 ? x1 : x2;
+    const int right = x1 < x2 ? x2 : x1;
+    const int top = y1 < y2 ? y1 : y2;
+    const int bottom = y1 < y2 ? y2 : y1;
+
+    if (horizontal)
+    {
+        const int steps = right - left;
+        for (int col = left; col <= right; ++col)
+        {
+            const Color c = steps == 0 ? from : lerp_color(from, to, col - left, steps);
+            draw_line(col, top, col, bottom, c);
+        }
+    }
+    else
+    {
+        const int steps = bottom - top;
+        for (int row = top; row <= bottom; ++row)
+        {
+            const Color c = steps == 0 ? from : lerp_color(from, to, row - top, steps);
+            draw_line(left, row, right, row, c);
+        }
+    }
 }
 
 /** draw 8 pixels for circle */
