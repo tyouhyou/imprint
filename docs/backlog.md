@@ -18,7 +18,7 @@
     - Button text vertical centering (`65087b8`)
     - Showcase GIF re-recorded with platform default font (`872cdc9`)
     - Backlog documentation separated into `docs/backlog.md` (`da64ed6`)
-  - Target: Push `main` and `v0.1.1` tag to GitHub origin, publish v0.1.1 Release with updated assets (`imprint-showcase-v0.1.1-win-x64.zip`, `imprint-showcase-v0.1.1.nds`), and proceed with community promotion.
+  - Status: `main` pushed, v0.1.1 Release published on GitHub (2026-09-02) with both assets. Remaining: community promotion only (priority lowered 2026-09-05). Before any promotion copy mentions macOS support, re-verify the mac shell on a real macOS 13+ machine (layer-backed path, see CONTEXT.md verify matrix).
 
 ## 2. Product & Feature Backlog
 
