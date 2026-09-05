@@ -52,7 +52,11 @@ namespace zb::app
         {
             return graphics_ ? graphics_->size().height : 0;
         }
-        [[nodiscard]] std::string title() const noexcept override { return "myapp"; }
+        [[nodiscard]] std::string title() const noexcept override { return title_; }
+
+        // window title for the presenting shells (win/x11/mac read it once
+        // at window creation); default is the project name "myapp"
+        void set_title(std::string t) noexcept { title_ = std::move(t); }
 
         // IGui
         void close() noexcept override
@@ -257,6 +261,7 @@ namespace zb::app
         zb::ui::InputDispatcher dispatcher_;
         bool dirty_ = true;
         bool auto_layout_ = false;
+        std::string title_ = "myapp";
 
         // last theme generation this window painted (contract 10.4)
         unsigned theme_gen_ = zb::ui::theme_generation();

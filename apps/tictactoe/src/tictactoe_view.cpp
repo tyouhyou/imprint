@@ -32,6 +32,7 @@ void TictactoeView::build(uint32_t max_client_width, uint32_t max_client_height,
 
     auto win = zb::make_shared<CanvasWindow>();
     win->create(max_client_width, max_client_height, buffer);
+    win->set_title("TicTacToe");
     win->root().set_background_color(core::Color::from(28, 148, 64));
     window_ = win;  // children are added to the window's root below
 

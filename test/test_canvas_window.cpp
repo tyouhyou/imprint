@@ -16,6 +16,8 @@ int test_canvas_window()
         EXPECT(w.height() == 240);
         EXPECT(w.data() != nullptr);
         EXPECT(w.title() == "myapp");
+        w.set_title("TicTacToe");
+        EXPECT(w.title() == "TicTacToe");
     }
 
     // wrapper mode uses the provided buffer directly

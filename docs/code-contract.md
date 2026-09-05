@@ -358,6 +358,12 @@ keeps only API-level supplements.
   `<story>_app`. Framework modules never name story code; only the
   shell and the binding instantiate an app, and only the top level
   links the executable.
+- `IWindow::title()` is the single source of the window title: every
+  windowing shell (win/x11/mac) reads it once at window creation, and
+  non-windowing targets (NDS, linux-fb, wasm) never read it. The
+  `CanvasWindow` default is "myapp"; apps override it with
+  `set_title()` (the app code sets it before the shell reads the
+  title, i.e. inside `create_window`/`make_window`).
 
 ## 4. Declarative UI builder (batch G contract)
 
