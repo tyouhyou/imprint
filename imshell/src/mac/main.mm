@@ -47,32 +47,6 @@ namespace
     int g_buffer_width = 0;
     int g_buffer_height = 0;
 
-    // diagnostic: a coarse fingerprint of the buffer contents, so the
-    // repaint log proves whether drawRect's source changed between
-    // frames. Sample points are inside the dialog frame band (the only
-    // region that differs between the difficulty and side dialogs --
-    // title text, button rows), plus one board-corner point.
-    void log_buffer_fingerprint(const void *pixels, const int w, const int h)
-    {
-        const int pts[][2] = {
-            {400, 286},  // frame title text band
-            {338, 310},  // first-button row (EASY / X FIRST)
-            {398, 310},  // second-button column (NORMAL / O SECOND)
-            {445, 310},  // third-button column (HARD / O SECOND)
-            {310, 268},  // frame top-left corner
-            {60, 60},    // board area under the mask
-        };
-        const auto *p = static_cast<const uint8_t *>(pixels);
-        uint32_t acc = 0;
-        for (const auto &pt : pts)
-        {
-            const uint8_t *pix = p + (static_cast<size_t>(pt[1]) * w + pt[0]) * 4;
-            acc = acc * 131 + static_cast<uint32_t>(pix[0]) + (static_cast<uint32_t>(pix[1]) << 8) +
-                  (static_cast<uint32_t>(pix[2]) << 16);
-        }
-        log_repaint("buffer-fingerprint", acc, 0, 0, 0);
-    }
-
     // diagnostic (repaint investigation): append one line per repaint
     // event so the present chain (painted -> invalidate -> drawRect) can
     // be compared end to end for one click sequence. EVERY diagnostic
@@ -98,6 +72,32 @@ namespace
                                  1000),
                 what, x, y, w, h);
         fclose(f);
+    }
+
+    // diagnostic: a coarse fingerprint of the buffer contents, so the
+    // repaint log proves whether drawRect's source changed between
+    // frames. Sample points are inside the dialog frame band (the only
+    // region that differs between the difficulty and side dialogs --
+    // title text, button rows), plus one board-corner point.
+    void log_buffer_fingerprint(const void *pixels, const int w, const int h)
+    {
+        const int pts[][2] = {
+            {400, 286},  // frame title text band
+            {338, 310},  // first-button row (EASY / X FIRST)
+            {398, 310},  // second-button column (NORMAL / O SECOND)
+            {445, 310},  // third-button column (HARD / O SECOND)
+            {310, 268},  // frame top-left corner
+            {60, 60},    // board area under the mask
+        };
+        const auto *p = static_cast<const uint8_t *>(pixels);
+        uint32_t acc = 0;
+        for (const auto &pt : pts)
+        {
+            const uint8_t *pix = p + (static_cast<size_t>(pt[1]) * w + pt[0]) * 4;
+            acc = acc * 131 + static_cast<uint32_t>(pix[0]) + (static_cast<uint32_t>(pix[1]) << 8) +
+                  (static_cast<uint32_t>(pix[2]) << 16);
+        }
+        log_repaint("buffer-fingerprint", acc, 0, 0, 0);
     }
 
     // diagnostic: the draw-state that dictates how CGContextDrawImage
