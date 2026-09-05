@@ -152,9 +152,9 @@ Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop bu
 
 **TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
 
-| Windows | Linux (X11) | WebAssembly | Nintendo DS | Python host |
-|:---:|:---:|:---:|:---:|:---:|
-| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> | <img src="assets/nds.png" width="200"> | <img src="assets/py256.png" width="240"> |
+| Windows | macOS | Linux (X11) | WebAssembly | Nintendo DS | Python host |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| <img src="assets/tictactoe/win.png" width="240"> | <img src="assets/tictactoe/mac.png" width="240"> | <img src="assets/tictactoe/linux_x11.png" width="240"> | <img src="assets/tictactoe/wasm.png" width="160"> | <img src="assets/tictactoe/nds.png" width="200"> | <img src="assets/tictactoe/py256.png" width="240"> |
 
 ## License
 

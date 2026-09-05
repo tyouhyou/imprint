@@ -150,9 +150,9 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 **三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。
 
-| Windows | Linux (X11) | WebAssembly | ニンテンドーDS | Python ホスト |
-|:---:|:---:|:---:|:---:|:---:|
-| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> | <img src="assets/nds.png" width="200"> | <img src="assets/py256.png" width="240"> |
+| Windows | macOS | Linux (X11) | WebAssembly | ニンテンドーDS | Python ホスト |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| <img src="assets/tictactoe/win.png" width="240"> | <img src="assets/tictactoe/mac.png" width="240"> | <img src="assets/tictactoe/linux_x11.png" width="240"> | <img src="assets/tictactoe/wasm.png" width="160"> | <img src="assets/tictactoe/nds.png" width="200"> | <img src="assets/tictactoe/py256.png" width="240"> |
 
 ## ライセンス
 

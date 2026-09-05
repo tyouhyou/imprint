@@ -148,9 +148,9 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 **井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
 
-| Windows | Linux (X11) | WebAssembly | 任天堂 DS | Python 宿主 |
-|:---:|:---:|:---:|:---:|:---:|
-| <img src="assets/win.png" width="240"> | <img src="assets/linux_x11.png" width="240"> | <img src="assets/wasm.png" width="160"> | <img src="assets/nds.png" width="200"> | <img src="assets/py256.png" width="240"> |
+| Windows | macOS | Linux (X11) | WebAssembly | 任天堂 DS | Python 宿主 |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| <img src="assets/tictactoe/win.png" width="240"> | <img src="assets/tictactoe/mac.png" width="240"> | <img src="assets/tictactoe/linux_x11.png" width="240"> | <img src="assets/tictactoe/wasm.png" width="160"> | <img src="assets/tictactoe/nds.png" width="200"> | <img src="assets/tictactoe/py256.png" width="240"> |
 
 ## 许可证
 
