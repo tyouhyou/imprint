@@ -93,31 +93,45 @@ int main(int argc, char **argv)
 
     Showcase app;
     app.create_window(320, 240);
-    // bump the theme generation once: the first frame must present the
-    // whole buffer (CanvasWindow forces a full-frame paint when the theme
-    // generation moved); a shell-less host has no other full-invalidate
-    // path, and the initial per-widget damage region is not the full page
-    zb::ui::set_theme(zb::ui::light_theme());
+    // V-2: the showcase boots dark and the recorder keeps that -- the
+    // old light-start override would desync the theme button's flag.
+    // The first frame is a full one anyway (CanvasWindow starts owing a
+    // repaint)
     auto &win = *static_cast<zb::app::CanvasWindow *>(app.window().get());
     std::printf("gif_record: %ux%u buffer\n",
                 static_cast<unsigned>(win.width()), static_cast<unsigned>(win.height()));
 
     g_gif = std::make_unique<GifWriter>(out_path, 320, 240, 5);
 
-    // initial page, laid out by the first paint
+    // 1: dark boot. The chart reveal auto-starts and advances one step
+    // per captured frame, so the opening is the animation itself
     frame(app);
+    for (int i = 0; i < 36; ++i)
+    {
+        frame(app);
+    }
 
-
-    // START: the three bars advance one step per input event while
-    // running, so the fill animation is exactly N scripted events
+    // 2: START fills the bars (one deterministic step per input event);
+    // a full run is 100 events, capture every other one so the closing
+    // frames show the DONE state
     click(app, win, "start_btn");
     for (int i = 0; i < 100; ++i)
     {
         app.input(key_ev(zb::input::key_code::right));  // advances + feeds the window
+        if (i % 2 == 0)
+        {
+            frame(app);
+        }
+    }
+
+    // 3: REPLAY re-runs the chart reveal over the finished bars
+    click(app, win, "replay_btn");
+    for (int i = 0; i < 36; ++i)
+    {
         frame(app);
     }
 
-    // dark theme, gallery page, drag the demo slider across, back, light
+    // 4: light hero, then the gallery with its asset row
     click(app, win, "theme_btn");
     click(app, win, "gallery_btn");
     if (auto *slider = win.root().find_by_id("demo_slider"))
@@ -136,8 +150,11 @@ int main(int argc, char **argv)
         app.input(touch_ev(input_type::mouse_left_up, p.x + 2 + (s.width - 4), y));
         frame(app);
     }
+
+    // 5: back to the hero, dark again -- the closing money shot
     click(app, win, "back_btn");
-    click(app, win, "theme_btn");  // back to light for a tidy last frame
+    click(app, win, "theme_btn");
+    frame(app);
 
     const std::size_t n = g_gif->frames();
     g_gif->close();

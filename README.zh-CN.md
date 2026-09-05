@@ -18,7 +18,7 @@ Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，�
 
 **[在浏览器里直接试](https://tyouhyou.github.io/imprint/)** —— 上面的页面是 WebAssembly 构建；任天堂 DS 画面来自同一份源码的 devkitARM 构建。
 
-<img src="assets/showcase/showcase.gif" width="480" alt="逐帧录制的 showcase：START 填充进度条、深色主题、全控件页、滑杆驱动演示条">
+<img src="assets/showcase/showcase.gif" width="480" alt="逐帧录制的 showcase：暗色启动、图表逐步生长、START 填充进度条、REPLAY 重放图表、浅色全控件页与阴影卡资产、回到暗色收尾">
 
 不需要 GPU。不需要操作系统 GUI 工具包。不需要平台专属 UI 代码。
 

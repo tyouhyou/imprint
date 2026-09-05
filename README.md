@@ -19,7 +19,7 @@ preview on your PC, then ship the very same code to the device.
 
 **[Try it live in your browser](https://tyouhyou.github.io/imprint/)** — the page above runs the WebAssembly build; the Nintendo DS frame comes from the same source compiled with devkitARM.
 
-<img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: START fills the progress bars, the dark theme, the widget gallery, the slider driving the demo bar">
+<img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: boots dark while the chart reveals itself, START fills the progress bars, REPLAY replays the chart, the light widget gallery with its shadow-card assets, back to dark">
 
 No GPU required. No OS GUI toolkit required. No platform-specific UI code.
 
