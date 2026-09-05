@@ -18,6 +18,7 @@
 
 #import <Cocoa/Cocoa.h>
 
+#include <cstdio>
 #include <iostream>
 
 #include "imcore.hpp"
@@ -169,6 +170,33 @@ namespace
     // swallowed keydowns
 }
 
+// diagnostic (vertical-flip investigation): record the draw-state that
+// dictates how CGContextDrawImage lands in the view (isFlipped, layer
+// path, base CTM) so the macOS 10.13 vs 13 contexts can be compared.
+static void log_draw_state(NSView *view)
+{
+    NSGraphicsContext *nsc = [NSGraphicsContext currentContext];
+    CGContextRef ctx = nsc ? nsc.CGContext : nullptr;
+    const CGAffineTransform base = ctx ? CGContextGetCTM(ctx) : CGAffineTransformIdentity;
+    FILE *f = fopen("/tmp/imprint_ctm.log", "w");
+    if (f == nullptr)
+    {
+        return;
+    }
+    fprintf(f, "isFlipped=%d wantsLayer=%d layer=%p layerBacked=%d "
+               "isLayerBacked=%d windowLayerBacked=%d windowBacking=%lu\n"
+               "baseCTM a=%g b=%g c=%g d=%g tx=%g ty=%g\n"
+               "bounds=%gx%g windowContentScale=%g\n",
+            (int)view.isFlipped, (int)view.wantsLayer, view.layer,
+            (int)view.layerContentsRedrawPolicy, (int)view.isLayerBacked,
+            (int)(view.window ? [view.window.contentView isLayerBacked] : 0),
+            (unsigned long)(view.window ? view.window.backingType : 0),
+            base.a, base.b, base.c, base.d, base.tx, base.ty,
+            view.bounds.size.width, view.bounds.size.height,
+            (double)(view.window ? view.window.backingScaleFactor : 1.0));
+    fclose(f);
+}
+
 - (void)drawRect:(NSRect)dirtyRect
 {
     if (g_image == nullptr)
@@ -180,6 +208,7 @@ namespace
     {
         return;
     }
+    log_draw_state(self);
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
     // the framework buffer is top-down; CG draws bottom-up
@@ -202,6 +231,55 @@ namespace
 }
 
 @end
+
+// diagnostic: dump the raw pixel buffer as a 32bpp BMP file.
+// Memory layout is [B,G,R,A] (bgra32_le); BMP 32bpp expects [B,G,R,X]
+// so the bytes can be written directly. Negative height = top-down.
+static void dump_bmp(const char *path, const void *pixels, int width, int height)
+{
+    FILE *f = fopen(path, "wb");
+    if (!f)
+    {
+        return;
+    }
+    const int row_bytes = width * 4;
+    const int pixel_data_size = row_bytes * height;
+    const int file_size = 14 + 40 + pixel_data_size;
+
+    // BMP file header (14 bytes)
+    uint8_t fh[14] = {};
+    fh[0] = 'B';
+    fh[1] = 'M';
+    fh[2] = static_cast<uint8_t>(file_size);
+    fh[3] = static_cast<uint8_t>(file_size >> 8);
+    fh[4] = static_cast<uint8_t>(file_size >> 16);
+    fh[5] = static_cast<uint8_t>(file_size >> 24);
+    fh[10] = 54;  // offset to pixel data
+
+    // BITMAPINFOHEADER (40 bytes)
+    uint8_t ih[40] = {};
+    ih[0] = 40;  // header size
+    ih[4] = static_cast<uint8_t>(width);
+    ih[5] = static_cast<uint8_t>(width >> 8);
+    ih[6] = static_cast<uint8_t>(width >> 16);
+    ih[7] = static_cast<uint8_t>(width >> 24);
+    const int neg_h = -height;  // negative = top-down
+    ih[8] = static_cast<uint8_t>(neg_h);
+    ih[9] = static_cast<uint8_t>(neg_h >> 8);
+    ih[10] = static_cast<uint8_t>(neg_h >> 16);
+    ih[11] = static_cast<uint8_t>(neg_h >> 24);
+    ih[12] = 1;  // planes
+    ih[14] = 32;  // bpp
+    ih[20] = static_cast<uint8_t>(pixel_data_size);
+    ih[21] = static_cast<uint8_t>(pixel_data_size >> 8);
+    ih[22] = static_cast<uint8_t>(pixel_data_size >> 16);
+    ih[23] = static_cast<uint8_t>(pixel_data_size >> 24);
+
+    fwrite(fh, 1, 14, f);
+    fwrite(ih, 1, 40, f);
+    fwrite(pixels, 1, pixel_data_size, f);
+    fclose(f);
+}
 
 int main(int argc, char *argv[])
 {
@@ -310,6 +388,7 @@ int main(int argc, char *argv[])
         });
 
         g_app->paint();  // fill the buffer before the first show
+        dump_bmp("/tmp/imprint_buffer.bmp", window->data(), g_buffer_width, g_buffer_height);
         [win makeKeyAndOrderFront:nil];
         [app activateIgnoringOtherApps:YES];
         [app run];
