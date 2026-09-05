@@ -184,12 +184,11 @@ static void log_draw_state(NSView *view)
         return;
     }
     fprintf(f, "isFlipped=%d wantsLayer=%d layer=%p layerBacked=%d "
-               "isLayerBacked=%d windowLayerBacked=%d windowBacking=%lu\n"
+               "windowBacking=%lu\n"
                "baseCTM a=%g b=%g c=%g d=%g tx=%g ty=%g\n"
                "bounds=%gx%g windowContentScale=%g\n",
             (int)view.isFlipped, (int)view.wantsLayer, view.layer,
-            (int)view.layerContentsRedrawPolicy, (int)view.isLayerBacked,
-            (int)(view.window ? [view.window.contentView isLayerBacked] : 0),
+            (int)view.layerContentsRedrawPolicy,
             (unsigned long)(view.window ? view.window.backingType : 0),
             base.a, base.b, base.c, base.d, base.tx, base.ty,
             view.bounds.size.width, view.bounds.size.height,
