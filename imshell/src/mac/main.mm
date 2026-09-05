@@ -44,9 +44,34 @@ namespace
 {
     zb::SharedPtr<IApp> g_app;
     ImprintView *g_view = nil;
-    CGImageRef g_image = nullptr;
     int g_buffer_width = 0;
     int g_buffer_height = 0;
+
+    // diagnostic: a coarse fingerprint of the buffer contents, so the
+    // repaint log proves whether drawRect's source changed between
+    // frames. Sample points are inside the dialog frame band (the only
+    // region that differs between the difficulty and side dialogs --
+    // title text, button rows), plus one board-corner point.
+    void log_buffer_fingerprint(const void *pixels, const int w, const int h)
+    {
+        const int pts[][2] = {
+            {400, 286},  // frame title text band
+            {338, 310},  // first-button row (EASY / X FIRST)
+            {398, 310},  // second-button column (NORMAL / O SECOND)
+            {445, 310},  // third-button column (HARD / O SECOND)
+            {310, 268},  // frame top-left corner
+            {60, 60},    // board area under the mask
+        };
+        const auto *p = static_cast<const uint8_t *>(pixels);
+        uint32_t acc = 0;
+        for (const auto &pt : pts)
+        {
+            const uint8_t *pix = p + (static_cast<size_t>(pt[1]) * w + pt[0]) * 4;
+            acc = acc * 131 + static_cast<uint32_t>(pix[0]) + (static_cast<uint32_t>(pix[1]) << 8) +
+                  (static_cast<uint32_t>(pix[2]) << 16);
+        }
+        log_repaint("buffer-fingerprint", acc, 0, 0, 0);
+    }
 
     // diagnostic (repaint investigation): append one line per repaint
     // event so the present chain (painted -> invalidate -> drawRect) can
@@ -237,7 +262,12 @@ namespace
 
 - (void)drawRect:(NSRect)dirtyRect
 {
-    if (g_image == nullptr)
+    if (g_buffer_width <= 0 || g_buffer_height <= 0 || g_app == nullptr)
+    {
+        return;
+    }
+    auto window = g_app->window();
+    if (window == nullptr || window->width() <= 0 || window->height() <= 0)
     {
         return;
     }
@@ -249,6 +279,28 @@ namespace
     log_draw_state(self);
     log_repaint("drawRect", dirtyRect.origin.x, dirtyRect.origin.y,
                 dirtyRect.size.width, dirtyRect.size.height);
+
+    // zero-copy wrap of the current app buffer (B,G,R,A bytes == 32-bit
+    // little-endian ARGB, straight alpha). The image is built fresh on
+    // EVERY drawRect: a CGImage created once over a mutable buffer is
+    // only guaranteed to present the bytes it decoded first (older
+    // macOS caches the decode), so any later frame read through the
+    // same image object was stale -- the first view was all the user
+    // ever saw. A per-frame image keeps every present current.
+    const size_t bytes_per_row = static_cast<size_t>(g_buffer_width) * sizeof(zb::ui::core::Color);
+    CGDataProviderRef provider = CGDataProviderCreateWithData(
+        nullptr, window->data(), bytes_per_row * g_buffer_height, nullptr);
+    CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
+    CGImageRef frame = CGImageCreate(
+        static_cast<size_t>(g_buffer_width), static_cast<size_t>(g_buffer_height),
+        8, 32, bytes_per_row, cs,
+        kCGBitmapByteOrder32Little | kCGImageAlphaFirst,
+        provider, nullptr, false, kCGRenderingIntentDefault);
+    CGColorSpaceRelease(cs);
+    CGDataProviderRelease(provider);
+
+    log_buffer_fingerprint(window->data(), g_buffer_width, g_buffer_height);
+
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
     // buffer row 0 belongs at the view top. AppKit hands drawRect a base
@@ -265,7 +317,8 @@ namespace
         CGContextTranslateCTM(ctx, 0.0, self.bounds.size.height);
         CGContextScaleCTM(ctx, 1.0, -1.0);
     }
-    CGContextDrawImage(ctx, self.bounds, g_image);
+    CGContextDrawImage(ctx, self.bounds, frame);
+    CGImageRelease(frame);
     CGContextRestoreGState(ctx);
 }
 
@@ -379,22 +432,6 @@ int main(int argc, char *argv[])
         [win center];
         g_view = view;
 
-        // zero-copy wrap of the app buffer: B,G,R,A bytes == 32-bit
-        // little-endian ARGB, straight alpha (kCGImageAlphaFirst). The
-        // image reads live memory, so drawRect always presents the
-        // current frame
-        const size_t bytes_per_row = static_cast<size_t>(g_buffer_width) * sizeof(zb::ui::core::Color);
-        CGDataProviderRef provider = CGDataProviderCreateWithData(
-            nullptr, window->data(), bytes_per_row * g_buffer_height, nullptr);
-        CGColorSpaceRef cs = CGColorSpaceCreateDeviceRGB();
-        g_image = CGImageCreate(
-            static_cast<size_t>(g_buffer_width), static_cast<size_t>(g_buffer_height),
-            8, 32, bytes_per_row, cs,
-            kCGBitmapByteOrder32Little | kCGImageAlphaFirst,
-            provider, nullptr, false, kCGRenderingIntentDefault);
-        CGColorSpaceRelease(cs);
-        CGDataProviderRelease(provider);
-
         // the shell calls paint() to request a frame; the "painted" event
         // asks the shell to present (A-2 presentation seam). AppKit unions
         // invalidated rects until the next drawRect, so the pending region
@@ -445,12 +482,6 @@ int main(int argc, char *argv[])
         [win makeKeyAndOrderFront:nil];
         [app activateIgnoringOtherApps:YES];
         [app run];
-
-        if (g_image != nullptr)
-        {
-            CGImageRelease(g_image);
-            g_image = nullptr;
-        }
     }
 
     return 0;
