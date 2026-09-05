@@ -18,9 +18,6 @@
 
 #import <Cocoa/Cocoa.h>
 
-#include <chrono>
-#include <cstdio>
-#include <ctime>
 #include <iostream>
 
 #include "imcore.hpp"
@@ -46,95 +43,6 @@ namespace
     ImprintView *g_view = nil;
     int g_buffer_width = 0;
     int g_buffer_height = 0;
-
-    // diagnostic (repaint investigation): append one line per repaint
-    // event so the present chain (painted -> invalidate -> drawRect) can
-    // be compared end to end for one click sequence. EVERY diagnostic
-    // lands in this single file (draw-state included) so no other log
-    // paths exist.
-    void log_repaint(const char *what, const double x, const double y,
-                     const double w, const double h)
-    {
-        FILE *f = fopen("/tmp/imprint_repaint.log", "a");
-        if (f == nullptr)
-        {
-            return;
-        }
-        const auto now = std::chrono::system_clock::now();
-        const auto t = std::chrono::system_clock::to_time_t(now);
-        std::tm buf{};
-        localtime_r(&t, &buf);
-        fprintf(f, "[%02d:%02d:%02d.%03d] %s rect=%g,%g,%g,%g\n",
-                buf.tm_hour, buf.tm_min, buf.tm_sec,
-                static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     now.time_since_epoch())
-                                     .count() %
-                                 1000),
-                what, x, y, w, h);
-        fclose(f);
-    }
-
-    // diagnostic: a coarse fingerprint of the buffer contents, so the
-    // repaint log proves whether drawRect's source changed between
-    // frames. Sample points are inside the dialog frame band (the only
-    // region that differs between the difficulty and side dialogs --
-    // title text, button rows), plus one board-corner point.
-    void log_buffer_fingerprint(const void *pixels, const int w, const int h)
-    {
-        const int pts[][2] = {
-            {400, 286},  // frame title text band
-            {338, 310},  // first-button row (EASY / X FIRST)
-            {398, 310},  // second-button column (NORMAL / O SECOND)
-            {445, 310},  // third-button column (HARD / O SECOND)
-            {310, 268},  // frame top-left corner
-            {60, 60},    // board area under the mask
-        };
-        const auto *p = static_cast<const uint8_t *>(pixels);
-        uint32_t acc = 0;
-        for (const auto &pt : pts)
-        {
-            const uint8_t *pix = p + (static_cast<size_t>(pt[1]) * w + pt[0]) * 4;
-            acc = acc * 131 + static_cast<uint32_t>(pix[0]) + (static_cast<uint32_t>(pix[1]) << 8) +
-                  (static_cast<uint32_t>(pix[2]) << 16);
-        }
-        log_repaint("buffer-fingerprint", acc, 0, 0, 0);
-    }
-
-    // diagnostic: the draw-state that dictates how CGContextDrawImage
-    // lands in the view (isFlipped, layer path, base CTM). Appended to
-    // the same repaint log, timestamped, so the CTM can be compared
-    // across every drawRect call of one run.
-    void log_draw_state(NSView *view)
-    {
-        NSGraphicsContext *nsc = [NSGraphicsContext currentContext];
-        CGContextRef ctx = nsc ? nsc.CGContext : nullptr;
-        const CGAffineTransform base = ctx ? CGContextGetCTM(ctx) : CGAffineTransformIdentity;
-        FILE *f = fopen("/tmp/imprint_repaint.log", "a");
-        if (f == nullptr)
-        {
-            return;
-        }
-        const auto now = std::chrono::system_clock::now();
-        const auto t = std::chrono::system_clock::to_time_t(now);
-        std::tm buf{};
-        localtime_r(&t, &buf);
-        fprintf(f, "[%02d:%02d:%02d.%03d] draw-state isFlipped=%d wantsLayer=%d "
-                   "layer=%p layerBacked=%d windowBacking=%lu "
-                   "baseCTM a=%g b=%g c=%g d=%g tx=%g ty=%g "
-                   "bounds=%gx%g windowContentScale=%g\n",
-                buf.tm_hour, buf.tm_min, buf.tm_sec,
-                static_cast<int>(std::chrono::duration_cast<std::chrono::milliseconds>(
-                                     now.time_since_epoch())
-                                     .count() %
-                                 1000),
-                (int)view.isFlipped, (int)view.wantsLayer, view.layer,
-                (int)view.layerContentsRedrawPolicy,
-                (unsigned long)(view.window ? view.window.backingType : 0),
-                base.a, base.b, base.c, base.d, base.tx, base.ty,
-                view.bounds.size.width, view.bounds.size.height,
-                (double)(view.window ? view.window.backingScaleFactor : 1.0));
-        fclose(f);
-    }
 
     void feed(const zb::input::input_event &ev)
     {
@@ -276,9 +184,6 @@ namespace
     {
         return;
     }
-    log_draw_state(self);
-    log_repaint("drawRect", dirtyRect.origin.x, dirtyRect.origin.y,
-                dirtyRect.size.width, dirtyRect.size.height);
 
     // zero-copy wrap of the current app buffer (B,G,R,A bytes == 32-bit
     // little-endian ARGB, straight alpha). The image is built fresh on
@@ -298,8 +203,6 @@ namespace
         provider, nullptr, false, kCGRenderingIntentDefault);
     CGColorSpaceRelease(cs);
     CGDataProviderRelease(provider);
-
-    log_buffer_fingerprint(window->data(), g_buffer_width, g_buffer_height);
 
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
@@ -335,55 +238,6 @@ namespace
 }
 
 @end
-
-// diagnostic: dump the raw pixel buffer as a 32bpp BMP file.
-// Memory layout is [B,G,R,A] (bgra32_le); BMP 32bpp expects [B,G,R,X]
-// so the bytes can be written directly. Negative height = top-down.
-static void dump_bmp(const char *path, const void *pixels, int width, int height)
-{
-    FILE *f = fopen(path, "wb");
-    if (!f)
-    {
-        return;
-    }
-    const int row_bytes = width * 4;
-    const int pixel_data_size = row_bytes * height;
-    const int file_size = 14 + 40 + pixel_data_size;
-
-    // BMP file header (14 bytes)
-    uint8_t fh[14] = {};
-    fh[0] = 'B';
-    fh[1] = 'M';
-    fh[2] = static_cast<uint8_t>(file_size);
-    fh[3] = static_cast<uint8_t>(file_size >> 8);
-    fh[4] = static_cast<uint8_t>(file_size >> 16);
-    fh[5] = static_cast<uint8_t>(file_size >> 24);
-    fh[10] = 54;  // offset to pixel data
-
-    // BITMAPINFOHEADER (40 bytes)
-    uint8_t ih[40] = {};
-    ih[0] = 40;  // header size
-    ih[4] = static_cast<uint8_t>(width);
-    ih[5] = static_cast<uint8_t>(width >> 8);
-    ih[6] = static_cast<uint8_t>(width >> 16);
-    ih[7] = static_cast<uint8_t>(width >> 24);
-    const int neg_h = -height;  // negative = top-down
-    ih[8] = static_cast<uint8_t>(neg_h);
-    ih[9] = static_cast<uint8_t>(neg_h >> 8);
-    ih[10] = static_cast<uint8_t>(neg_h >> 16);
-    ih[11] = static_cast<uint8_t>(neg_h >> 24);
-    ih[12] = 1;  // planes
-    ih[14] = 32;  // bpp
-    ih[20] = static_cast<uint8_t>(pixel_data_size);
-    ih[21] = static_cast<uint8_t>(pixel_data_size >> 8);
-    ih[22] = static_cast<uint8_t>(pixel_data_size >> 16);
-    ih[23] = static_cast<uint8_t>(pixel_data_size >> 24);
-
-    fwrite(fh, 1, 14, f);
-    fwrite(ih, 1, 40, f);
-    fwrite(pixels, 1, pixel_data_size, f);
-    fclose(f);
-}
 
 int main(int argc, char *argv[])
 {
@@ -448,11 +302,9 @@ int main(int argc, char *argv[])
                 dirty, x, y, w, h, g_buffer_width, g_buffer_height);
             if (r.w <= 0)
             {
-                log_repaint("painted-empty", 0, 0, 0, 0);
                 return;  // nothing was drawn, nothing to present
             }
             // top-left surface pixels -> bottom-left view points
-            log_repaint("painted-invalidate", r.x, g_buffer_height - r.y - r.h, r.w, r.h);
             [g_view setNeedsDisplayInRect:NSMakeRect(r.x, g_buffer_height - r.y - r.h, r.w, r.h)];
         });
 
@@ -478,7 +330,6 @@ int main(int argc, char *argv[])
         });
 
         g_app->paint();  // fill the buffer before the first show
-        dump_bmp("/tmp/imprint_buffer.bmp", window->data(), g_buffer_width, g_buffer_height);
         [win makeKeyAndOrderFront:nil];
         [app activateIgnoringOtherApps:YES];
         [app run];
