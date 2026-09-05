@@ -11,6 +11,30 @@
 
 ## 1. Product & Feature Backlog
 
+### Batch V — Visual Presentation (Active; started 2026-09-05)
+
+Goal: close the "works but looks primitive" gap against other UI
+frameworks. Principle: modern look = rasterizer primitives (imcore
+Graphics) + themed demo content; widgets stay theme-token driven, no
+widget redesign, no animation system.
+
+- **V-1. Rasterizer primitives** (imcore `Graphics`):
+  - Linear gradient fill (rect span, two colors; 16bpp quantizes — accepted).
+  - Rounded rect draw/fill (single radius).
+  - Tinted `draw_image` (modulate color multiply) — one PNG, any palette.
+  - Anti-aliased line/circle as **opt-in per-primitive calls**
+    (`*_aa`), never a global default switch — decision 2026-09-05;
+    battery expectations update as calls migrate.
+- **V-2. Showcase content & assets**: dark-theme hero page with a
+  chart drawn by the framework's own primitives; alpha-PNG gallery
+  entries; 9-slice/shadow via pre-blurred PNG assets (no framework
+  blur).
+- **V-3. Re-record & re-shoot**: GIF + per-platform static frames
+  (win / X11 / mac), README hero layout, three-language READMEs aligned.
+- **V-0. Promote `gif_encoder`** (showcase app) into `imcore/codec/gif`
+  per the §2 tool-placement rule (+ battery suite); recorder glue stays
+  app-side until a second user appears.
+
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 
 - **L-1. Widget-level margin/padding API**:

@@ -50,6 +50,16 @@ modules, `STATIC` for everything else, `SHARED` only at foreign-host
 boundaries (`imcore`, so the Linux host `zbapi` can load it as a sibling
 `.so`, and `zbapi` itself); module boundaries are logical.
 
+Tool placement rule (where a convenience utility lives, by nature):
+pure in-memory encode/decode/algorithm code with no file I/O and no
+framework state is a codec/kernel capability and goes to `imcore`
+(e.g. a runtime GIF encoder sits in `imcore/codec` beside png/jpeg);
+build-time code/resource generation goes to `tools/`; glue that hooks
+application lifecycle or writes files stays in the app that needs it
+until a second user appears — only then is it lifted into an optional
+helper beside `imapp_canvas`; shells never take app tooling (A-22:
+pure providers).
+
 ## 3. Targets
 
 What each target is; how to configure and build it is operational
