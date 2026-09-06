@@ -211,6 +211,49 @@ defined. Contract:
   targets never opt in (the TTF pipeline is host-only; 5x7 remains the
   universal fallback).
 
+**Runtime TTF provider (batch L-5)**: with `USE_TTF_RUNTIME` (default
+OFF; an optional feature like `USE_FONT`/`USE_PNG`, never forced by any
+toolchain), imcore compiles the vendored stb_truetype behind one wrapper
+TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
+
+- **The seam does not grow.** `TtfFamily` (init path) loads one TTF and
+  hands out one `GlyphProvider` per pixel size through
+  `provider_for(px)` (1..128; outside the range throws — the init-path
+  rule §1.1). Equal `px` returns the same instance; the widget never
+  knows a family exists — per-size providers ride `set_glyph_provider`
+  unchanged. A future `set_font_size(px)` convenience would need no
+  seam change.
+- **Sources**: `TtfFamily::from_file(path)` owns a copy of the font
+  bytes; `from_memory(bytes, n)` **borrows** — the caller's buffer must
+  outlive the family (the ROM-blob case; build-time packing follows the
+  `ui_embed`/`asset_gen` precedent and is condition-triggered like V-4
+  until a real embedded use case appears). A font stb_truetype cannot
+  parse throws `zb::ui::error` at construction.
+- **Bounded glyph cache (§8)**: entries keyed `(pixel size, code unit)`
+  rasterize lazily on first draw; the cache counts bytes and drops
+  everything when over budget (the ListBox row-cache rule) — rendered
+  pixels never depend on cache state. First-frame rasterization may
+  allocate; a warm draw allocates nothing. Observability seams on the
+  family: `rasterization_count()` (monotonic cache misses) and
+  `cache_bytes()` — the counter is the portable proof across the imcore
+  DLL boundary (§8, the ListBox precedent).
+- **Fallback chain unchanged (standing rules above)**: code units the
+  font lacks (glyph index 0) are "not covered" and fall through to the
+  5x7 bitmap provider, then skip. `covers` never allocates; `measure`
+  never rasterizes (advances only); `line_metrics` is computed once per
+  size (ascent/descent/line height, no linegap — the same formula as
+  the build-time subset).
+- **Selection-point-only conditional compilation**: stb_truetype is
+  never a hard imcore/imui dependency — with the option off no new code
+  compiles and the 5x7/build-time subset paths are untouched. Default
+  rendering stays 5x7 unless a provider is installed. `make_text_image`
+  stays bitmap-backed.
+- **The build-time path stays first-class by construction**: fonts are
+  reached only through `GlyphProvider` and widgets never know which
+  provider is behind the seam — `BitmapProvider` (5x7, zero dependency)
+  and `TtfSubsetProvider` (build-time table, zero runtime cost) remain
+  the defaults for constrained targets that cannot ship a TTF at all.
+
 ---
 
 ## 3. Other API-shape rules
@@ -596,6 +639,14 @@ dispatcher's raw pointers against dangling/UAF:
   first frame). New code on the `USE_FONT=ON` text draw path must meet
   the same zero-allocation requirement (reuse a buffer or batch
   `reserve`).
+- **Runtime glyph cache (L-5)**: `TtfFamily`'s cache is bounded (default
+  budget 64 KB, constructor parameter) with drop-all eviction (the
+  ListBox rule). The first draw of a `(size, code unit)` rasterizes and
+  may allocate; a warm draw allocates nothing. `test_runtime_ttf` gates
+  warm `write` at zero allocations and pins miss deltas through
+  `rasterization_count()` — allocation deltas are not portable proof
+  across the imcore DLL boundary (same conclusion as the ListBox bullet
+  above), while the zero-allocation gate locks the test-binary side.
 - **ListBox dynamic-model invalidation (A-9, 2026-08-28)**: the row-cache
   key is `(row,sel,w,h,fg,bg)` and does not include string content. If
   `ItemText` content changes without any setter call, hitting a stale

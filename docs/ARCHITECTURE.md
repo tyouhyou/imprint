@@ -233,7 +233,8 @@ satisfies. Changing any of these is an architecture change.
 - Framework API text input is **UTF-8**; widget text is stored as
   `std::u16string`; conversion lives in `imcore/text/utf8`.
 - Rendering goes through the `GlyphProvider` seam: a primary provider
-  (custom or FreeType via `USE_FONT`) with the built-in 5x7 `BitmapProvider`
+  (custom, the build-time TTF subset, or the runtime TTF provider via
+  `USE_TTF_RUNTIME`) with the built-in 5x7 `BitmapProvider`
   as fallback for uncovered code units; uncovered-by-both units are skipped.
 - The 5x7 table covers ASCII (plus lowercase → uppercase) and, when Python
   is available at configure time, a build-generated subset of code units
@@ -248,6 +249,14 @@ satisfies. Changing any of these is an architecture change.
   code-contract.md §2.4).
 - `USE_FONT` (FreeType) is optional and currently links through hardcoded
   per-platform paths — a known limitation, not a porting example.
+- Runtime rasterization (batch L-5): with `USE_TTF_RUNTIME`, vendored
+  stb_truetype compiles into imcore behind `IMCORE_HAS_TTF_RUNTIME`;
+  `TtfFamily` loads one TTF (a file path on hosts, a borrowed memory
+  blob on targets without a usable filesystem) and hands out one
+  `GlyphProvider` per pixel size, all sharing a bounded glyph cache.
+  Widgets ride the existing `set_glyph_provider` seam unchanged; the
+  fallback chain is runtime provider → 5x7 → skip (contract:
+  code-contract.md §2.4, §8).
 
 ### 4.6 Event system
 
@@ -304,6 +313,7 @@ satisfies. Changing any of these is an architecture change.
 | `FONT_SUBSET`             | ON      | ON            | build-time 5x7 glyph subset (needs Python) |
 | `TTF_FONT` (+ `TTF_PIXEL_SIZE`) | "" (off) | "" (off) | plan 2: rasterize a TTF into the glyph subset at the given pixel size |
 | `USE_FONT_SIZE`           | OFF     | —             | plan 2: platform default system font at `TTF_PIXEL_SIZE` as the default glyph provider (hosts only; needs Python) |
+| `USE_TTF_RUNTIME`         | OFF     | OFF           | L-5: runtime TTF rasterization via vendored stb_truetype — `TtfFamily`, per-size providers, bounded glyph cache |
 | `STORY`                   | tictactoe | —          | selects which demo app the shell links    |
 
 `USE_INTEGER_GEOMETRY` and `USE_NON_ATOMIC_PTR` are examples of the
