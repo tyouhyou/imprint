@@ -34,7 +34,9 @@ documents.
   Bare values are forbidden — everything is `key=value`.
 - Strings are double-quoted `"..."`; escapes are `\"` and `\\` (any
   other `\x` stays literal). Integers are bare; booleans are
-  `true|false`.
+  `true|false`. Percent sizes are `N%` (N a non-negative integer, no
+  sign or fraction) and may be quoted or bare — `width="50%"` and
+  `width=50%` are the same value.
 - `id=` names a node for later lookup (`find_by_id`); an unquoted
   integer value is accepted and stored as its decimal string.
   `items=` accepts multiple space-separated quoted strings.
@@ -68,7 +70,10 @@ widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `list_box`, `text_input`), with properties including
 `id`, `text`, `size`, `pos`, `named`, `checked`, `group`, `step`,
 `min`, `max`, `value`, `rows`, `spacing`, `padding`, `wrap`, `flex`,
-`visible`. Both the fluent builder and the
+`visible`. A `width`/`height` value of the form `N%` (1..100) declares
+that axis as a percentage of the FlexPanel parent's content box,
+resolved at layout time — it never becomes an explicit size, and outside
+a FlexPanel it stays unresolved. Both the fluent builder and the
 parser feed the same tables, so anything expressible in C++ builder
 form parses identically from text.
 
@@ -88,6 +93,12 @@ form parses identically from text.
   dropped with a warning.
 - Missing property or type mismatch: default value, silently — the
   parse path never throws.
+- A percent `width`/`height` (`N%`) is a layout-time declaration on that
+  axis, resolved by the FlexPanel parent against its content box (fixed
+  siblings claim their space first; percent siblings that overflow the
+  remaining space are scaled into it proportionally; `flex=` on the same
+  child is ignored); under a non-flex parent it stays unresolved and the
+  axis keeps its current size.
 - `text` is accepted as UTF-8 and stored internally as UTF-16.
 
 ## What a design file cannot express

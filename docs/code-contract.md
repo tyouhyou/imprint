@@ -291,6 +291,36 @@ keeps only API-level supplements.
   `set_width_auto()/set_height_auto()` to clear **only that axis's flag** —
   an explicit cross-axis size keeps its value and flag when the main axis
   grows.
+- **Percentage sizes (batch L-4)**: a widget axis may declare a
+  percentage of its **FlexPanel parent's content box** —
+  `set_width_percent(pct)` / `set_height_percent(pct)` (1..100; values
+  clamp into that range, 0 clears the declaration), queried by
+  `is_width_percent()/width_percent()` and the height pair. The
+  declaration replaces explicitness on that axis (the axis stops being
+  explicit), and `set_size` clears both declarations — the last geometry
+  setter on an axis wins. The FlexPanel parent resolves the declaration
+  during its `layout()` and writes the result through the per-axis auto
+  setters, so the axis never becomes explicit and every re-layout
+  re-resolves it (resizing the parent resizes the child; resolution is
+  top-down — a nested FlexPanel's own percent size is written before its
+  `layout()` runs, so inner percentages resolve against the fresh size).
+  Main axis: fixed siblings (explicit axes and measured natural sizes)
+  claim their demand first; each percent sibling desires
+  `pct * content_main / 100` (integer floor), and when the desires
+  overflow the line's remaining space they are scaled down
+  proportionally to their percentages — the last percent sibling takes
+  the leftover pixel so a scaled line sums exactly to the remainder (the
+  same exact-sum rule as the flex-grow distribution). `flex_grow` and
+  percentage are per-child mutually exclusive: the percentage wins and
+  the grow weight is ignored. Cross axis: resolves against the
+  content-box cross size, no sibling interaction. `measure()`: a percent
+  child contributes 0 on its percent axis (main like a flex item, cross
+  as 0), so an auto-sized container ignores percent children until a
+  real parent size resolves them. Outside a FlexPanel (Panel children,
+  the tree root) a percent declaration stays unresolved: the axis keeps
+  whatever size it has (a fresh widget's 0). With wrap, percent children
+  participate in line breaking with their desired size and the
+  scale-down applies per line. Integer math only.
 - **FlexPanel wrapping and cross-axis semantics (batch K/N2, N3)**: the
   wrap test accumulates only non-flex children's main-axis demand; a flex
   child contributes 0 to wrapping (it absorbs in-row leftover space, its
@@ -372,7 +402,8 @@ keeps only API-level supplements.
   (column/row/panel/label/button/checkbox/radio/slider/progress_bar/
   list_box/text_input
   + .size/.pos/.text/.named/.checked/.group/.step/.value/.rows/.spacing/
-  .padding/.wrap/.flex/.visible) and the future design-file deserializer
+  .padding/.wrap/.flex/.visible/.width_pct/.height_pct) and the future
+  design-file deserializer
   (G6) share one intermediate representation — the props produced by
   either must be consumable by the same property-resolution table.
 - `build(host, root)`: the root node itself is the document (the host is
@@ -394,7 +425,16 @@ keeps only API-level supplements.
   change to one side must update the other (both live in ui_builder.cpp).
 - Geometry props apply by **presence** (batch K/N8): `width=0`/`pos_x=0`
   are explicit values, not omissions, and are applied at materialize
-  (setting explicit); an absent axis defaults to 0. Corresponding parse
+  (setting explicit); an absent axis defaults to 0. A `width`/`height`
+  prop may also be a percent string `N%` (1..100): that axis is declared
+  as a percentage of the FlexPanel parent's content box instead of
+  explicit pixels (§3 percentage sizes; the resolution algorithm lives
+  there — this section only fixes the prop form). Mixed declarations
+  apply the integer axes through `set_size` first, then the percent
+  declarations (which clear their axis's explicitness). The fluent
+  helpers `.width_pct(pct)` / `.height_pct(pct)` produce the same string
+  form, so both feeders share one representation.
+  Corresponding parse
   side: `id=` accepts an unquoted integer literal and stores its decimal
   string (batch K/N9; grammar defined in `docs/design-file.md`).
 - Contract boundary (must not enter the description layer): dynamic models
