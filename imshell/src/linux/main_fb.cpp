@@ -15,7 +15,7 @@ int main(int argc, char *argv[])
         std::printf("%s", message.c_str());
     });
 
-    LI << "run on FB";
+    LD << "run on FB";
 
     FB fb;
     if (!fb.ok())

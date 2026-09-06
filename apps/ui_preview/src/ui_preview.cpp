@@ -87,11 +87,11 @@ namespace zb::app::ui_preview
             root.add_child(std::move(screen));
             screens_.push_back(raw);
             docs_.push_back(std::move(doc));
-            LI << "ui_preview: loaded '" << files_[i] << "'";
+            LD << "ui_preview: loaded '" << files_[i] << "'";
         }
         if (screens_.empty())
         {
-            LI << "ui_preview: no usable documents; empty window";
+            LD << "ui_preview: no usable documents; empty window";
         }
     }
 
@@ -103,7 +103,7 @@ namespace zb::app::ui_preview
         }
         current_ = index;
         window_->root().layout();
-        LI << "ui_preview: showing '" << files_[index] << "'";
+        LD << "ui_preview: showing '" << files_[index] << "'";
     }
 
     zb::SharedPtr<IWindow> UiPreview::window() noexcept

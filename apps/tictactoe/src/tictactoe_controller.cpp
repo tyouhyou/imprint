@@ -23,28 +23,28 @@ void TictactoeController::start()
 
 void TictactoeController::show_round_setup()
 {
-    LI << "round setup: difficulty";
+    LD << "round setup: difficulty";
     view_->board().clear_marks();
     view_->open_difficulty_dialog();
 }
 
 void TictactoeController::show_side_dialog()
 {
-    LI << "round setup: side";
+    LD << "round setup: side";
     view_->open_side_dialog();
 }
 
 void TictactoeController::choose_difficulty(const difficulty d)
 {
     difficulty_ = d;
-    LI << "difficulty: "
+    LD << "difficulty: "
        << (d == difficulty::easy ? "easy" : d == difficulty::normal ? "normal" : "hard");
     show_side_dialog();
 }
 
 void TictactoeController::begin_round(const player_type human)
 {
-    LI << (human == player_type::x ? "round start: human X" : "round start: human O");
+    LD << (human == player_type::x ? "round start: human X" : "round start: human O");
     game_->set_human(human);
     game_->start_round(player_type::x);  // X always opens
     view_->board().clear_marks();
@@ -71,7 +71,7 @@ void TictactoeController::on_cell_clicked(const int row, const int col)
     {
         return;
     }
-    LI << "human move: " << row << "," << col;
+    LD << "human move: " << row << "," << col;
     view_->board().set_mark(row, col, p);
     finish_after_move();
     if (!view_->dialog_open())
@@ -96,7 +96,7 @@ void TictactoeController::computer_turn()
     {
         return;  // full board: the game-over flow already handled it
     }
-    LI << "computer move: " << m.row << "," << m.col;
+    LD << "computer move: " << m.row << "," << m.col;
     view_->board().set_mark(m.row, m.col, game_->get_computer());
     game_->place_mark(m.row, m.col);
     finish_after_move();
@@ -113,12 +113,12 @@ void TictactoeController::finish_after_move()
     result_msg_ = (winner == game_->get_human()) ? "YOU WIN"
                   : (winner == player_type::none) ? "DRAW"
                                                   : "COMPUTER WINS";
-    LI << "game over: " << result_msg_;
+    LD << "game over: " << result_msg_;
     view_->open_result_dialog(result_msg_);
 }
 
 void TictactoeController::quit_game()
 {
-    LI << "quit";
+    LD << "quit";
     view_->window()->close();
 }

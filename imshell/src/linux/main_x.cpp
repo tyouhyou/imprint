@@ -64,7 +64,7 @@ int start()
         XCloseDisplay(display);
         return 2;
     }
-    LI << "selected 32-bit visual: " << vi.depth;
+    LD << "selected 32-bit visual: " << vi.depth;
 
     XSetWindowAttributes swa{};
     swa.background_pixel = BlackPixel(display, screen);

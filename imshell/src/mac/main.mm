@@ -303,7 +303,7 @@ int main(int argc, char *argv[])
         std::cerr << message;
     });
 
-    LI << "run on mac (AppKit)";
+    LD << "run on mac (AppKit)";
 
     if (sizeof(zb::ui::core::Color) != 4)
     {
