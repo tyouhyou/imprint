@@ -66,6 +66,11 @@ showcase)
         -o /tmp/ui_embed
     /tmp/ui_embed /tmp/showcase_ui.gen.hpp \
         /src/apps/showcase/hero.ui /src/apps/showcase/gallery.ui
+    # V-2 procedural assets: the same build-time materialization the
+    # CMake showcase target runs (asset_gen is standalone -- std headers
+    # only, so the image's g++ builds it unchanged)
+    g++ -std=c++17 -O2 /src/tools/asset_gen.cpp -o /tmp/asset_gen
+    /tmp/asset_gen /tmp/showcase_assets.gen.hpp
     EXTRA_INCLUDES="-I /tmp"
     ;;
 *)
