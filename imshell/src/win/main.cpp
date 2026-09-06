@@ -109,12 +109,22 @@ namespace
             return;
         }
 
-        // a system-triggered repaint (first show, resize) invalidates the
-        // whole client area: blit the entire buffer; otherwise only the
-        // region the painted callbacks accumulated
+        // 1:1 presents only the region the painted callbacks accumulated
+        // (the long-verified path); a scaled presentation always presents
+        // the whole fitted rect from the live buffer (the mac drawRect
+        // strategy): the fill-then-partial-stretch alternative relies on
+        // the update region never exceeding dest(pending) -- an invariant
+        // shell-side bookkeeping cannot guarantee across the system's own
+        // invalidations -- and any rect it misses is erased by the
+        // letterbox fill but not redrawn (content black-holes). A full
+        // self-covering present cannot lose pixels by construction.
         zb::shell::present_rect r = g_pending.get();
-        if (rc_paint.left <= 0 && rc_paint.top <= 0 &&
-            rc_paint.right >= pres.x + pres.w && rc_paint.bottom >= pres.y + pres.h)
+        const bool one_to_one = pres.x == 0 && pres.y == 0 &&
+                                pres.w == g_buffer_width &&
+                                pres.h == g_buffer_height;
+        if (!one_to_one ||
+            (rc_paint.left <= 0 && rc_paint.top <= 0 &&
+             rc_paint.right >= pres.x + pres.w && rc_paint.bottom >= pres.y + pres.h))
         {
             r = zb::shell::present_rect{0, 0, g_buffer_width, g_buffer_height};
         }
