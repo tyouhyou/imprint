@@ -48,7 +48,7 @@ cheapest carrier.
 | `Graphics::clip_safe` | RAII `ClipGuard` (stack value, zero allocation): saves/restores draw state, never throws; used by the widget draw path | ✓ compliant |
 | `Graphics::clip` | removed (no call sites; throwing semantics superseded by ClipGuard) | ✓ |
 | `Graphics::clone` | kept for one-shot deep copies; no hot-path call sites | ✓ compliant |
-| `Font` constructor | throws `Font::error` (RAII leak guard in place) | ✓ compliant (init path) |
+| `Font` constructor | removed with the FreeType path (2026-09-06, L-5); init-path font failures now throw `zb::ui::error` from `TtfFamily` (§2.4) | ✓ |
 | `Graphics` constructor / `clone` | throws `zb::ui::error`: the constructor rejects zero sizes and pixel counts overflowing `int` (64-bit multiply prevents wraparound — 65536×65536 used to wrap to 0, allocate an empty buffer, and still report a full-size draw_area → first fill/draw wrote out of bounds); clone's bounds guard uses 64-bit sums (`x+width` used to wrap negative and pass the check → out-of-bounds read) | ✓ compliant (init path) |
 | `codec/` (png/jpeg, vendored stb) | `int` error codes, 0 = OK; read path: 1=open failed 2=not this format 3=decode failed 4=zero size 5=info callback rejected 6=row callback rejected; write path: 1=zero size 2=row callback rejected 3=open failed 4=write failed. Renumbered once when switching to stb (2026-08; previously libpng/libjpeg numbering 1~5/-1); semantics unchanged, numbers are not a long-term commitment | in-boundary contract: file I/O may run in exception-disabled environments, error codes are **retained** at this boundary; a future external wrapper throws `zb::ui::error` per the init path |
 | `fb.cpp` TODO("throw error") | unimplemented | keep the TODO; do not turn it into a hot-path throw |
@@ -66,12 +66,10 @@ private:
 };
 ```
 
-`Font::error` is a same-named type that exists today; it will converge to
-an alias of — or be replaced by — the common `zb::ui::error`. The
-`zb::ui::error` type itself already exists in
-`imcore/include/core/error.hpp` (`what() const noexcept`, message taken by
-`const&`); until then `Font::error` satisfies the "exception carrying a
-msg" requirement.
+`zb::ui::error` is defined in `imcore/include/core/error.hpp`
+(`what() const noexcept`, message taken by `const&`); the legacy
+same-shaped `Font::error` type left the codebase with the FreeType path
+(2026-09-06, L-5).
 
 ### 1.5 Event callback contract
 
@@ -102,9 +100,9 @@ msg" requirement.
 ### 2.1 Internal representation: `std::u16string` (current, keep)
 
 - `Widget` stores text as `std::u16string` (`widget.hpp`).
-- `Font::measure` / `Font::write` accept `const char16_t*` (FreeType's
-  UTF-16 semantics); widget drawing passes the internal buffer directly,
-  no copy/convert.
+- Provider `measure` / `write` accept `const char16_t*` (UTF-16
+  semantics); widget drawing passes the internal buffer directly, no
+  copy/convert.
 
 ### 2.2 Input form: framework APIs are UTF-8, always
 
@@ -120,21 +118,23 @@ msg" requirement.
 ### 2.3 Conversion layer location
 
 - The UTF-8 ↔ UTF-16 converter lives in `imcore/text/utf8.hpp`
-  (`utf8_to_utf16` / `utf16_to_utf8`, landed), same layer as `Font`.
+  (`utf8_to_utf16` / `utf16_to_utf8`, landed), the same layer as the
+  text providers.
 - `imcore` does not depend on `imui`; conversion at the widget layer is
   just "decode → append to the u16 buffer".
 
 ### 2.4 Dual glyph providers (landed)
 
-The `GlyphProvider` abstraction, `BitmapProvider` (built-in 5x7, never
-depends on FreeType), and the FreeType wrapper provider live in
-`imcore/include/text/`. `Widget::set_glyph_provider()` installs the main
-provider; `set_font` remains a convenience alias. Standing contract
-obligations:
+The `GlyphProvider` abstraction and the built-in `BitmapProvider` (5x7,
+zero dependencies) live in `imcore/include/text/`, next to the
+build-time subset provider (§2.4 plan 2) and the runtime TTF provider
+(§2.4 L-5). `Widget::set_glyph_provider()` installs the main provider.
+Standing contract obligations:
 
 - Fallback chain: main provider reports "glyph not covered" → fallback
   provider → still missing → skip.
-- `#if defined(USE_FONT)` conditional compilation is only allowed at the
+- Provider conditional compilation (`IMCORE_HAS_TTF_RUNTIME`; formerly
+  the FreeType `USE_FONT`, removed 2026-09-06) is only allowed at the
   provider-selection point; the widget draw path is unconditional.
 - The shape of `set_text` / the internal u16 buffer does not change;
   `make_text_image` stays an independent API (tictactoe depends on it:
@@ -183,7 +183,8 @@ defined. Contract:
   stateless `GlyphProvider`) plus `ttf_subset_provider()`, which
   returns the shared instance; widgets opt in through the existing
   `set_glyph_provider` seam — the same selection-point-only
-  conditional rule as `USE_FONT`. Default rendering stays 5x7 unless
+  conditional rule as the runtime provider (§2.4 L-5). Default
+  rendering stays 5x7 unless
   a widget installs the provider, and the fallback chain is unchanged
   (units absent from the table fall back to the 5x7 bitmap provider,
   then skip). `make_text_image` stays bitmap-backed.
@@ -212,7 +213,7 @@ defined. Contract:
   universal fallback).
 
 **Runtime TTF provider (batch L-5)**: with `USE_TTF_RUNTIME` (default
-OFF; an optional feature like `USE_FONT`/`USE_PNG`, never forced by any
+OFF; an optional feature like `USE_PNG`, never forced by any
 toolchain), imcore compiles the vendored stb_truetype behind one wrapper
 TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
 
@@ -563,8 +564,7 @@ dispatcher's raw pointers against dangling/UAF:
 ## 7. Layout protocol (batch J5 final)
 
 - `layout_dirty_` is the layout invalidation flag: geometry/content
-  setters (set_size, set_size_auto, set_text, set_font,
-  set_glyph_provider; container add_child/remove_child,
+  setters (set_size, set_size_auto, set_text, set_glyph_provider; container add_child/remove_child,
   set_orientation/set_spacing/set_padding) call `mark_layout_dirty()`
   which bubbles to the root along the parent chain (zero allocation). A
   fresh tree starts dirty (`layout_dirty_ = true`). Layout clears the
@@ -583,7 +583,7 @@ dispatcher's raw pointers against dangling/UAF:
   additionally mark render dirty (geometry changes produce damage
   naturally when layout writes sizes back through its setters).
 - Text advance cache (batch J4) invalidation duty: any setter that
-  changes glyph content (set_text/set_font/set_glyph_provider) must reset
+  changes glyph content (set_text/set_glyph_provider) must reset
   the cache; when adding such a setter, invalidate in the same change +
   update this section + rely on the gate test as backstop.
 - Intrinsic-setter audit duty: for widgets with a measure() override, the
@@ -632,13 +632,10 @@ dispatcher's raw pointers against dangling/UAF:
 - Shared obligation: the process-wide shared BitmapProvider (batch J6)
   rests on it having no per-instance state; adding state to it requires
   removing the sharing first.
-- **USE_FONT text path (A-8, 2026-08-28)**: `Font::draw_alphamap`'s
-  per-glyph `resize` is a hot-path allocation; `test_alloc_guard`
-  covers both the bitmap path and a `USE_FONT` variant (scenario 5:
-  label+button repaint through FreeType allocates nothing after the
-  first frame). New code on the `USE_FONT=ON` text draw path must meet
-  the same zero-allocation requirement (reuse a buffer or batch
-  `reserve`).
+- The FreeType text-path allocation bullet (A-8, 2026-08-28) left the
+  contract with the removed `USE_FONT` path (2026-09-06, L-5); the
+  runtime provider carries the same zero-allocation duty forward (next
+  bullet).
 - **Runtime glyph cache (L-5)**: `TtfFamily`'s cache is bounded (default
   budget 64 KB, constructor parameter) with drop-all eviction (the
   ListBox rule). The first draw of a `(size, code unit)` rasterizes and

@@ -64,7 +64,7 @@ Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，�
 - **契约即自动化友好** — "宿主驱动一切"的模型意味着脚本可以直接替代用户：喂输入、泵帧、对像素断言；单线程、无定时器，驱动方无需 sleep——测试集包含端到端 `automation` 套件，全程走公开 API
 - **嵌入式级约束** — 无 RTTI、16 位色（abgr1555）、纯整数几何选项、非原子引用计数选项（NDS 没有 libatomic）
 - **零分配热路径** — RAII `ClipGuard`、事件墓碑删除、`Subscription`
-- **全链路 UTF-8 文本** — 内置 5x7 位图字形兜底（按源码字符串自动子集化）；可选 FreeType（字体）、vendored stb 编解码器（PNG/JPEG）与手写 GIF 编码器
+- **全链路 UTF-8 文本** — 内置 5x7 位图字形兜底（按源码字符串自动子集化）；可选运行时 TTF 文本（vendored stb_truetype）、vendored stb 编解码器（PNG/JPEG）与手写 GIF 编码器
 - **C++17、CMake、静态库** — 一切可组合，不强加任何东西
 
 ## 非目标
@@ -120,7 +120,7 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 | 目标 | 命令 | 说明 |
 |---|---|---|
 | Windows（MSVC） | `cmake -S . -B build/build_win && cmake --build build/build_win` | 零依赖默认构建（32bpp） |
-| Windows + 字体 | `cmake -S . -B build/build_font -DUSE_FONT=ON && cmake --build build/build_font` | 运行需 `freetype.dll` 在 PATH 上 |
+| 运行时 TTF 文本 | `cmake -S . -B build/build_rt_ttf -DUSE_TTF_RUNTIME=ON && cmake --build build/build_rt_ttf` | 运行时字形栅格化（批次 L-5）：应用经 `TtfFamily` 加载字体，无外部依赖 |
 | macOS（AppKit） | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target 11.0，无需额外选项 |
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
 | Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |

@@ -21,7 +21,8 @@ place unchanged: every app is drivable headlessly, which makes automation
 and end-to-end testing a property of the contract, not an add-on (§4.11).
 
 The default build is zero-dependency: no font, no image codec. Optional
-features (FreeType fonts, PNG/JPEG via vendored stb) are compile-time
+features (runtime TTF text via vendored stb_truetype, PNG/JPEG via vendored
+stb) are compile-time
 switches. The NDS toolchain forces a set of embedded-friendly options; every
 other target uses the desktop defaults.
 
@@ -32,7 +33,7 @@ other target uses the desktop defaults.
 | `imutil`  | Logging macros `LD`/`LI`/`LW`/`LE`/`LF` (level-gated, zero-cost when suppressed)            | INTERFACE    | —                                   |
 | `imevent` | Zero-allocation pub/sub `Event<T...>` + RAII `Subscription`; `PAINT_EVENT`/`CLOSE_EVENT`   | INTERFACE    | —                                   |
 | `iminput` | `input_event` POD + `key_code` enum                                                         | INTERFACE    | —                                   |
-| `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap, optional FreeType, UTF-8), codecs (`png`/`jpeg`, vendored stb) | SHARED | `imutil`                            |
+| `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap + optional runtime TTF, UTF-8), codecs (`png`/`jpeg`, vendored stb) | SHARED | `imutil`                            |
 | `imui`    | Widget tree: `Panel`, `FlexPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`) | STATIC | `imcore`, `imevent`, `iminput`      |
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
 | `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
@@ -247,8 +248,9 @@ satisfies. Changing any of these is an architecture change.
   font dependency, 5x7 stays the default (`USE_FONT_SIZE` switches the
   process-wide default to a platform system font on hosts; contract:
   code-contract.md §2.4).
-- `USE_FONT` (FreeType) is optional and currently links through hardcoded
-  per-platform paths — a known limitation, not a porting example.
+- `USE_FONT` (FreeType) was removed with batch L-5 (2026-09-06): the
+  runtime TTF provider (`USE_TTF_RUNTIME`, vendored stb_truetype) is the
+  recorded runtime-text path, with no external library dependency.
 - Runtime rasterization (batch L-5): with `USE_TTF_RUNTIME`, vendored
   stb_truetype compiles into imcore behind `IMCORE_HAS_TTF_RUNTIME`;
   `TtfFamily` loads one TTF (a file path on hosts, a borrowed memory
@@ -309,7 +311,7 @@ satisfies. Changing any of these is an architecture change.
 | `COLOR_DEPTH`             | 32      | 16 (FORCE)    | bits per pixel; 16 = embedded only        |
 | `USE_INTEGER_GEOMETRY`    | OFF     | ON (FORCE)    | integer circle/ellipse bounds (no FPU)    |
 | `USE_NON_ATOMIC_PTR`      | OFF     | ON (FORCE)    | non-atomic `SharedPtr` refcount (no libatomic) |
-| `USE_FONT` / `USE_PNG` / `USE_JPEG` | OFF | OFF    | optional features; codecs are vendored stb |
+| `USE_PNG` / `USE_JPEG` | OFF | OFF    | optional features; codecs are vendored stb |
 | `FONT_SUBSET`             | ON      | ON            | build-time 5x7 glyph subset (needs Python) |
 | `TTF_FONT` (+ `TTF_PIXEL_SIZE`) | "" (off) | "" (off) | plan 2: rasterize a TTF into the glyph subset at the given pixel size |
 | `USE_FONT_SIZE`           | OFF     | —             | plan 2: platform default system font at `TTF_PIXEL_SIZE` as the default glyph provider (hosts only; needs Python) |
@@ -364,8 +366,6 @@ contract, not an add-on:
 - The macOS AppKit shell (A-20) is verified behaviorally only on the
   maintainer's macOS 13 machine so far; CI compiles it and runs the host
   test battery, and the shell presents at 1x scale (no Retina mapping yet).
-- `USE_FONT` needs hardcoded per-platform FreeType paths before it can be
-  enabled elsewhere (`find_package`/CACHE is the intended fix).
 - 16bpp builds are embedded-only: the desktop shells and DIB/XImage present
   assume 32bpp; a desktop `COLOR_DEPTH=16` build is compile/test-only.
 - The Linux framebuffer shell has **no input source** (no keyboard/pointer);
