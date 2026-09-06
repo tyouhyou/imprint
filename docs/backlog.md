@@ -49,6 +49,30 @@ widget redesign, no animation system.
   pacing, file driving) stays app-side. `test_gif` pins the block
   structure (GCE terminator included, bb916e7) and determinism; the
   recorder builds against the codec unchanged.
+- **V-5. Modern dashboard demo pass** (added 2026-09-06; the
+  buyer-facing showcase pass — also the prototype of the future
+  embedded device page, see the device-selection discussion in the
+  handoff notes):
+  - **Arc primitive**: an opt-in AA arc (`draw_arc_aa`, the V-1
+    `*_aa` precedent — explicit call, never a global default);
+    unlocks gauge/donut rings. Battery-locked, with 16bpp
+    degradation notes (the HeroChart depth-notes precedent).
+  - **Composition widgets** from existing primitives: toggle switch
+    (rounded capsule + dot), gauge ring (arc + ticks), big-numeral
+    readouts (build-time TTF subset / vendored stb runtime text —
+    no external library). Theme-token driven; no widget redesign,
+    no animation system (standing non-goals).
+  - **Showcase page**: a factory-console themed dashboard (trend
+    chart, gauges, toggles, setpoint slider, alarm list, status
+    banner) — the genre its target audience (industrial /
+    instrument / kiosk) recognizes; doubles as the embedded device
+    page (same source tree, real sensor data on the device).
+  - **Self-benchmark panel** (app-side; simulated data on desktop,
+    real data once a device port lands): FPS with a render/flush
+    split, flush bytes vs full-frame bytes (the dirty-region
+    selling point), a steady-state zero-allocation line, and an
+    input-tape determinism verify (PIXELS MATCH) — the on-device
+    proof of the deterministic-runtime positioning.
 
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 
