@@ -59,13 +59,67 @@ widget redesign, no animation system.
   - Review default framework alignment strategy (e.g. text centering vs top-left default).
 - **L-3. `list_box rows=` declaration width trap**:
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
+- **L-4. Percentage sizes**:
+  - `width="50%"` / `height="30%"` in `.ui` (plus a programmatic
+    equivalent): FlexPanel resolves percentages against the parent
+    content box top-down, once per layout — fixed-size siblings claim
+    their space first, percentage siblings split the remainder; integer
+    math only. v1 scope: FlexPanel containers only (absolutely
+    positioned Panel children keep explicit sizes). The fixed-size-buffer
+    architecture is what keeps this cheap: layout resolves once against
+    the root size, and I-2a presentation scaling never re-lays-out.
+    Contract-first: `docs/design-file.md` grammar + the code-contract
+    layout section before code.
+- **L-5. Runtime glyph provider** (decided 2026-09-06: the recorded
+  future path for text, and the eventual FreeType exit):
+  - Runtime TTF rasterization through the existing `GlyphProvider` seam
+    (already size-agnostic: `measure`/`line_metrics`/`write` are all
+    provider-queried). Vendored stb_truetype gains an optional runtime
+    provider that rasterizes (font, size, code unit) lazily into a
+    bounded text→font→bitmap glyph cache; the TTF source is a filesystem
+    path on hosts and a build-time ROM-packed blob on targets without a
+    usable filesystem (the `asset_gen`/`ui_embed` embed precedent).
+    Per-widget size selection (`set_font_size(px)`) is expected to ride
+    the seam unchanged via per-size provider instances from one family
+    sharing a cache; if the seam itself must grow, the contract changes
+    first.
+  - Contract duties to settle before code (same pattern as A-8/FreeType
+    and the ListBox row cache): §8 warm-cache gate (first-frame
+    rasterization may allocate, steady-state draw allocates nothing);
+    selection-point-only conditional compilation — stb_truetype is never
+    a hard imcore/imui dependency, targets that cannot afford it link
+    without it; §2.4 fallback chain unchanged (runtime provider → 5x7 →
+    skip).
+  - **The build-time path stays first-class by construction**: fonts are
+    reached only through `GlyphProvider` and widgets never know which
+    provider is behind the seam, so `BitmapProvider` (5x7, zero
+    dependency) and `TtfSubsetProvider` (build-time table, zero runtime
+    cost) remain the defaults for constrained targets that cannot ship a
+    TTF at all. When L-5 lands it replaces the frozen FreeType path
+    (`USE_FONT`), retiring Z2/Z3 with it.
 
 ### Batch I — Tooling & Inspection (Unscheduled)
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
   - Watch `.ui` file changes on disk and reload in-place without restarting the previewer.
 - **I-2. Target screen simulation**:
-  - Desktop-hosted simulation / emulation overlay matching target screen constraints (e.g., dual NDS 256x192 screens, framebuffer 320x240).
+  - **I-2a. Shell presentation scaling** (first deliverable; decided
+    2026-09-06): desktop shells unlock the window and present the
+    fixed-size app buffer scaled to fit — aspect preserved, centered
+    (letterboxed). The buffer stays fixed-size and no re-layout ever
+    happens: presentation-side only, core untouched. Resampling is
+    nearest-neighbor on every platform (win `StretchDIBits` COLORONCOLOR,
+    mac `kCGInterpolationNone`, x11 manual resample loop in a shared
+    `imshell/shell/` seam) — uniformity is contractual because
+    cross-platform captures must stay pixel-identical (the win/mac/linux
+    GIF md5 story). Input maps back through the same integer floor
+    formula as the render forward map (`buf = win * buf_w / win_w`, no
+    floats), so hit-testing is the exact inverse of what is on screen.
+    NDS/FB shells stay 1:1; wasm/python hosts scale host-side. The
+    scaling algorithm is user-facing documented (README shell section).
+  - **I-2b. Device overlay**: bezel/chrome around the presented buffer
+    matching target screen constraints (e.g., dual NDS 256x192 screens,
+    framebuffer 320x240).
 
 ### Batch F — Event Loop Extension & Frame Automation (Long-term)
 
