@@ -10,7 +10,9 @@
 //   - presentation: painted callbacks decide the region through
 //     region_to_present and invalidate the view; AppKit unions the
 //     invalidated rects itself, so no coalescer is needed; drawRect
-//     presents through one CGImage wrap (zero copy) of the app buffer
+//     presents the fixed buffer fitted into the view (I-2a, shared
+//     integer seam) through one CGImage wrap (zero copy) of the app
+//     buffer
 //
 // 32bpp only, like the win shell's blit NOTE: the CGImage wraps the
 // buffer as 32-bit little-endian ARGB (B,G,R,A bytes, straight alpha),
@@ -25,6 +27,7 @@
 #include "app_maker.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
+#include "shell/presentation.hpp"
 #include "shell/presenter.hpp"
 #include "logging.hpp"
 
@@ -95,19 +98,42 @@ namespace
 
     /*
      * A-2 InputSource, pointer half: window points (bottom-left origin)
-     * become top-left surface pixels. The buffer pixel is one point (the
-     * fixed-size buffer presents at 1x scale).
+     * become top-left surface pixels through the I-2a inverse map -- the
+     * same integer floor formula the forward stretch samples with.
+     * Returns false when the point is on the letterbox (not app input;
+     * the caller swallows the event).
      */
-    zb::input::input_event nsevent_to_pointer(const zb::input::input_type type, NSEvent *nse)
+    bool nsevent_to_pointer(const zb::input::input_type type, NSEvent *nse,
+                            zb::input::input_event &out)
+    {
+        out = {};
+        out.type = type;
+        out.touch_id = 0;
+        const NSRect b = g_view.bounds;
+        const zb::shell::presentation pres = zb::shell::presentation_fit(
+            static_cast<int>(b.size.width), static_cast<int>(b.size.height),
+            g_buffer_width, g_buffer_height);
+        const NSPoint p = [g_view convertPoint:nse.locationInWindow fromView:nil];
+        int bx = 0;
+        int by = 0;
+        if (!pres.to_buffer(static_cast<int>(p.x),
+                            static_cast<int>(b.size.height - p.y), bx, by))
+        {
+            return false;
+        }
+        out.x = bx;
+        out.y = by;
+        return true;
+    }
+
+    // feeds one pointer event when it lands on the presented buffer
+    void feed_pointer(const zb::input::input_type type, NSEvent *nse)
     {
         zb::input::input_event ev;
-        ev.type = type;
-        ev.touch_id = 0;
-        const NSPoint p = [g_view convertPoint:nse.locationInWindow fromView:nil];
-        ev.x = static_cast<int>(p.x);
-        const int y = static_cast<int>(g_view.bounds.size.height - p.y);
-        ev.y = y < 0 ? 0 : y;  // the bottom edge lands exactly on the bound
-        return ev;
+        if (nsevent_to_pointer(type, nse, ev))
+        {
+            feed(ev);
+        }
     }
 }
 
@@ -120,29 +146,29 @@ namespace
 
 - (void)mouseDown:(NSEvent *)e
 {
-    feed(nsevent_to_pointer(zb::input::input_type::mouse_left_down, e));
+    feed_pointer(zb::input::input_type::mouse_left_down, e);
 }
 - (void)mouseUp:(NSEvent *)e
 {
-    feed(nsevent_to_pointer(zb::input::input_type::mouse_left_up, e));
+    feed_pointer(zb::input::input_type::mouse_left_up, e);
 }
 - (void)rightMouseDown:(NSEvent *)e
 {
-    feed(nsevent_to_pointer(zb::input::input_type::mouse_right_down, e));
+    feed_pointer(zb::input::input_type::mouse_right_down, e);
 }
 - (void)rightMouseUp:(NSEvent *)e
 {
-    feed(nsevent_to_pointer(zb::input::input_type::mouse_right_up, e));
+    feed_pointer(zb::input::input_type::mouse_right_up, e);
 }
 - (void)mouseMoved:(NSEvent *)e
 {
     // hover/drag moves drive the dispatcher: slop cancel, captured moves
     // (slider/listbox drag) and hover repaints all read them
-    feed(nsevent_to_pointer(zb::input::input_type::mouse_move, e));
+    feed_pointer(zb::input::input_type::mouse_move, e);
 }
 - (void)mouseDragged:(NSEvent *)e
 {
-    feed(nsevent_to_pointer(zb::input::input_type::mouse_move, e));
+    feed_pointer(zb::input::input_type::mouse_move, e);
 }
 - (void)scrollWheel:(NSEvent *)e
 {
@@ -153,7 +179,11 @@ namespace
     {
         return;
     }
-    zb::input::input_event ev = nsevent_to_pointer(zb::input::input_type::mouse_wheel, e);
+    zb::input::input_event ev;
+    if (!nsevent_to_pointer(zb::input::input_type::mouse_wheel, e, ev))
+    {
+        return;  // the cursor rests on the letterbox: not app input
+    }
     ev.delta = dy > 0 ? 1 : -1;
     feed(ev);
 }
@@ -206,23 +236,50 @@ namespace
 
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
-    // buffer row 0 belongs at the view top. AppKit hands drawRect a base
-    // context whose Y orientation differs across window backing paths:
-    // buffered windows (macOS 10.13: base.d > 0, y-up, identity CTM) vs
-    // layer-backed windows (macOS >= 10.14: base.d < 0, y-down).
-    // CGContextDrawImage puts the first data row at the rect top when the
-    // effective CTM is y-up, so flip Y exactly when the base is y-down.
-    // (Measured on 10.13.6 + verified logic on macOS 13; a retina base.d
-    // keeps its sign, so the check is scale-invariant.)
-    const CGAffineTransform base = CGContextGetCTM(ctx);
-    if (base.d < 0.0)
+    // I-2a: the fixed buffer is presented fitted into the view, aspect
+    // preserved and centered; the letterbox is filled black first (the
+    // blit below is clipped to the dirty rect by AppKit)
+    const NSRect bounds = self.bounds;
+    const zb::shell::presentation pres = zb::shell::presentation_fit(
+        static_cast<int>(bounds.size.width), static_cast<int>(bounds.size.height),
+        g_buffer_width, g_buffer_height);
+    [[NSColor blackColor] setFill];
+    NSRectFillUsingOperation(bounds, NSCompositingOperationCopy);
+    if (pres.w > 0 && pres.h > 0)
     {
-        CGContextTranslateCTM(ctx, 0.0, self.bounds.size.height);
-        CGContextScaleCTM(ctx, 1.0, -1.0);
+        // nearest-neighbor resampling keeps the pixels identical to the
+        // other desktop shells at the same window size (I-2a)
+        CGContextSetInterpolationQuality(ctx, kCGInterpolationNone);
+        // buffer row 0 belongs at the view top. AppKit hands drawRect a base
+        // context whose Y orientation differs across window backing paths:
+        // buffered windows (macOS 10.13: base.d > 0, y-up, identity CTM) vs
+        // layer-backed windows (macOS >= 10.14: base.d < 0, y-down).
+        // CGContextDrawImage puts the first data row at the rect top when the
+        // effective CTM is y-up, so flip Y exactly when the base is y-down.
+        // (Measured on 10.13.6 + verified logic on macOS 13; a retina base.d
+        // keeps its sign, so the check is scale-invariant.)
+        const CGAffineTransform base = CGContextGetCTM(ctx);
+        if (base.d < 0.0)
+        {
+            CGContextTranslateCTM(ctx, 0.0, bounds.size.height);
+            CGContextScaleCTM(ctx, 1.0, -1.0);
+        }
+        // the dest rect in the normalized y-up context: the image's top
+        // row lands p.y points below the view top
+        const CGRect dest = CGRectMake(pres.x, bounds.size.height - pres.y - pres.h,
+                                       pres.w, pres.h);
+        CGContextDrawImage(ctx, dest, frame);
     }
-    CGContextDrawImage(ctx, self.bounds, frame);
     CGImageRelease(frame);
     CGContextRestoreGState(ctx);
+}
+
+// I-2a: a resize changes the presented rect (and the letterbox bands) --
+// redraw everything, not just the changed band
+- (void)setFrameSize:(NSSize)newSize
+{
+    [super setFrameSize:newSize];
+    [self setNeedsDisplayInRect:self.bounds];
 }
 
 @end
@@ -276,9 +333,9 @@ int main(int argc, char *argv[])
                           backing:NSBackingStoreBuffered
                             defer:NO];
         win.title = [NSString stringWithUTF8String:window->title().c_str()];
-        // the framebuffer is fixed-size: no resize (a resize could only
-        // crop the buffer with no redraw), like every other shell
-        win.styleMask &= ~NSWindowStyleMaskResizable;
+        // I-2a: the window is user-resizable; the fixed-size buffer is
+        // presented scaled-to-fit, so a resize never crops anything
+        win.styleMask |= NSWindowStyleMaskResizable;
 
         ImprintView *view = [[ImprintView alloc] initWithFrame:content];
         win.contentView = view;
@@ -304,8 +361,20 @@ int main(int argc, char *argv[])
             {
                 return;  // nothing was drawn, nothing to present
             }
-            // top-left surface pixels -> bottom-left view points
-            [g_view setNeedsDisplayInRect:NSMakeRect(r.x, g_buffer_height - r.y - r.h, r.w, r.h)];
+            // I-2a: the buffer region invalidates the view rect it
+            // stretches into (top-left dest points -> bottom-left view
+            // points); a resize re-invalidates the whole view through
+            // setFrameSize, so a stale mapping cannot lose pixels
+            const NSRect b = g_view.bounds;
+            const zb::shell::presentation pres = zb::shell::presentation_fit(
+                static_cast<int>(b.size.width), static_cast<int>(b.size.height),
+                g_buffer_width, g_buffer_height);
+            const zb::shell::present_rect d = zb::shell::presentation_region(pres, r);
+            if (d.w <= 0)
+            {
+                return;
+            }
+            [g_view setNeedsDisplayInRect:NSMakeRect(d.x, b.size.height - d.y - d.h, d.w, d.h)];
         });
 
         // the app requests to quit by closing its window (e.g. a QUIT

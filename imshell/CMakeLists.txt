@@ -63,11 +63,15 @@ foreach(f IN LISTS build_src)
     list(APPEND APPSRC ${APPSRCDIR}/${f})
 endforeach()
 
-# A-2 shell seams (input_source.cpp feeds the app; presenter.hpp is
-# header-only): one static lib shared by every desktop shell and the
-# test battery. Embedded targets keep their minimal build.
+# A-2 shell seams (input_source.cpp feeds the app; presenter.hpp /
+# presentation.hpp are header-only, presentation.cpp carries the shared
+# nearest-neighbor resample): one static lib shared by every desktop
+# shell and the test battery. Embedded targets keep their minimal build.
 if (NOT NDS_PLATFORM)
-    add_library(shell_common STATIC src/shell/input_source.cpp)
+    add_library(shell_common STATIC
+        src/shell/input_source.cpp
+        src/shell/presentation.cpp
+    )
     target_include_directories(shell_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(shell_common PUBLIC ${IMAPPLIB} ${IMINPUTLIB})
 endif()

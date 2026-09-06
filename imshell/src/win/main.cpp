@@ -6,6 +6,7 @@
 #include "app_maker.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
+#include "shell/presentation.hpp"
 #include "shell/presenter.hpp"
 #include "win_input.hpp"
 
@@ -25,6 +26,38 @@ namespace
     // lowest-priority message): the union of every invalidated region
     // survives here until the present (A-2 presentation seam)
     zb::shell::dirty_coalescer g_pending;
+    // I-2a: the presented mapping of the current client area, kept
+    // current by WM_SIZE for the input inverse map (paint recomputes it
+    // from the live client rect)
+    zb::shell::presentation g_presentation;
+
+    // the only place the window size enters the shell: the fixed-size
+    // buffer fitted into the current client area (I-2a)
+    zb::shell::presentation current_presentation(const HWND hwnd)
+    {
+        RECT rc;
+        if (!GetClientRect(hwnd, &rc))
+        {
+            return {};
+        }
+        return zb::shell::presentation_fit(rc.right - rc.left, rc.bottom - rc.top,
+                                           g_buffer_width, g_buffer_height);
+    }
+
+    // pointer events whose window-client point lands on the letterbox are
+    // not app input; keyboard and other events carry no pointer position
+    // and always pass. to_buffer is the exact inverse of the stretch, so
+    // a hit lands on the pixel shown under the cursor
+    bool pointer_in_buffer(const input_event &ev, int &bx, int &by)
+    {
+        if (!zb::shell::maps_pointer(ev.type))
+        {
+            bx = ev.x;
+            by = ev.y;
+            return true;
+        }
+        return g_presentation.to_buffer(ev.x, ev.y, bx, by);
+    }
 
     // called on every "painted" event, requests a repaint by invalidating
     // only the region that was actually drawn
@@ -50,18 +83,28 @@ namespace
         }
         // an empty frame adds nothing and must not drop pending regions
         g_pending.add(x, y, w, h);
-        const zb::shell::present_rect p = g_pending.get();
-        if (p.w <= 0)
+        // the buffer region invalidates the dest rect it stretches into
+        // (I-2a); a resize invalidates the whole client anyway, so a
+        // stale mapping between the two cannot lose pixels
+        const zb::shell::presentation pres = current_presentation(g_hwnd);
+        const zb::shell::present_rect d =
+            zb::shell::presentation_region(pres, zb::shell::present_rect{x, y, w, h});
+        if (d.w <= 0)
         {
             return;
         }
-        RECT rc{p.x, p.y, p.x + p.w, p.y + p.h};
+        RECT rc{d.x, d.y, d.x + d.w, d.y + d.h};
         InvalidateRect(g_hwnd, &rc, FALSE);
     }
 
-    void paint_app(HWND hwnd, HDC hDC, const RECT &rc_paint)
+    void paint_app(const HWND hwnd, HDC hDC, const RECT &rc_paint)
     {
         if (nullptr == g_framebuffer || 0 == g_buffer_width || 0 == g_buffer_height)
+        {
+            return;
+        }
+        const zb::shell::presentation pres = current_presentation(hwnd);
+        if (pres.w <= 0 || pres.h <= 0)
         {
             return;
         }
@@ -69,17 +112,18 @@ namespace
         // a system-triggered repaint (first show, resize) invalidates the
         // whole client area: blit the entire buffer; otherwise only the
         // region the painted callbacks accumulated
-        zb::shell::present_rect p = g_pending.get();
+        zb::shell::present_rect r = g_pending.get();
         if (rc_paint.left <= 0 && rc_paint.top <= 0 &&
-            rc_paint.right >= g_buffer_width && rc_paint.bottom >= g_buffer_height)
+            rc_paint.right >= pres.x + pres.w && rc_paint.bottom >= pres.y + pres.h)
         {
-            p = zb::shell::present_rect{0, 0, g_buffer_width, g_buffer_height};
-        }
-        if (p.w <= 0 || p.h <= 0)
-        {
-            return;
+            r = zb::shell::present_rect{0, 0, g_buffer_width, g_buffer_height};
         }
         g_pending.clear();  // presented; the next painted callback accumulates afresh
+
+        // the letterbox: the client area outside the presented rect is
+        // not app content; the blit below is clipped to the paint region
+        // by BeginPaint, so the fill stays flicker-free
+        FillRect(hDC, &rc_paint, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
 
         // NOTE: this blit assumes 32bpp (biBitCount = 32, BI_RGB). A
         // COLOR_DEPTH=16 build would produce an abgr1555 buffer while the
@@ -95,19 +139,23 @@ namespace
             (DWORD)((((g_buffer_width * zb::ui::core::ImColor_Depth) + 31) & ~31) >> 3) * (DWORD)g_buffer_height,
             0, 0, 0, 0};
 
-        // the whole DIB is submitted (StartScan = 0, every row) and the
-        // source rectangle selects the region. Passing the base pointer
-        // together with StartScan = y would tell GDI the buffer holds
-        // rows [y, y+h): it would blit the top of the frame for any
-        // region below the first row
-        SetDIBitsToDevice(
+        // I-2a: the buffer region stretches into its dest rect with
+        // nearest-neighbor resampling (COLORONCOLOR) -- the dest rect is
+        // ceiled conservatively by presentation_region, so a partial
+        // present repaints every dest pixel the region can touch. At
+        // 1:1 (the default window size) dest and source coincide.
+        const zb::shell::present_rect d = zb::shell::presentation_region(pres, r);
+        if (d.w <= 0 || d.h <= 0)
+        {
+            return;
+        }
+        SetStretchBltMode(hDC, COLORONCOLOR);
+        StretchDIBits(
             hDC,
-            p.x, p.y,
-            p.w, p.h,
-            p.x, p.y,
-            0, g_buffer_height,
+            d.x, d.y, d.w, d.h,
+            r.x, r.y, r.w, r.h,
             g_framebuffer, &bmi,
-            DIB_RGB_COLORS);
+            DIB_RGB_COLORS, SRCCOPY);
     }
 } // namespace
 
@@ -150,9 +198,9 @@ extern "C" int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrev
     // request a frame; the app repaints after every input event, and the
     // "painted" event asks the shell to present (InvalidateRect -> WM_PAINT)
     RECT client_rect{0, 0, g_buffer_width, g_buffer_height};
-    // the framebuffer is fixed-size: no thick frame (a resize could only
-    // crop the buffer with no redraw)
-    const DWORD dwStyle = WS_OVERLAPPEDWINDOW & ~(WS_THICKFRAME | WS_MAXIMIZEBOX);
+    // I-2a: the window is user-resizable; the fixed-size buffer is
+    // presented scaled-to-fit, so a resize never crops anything
+    const DWORD dwStyle = WS_OVERLAPPEDWINDOW;
     const DWORD dwExStyle = WS_EX_APPWINDOW | WS_EX_WINDOWEDGE;
     AdjustWindowRectEx(&client_rect, dwStyle, FALSE, dwExStyle);
 
@@ -181,6 +229,7 @@ extern "C" int WINAPI WinMain(_In_ HINSTANCE hInstance, _In_opt_ HINSTANCE hPrev
     }
 
     g_hwnd = hwnd;
+    g_presentation = current_presentation(hwnd);
     // fill the framebuffer before the first show: the initial WM_PAINT
     // then blits real content instead of the uninitialized window
     g_app->paint();
@@ -214,6 +263,16 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
             EndPaint(hwnd, &ps);
             return 0;
         }
+        case WM_SIZE:
+        {
+            // I-2a: the window is user-resizable, the buffer is not --
+            // the new client area only changes the presented rect. The
+            // whole client is invalidated: the next WM_PAINT re-fills
+            // the letterbox and re-stretches the buffer
+            g_presentation = current_presentation(hwnd);
+            InvalidateRect(hwnd, nullptr, FALSE);
+            return 0;
+        }
         case WM_DESTROY:
         {
             PostQuitMessage(0);
@@ -242,6 +301,16 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         {
             case zb::shell::win_input::result::handled:
             {
+                // I-2a: window-client pixels -> buffer pixels; a pointer
+                // event on the letterbox is not app input and is dropped
+                int bx = 0;
+                int by = 0;
+                if (!pointer_in_buffer(ev, bx, by))
+                {
+                    return 0;
+                }
+                ev.x = bx;
+                ev.y = by;
                 zb::shell::feed_input(*g_app, ev);
                 return 0;
             }
