@@ -59,33 +59,6 @@ widget redesign, no animation system.
   - Review default framework alignment strategy (e.g. text centering vs top-left default).
 - **L-3. `list_box rows=` declaration width trap**:
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
-- **L-5. Runtime glyph provider** (decided 2026-09-06: the recorded
-  future path for text, and the eventual FreeType exit):
-  - Runtime TTF rasterization through the existing `GlyphProvider` seam
-    (already size-agnostic: `measure`/`line_metrics`/`write` are all
-    provider-queried). Vendored stb_truetype gains an optional runtime
-    provider that rasterizes (font, size, code unit) lazily into a
-    bounded text→font→bitmap glyph cache; the TTF source is a filesystem
-    path on hosts and a build-time ROM-packed blob on targets without a
-    usable filesystem (the `asset_gen`/`ui_embed` embed precedent).
-    Per-widget size selection (`set_font_size(px)`) is expected to ride
-    the seam unchanged via per-size provider instances from one family
-    sharing a cache; if the seam itself must grow, the contract changes
-    first.
-  - Contract duties to settle before code (same pattern as A-8/FreeType
-    and the ListBox row cache): §8 warm-cache gate (first-frame
-    rasterization may allocate, steady-state draw allocates nothing);
-    selection-point-only conditional compilation — stb_truetype is never
-    a hard imcore/imui dependency, targets that cannot afford it link
-    without it; §2.4 fallback chain unchanged (runtime provider → 5x7 →
-    skip).
-  - **The build-time path stays first-class by construction**: fonts are
-    reached only through `GlyphProvider` and widgets never know which
-    provider is behind the seam, so `BitmapProvider` (5x7, zero
-    dependency) and `TtfSubsetProvider` (build-time table, zero runtime
-    cost) remain the defaults for constrained targets that cannot ship a
-    TTF at all. When L-5 lands it replaces the frozen FreeType path
-    (`USE_FONT`), retiring Z2/Z3 with it.
 
 ### Batch I — Tooling & Inspection (Unscheduled)
 
