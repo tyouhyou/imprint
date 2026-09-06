@@ -59,17 +59,6 @@ widget redesign, no animation system.
   - Review default framework alignment strategy (e.g. text centering vs top-left default).
 - **L-3. `list_box rows=` declaration width trap**:
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
-- **L-4. Percentage sizes**:
-  - `width="50%"` / `height="30%"` in `.ui` (plus a programmatic
-    equivalent): FlexPanel resolves percentages against the parent
-    content box top-down, once per layout — fixed-size siblings claim
-    their space first, percentage siblings split the remainder; integer
-    math only. v1 scope: FlexPanel containers only (absolutely
-    positioned Panel children keep explicit sizes). The fixed-size-buffer
-    architecture is what keeps this cheap: layout resolves once against
-    the root size, and I-2a presentation scaling never re-lays-out.
-    Contract-first: `docs/design-file.md` grammar + the code-contract
-    layout section before code.
 - **L-5. Runtime glyph provider** (decided 2026-09-06: the recorded
   future path for text, and the eventual FreeType exit):
   - Runtime TTF rasterization through the existing `GlyphProvider` seam
