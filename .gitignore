@@ -49,7 +49,7 @@ __pycache__/
 demo/wasm/tictactoe.js
 demo/wasm/tictactoe.wasm
 
-# vendored 3rd-party headers (USE_FONT needs system FreeType instead)
+# legacy vendored FreeType binaries (removed with USE_FONT, 2026-09-06)
 /imcore/ext_lib/
 
 # internal dev docs (not published)

@@ -18,7 +18,7 @@ struct zb_app
 
 /*
  * C-ABI boundary: no exception may cross into the host. The C++ side
- * throws on the init path (bad_alloc, Font::error, ...) and must not
+ * throws on the init path (bad_alloc, zb::ui::error, ...) and must not
  * propagate through the extern "C" frame -- that is UB (a trap in WASM).
  * Logging itself must not throw here, so failures are reported via LE.
  */

@@ -3,8 +3,9 @@
 #
 # Discipline from the repo's build matrix (CONTEXT.md / README "Build"):
 #   - tests run in Debug only; Release distorts the allocation gates
-#   - USE_FONT stays out of CI (hardcoded per-platform FreeType paths,
-#     documented known limitation)
+#   - optional features (USE_TTF_RUNTIME, USE_PNG, USE_JPEG) stay out of
+#     the Tier1/2 matrices; the NDS cross build and the non-atomic variant
+#     cover the rest
 
 name: CI
 

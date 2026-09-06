@@ -20,7 +20,8 @@ namespace zb::ui
      * Glyph provider: renders UTF-16 text runs onto a Graphics surface.
      * This is the single seam between widgets and the text rendering
      * backends, so a widget can fall back from its primary provider
-     * (FreeType) to the built-in 5x7 bitmap glyphs for uncovered
+     * (build-time subset, runtime TTF, ...) to the built-in 5x7 bitmap
+     * glyphs for uncovered
      * characters (see Widget::draw_text and BitmapProvider).
      *
      * Implementations are hot path: they must never throw.
@@ -39,7 +40,7 @@ namespace zb::ui
         /*
          * Line height and ascent without scanning the string (width is 0).
          * Cheaper than measure() on providers whose metrics cost a glyph
-         * load per code unit (e.g. FreeType); used for vertical alignment.
+         * load per code unit (e.g. the runtime TTF provider); used for vertical alignment.
          */
         virtual text_metrics line_metrics() const = 0;
 

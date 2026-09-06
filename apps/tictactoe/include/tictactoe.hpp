@@ -12,7 +12,7 @@ namespace zb::app::tictactoe
      * styling) and the controller (round flow) and forwards the IApp
      * protocol to the view's window. The app contains no platform-specific
      * code; text is rendered with the built-in bitmap font, so no
-     * Font/FreeType is needed.
+     * font provider is needed.
      */
     class Tictactoe : public IApp
     {

@@ -2,10 +2,6 @@
 
 #include "imui.hpp"
 
-#if defined(USE_FONT)
-#include <cstdio>
-#endif
-
 using namespace zb::ui;
 
 int test_label()
@@ -109,38 +105,6 @@ int test_label()
         EXPECT(l.get_text().empty());
         EXPECT(l.is_visible());
     }
-
-#if defined(USE_FONT)
-    // measure smoke test against a system font (skip if unavailable)
-    {
-        std::FILE *f = std::fopen("C:/Windows/Fonts/arial.ttf", "rb");
-        if (nullptr != f)
-        {
-            std::fclose(f);
-            Font font("C:/Windows/Fonts/arial.ttf", 0);
-            font.set_char_size_in_px(16);
-            const auto m = font.measure(u"Hello", 5);
-            EXPECT(m.width > 0);
-            EXPECT(m.height > 0);
-            EXPECT(m.ascent > 0);
-            EXPECT(m.ascent <= m.height);
-
-            // centered text must stay inside the label
-            Label l;
-            l.set_size(100, 20);
-            l.set_font(&font);
-            l.set_text(u"Hi");
-            l.set_h_align(Widget::h_align::center);
-            l.set_v_align(Widget::v_align::center);
-            auto g = core::Graphics::make_ptr(100, 20);
-            l.draw(*g);  // must not draw outside; no crash
-        }
-        else
-        {
-            std::printf("skip font measure test (arial.ttf not found)\n");
-        }
-    }
-#endif
 
     return test::report("label");
 }

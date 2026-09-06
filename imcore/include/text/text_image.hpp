@@ -17,9 +17,9 @@ namespace zb::ui
      *
      * i18n: the glyph table only covers 32..95 (plus a-z via uppercasing).
      * To add more characters, extend kGlyphs in bitmap_provider.cpp and
-     * BitmapProvider::covers(). For real fonts, use the Font class
-     * (USE_FONT) or a dedicated GlyphProvider -- the built-in bitmap path
-     * stays usable on embedded targets without FreeType.
+     * BitmapProvider::covers(). For real fonts, install a dedicated
+     * GlyphProvider (build-time subset or runtime TTF, contract 2.4) --
+     * the built-in bitmap path stays usable on embedded targets.
      */
     zb::SharedPtr<core::Graphics> make_text_image(
         const char *text,

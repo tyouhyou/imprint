@@ -17,7 +17,7 @@ assignees: ''
 **Target and environment**
 
 - Target: Windows / Linux X11 / Linux framebuffer / macOS / NDS / WASM / Python host
-- Build options (if any): e.g. `-DCOLOR_DEPTH=16`, `-DUSE_FONT=ON`
+- Build options (if any): e.g. `-DCOLOR_DEPTH=16`, `-DUSE_TTF_RUNTIME=ON`
 - Commit or release:
 
 **Additional context**

@@ -9,9 +9,6 @@
 #include "input.hpp"
 #include "theme.hpp"
 
-#if defined(USE_FONT)
-#include "text/font.hpp"
-#endif
 #include "text/bitmap_provider.hpp"
 
 namespace zb::ui
@@ -31,8 +28,7 @@ namespace zb::ui
      * color). Drawn by the base class before draw_at().
      *
      * Text: always rendered (UTF-8 input, UTF-16 storage). The primary
-     * glyph provider is the font assigned via set_font() (USE_FONT
-     * builds), a custom one set via set_glyph_provider(), or the
+     * glyph provider is the one assigned via set_glyph_provider() or the
      * process-wide default (set_default_glyph_provider); code units the
      * primary provider does not cover fall back to the built-in 5x7
      * bitmap glyphs, and code units nothing covers are skipped (see
@@ -310,7 +306,7 @@ namespace zb::ui
         }
 
         /*
-         * Sets the primary glyph provider (e.g. a FreeTypeProvider).
+         * Sets the primary glyph provider (e.g. a TtfRuntimeProvider).
          * Uncovered code units fall back to the built-in bitmap glyphs.
          */
         void set_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider)
@@ -320,17 +316,6 @@ namespace zb::ui
             mark_dirty();
             mark_layout_dirty();
         }
-#if defined(USE_FONT)
-        /* convenience: wraps the font as the primary provider */
-        void set_font(const Font *f)
-        {
-            mark_dirty();
-            font_ = f;
-            primary_provider_ = zb::make_shared<FreeTypeProvider>(f);
-            advance_cache_ = -1;
-            mark_layout_dirty();
-        }
-#endif
 
         /*
          * Renders the widget: clips to the widget's own area, draws the
@@ -450,8 +435,7 @@ namespace zb::ui
 
         /*
          * Returns the primary glyph provider: the custom provider set via
-         * set_glyph_provider(), else the FreeType wrapper of the assigned
-         * font (USE_FONT), else the process-wide default
+         * set_glyph_provider(), else the process-wide default
          * (set_default_glyph_provider), else nullptr (bitmap-only
          * rendering).
          */
@@ -643,9 +627,6 @@ namespace zb::ui
          * main can never touch a dead provider.
          */
         zb::SharedPtr<BitmapProvider> bitmap_fallback_;
-#if defined(USE_FONT)
-        const Font *font_ = nullptr;
-#endif
         /*
          * text_advance() cache (batch J4): the measurement splits text_
          * into provider runs and asks each provider, which costs per

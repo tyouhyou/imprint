@@ -7,7 +7,7 @@ namespace zb::ui
     /*
      * Glyph provider backed by the built-in 5x7 bitmap glyphs. Covers the
      * printable range 32..95 plus lowercase letters (rendered uppercase),
-     * never depends on FreeType, and is the universal fallback provider
+     * zero dependencies, and is the universal fallback provider
      * for widgets (see docs/code-contract.md section 2.4). Uncovered
      * code units advance zero width.
      */

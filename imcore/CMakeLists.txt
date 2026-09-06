@@ -7,14 +7,11 @@ endif()
 # supported on embedded targets.
 set(COLOR_DEPTH 32 CACHE STRING "Pixel color depth in bits (16 or 32). Set 16 for embedded framebuffers only.")
 # NOTE: these options are OFF in production builds and the default build
-# stays zero-dependency. USE_FONT links FreeType through hardcoded
-# per-platform paths below (verified on Linux with the distro dev package
-# and Windows with the prebuilt DLLs under ext_lib); before enabling it
-# elsewhere, prefer find_package()/CACHE variables over the hardcoded
-# IMPORTED_LOCATION entries. USE_PNG and USE_JPEG are self-contained: they
+# stays zero-dependency. USE_PNG and USE_JPEG are self-contained: they
 # compile the vendored stb_image/stb_image_write (third_party/stb) into
-# imcore and need no external library.
-set(USE_FONT OFF CACHE BOOL "Switch it to ON if font processing is needed.")
+# imcore and need no external library. USE_TTF_RUNTIME likewise compiles
+# the vendored stb_truetype (batch L-5) -- the framework carries no
+# external font library.
 set(USE_PNG OFF CACHE BOOL "Switch it to ON if png file processing is needed.")
 set(USE_JPEG OFF CACHE BOOL "Switch it to ON if jpeg file processing is needed.")
 # Integer-only geometry: no std::sqrt in the circle/ellipse scanlines for
@@ -48,7 +45,7 @@ set(USE_FONT_SIZE OFF CACHE BOOL "Render widgets with the platform default font 
 set(USE_TTF_RUNTIME OFF CACHE BOOL "Runtime TTF rasterization through vendored stb_truetype (batch L-5): TtfFamily hands out one glyph provider per pixel size over a bounded shared cache. When OFF only the 5x7 bitmap and build-time subset paths exist.")
 
 # USE_FONT_SIZE with an empty TTF_FONT resolves the platform's system font
-# (hardcoded paths, the USE_FONT style); a missing file is a config error.
+# (hardcoded paths); a missing file is a config error.
 if (USE_FONT_SIZE AND NOT NDS_PLATFORM AND TTF_FONT STREQUAL "")
     if (MSVC OR WIN32)
         set(TTF_FONT "C:/Windows/Fonts/segoeui.ttf")
@@ -128,13 +125,6 @@ if (NOT TTF_FONT STREQUAL "" AND NOT NDS_PLATFORM)
     endif()
 endif()
 
-if (USE_FONT)
-    set(FONT_SRC
-        src/text/font.cpp
-    )
-else()
-    set(FONT_SRC)
-endif()
 if (NOT IMCORE_HAS_TTF_SUBSET)
     set(TTF_SRC)
 endif()
@@ -183,7 +173,6 @@ add_library(
     src/text/text_image.cpp
     src/text/bitmap_provider.cpp
     src/text/utf8.cpp
-    ${FONT_SRC}
     ${TTF_SRC}
     ${TTF_RUNTIME_SRC}
     ${STB_SRC}
@@ -192,57 +181,12 @@ add_library(
     ${GIF_SRC}
 )
 
-if (USE_FONT)
-    # hardcoded per-platform library paths (see the note at USE_FONT)
-add_library(freetype2 SHARED IMPORTED GLOBAL)
-endif()
-
-if(APPLE)
-if (USE_FONT)
-    set_target_properties(
-        freetype2 PROPERTIES 
-        IMPORTED_LOCATION /usr/X11/lib/libfreetype.dylib
-    )
-endif()
-elseif(UNIX)
-if (USE_FONT)
-    set_target_properties(
-        freetype2 PROPERTIES 
-        IMPORTED_LOCATION /usr/lib/x86_64-linux-gnu/libfreetype.so
-    )
-endif()
-elseif(MSVC OR WIN32)
-if (USE_FONT)
-    set_target_properties(
-        freetype2 PROPERTIES 
-        IMPORTED_IMPLIB   ${CMAKE_CURRENT_SOURCE_DIR}\\ext_lib\\freetype\\release_dll\\win64\\freetype.lib
-        IMPORTED_LOCATION ${CMAKE_CURRENT_SOURCE_DIR}\\ext_lib\\freetype\\release_dll\\win64\\freetype.dll
-    )
-endif()
-endif()
-
-if(APPLE)
-set (INC_DIRS
-    /Developer/SDKs/MacOSX10.6.sdk/usr/X11/include
-    /Developer/SDKs/MacOSX10.6.sdk/usr/X11/include/freetype2
-    /Developer/SDKs/MacOSX10.6.sdk/usr/X11/include/freetype2/freetype)
-elseif(UNIX)
-set (INC_DIRS
-    /usr/include/freetype2
-    /usr/include/freetype2/freetype)
-elseif(MSVC OR WIN32)
-set (INC_DIRS
-    ${CMAKE_CURRENT_SOURCE_DIR}\\ext_lib\\freetype\\include
-    ${CMAKE_CURRENT_SOURCE_DIR}\\ext_lib\\freetype\\include\\freetype)
-endif()
-
 target_include_directories(
-    ${IMCORELIB} 
-    
+    ${IMCORELIB}
+
     PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
-    ${INC_DIRS}
-    
+
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include/core
     ${CMAKE_CURRENT_SOURCE_DIR}/include/text
@@ -250,13 +194,8 @@ target_include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../third_party/stb
 )
 
-if (USE_FONT)
-    target_compile_definitions(${IMCORELIB} PUBLIC USE_FONT)
-    target_link_libraries(${IMCORELIB} freetype2)
-endif()
-
-if (USE_INTEGER_GEOMETRY)
-    target_compile_definitions(${IMCORELIB} PUBLIC USE_INTEGER_GEOMETRY)
+if (USE_PNG)
+    target_compile_definitions(${IMCORELIB} PUBLIC USE_PNG)
 endif()
 
 if (USE_NON_ATOMIC_PTR)

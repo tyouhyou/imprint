@@ -8,7 +8,7 @@ namespace zb::ui
      * Glyph provider backed by the build-time rasterized TTF subset
      * (batch S2; code-contract 2.4, plan 2). Stateless and shareable.
      * Widgets opt in through set_glyph_provider (the same selection
-     * point as USE_FONT's set_font); the default stays the 5x7 bitmap
+     * point as the runtime TTF provider); the default stays the 5x7 bitmap
      * rendering. Units absent from the table report uncovered, so the
      * fallback chain hands them to the bitmap provider. Coverage bytes
      * are drawn as the foreground color's alpha (zero allocation in
