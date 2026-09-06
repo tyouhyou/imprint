@@ -64,24 +64,9 @@ widget redesign, no animation system.
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
   - Watch `.ui` file changes on disk and reload in-place without restarting the previewer.
-- **I-2. Target screen simulation**:
-  - **I-2a. Shell presentation scaling** (first deliverable; decided
-    2026-09-06): desktop shells unlock the window and present the
-    fixed-size app buffer scaled to fit — aspect preserved, centered
-    (letterboxed). The buffer stays fixed-size and no re-layout ever
-    happens: presentation-side only, core untouched. Resampling is
-    nearest-neighbor on every platform (win `StretchDIBits` COLORONCOLOR,
-    mac `kCGInterpolationNone`, x11 manual resample loop in a shared
-    `imshell/shell/` seam) — uniformity is contractual because
-    cross-platform captures must stay pixel-identical (the win/mac/linux
-    GIF md5 story). Input maps back through the same integer floor
-    formula as the render forward map (`buf = win * buf_w / win_w`, no
-    floats), so hit-testing is the exact inverse of what is on screen.
-    NDS/FB shells stay 1:1; wasm/python hosts scale host-side. The
-    scaling algorithm is user-facing documented (README shell section).
-  - **I-2b. Device overlay**: bezel/chrome around the presented buffer
-    matching target screen constraints (e.g., dual NDS 256x192 screens,
-    framebuffer 320x240).
+- **I-2b. Device overlay**: bezel/chrome around the presented buffer
+  matching target screen constraints (e.g., dual NDS 256x192 screens,
+  framebuffer 320x240).
 
 ### Batch F — Event Loop Extension & Frame Automation (Long-term)
 
