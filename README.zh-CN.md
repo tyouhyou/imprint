@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-08-30）。
+> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-09-06）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
@@ -8,9 +8,9 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**一套 GUI 代码，到处运行——甚至包括任天堂 DS。**
+**一套 UI 只写一次。测试完全确定。到处运行。**
 
-Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，面向嵌入式与非传统目标。同一份 UI 源码树可以编译到 Windows、Linux、macOS、浏览器（WebAssembly）和任天堂 DS——在 PC 上开发预览，然后把**完全相同的代码**发布到设备上。
+Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，契约天生面向自动化：宿主驱动一切，因此**相同的输入序列永远得到相同的像素**——UI 逻辑可以在 CI 里、无显示器的环境下做像素级断言。同一份 UI 源码树可以编译到 Windows、Linux、macOS、浏览器（WebAssembly）和任天堂 DS——在 PC 上开发预览，然后把**完全相同的代码**发布到设备上。
 
 **一份 UI 源码树。一个像素缓冲。多个目标。**
 

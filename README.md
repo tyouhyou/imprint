@@ -6,12 +6,15 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**Write your GUI once. Run it anywhere — even on a Nintendo DS.**
+**Build your UI once. Test it deterministically. Run it anywhere.**
 
-Imprint UI is a tiny, dependency-free, software-rendered C++17 GUI framework for
-embedded and unusual targets. The same UI source tree compiles for Windows,
-Linux, macOS, the browser (WebAssembly) and the Nintendo DS — develop and
-preview on your PC, then ship the very same code to the device.
+Imprint UI is a tiny, dependency-free, software-rendered C++17 GUI framework
+with an automation-first contract: the host drives everything, so the same
+input sequence always produces the same pixels — UI logic you can assert on
+pixel by pixel, in CI, with no display attached. The same UI source tree
+compiles for Windows, Linux, macOS, the browser (WebAssembly) and the
+Nintendo DS — develop and preview on your PC, then ship the very same code
+to the device.
 
 **One UI source tree. One pixel buffer. Many targets.**
 

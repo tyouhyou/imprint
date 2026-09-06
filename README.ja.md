@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-08-30 時点）。
+> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-09-06 時点）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-blue)](README.ja.md)
 
@@ -8,9 +8,9 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**GUI は一度書くだけ。どこでも動く——ニンテンドーDS でも。**
+**UI は一度だけ書く。テストは完全に決定論的。どこでも動く。**
 
-Imprint UI は、組み込みと非典型的なターゲットのための、極小・依存ゼロ・ソフトウェアレンダリングの C++17 UI フレームワークです。同じ UI ソースツリーが Windows、Linux、macOS、ブラウザ（WebAssembly）、ニンテンドーDS 向けにコンパイルできます——PC で開発・プレビューし、**まったく同じコード**をデバイスへ。
+Imprint UI は、極小・依存ゼロ・ソフトウェアレンダリングの C++17 UI フレームワークで、ホストがすべてを駆動する契約を持つため、**同じ入力シーケンスは常に同じピクセルを生みます**——UI ロジックは、ディスプレイなしで CI の中でピクセル単位にアサートできます。同じ UI ソースツリーが Windows、Linux、macOS、ブラウザ（WebAssembly）、ニンテンドーDS 向けにコンパイルできます——PC で開発・プレビューし、**まったく同じコード**をデバイスへ。
 
 **1 つの UI ソースツリー。1 つのピクセルバッファ。複数のターゲット。**
 

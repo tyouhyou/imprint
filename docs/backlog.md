@@ -109,9 +109,11 @@ Conclusions recorded so they are not re-derived:
   (entertainment-class hardware), so the embedded claim stays partially
   earned until a real MCU-tier footprint exists.
 - **Cheapest moves when resumed** (packaging only, zero architecture
-  change): README first line carries the commercial value (the NDS hook
-  demoted to the second sentence); a landing page assembled from
-  existing assets (GIF, four-platform screenshot strip, NDS photos,
+  change): README first line — **done** (2026-09-06: the three-language
+  READMEs lead with the deterministic-testing contract, NDS demoted
+  into the target list; the live gh-pages WASM showcase rebuilt to the
+  V-2 dark showcase the same day). Remaining: a landing page assembled
+  from existing assets (GIF, four-platform screenshot strip, NDS photos,
   single-file WASM demo) with a "tell us about your device" intake;
   the deterministic-test capability packaged as an explicit feature
   with a CI recipe.
