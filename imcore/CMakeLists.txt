@@ -45,6 +45,7 @@ set(TTF_PIXEL_SIZE 16 CACHE STRING "Pixel size of the rasterized TTF subset (pla
 # CanvasWindow). OFF keeps the 5x7 bitmap default everywhere. Host builds
 # only — the TTF pipeline never runs on NDS.
 set(USE_FONT_SIZE OFF CACHE BOOL "Render widgets with the platform default font at TTF_PIXEL_SIZE instead of the 5x7 bitmap (hosts only).")
+set(USE_TTF_RUNTIME OFF CACHE BOOL "Runtime TTF rasterization through vendored stb_truetype (batch L-5): TtfFamily hands out one glyph provider per pixel size over a bounded shared cache. When OFF only the 5x7 bitmap and build-time subset paths exist.")
 
 # USE_FONT_SIZE with an empty TTF_FONT resolves the platform's system font
 # (hardcoded paths, the USE_FONT style); a missing file is a config error.
@@ -137,6 +138,16 @@ endif()
 if (NOT IMCORE_HAS_TTF_SUBSET)
     set(TTF_SRC)
 endif()
+# runtime TTF rasterization (batch L-5): vendored stb_truetype behind one
+# wrapper TU; with the option off none of it compiles (contract 2.4)
+if (USE_TTF_RUNTIME)
+    set(TTF_RUNTIME_SRC
+        src/text/stb_truetype_impl.cpp
+        src/text/runtime_ttf_provider.cpp
+    )
+else()
+    set(TTF_RUNTIME_SRC)
+endif()
 # vendored single-file codecs: one implementation TU, compiled only when a
 # codec option is on (png.cpp/jpeg.cpp, the Image API, use stb internally)
 if (USE_PNG OR USE_JPEG)
@@ -174,6 +185,7 @@ add_library(
     src/text/utf8.cpp
     ${FONT_SRC}
     ${TTF_SRC}
+    ${TTF_RUNTIME_SRC}
     ${STB_SRC}
     ${JPEG_SRC}
     ${PNG_SRC}
@@ -275,6 +287,12 @@ if (USE_FONT_SIZE)
     else()
         message(WARNING "USE_FONT_SIZE is ON but the TTF subset pipeline did not run; the 5x7 bitmap stays the default")
     endif()
+endif()
+
+if (USE_TTF_RUNTIME)
+    # PUBLIC so imui/CanvasWindow and the tests compile against the same
+    # macro the provider was built with (the USE_FONT_SIZE pattern)
+    target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_TTF_RUNTIME)
 endif()
 
 if (USE_PNG)

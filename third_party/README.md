@@ -10,7 +10,7 @@ vendored 第三方单头文件库。裁决背景见 `CONTEXT.md` 批次 D：vend
 |---|---|---|---|
 | `stb/stb_image.h` | v2.30 | PNG/JPEG 解码（`USE_PNG`/`USE_JPEG`） | `imcore/src/codec/stb_impl.cpp` |
 | `stb/stb_image_write.h` | v1.16 | PNG/JPEG 编码（写盘/截图） | 同上 |
-| `stb/stb_truetype.h` | v1.26 | 构建期 TTF→位图（批次 E 字体子集工具链，仅头文件，未接实现） | — |
+| `stb/stb_truetype.h` | v1.26 | 运行时 TTF 栅格化（L-5，`USE_TTF_RUNTIME`） | `imcore/src/text/stb_truetype_impl.cpp`；构建期子集工具 `tools/ttf_subset.cpp` 另有独立实现入口（host 工具，与框架库不共链） |
 
 ## 规则
 

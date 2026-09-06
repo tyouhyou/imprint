@@ -55,6 +55,9 @@ int test_x11_input();
 int test_ttf_subset();
 int test_font_size();
 #endif
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+int test_runtime_ttf();
+#endif
 
 int main()
 {
@@ -112,6 +115,9 @@ int main()
 #if defined(IMCORE_HAS_TTF_SUBSET)
     total += test_ttf_subset();
     total += test_font_size();
+#endif
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    total += test_runtime_ttf();
 #endif
 
     if (total)

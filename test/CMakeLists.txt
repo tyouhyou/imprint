@@ -89,6 +89,14 @@ if (TARGET ttf_subset)
     target_sources(test_imui PRIVATE test_ttf_subset.cpp test_font_size.cpp)
 endif()
 
+# L-5: the runtime TTF suite runs only when the runtime provider is
+# compiled in; the deterministic font is the in-repo Inter
+if (USE_TTF_RUNTIME)
+    target_sources(test_imui PRIVATE test_runtime_ttf.cpp)
+    target_compile_definitions(test_imui PRIVATE
+        IM_TEST_RUNTIME_TTF_FONT="${CMAKE_SOURCE_DIR}/assets/fonts/Inter-Regular.ttf")
+endif()
+
 # build-time packing smoke: ui_embed validates and embeds the example
 # document; test_ui_file parses the packed bytes back
 set(UI_EMBED_TEST_HEADER ${CMAKE_CURRENT_BINARY_DIR}/ui_embed_test.gen.hpp)
