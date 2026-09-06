@@ -194,7 +194,9 @@ int test_shell_presenter()
 
     // resample: the shared loop picks the same pixel the inverse map
     // returns to an input event at the same dest point (the exactness
-    // the hit-testing contract rests on)
+    // the hit-testing contract rests on). Compared as Color words: the
+    // resampler copies verbatim, and words are the bpp-agnostic form
+    // (channel accessors expand at 16bpp, contract 3)
     {
         const zb::shell::presentation p = zb::shell::presentation_fit(64, 48, 32, 24);
         std::vector<zb::ui::core::Color> src(32 * 24);
@@ -217,8 +219,8 @@ int test_shell_presenter()
             for (int dx = 0; dx < 64; ++dx)
             {
                 EXPECT(p.to_buffer(dx, dy, bx, by));
-                const zb::ui::core::Color &c = dst[static_cast<size_t>(dy) * 64 + dx];
-                EXPECT(c.r() == bx && c.g() == by);
+                EXPECT(dst[static_cast<size_t>(dy) * 64 + dx].pixel ==
+                       src[static_cast<size_t>(by) * 32 + bx].pixel);
             }
         }
     }
