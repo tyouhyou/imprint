@@ -92,6 +92,8 @@ namespace zb::ui
             size = s;
             size_explicit_w_ = true;
             size_explicit_h_ = true;
+            width_percent_ = 0;
+            height_percent_ = 0;
             mark_dirty();
             mark_layout_dirty();
         }
@@ -101,6 +103,8 @@ namespace zb::ui
             size = {w, h};
             size_explicit_w_ = true;
             size_explicit_h_ = true;
+            width_percent_ = 0;
+            height_percent_ = 0;
             mark_dirty();
             mark_layout_dirty();
         }
@@ -148,6 +152,34 @@ namespace zb::ui
             mark_dirty();
             mark_layout_dirty(false);
         }
+        /*
+         * Percentage size (batch L-4): declares the axis as a percentage
+         * of the FlexPanel parent's content box. The parent resolves it
+         * during its layout() and writes the result through the per-axis
+         * auto setters, so the axis never becomes explicit and every
+         * re-layout re-resolves it (resizing the parent resizes the
+         * child). The declaration replaces explicitness on the axis;
+         * set_size clears both declarations -- the last geometry setter
+         * on an axis wins. pct clamps into 1..100; 0 (or negative)
+         * clears the declaration. Outside a FlexPanel (Panel children,
+         * the tree root) the declaration stays unresolved: the axis
+         * keeps its current size (docs/code-contract.md 3).
+         */
+        void set_width_percent(const int pct)
+        {
+            width_percent_ = percent_clamp(pct);
+            mark_layout_dirty();
+        }
+        void set_height_percent(const int pct)
+        {
+            height_percent_ = percent_clamp(pct);
+            mark_layout_dirty();
+        }
+        [[nodiscard]] bool is_width_percent() const { return width_percent_ != 0; }
+        [[nodiscard]] bool is_height_percent() const { return height_percent_ != 0; }
+        // the declared percent (0 = the axis is not a percentage)
+        [[nodiscard]] int width_percent() const { return width_percent_; }
+        [[nodiscard]] int height_percent() const { return height_percent_; }
         [[nodiscard]] virtual bool is_size_explicit() const { return size_explicit_w_ || size_explicit_h_; }
         [[nodiscard]] bool is_width_explicit() const { return size_explicit_w_; }
         [[nodiscard]] bool is_height_explicit() const { return size_explicit_h_; }
@@ -523,7 +555,17 @@ namespace zb::ui
         bool focused = false;
         bool size_explicit_w_ = false;  // set_size marks the axes it sized
         bool size_explicit_h_ = false;
+        // percentage declarations per axis (batch L-4): 0 = not a
+        // percent, otherwise the declared percent (1..100) of the
+        // FlexPanel parent's content box
+        unsigned char width_percent_ = 0;
+        unsigned char height_percent_ = 0;
         bool layout_dirty_ = true;  // first paint lays out the tree
+
+        static unsigned char percent_clamp(const int pct)
+        {
+            return pct <= 0 ? 0 : (pct > 100 ? 100 : static_cast<unsigned char>(pct));
+        }
 
         // damage reporting: one unioned rect per widget, in absolute
         // coordinates; empty (dirty_ false) means "nothing reported".

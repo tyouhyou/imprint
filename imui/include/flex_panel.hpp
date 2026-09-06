@@ -17,6 +17,12 @@ namespace zb::ui
      *
      * Sizing: a child that was never explicitly sized (set_size) is sized
      * by its natural measure() along both axes; an explicit set_size wins.
+     * A child may instead declare a percentage size per axis
+     * (set_width_percent / set_height_percent): this container resolves
+     * it at layout() against its own content box -- fixed siblings claim
+     * their space first, percent siblings that overflow the remainder
+     * are scaled into it proportionally, and the declaration never
+     * becomes an explicit size (docs/code-contract.md 3).
      * Cross-axis sizes are not stretched. Wrap breaks a line when the
      * fixed demands exceed the available main-axis space. Flex-assigned
      * sizes never mark a child as explicitly sized, so re-layout keeps

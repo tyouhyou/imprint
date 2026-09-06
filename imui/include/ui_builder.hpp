@@ -53,6 +53,18 @@ namespace zb::ui
         {
             return prop("width", w).prop("height", h);
         }
+        // percentage geometry (batch L-4): the axis becomes a percentage
+        // of the FlexPanel parent's content box, resolved at layout
+        // (docs/code-contract.md 3); stored as the same "N%" string form
+        // the .ui parser produces
+        ui_node &width_pct(const long long pct)
+        {
+            return prop("width", std::to_string(pct) + "%");
+        }
+        ui_node &height_pct(const long long pct)
+        {
+            return prop("height", std::to_string(pct) + "%");
+        }
         ui_node &pos(const long long x, const long long y)
         {
             return prop("pos_x", x).prop("pos_y", y);

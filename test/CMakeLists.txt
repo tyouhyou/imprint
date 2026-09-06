@@ -26,6 +26,7 @@ add_executable(
     test_event.cpp
     test_text.cpp
     test_flex.cpp
+    test_percent.cpp
     test_ptr.cpp
     test_codec.cpp
     test_gif.cpp

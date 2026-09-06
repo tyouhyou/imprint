@@ -171,6 +171,33 @@ namespace zb::ui
             return static_cast<Panel *>(&w);
         }
 
+        // the percent form of a geometry prop: "N%" -> N clamped into
+        // 1..100 (0 = no percent declaration); any other value -> 0
+        // (tolerated like every mistyped prop)
+        int as_percent(const prop_value &v)
+        {
+            const auto *s = std::get_if<std::string>(&v);
+            if (s == nullptr || s->size() < 2 || s->back() != '%')
+            {
+                return 0;
+            }
+            long long n = 0;
+            for (std::size_t i = 0; i + 1 < s->size(); ++i)
+            {
+                const char c = (*s)[i];
+                if (c < '0' || c > '9')
+                {
+                    return 0;
+                }
+                n = n * 10 + (c - '0');
+                if (n > 100)
+                {
+                    return 100;  // an overlong run still clamps to 100
+                }
+            }
+            return static_cast<int>(n);
+        }
+
         // --- common properties (every widget) ---------------------------
 
         void apply_common(Widget &w, const ui_node &n)
@@ -180,11 +207,24 @@ namespace zb::ui
                 w.set_id(n.id);
             }
             // presence-gated: a declared 0 is an explicit value, not an
-            // omission (batch K / N8)
+            // omission (batch K / N8). Percent values ("N%", batch L-4)
+            // apply after the pixel form: set_size marks both axes
+            // explicit, the declaration then clears its axis's
+            // explicitness
             if (has_prop(n, "width") || has_prop(n, "height"))
             {
                 w.set_size(static_cast<int>(prop_of(n, "width", 0LL)),
                            static_cast<int>(prop_of(n, "height", 0LL)));
+                const int w_pct = as_percent(prop_of(n, "width", std::string{}));
+                const int h_pct = as_percent(prop_of(n, "height", std::string{}));
+                if (w_pct > 0)
+                {
+                    w.set_width_percent(w_pct);
+                }
+                if (h_pct > 0)
+                {
+                    w.set_height_percent(h_pct);
+                }
             }
             if (has_prop(n, "pos_x") || has_prop(n, "pos_y"))
             {

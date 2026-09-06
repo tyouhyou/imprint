@@ -87,6 +87,25 @@ namespace zb::ui
             return true;
         }
 
+        // bare percent token (batch L-4): one or more digits then '%'.
+        // Stored as its string form, the same value the quoted "N%"
+        // produces
+        bool is_percent_token(const std::string &t)
+        {
+            if (t.size() < 2 || t.back() != '%')
+            {
+                return false;
+            }
+            for (std::size_t i = 0; i + 1 < t.size(); ++i)
+            {
+                if (!(t[i] >= '0' && t[i] <= '9'))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         bool is_container_tag(const std::string &t)
         {
             return t == "panel" || t == "column" || t == "row";
@@ -324,6 +343,11 @@ namespace zb::ui
                     else if (parse_int(token, int_value))
                     {
                         value = int_value;
+                        value_ok = true;
+                    }
+                    else if (is_percent_token(token))
+                    {
+                        value = token;
                         value_ok = true;
                     }
                     else

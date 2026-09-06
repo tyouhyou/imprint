@@ -18,6 +18,7 @@ int test_graphics();
 int test_event();
 int test_text();
 int test_flex();
+int test_percent();
 int test_ptr();
 int test_codec();
 int test_gif();
@@ -76,6 +77,7 @@ int main()
     total += test_event();
     total += test_text();
     total += test_flex();
+    total += test_percent();
     total += test_ptr();
     total += test_codec();
     total += test_gif();
