@@ -28,7 +28,17 @@ if (NOT MSVC AND NOT NDS_PLATFORM)
     set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 endif()
 
+# logging verbosity (2026-09-06 ruling): debug-level logs (LD) print only
+# when the build defines DEBUG. The Debug configuration gets the definition
+# here; any other build that needs the traces (e.g. the NDS touch
+# calibration) turns LOGGING_DEBUG on -- the safe way to add the definition
+# beside a toolchain-provided CMAKE_CXX_FLAGS (a raw -DCMAKE_CXX_FLAGS=...
+# would drop the NDS toolchain's INIT flags). See logging.hpp / ARCHITECTURE 4.9.
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
+set(LOGGING_DEBUG OFF CACHE BOOL "Keep the debug-level logs (LD) in this build by defining DEBUG (the Debug configuration always has them).")
+if (LOGGING_DEBUG)
+    add_compile_definitions(DEBUG)
+endif()
 
 # MSVC: source and execution charset UTF-8. Hosts with a non-UTF-8
 # code page (e.g. 932) otherwise mangle the non-ASCII literals in

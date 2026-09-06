@@ -629,8 +629,10 @@ dispatcher's raw pointers against dangling/UAF:
   warm repaint after scrolling at zero allocations; every change to
   hot-path code must pass it.
 - Exemptions and boundaries:
-  - Log macros construct a stringstream at the default level (debug)
-    (timestamp + message body): hot-path LD allocations are a **known,
+  - Log macros construct a stringstream at their default level (debug in
+    a DEBUG-defining build — the battery runs Debug; info elsewhere,
+    2026-09-06 ruling: no DEBUG definition, no debug logs): hot-path LD
+    allocations are a **known,
     exempted item** — after `Logging::set_min_level` is raised to info or
     above, suppressed levels construct and allocate nothing; the gate
     test pins log-free paths at the default level.

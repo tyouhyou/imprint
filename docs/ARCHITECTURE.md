@@ -334,6 +334,7 @@ satisfies. Changing any of these is an architecture change.
 | `TTF_FONT` (+ `TTF_PIXEL_SIZE`) | "" (off) | "" (off) | plan 2: rasterize a TTF into the glyph subset at the given pixel size |
 | `USE_FONT_SIZE`           | OFF     | —             | plan 2: platform default system font at `TTF_PIXEL_SIZE` as the default glyph provider (hosts only; needs Python) |
 | `USE_TTF_RUNTIME`         | OFF     | OFF           | L-5: runtime TTF rasterization via vendored stb_truetype — `TtfFamily`, per-size providers, bounded glyph cache |
+| `LOGGING_DEBUG`           | OFF     | OFF           | defines `DEBUG` so the debug-level logs (LD) print; without it (or a Debug configuration) no debug logs are emitted in any build |
 | `STORY`                   | tictactoe | —          | selects which demo app the shell links    |
 
 `USE_INTEGER_GEOMETRY` and `USE_NON_ATOMIC_PTR` are examples of the

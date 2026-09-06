@@ -125,10 +125,15 @@ namespace zb
          * Runtime verbosity: messages below the minimum level are dropped
          * without constructing anything (a hot path that logs LD becomes
          * allocation-free once the level is at info or above). The
-         * default is debug -- everything logs -- matching the historical
-         * behavior; the NDS debug workflow depends on it. The flag is a
-         * plain read (the UI contract is single-threaded; see the mutex
-         * note below).
+         * default is a compile-time decision (2026-09-06 ruling): a
+         * build shows debug-level logs only when it defines DEBUG -- the
+         * Debug configuration gets the definition from the root
+         * CMakeLists, and any other build that needs the traces (e.g.
+         * the NDS touch calibration) opts in with -DLOGGING_DEBUG=ON.
+         * Without DEBUG the default minimum level is info, regardless of
+         * build type. set_min_level still overrides at runtime. The flag
+         * is a plain read (the UI contract is single-threaded; see the
+         * mutex note below).
          */
         static void set_min_level(const Logging_Level level) { s_min_level = level; }
         static bool suppressed(const Logging_Level level)
@@ -191,6 +196,13 @@ namespace zb
         // is a single-core no-op, which is all that platform needs.
         inline static std::mutex s_log_mutex;
         inline static log_handler_t s_log_handler;
-        inline static Logging_Level s_min_level = Logging_Level::debug;
+        // the DEBUG gate (see set_min_level above): no DEBUG definition,
+        // no debug-level logs -- in every build, NDS included
+        inline static Logging_Level s_min_level =
+#if defined(DEBUG)
+            Logging_Level::debug;
+#else
+            Logging_Level::info;
+#endif
     };
 }
