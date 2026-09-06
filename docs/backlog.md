@@ -93,6 +93,45 @@ widget redesign, no animation system.
     beside `imapp_canvas` when a second user appears (§2 tool-placement
     rule).
 
+### Batch G — Positioning & Go-to-Market (Deferred; recorded 2026-09-06)
+
+Input: a third-party commercial review plus the maintainer assessment
+of 2026-09-06 (discussion in the session log; deliberately deferred —
+the project stays in technical validation until promotion resumes).
+Conclusions recorded so they are not re-derived:
+
+- **Reposition when promotion resumes**: lead with the
+  already-delivered differentiator — a deterministic, pixel-testable
+  UI runtime (input → deterministic frames → pixel assertions,
+  allocation gates, cross-platform identical output; all locked by the
+  test battery) — not "another cross-platform C++ GUI framework". Do
+  not lead with "embedded": the only embedded target so far is the NDS
+  (entertainment-class hardware), so the embedded claim stays partially
+  earned until a real MCU-tier footprint exists.
+- **Cheapest moves when resumed** (packaging only, zero architecture
+  change): README first line carries the commercial value (the NDS hook
+  demoted to the second sentence); a landing page assembled from
+  existing assets (GIF, four-platform screenshot strip, NDS photos,
+  single-file WASM demo) with a "tell us about your device" intake;
+  the deterministic-test capability packaged as an explicit feature
+  with a CI recipe.
+- **First revenue path**: per-target port engagements (display /
+  input / font glue for a customer's board) — small, immediate,
+  single-customer. SDK/enterprise licensing and any designer product
+  are later-stage; a designer would reverse the "no drag-drop
+  designer" ruling (an architecture-level decision, not a feature).
+- **Rejected directions** (with reasons): Figma import (free-form
+  canvas → constraint-layout mapping is unmaintainable; the viable
+  variant is LLM-generated `.ui` files, which the grammar already
+  supports); AI-agent-friendly runtime as a commercial wedge (circular
+  — agents drive pre-existing GUIs; deterministic rendering remains a
+  free option for agent-eval sandboxes); hardware-SDK-vendor sales at
+  the current validation stage (B2B2B needs support infrastructure and
+  bus-factor credibility that do not exist yet).
+- **Standing constraint**: single-maintainer bus factor outweighs star
+  count for embedded adopters; the first external committer matters
+  more than stars.
+
 ## 2. Architecture Backlog
 
 ### A-4. Smaller Items
