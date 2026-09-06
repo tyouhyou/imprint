@@ -68,9 +68,9 @@ knowledge and lives with the quick-start material.
 
 | Target | Implementation | Fixed characteristics |
 |---|---|---|
-| Windows | `imshell/win` (Win32) | 32bpp BGRA presentation; a `COLOR_DEPTH=16` build compiles and passes tests but has no presenting shell |
-| macOS | `imshell/mac` (AppKit) | 32bpp ARGB presentation through a zero-copy CGImage; behavior verified on the maintainer's macOS 13 machine, CI compiles the shell and runs the host battery |
-| Linux | `imshell/fb`, `imshell/x11` | X11 is the input-capable backend; the framebuffer backend presents only (no input source) |
+| Windows | `imshell/win` (Win32) | 32bpp BGRA presentation, scaled-to-fit (I-2a); a `COLOR_DEPTH=16` build compiles and passes tests but has no presenting shell |
+| macOS | `imshell/mac` (AppKit) | 32bpp ARGB presentation through a zero-copy CGImage, scaled-to-fit (I-2a); behavior verified on the maintainer's macOS 13 machine, CI compiles the shell and runs the host battery |
+| Linux | `imshell/fb`, `imshell/x11` | X11 is the input-capable backend and presents scaled-to-fit (I-2a); the framebuffer backend presents only (no input source) at 1:1 |
 | Nintendo DS | `imshell/nds` + `cmake/nds.toolchain.cmake` | ARM9, 4 MB RAM, no FPU/RTTI/libatomic; 16bpp abgr1555; ROM packaged by ndstool (POST_BUILD) |
 | WebAssembly | `demo/wasm` (Emscripten) | JS host wraps the pixel buffer as canvas; node smoke test in-tree |
 | Host languages | `binding` (`zbapi` shared library) | Python/ctypes demo and a C smoke test drive the C-ABI |
@@ -131,6 +131,18 @@ satisfies. Changing any of these is an architecture change.
   the union of painted callbacks in `dirty_coalescer` until the present;
   presenters whose platform unions for them (mac `setNeedsDisplayInRect`,
   x11 immediate) present straight away.
+- **Presentation scaling (I-2a):** the buffer never resizes and layout
+  never re-runs for a window resize — desktop shells unlock the window
+  and present the fixed-size buffer fitted into the client area, aspect
+  preserved and centered (letterbox), through the shared integer seam in
+  `shell/presentation.hpp` (`presentation_fit` / `presentation::to_buffer`
+  / `presentation_region`). Resampling is nearest-neighbor on every
+  platform (win `StretchDIBits` + `COLORONCOLOR`, mac
+  `kCGInterpolationNone`, x11 the shared manual resample loop over a
+  dest-sized scratch); at integer scale factors the platforms are
+  pixel-identical. NDS/FB present 1:1; wasm/python hosts scale
+  host-side. The scaling is presentation-side only: the core never
+  learns the window size.
 - `CanvasWindow` (the default window): owns a `Graphics` framebuffer, a root
   `Panel`, and an `InputDispatcher`. Paint order is
   **auto-layout → damage walk → clear damaged region → draw tree → `painted`**.
@@ -147,6 +159,12 @@ satisfies. Changing any of these is an architecture change.
 - `input_event` is a **POD**: `{type, x, y, button, delta, key, touch_id,
   ch}`. This is the C-ABI pass-through shape and must never grow STL
   containers, virtuals, or `std::any`.
+- `ev.x/y` are **buffer pixels** (the dispatcher picks targets by
+  coordinates). Desktop shells map window-client points through
+  `presentation::to_buffer` (I-2a); a point on the letterbox is not app
+  input and is swallowed before it reaches the app — so the dispatcher's
+  press/slop/capture geometry below stays in buffer pixels at any
+  window scale.
 - The data model is multi-touch (`touch_id` identifies a pointer, mouse = 0),
   but the dispatcher tracks **one active press**; move/up from a different
   `touch_id` never interferes.
@@ -365,7 +383,9 @@ contract, not an add-on:
 
 - The macOS AppKit shell (A-20) is verified behaviorally only on the
   maintainer's macOS 13 machine so far; CI compiles it and runs the host
-  test battery, and the shell presents at 1x scale (no Retina mapping yet).
+  test battery. The window presents scaled-to-fit (I-2a) in points, but
+  there is no Retina mapping yet (one buffer pixel = one point, so a
+  HiDPI backing scale shows a smaller physical image).
 - 16bpp builds are embedded-only: the desktop shells and DIB/XImage present
   assume 32bpp; a desktop `COLOR_DEPTH=16` build is compile/test-only.
 - The Linux framebuffer shell has **no input source** (no keyboard/pointer);

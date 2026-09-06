@@ -130,6 +130,14 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 测试：`test/test_imui`——纯断言，无测试框架；桌面构建自动运行，NDS 跳过。
 
+## 窗口与呈现
+
+应用拥有**固定尺寸的像素缓冲**（`create_window(w, h)`），窗口缩放从不触发重新布局。桌面壳
+（win32 / X11 / macOS）以缓冲尺寸打开窗口并允许自由缩放：缓冲按等比缩放居中呈现（黑色
+letterbox 留边），最近邻重采样——同一缓冲在同一窗口尺寸下于所有桌面平台渲染一致。指针输入
+经与正向拉伸同一整数公式（`buf = (win - dest) * buf / dest`）逆映射，任意缩放命中测试都精确；
+letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/Python 宿主在宿主侧缩放。
+
 ## 文档
 
 **建议阅读顺序**（新维护者的第一遍）：

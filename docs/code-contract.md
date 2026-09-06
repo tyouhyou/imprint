@@ -420,6 +420,30 @@ keeps only API-level supplements.
   `DefWindowProc`). They are pure — no window, server or display — and
   their behavior is locked by the dummy-driven suites
   (`test_shell_presenter`, `test_win_input`, `test_x11_input`).
+- **Presentation scaling (I-2a, `shell/presentation.hpp`)**: the app
+  buffer stays fixed-size forever — desktop shells are what resize. The
+  window opens at buffer size (1:1, so captures are unchanged) and the
+  user may resize it; the shell presents the buffer fitted into the
+  client area, aspect preserved and centered (black letterbox), through
+  the shared integer seam. `presentation_fit(win_w, win_h, buf_w,
+  buf_h)` computes the presented rect (cross-multiplied orientation
+  test, floor division, centered; degenerate sizes give a zero rect).
+  `presentation::to_buffer(wx, wy, ...)` is its exact inverse — the same
+  integer floor formula as the forward stretch
+  (`buf = (win - dest) * buf / dest`, no floats) — and returns false
+  for a point on the letterbox, which every desktop shell swallows
+  (a pointer event outside the presented rect is not app input).
+  `presentation_region(...)` maps a buffer-space dirty region to the
+  conservative dest-space rect (ceiled edges), so the
+  `region_to_present` protocol composes with the stretch. Resampling is
+  nearest-neighbor on every platform (win `StretchDIBits` +
+  `COLORONCOLOR`, mac `kCGInterpolationNone`, x11 the shared manual
+  resample loop over a dest-sized scratch): at integer scale factors
+  the platforms are pixel-identical, which is what keeps native
+  captures reproducible — the GIF md5 capture path is shell-less and
+  unaffected. NDS/FB shells stay 1:1; wasm/python hosts scale
+  host-side. The scaling algorithm is user-facing documented (README
+  "Window & presentation"); the seam is locked by `test_shell_presenter`.
 - **Module consumption paths (A-22)**: `imapp` (`IApp`/`IWindow`/`IGui` +
   `make_app`) has no widget dependency — a graphics-only app links
   `imapp` plus a shell backend and implements `IApp` directly on

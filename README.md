@@ -134,6 +134,19 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 
 Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop builds, skipped on NDS.
 
+## Window & presentation
+
+The app owns a **fixed-size pixel buffer** (`create_window(w, h)`) and
+never re-lays out for a window resize. Desktop shells (win32 / X11 /
+macOS) open the window at buffer size and let you resize it freely: the
+buffer is presented scaled to fit, aspect preserved, centered on a black
+letterbox, with nearest-neighbor resampling — the same buffer at the
+same window size renders identically on every desktop platform. Pointer
+input maps back through the same integer formula the stretch uses
+(`buf = (win - dest) * buf / dest`), so hit-testing stays exact at any
+scale; clicks on the letterbox are ignored. The NDS and framebuffer
+shells present 1:1; WASM/Python hosts scale host-side.
+
 ## Documentation
 
 **Suggested reading order** (first pass for a new maintainer):
