@@ -89,10 +89,14 @@ namespace zb::ui
         case zb::input::input_type::touch_down:
         {
             const auto pos = get_absolute_position();
-            mark_dirty();
-            value = value_from_x(ev.x - pos.x);
-            changed(value);
-            return true;
+            const int v = value_from_x(ev.x - pos.x);
+            if (v != value)
+            {
+                mark_dirty();
+                value = v;
+                changed(v);
+            }
+            return true;  // the press is claimed either way
         }
         case zb::input::input_type::mouse_move:
         case zb::input::input_type::touch_move:
