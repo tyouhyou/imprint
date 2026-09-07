@@ -100,6 +100,25 @@ extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int ch
         ev.key = key;
         ev.ch = ch;
         ev.touch_id = touch_id;
+        // the type encodes the button (the mouse_* family is left/right
+        // by name); without this the C-ABI clicks always reported
+        // button == none. mouse_move carries no button, exactly like
+        // the native shells (win/x11).
+        switch (ev.type)
+        {
+            case zb::input::input_type::mouse_left_down:
+            case zb::input::input_type::mouse_left_up:
+            case zb::input::input_type::mouse_left_click:
+                ev.button = zb::input::mouse_button_t::left;
+                break;
+            case zb::input::input_type::mouse_right_down:
+            case zb::input::input_type::mouse_right_up:
+            case zb::input::input_type::mouse_right_click:
+                ev.button = zb::input::mouse_button_t::right;
+                break;
+            default:
+                break;
+        }
         // the documented C-ABI contract carries the wheel delta in `key`
         // (zbapi.h); the widgets read ev.delta -- without this mapping
         // every wheel tick scrolled the same direction

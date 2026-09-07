@@ -98,6 +98,10 @@ void zb_app_destroy(zb_app_t *app);
 
 /* feeds an input event; fields without meaning for the type are ignored:
  *   - touch_* / mouse_* (click, move): x, y
+ *   - mouse_*:                         the button follows the type family
+ *                                      (ZB_INPUT_MOUSE_LEFT_* -> left,
+ *                                      ZB_INPUT_MOUSE_RIGHT_* -> right,
+ *                                      move carries no button)
  *   - touch_*:                         touch_id identifies the finger
  *                                      (0 for single-touch shells / mouse)
  *   - mouse_wheel:                     key holds the wheel delta
