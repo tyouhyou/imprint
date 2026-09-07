@@ -77,6 +77,13 @@ namespace zb::app::showcase
             for (int i = 0; i < kPoints - 1; ++i)
             {
                 const int w = xs[i + 1] - xs[i];
+                if (w <= 0)
+                {
+                    // a chart narrower than one column pitch makes
+                    // adjacent samples share a column; skip (was a
+                    // divide-by-zero in the interpolation below)
+                    continue;
+                }
                 for (int x = xs[i]; x < xs[i + 1]; ++x)
                 {
                     const int y = ys[i] + (ys[i + 1] - ys[i]) * (x - xs[i]) / w;
