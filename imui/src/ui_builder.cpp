@@ -189,11 +189,15 @@ namespace zb::ui
                 {
                     return 0;
                 }
-                n = n * 10 + (c - '0');
-                if (n > 100)
+                const int d = c - '0';
+                // the same pre-multiply guard as ui_file.cpp parse_int:
+                // without it an overlong digit run (n already past
+                // (100-d)/10) overflows n*10+d before the clamp below
+                if (n > (100 - d) / 10)
                 {
                     return 100;  // an overlong run still clamps to 100
                 }
+                n = n * 10 + d;
             }
             return static_cast<int>(n);
         }
