@@ -282,8 +282,12 @@ namespace zb::ui
                         Widget &child = *items[i].child;
                         if (main_percent(child, direction) > 0)
                         {
+                            // shares floor at 0 like the overflow branch:
+                            // a container smaller than its padding gives a
+                            // negative content box and a raw percent would
+                            // size the child negative
                             set_main_size(child, direction,
-                                          main_desired(child, direction, avail_main));
+                                          std::max(0, main_desired(child, direction, avail_main)));
                         }
                     }
                 }
