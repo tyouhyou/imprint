@@ -501,14 +501,21 @@ void Graphics::draw_line(int x1, int y1, int x2, int y2, const Color &colr)
         return;
     }
 
-    int nJudgeX = -nIy;
-    int nJudgeY = -nIx;
+    // the judge accumulators add 2*nIx/2*nIy every step and only ever
+    // subtract the cross term when their own coordinate's branch fires;
+    // on a horizontal/vertical line the cross term is 0, so the active
+    // accumulator grows to ~2*L*L -- wide enough to overflow `int` for a
+    // segment longer than ~26844 px (an unbounded surface fill). The
+    // pixel coordinates stay `int` (clipped by the surface); only the
+    // accumulation is widened.
+    int64_t nJudgeX = -nIy;
+    int64_t nJudgeY = -nIx;
     int x = x1;
     int y = y1;
 
     nInc--;
-    int nTwoIx = 2 * nIx;
-    int nTwoIy = 2 * nIy;
+    int64_t nTwoIx = 2 * nIx;
+    int64_t nTwoIy = 2 * nIy;
 
     for (int i = 0; i < nInc; i++)
     {
