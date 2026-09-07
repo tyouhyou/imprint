@@ -69,6 +69,12 @@ namespace zb::ui
      * TtfFamily::provider_for -- the stb state and the cache live in the
      * shared family state, so the provider itself stays stateless apart
      * from its size bookkeeping.
+     *
+     * The holder must not outlive its family: the state pointer is
+     * non-owning (broken ownership -- if it kept a refcount the state's
+     * per-size memo would never be freed, a reference cycle). In every
+     * real use the family anchor outlives the widgets that hold a
+     * provider (a static font / app-scoped family).
      */
     class TtfRuntimeProvider final : public GlyphProvider
     {
@@ -81,9 +87,9 @@ namespace zb::ui
 
     private:
         friend class TtfFamily;
-        TtfRuntimeProvider(zb::SharedPtr<TtfFamilyState> state, int px);
+        TtfRuntimeProvider(TtfFamilyState *state, int px);
 
-        zb::SharedPtr<TtfFamilyState> state_;
+        TtfFamilyState *state_;
         int px_ = 0;
         float scale_ = 0.0f;
         text_metrics line_;

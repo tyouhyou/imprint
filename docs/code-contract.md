@@ -230,6 +230,13 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   `ui_embed`/`asset_gen` precedent and is condition-triggered like V-4
   until a real embedded use case appears). A font stb_truetype cannot
   parse throws `zb::ui::error` at construction.
+- **Ownership (the family is the anchor)**: a provider is *not
+  self-sustaining* — it borrows the shared family state (a refcounted
+  provider would close a reference cycle with the family's per-size
+  memo, leaking both). A provider handed out from a family must not
+  outlive that family; every real use keeps the family app-scoped (a
+  static font / a value held for the app's lifetime) while widgets hold
+  providers for their subtree.
 - **Bounded glyph cache (§8)**: entries keyed `(pixel size, code unit)`
   rasterize lazily on first draw; the cache counts bytes and drops
   everything when over budget (the ListBox row-cache rule) — rendered

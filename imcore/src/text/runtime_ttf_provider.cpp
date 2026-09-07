@@ -50,7 +50,9 @@ namespace zb::ui
         size_t cache_bytes = 0;
         long long rasterizations = 0;
 
-        // memoized per-size providers (TtfFamily::provider_for)
+        // memoized per-size providers (TtfFamily::provider_for); each
+        // provider borrows *this (non-owning), so this vector is the
+        // only owner -- no shared_ptr cycle
         std::vector<std::pair<int, zb::SharedPtr<GlyphProvider>>> per_size;
     };
 
@@ -223,7 +225,7 @@ namespace zb::ui
                 return provider;
             }
         }
-        zb::SharedPtr<TtfRuntimeProvider> p(new TtfRuntimeProvider(state_, px));
+        zb::SharedPtr<TtfRuntimeProvider> p(new TtfRuntimeProvider(state_.get(), px));
         state_->per_size.emplace_back(px, p);
         return p;
     }
@@ -238,8 +240,8 @@ namespace zb::ui
         return state_ != nullptr ? state_->cache_bytes : 0;
     }
 
-    TtfRuntimeProvider::TtfRuntimeProvider(zb::SharedPtr<TtfFamilyState> state, const int px)
-        : state_(std::move(state)), px_(px)
+TtfRuntimeProvider::TtfRuntimeProvider(TtfFamilyState *state, const int px)
+        : state_(state), px_(px)
     {
         scale_ = stbtt_ScaleForPixelHeight(&state_->info, static_cast<float>(px_));
         int ascent = 0;
