@@ -198,20 +198,19 @@ int FB::init()
 
 int FB::dispose()
 {
+    // munmap failure is not recoverable here (the mapping is already
+    // gone or the buffer must be dropped regardless), but the fd must
+    // still be closed; members are reset so a second dispose() (or a
+    // re-init) cannot double-unmap / double-close a reused fd
     if (buf != nullptr)
     {
-        if (0 != munmap(buf, screen_mem_len))
-        {
-            return 1;
-        }
-        // if (ioctl(ffb, FBIOPUT_VSCREENINFO, &bk_vinfo))
-        // {
-        //     return 2;
-        // }
+        munmap(buf, screen_mem_len);
+        buf = nullptr;
     }
     if (ffb > 0)
     {
         close(ffb);
+        ffb = -1;
     }
     return 0;
 }
