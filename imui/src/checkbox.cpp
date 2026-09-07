@@ -92,7 +92,7 @@ namespace zb::ui
         const core::Color box_edge = is_focused() ? check
                                                   : box_color.value_or(theme().border);
         area.draw_rect(0, 0, box_size, box_size, box_edge);
-        if (pressed_)
+        if (pressed_ && box_size > 2)
         {
             area.fill_rect(1, 1, box_size - 2, box_size - 2, check);
         }
