@@ -57,6 +57,10 @@ namespace zb::app::showcase
             }
             return m + (t - m) * (src - 2 * m) / (total - 2 * m);
         };
+        // image_t::row_stride == 0 means "use width" (image_view.hpp);
+        // a literal zero stride here would fetch every row from the first
+        // one and run past its end on tall assets
+        const int stride = img.row_stride > 0 ? img.row_stride : img.width;
         for (int dy = 0; dy < h; ++dy)
         {
             const int sy = axis(dy, h, img.height);
@@ -64,7 +68,7 @@ namespace zb::app::showcase
             {
                 const int sx = axis(dx, w, img.width);
                 g.draw_pixel(x + dx, y + dy,
-                             img.pixels[static_cast<std::size_t>(sy) * img.row_stride + sx]);
+                             img.pixels[static_cast<std::size_t>(sy) * stride + sx]);
             }
         }
     }
