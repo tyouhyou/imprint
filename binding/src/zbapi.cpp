@@ -12,8 +12,10 @@ struct zb_app
     zb::SharedPtr<zb::app::IApp> app;
     zb_painted_cb painted_fn = nullptr;
     void *painted_userdata = nullptr;
+    bool painted_hooked = false;
     zb_closed_cb closed_fn = nullptr;
     void *closed_userdata = nullptr;
+    bool closed_hooked = false;
 };
 
 /*
@@ -186,14 +188,22 @@ extern "C" void zb_set_painted_callback(zb_app_t *self, zb_painted_cb cb, void *
     {
         self->painted_fn = cb;
         self->painted_userdata = userdata;
-        self->app->on_painted(
-            [self](const void *)
-            {
-                if (self->painted_fn != nullptr)
+        if (!self->painted_hooked)
+        {
+            // on_painted appends a handler; the closure must be
+            // registered once for the app's lifetime, otherwise a host
+            // calling zb_set_painted_callback twice fires the callback
+            // twice per frame (one closure per call)
+            self->painted_hooked = true;
+            self->app->on_painted(
+                [self](const void *)
                 {
-                    self->painted_fn(self->painted_userdata);
-                }
-            });
+                    if (self->painted_fn != nullptr)
+                    {
+                        self->painted_fn(self->painted_userdata);
+                    }
+                });
+        }
     }
     catch (...)
     {
@@ -211,14 +221,18 @@ extern "C" void zb_set_closed_callback(zb_app_t *self, zb_closed_cb cb, void *us
     {
         self->closed_fn = cb;
         self->closed_userdata = userdata;
-        self->app->on_closed(
-            [self]()
-            {
-                if (self->closed_fn != nullptr)
+        if (!self->closed_hooked)
+        {
+            self->closed_hooked = true;
+            self->app->on_closed(
+                [self]()
                 {
-                    self->closed_fn(self->closed_userdata);
-                }
-            });
+                    if (self->closed_fn != nullptr)
+                    {
+                        self->closed_fn(self->closed_userdata);
+                    }
+                });
+        }
     }
     catch (...)
     {
