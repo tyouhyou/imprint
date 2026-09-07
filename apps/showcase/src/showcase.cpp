@@ -262,8 +262,13 @@ namespace zb::app::showcase
         if (mounted_ != nullptr)
         {
             // park the outgoing page back into the array (the tree owns
-            // it while mounted, so pages_[current_] was empty)
-            if (auto parked = root.remove_child(mounted_))
+            // it while mounted, so pages_[current_] was empty). The
+            // tree-mutation protocol (batch J3): remove_from evicts the
+            // subtree from the input dispatcher first -- the gallery
+            // button being pressed lives on the outgoing page, and a
+            // raw Panel::remove_child would leave the dispatcher's
+            // pressed_target/focus pointing into the parked subtree
+            if (auto parked = window_->remove_from(root, mounted_))
             {
                 pages_[current_].reset(
                     static_cast<zb::ui::FlexPanel *>(parked.release()));
