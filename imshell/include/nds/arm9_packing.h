@@ -17,6 +17,6 @@ void initFrameBuffer(void);
 /* set the sub LCD to console mode */
 void initSubVideoConsole(void);
 
-void printlog(std::string str, ...);
+void printlog(const char *message);
 
 #endif // ARM9_PACKING_H

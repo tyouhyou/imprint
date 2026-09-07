@@ -65,11 +65,11 @@ void initSubVideoConsole(void)
 								  // printf("\twww.devkitpro.org");
 }
 
-void printlog(std::string str, ...)
+void printlog(const char *message)
 {
 	// the message itself may contain '%' (e.g. coordinates), so it must
-	// not be used as the printf format; extra variadic args are ignored
-	std::printf("%s\n", str.c_str());
+	// not be used as the printf format
+	std::printf("%s\n", message);
 }
 
 /*

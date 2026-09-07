@@ -126,7 +126,7 @@ int main(void)
 	zb::Logging::set_log_handle(
 		[](const zb::Logging_Level &level, const std::string &message)
 		{
-			printlog(message);
+			printlog(message.c_str());
 		});
 	initSubVideoConsole();
 	initFrameBuffer();
