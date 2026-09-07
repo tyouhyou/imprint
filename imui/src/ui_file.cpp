@@ -122,14 +122,18 @@ namespace zb::ui
         // strictly deeper indentation becomes a subtree (skipping levels
         // is legal); returns how many lines were consumed. The recursive
         // push/pop pair keeps ui_node* stable: children are only added to
-        // the node currently being filled, never to a live vector.
-        std::size_t fill(ui_node &parent, const std::vector<parsed_line> &lines,
+        // the node currently being filled, never to a live vector. `lines`
+        // is moved-from as nodes are grafted in (it is a throwaway parse
+        // scratch), which needs the non-const reference -- a const rec
+        // (or a const vector) made every std::move a silent deep copy of
+        // the whole subtree at each recursion level (O(n^2) on deep trees).
+        std::size_t fill(ui_node &parent, std::vector<parsed_line> &lines,
                          std::size_t i, const int parent_depth)
         {
             const std::size_t start = i;
             while (i < lines.size())
             {
-                const parsed_line &rec = lines[i];
+                parsed_line &rec = lines[i];
                 if (rec.depth <= parent_depth)
                 {
                     break;
