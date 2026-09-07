@@ -50,10 +50,19 @@ namespace
      */
     int corner_chord(const int r, const int dy)
     {
+        // the radius can exceed sqrt(INT_MAX) (the round-rect clamp only
+        // needs the rect edge, and an unbounded surface's edge is huge):
+        // r*r must not wrap `int` before the subtraction. dy <= r by the
+        // callers, so sq stays non-negative; clamp anyway for defense.
+        const int64_t sq = static_cast<int64_t>(r) * r - static_cast<int64_t>(dy) * dy;
+        if (sq <= 0)
+        {
+            return 0;
+        }
 #if defined(USE_INTEGER_GEOMETRY)
-        return static_cast<int>(isqrt_u64(static_cast<uint64_t>(r * r - dy * dy)));
+        return static_cast<int>(isqrt_u64(static_cast<uint64_t>(sq)));
 #else
-        return static_cast<int>(std::sqrt(static_cast<double>(r * r - dy * dy)));
+        return static_cast<int>(std::sqrt(static_cast<double>(sq)));
 #endif
     }
 
@@ -562,6 +571,10 @@ void Graphics::draw_triangle(const impoint_t &p1, const impoint_t &p2, const imp
 
 void Graphics::draw_circle(int x, int y, int radius, const Color &colr)
 {
+    if (radius < 0)
+    {
+        return;  // a negative radius is not a circle (round-rect clamps; raw draws nothing)
+    }
     int px, py, d, x2m1;
     py = radius;
     d = -radius;
@@ -596,6 +609,10 @@ void Graphics::draw_circle(int x, int y, int radius, const Color &colr)
 
 void Graphics::fill_circle(int x, int y, int radius, const Color &colr)
 {
+    if (radius < 0)
+    {
+        return;  // see draw_circle
+    }
 
     int px, py, d, x2m1;
     py = radius;
