@@ -146,6 +146,37 @@ docs.
 the first shipped consumer appears. Consumer-side, not a new C-ABI surface at
 this stage.
 
+### Batch S — Render Modes: Sketch & Wireframe (Unscheduled; added 2026-09-09)
+
+Alternative rendering modes for the same widget tree. Not new widget
+classes — these are `Graphics`-layer `RenderMode` switches (~150 lines
+total) that change how existing draw calls behave. A widget tree
+rendered in WIREFRAME mode shows only structural bones; in SKETCH mode
+it looks hand-drawn. The widget tree, dispatcher, damage tracking, and
+Shaped hit-testing are all unchanged.
+
+- **S-1. WIREFRAME mode**:跳过填充，只画 1px 边框和文字骨架；
+  grid/spacing 可选显示。Use cases:
+  - **Layout debug view**：开发者查看界面布局结构，隐藏视觉噪音。
+  - **e-ink / low-power mode**：减少像素翻转量，延长 e-ink 屏幕
+    寿命；低带宽远程监控只传骨架（省 90%+ 帧数据）。
+  - **Accessibility / high-contrast**：极端简化，只保留结构信息。
+- **S-2. SKETCH mode**：线条加 jitter 偏移（轻微抖动），填充不完全
+  均匀，边缘有"毛刺"感。Use cases:
+  - **Product configurator kiosk**：家具/户型选配，手绘风暗示
+    "这是草图，还没定稿"，降低用户心理压力。
+  - **Education / children's devices**：触摸屏教育玩具，手绘风比
+    精确工业风更亲切。
+  - **Creative tool UI**：嵌入式绘图板/UI，sketch 模式让 UI 跟
+    内容风格统一。
+
+**Architecture note**: both modes live in `imcore` Graphics as a
+`set_render_mode(FULL|WIREFRAME|SKETCH)` enum. Each `draw_*` call
+branches on mode: WIREFRAME skips fills, SKETCH adds jitter to line
+endpoints. FULL is the default (current behavior, zero overhead).
+Orthogonal to Shaped (shape/hit-test) and to theme (colors/tokens) —
+a GaugeDial can render in any mode with any theme.
+
 ### Batch I — Tooling & Inspection (Unscheduled)
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
