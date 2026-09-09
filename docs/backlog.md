@@ -84,13 +84,21 @@ widget redesign, no animation system.
 - **L-3. `list_box rows=` declaration width trap**:
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
 
-### Batch H — HTML/CSS Rendering Path (Low priority; added 2026-09-09)
+### Batch H — HTML/CSS Rendering Path (Medium-high priority; added 2026-09-09)
 
 Goal: an optional declarative smooth-path that renders an HTML/CSS **subset**
 (no JS) through the existing widget tree, complementing the `.ui` design file.
 Rationale: lets users with existing HTML/CSS authoring patterns describe
 screens without learning the `.ui` grammar or the C++ builder API. No JS, no
 CSS cascade engine — a deliberately narrow declarative front-end onto widgets.
+
+**Dependency:** A-24 (`Shaped`) should land first or in parallel. Without
+`Shaped`, the HTML parser can only map elements to rectangular widgets
+(Panel/FlexPanel/Label/Button/Checkbox/Radio). With `Shaped`, the parser
+gains `<gauge>`, `<knob>`, `<trend>`, `<meter>` as first-class custom
+elements — the Shaped subclass handles its own rendering and interaction,
+the parser only declares the element and its style properties. This makes
+the HTML path significantly more powerful for industrial instrument pages.
 
 **Scope — what the initial (core) version supports:**
 - HTML subset: block containers (`div` mapped to `FlexPanel`/`Panel`), text
@@ -228,6 +236,86 @@ Conclusions recorded so they are not re-derived:
 - Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr` is an alias); the ~150-line non-atomic implementation exists only for targets without atomics (NDS ARM9: devkitARM ships no libatomic). Its semantics are locked by `test_ptr.cpp` (compiled against the custom branch on the host) and the CI non-atomic matrix job runs the whole battery against it.
 - **What is deferred:** Collapsing the duality — either `std::shared_ptr` on the NDS too (needs a toolchain decision: `__atomic` support on arm926ej-s / shipping a libatomic) or an intrusive refcount owned by the objects themselves. Both are ABI-adjacent changes with no current payoff.
 - **Trigger:** Act when the custom branch needs a real fix again, or when a second non-atomic target appears; until then the tests keep it cheap to carry.
+
+### A-24. `Shaped` — non-rectangular custom-draw widget base class
+
+**Priority: HIGH — blocks V-5 instrument widgets and Batch H custom elements.**
+
+Context: current `Widget` is rectangular (`position` + `size`), draws a
+background + text by default, and hit-tests via point-in-rect. Industrial
+instrument UIs (gauge dials, VU meters, knobs, trend lines) need
+non-rectangular shapes with custom hit-testing and value binding. A new
+base class `Shaped` extends `Widget` with this contract, keeping the
+existing widget tree, dispatcher, and damage tracking untouched.
+
+**Contract (architecture-level, normative in `ARCHITECTURE.md` §4.3):**
+
+- `Shaped : public Widget` — leaf node (no child widgets; sub-drawing is
+  all in `draw_content`).
+- **Shape is undefined at the base class level.** Subclasses define both
+  the visual shape and the hit-test shape. The base class provides:
+  - `virtual void draw_content(Graphics& g, Rect content_rect) = 0`
+    — subclass draws its entire visual here; `Graphics` is already
+    clipped to the widget rect by the framework's `clip_safe()` chain.
+  - `virtual bool hit_shape(int x, int y) const = 0` — subclass returns
+    true if (x,y) is inside the interactive area of the shape (circle,
+    arc sector, arbitrary path). Replaces the default rect hit-test.
+  - `bool hit(int x, int y) const override` — delegates to
+    `hit_shape()`; the dispatcher's existing pressed-target lock
+    (`touch_id` match) works unchanged.
+- **Value binding** (the data→visual seam):
+  - `void set_value(float v)` / `float get_value() const` / `void
+    set_range(float lo, float hi)` — value injection; `set_value` calls
+    `mark_dirty()`.
+  - `on_value_changed(float new_val)` — virtual hook, default no-op;
+    subclasses override for alarms / side effects.
+- **Event hooks** (optional overrides, default no-ops):
+  - `virtual bool on_pointer(input_event& ev)` — return true to consume
+    (knob drag, slider move); pressed-target lock handles DOWN→MOVE→UP
+    continuity automatically.
+  - `virtual bool on_key(input_event& ev)` — keyboard-driven value
+    adjustment.
+- **Damage rect**: subclass bounding box (the widget `pos`+`size`).
+  Conservative for non-rectangular shapes (outer rect includes air);
+  correct and zero-bug. No changes to `walk_damage` / damage hard-clip.
+- **`measure()` default**: returns current `size` (same as Widget).
+  Subclasses override if natural size depends on content (e.g.
+  SegmentDisplay measures its digit width).
+- **`draw_at()` override in `Shaped`**: calls `draw_content()` only;
+  no background draw, no child traversal (leaf node).
+- **No RTTI**: traversal uses existing `pick`/`child_count`/`child_at`/
+  `hit` virtuals; `Shaped::hit` is the only new virtual in the chain.
+  `static_cast` to `Shaped*` is forbidden outside builder-owned code
+  (same rule as all widgets).
+- **Tree removal**: unchanged — `CanvasWindow::remove_from` /
+  `InputDispatcher::evict` if subtree ever saw input.
+
+**First subclasses (product deliverables, not architecture):**
+- `GaugeDial` — arc ticks + needle + optional red-zone sector +
+  center-axis dot. Parameters: arc range (deg), colors, needle width.
+  Demonstrates: `hit_shape` (arc-sector test), `draw_content`
+  (arc + line + pie fill), `set_value` (needle angle = f(value)).
+- `Knob` — circular rotary knob with indicator line. Parameters:
+  radius, angle range, color. Demonstrates: `on_pointer` (drag
+  rotation), `hit_shape` (circle test), value change on drag.
+
+**Placement in tree**: `imcore` (shared with all targets); a leaf
+widget like Button/Label, not a container. Test:
+`test_shaped_hit` verifies `hit_shape` round-trip through dispatcher;
+`test_gauge_dial` verifies needle angle = f(value) pixel-correctness.
+
+**Interaction with Batch H (HTML/CSS parser):** Shaped subclasses
+expand the HTML parser's tag-mapping table:
+`<gauge>` → `GaugeDial`, `<knob>` → `Knob`, etc. The HTML parser
+declares the element and its style properties; the Shaped subclass
+handles rendering and interaction. Without Shaped, the HTML parser is
+limited to rectangular widgets only.
+
+**Interaction with V-5:** GaugeDial, Knob, and TrendLine (the
+existing hero_chart promoted to a Shaped subclass) are the V-5
+"composition widgets" — they replace the current hand-rolled
+`draw_at()` overrides in the showcase with reusable, parameterized
+components.
 
 ### A-23. Selective build/package switches (Condition-triggered)
 
