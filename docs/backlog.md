@@ -84,6 +84,60 @@ widget redesign, no animation system.
 - **L-3. `list_box rows=` declaration width trap**:
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
 
+### Batch H — HTML/CSS Rendering Path (Low priority; added 2026-09-09)
+
+Goal: an optional declarative smooth-path that renders an HTML/CSS **subset**
+(no JS) through the existing widget tree, complementing the `.ui` design file.
+Rationale: lets users with existing HTML/CSS authoring patterns describe
+screens without learning the `.ui` grammar or the C++ builder API. No JS, no
+CSS cascade engine — a deliberately narrow declarative front-end onto widgets.
+
+**Scope — what the initial (core) version supports:**
+- HTML subset: block containers (`div` mapped to `FlexPanel`/`Panel`), text
+  (`p`/`span` → `Label`), `button`, `checkbox`, `radio`, `br`; `id=` attributes
+  map to the existing `find_by_id` lookup.
+- CSS subset: `display: flex` + `flex-direction`, `width/height` (px and `N%`
+  → existing `set_width_percent`/`set_height_percent`), `background-color`,
+  `color` (→ `set_text_color`), `padding`, gap/spacing, `font-size` (where the
+  GlyphProvider supports it).
+- Styling via inline `style=` and an optional `<style>` block; **no** CSS
+  selectors beyond tag/type and simple `#id` matching.
+
+**Hard support boundary (documented, do-not-creep):**
+- No JS or dynamic behavior — HTML/CSS only as a static declarative front-end;
+  event wiring stays in C++ via `find_by_id` (same as `.ui`).
+- No CSS cascade engine, no inheritance model, no pseudo-classes/elements, no
+  media queries, no CSS variables, no responsive reflow beyond `N%`.
+- No `position: absolute/fixed` (no offset/z-index/overlap layout).
+- No `margin` in the initial version (only parent `padding`/`spacing`).
+- No `overflow: scroll` (no scroll container) in the initial version.
+- No CSS grid, no multi-column, no RTL/bidi.
+
+**Phased follow-ups (each a later, independently-reviewable increment — add
+support "a little at a time" as the boundary demands):**
+- H-1. Text wrapping: certifies paragraph reflow. **Prerequisite for any real
+  `<p>` page.** The `GlyphProvider` seam currently measures/draws a whole run
+  at once (`measure`/`write`); a wrapping engine needs per-word/per-char
+  measurement + greedy line breaking (~250 lines). This is the single
+  architecture-relevant gap in the initial core.
+- H-2. `BorderWidget` wrapper (~100 lines) + `border` shorthand.
+- H-3. `margin` support (or spacer-widget mapping).
+- H-4. `ScrollPanel` + `overflow` (moderate — needs a scroll container).
+- H-5. Widened selector support (class/descendant) if a real use case demands
+  it.
+
+**Cost estimate (discussion):** core version ≈ 1500–2000 lines C++ total, of
+which the text-wrapping engine (H-1) is the prerequisite piece; a minimal
+flex-only core without H-1 is ~800 lines and covers display-only pages. Main
+risk is not code volume but **semantic drift** — users hit "why isn't this CSS
+attribute supported", so the boundary above must stay explicit in the released
+docs.
+
+**Placement note:** toggle-position in-tree (a library module under an
+`IMPRINT_WITH_*`-style switch per A-23 precedent) is undecided — decide when
+the first shipped consumer appears. Consumer-side, not a new C-ABI surface at
+this stage.
+
 ### Batch I — Tooling & Inspection (Unscheduled)
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
