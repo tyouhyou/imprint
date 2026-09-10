@@ -148,6 +148,19 @@ powerful for industrial instrument pages.
 - No `margin` in the initial version (only parent `padding`/`spacing`).
 - No `overflow: scroll` (no scroll container) in the initial version.
 - No CSS grid, no multi-column, no RTL/bidi.
+- **`div` block semantics are deliberately simplified**: `div` maps to a
+  flex container (content-measuring FlexPanel), not HTML block layout; a
+  "block" div does **not** stretch to fill its parent's main axis (flex
+  markup drives fill). `display: block` and `display: flex` are treated
+  as equivalent in the initial core. (Waiving full block layout keeps the
+  parser from growing a second layout engine; FlexPanel is the one
+  layout backbone.)
+- **CSS flex features beyond FlexPanel's layout()**: `justify-content`
+  (main-axis end/center/space-between), `align-items`/`align-self`
+  (cross-axis alignment — FlexPanel cross-axis is not stretched),
+  `flex-basis`, `flex-shrink`, and `flex` min/max constraints are
+  **out of scope** for the initial core. They map to FlexPanel
+  enhancements, not parser work — see H-7.
 
 **Phased follow-ups (each a later, independently-reviewable increment — add
 support "a little at a time" as the boundary demands):**
@@ -183,6 +196,15 @@ support "a little at a time" as the boundary demands):**
     pre-rendered pixel assets (asset_gen precedent) — SVG suits reusable
     UI-drawing widgets (icons, gauge faces, decoration), not
     pixel-dense assets.
+- H-7. Layout alignment & flex fill (FlexPanel enhancements, not parser
+  work): `justify-content` (main-axis end/center/space-between),
+  `align-items`/`align-self` (cross-axis alignment — today FlexPanel does
+  not stretch cross-axis), `flex-basis`/`flex-shrink`, and `flex` min/max
+  constraints. Each is an additive FlexPanel parameter with a default
+  preserving current behavior (left-aligned main axis, unwrapped
+  cross-axis), so existing tests and `.ui` files stay green when a
+  parameter lands. Sized individually; gated by a real page that needs
+  them (see §0 step 6: not now).
 
 **Cost estimate (discussion):** core version ≈ 1500–2000 lines C++ total, of
 which the text-wrapping engine (H-1) is the prerequisite piece; a minimal
