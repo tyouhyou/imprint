@@ -92,13 +92,14 @@ Rationale: lets users with existing HTML/CSS authoring patterns describe
 screens without learning the `.ui` grammar or the C++ builder API. No JS, no
 CSS cascade engine — a deliberately narrow declarative front-end onto widgets.
 
-**Dependency:** A-24 (`Shaped`) should land first or in parallel. Without
-`Shaped`, the HTML parser can only map elements to rectangular widgets
-(Panel/FlexPanel/Label/Button/Checkbox/Radio). With `Shaped`, the parser
-gains `<gauge>`, `<knob>`, `<trend>`, `<meter>` as first-class custom
-elements — the Shaped subclass handles its own rendering and interaction,
-the parser only declares the element and its style properties. This makes
-the HTML path significantly more powerful for industrial instrument pages.
+**Dependency:** A-24 (Widget custom hit-test / value binding) should
+land first or in parallel. Without it, the HTML parser can only map
+elements to rectangular widgets (Panel/FlexPanel/Label/Button/Checkbox/
+Radio). With A-24, the parser gains `<gauge>`, `<knob>`, `<trend>`,
+`<meter>` as first-class custom elements — the Widget subclass handles
+its own rendering and interaction, the parser only declares the element
+and its style properties. This makes the HTML path significantly more
+powerful for industrial instrument pages.
 
 **Scope — what the initial (core) version supports:**
 - HTML subset: block containers (`div` mapped to `FlexPanel`/`Panel`), text
@@ -153,7 +154,7 @@ classes — these are `Graphics`-layer `RenderMode` switches (~150 lines
 total) that change how existing draw calls behave. A widget tree
 rendered in WIREFRAME mode shows only structural bones; in SKETCH mode
 it looks hand-drawn. The widget tree, dispatcher, damage tracking, and
-Shaped hit-testing are all unchanged.
+Widget hit-testing are all unchanged.
 
 - **S-1. WIREFRAME mode**:跳过填充，只画 1px 边框和文字骨架；
   grid/spacing 可选显示。Use cases:
@@ -174,8 +175,8 @@ Shaped hit-testing are all unchanged.
 `set_render_mode(FULL|WIREFRAME|SKETCH)` enum. Each `draw_*` call
 branches on mode: WIREFRAME skips fills, SKETCH adds jitter to line
 endpoints. FULL is the default (current behavior, zero overhead).
-Orthogonal to Shaped (shape/hit-test) and to theme (colors/tokens) —
-a GaugeDial can render in any mode with any theme.
+Orthogonal to Widget hit-test/shape (A-24) and to theme (colors/tokens)
+— a GaugeDial can render in any mode with any theme.
 
 ### Batch I — Tooling & Inspection (Unscheduled)
 
@@ -268,83 +269,81 @@ Conclusions recorded so they are not re-derived:
 - **What is deferred:** Collapsing the duality — either `std::shared_ptr` on the NDS too (needs a toolchain decision: `__atomic` support on arm926ej-s / shipping a libatomic) or an intrusive refcount owned by the objects themselves. Both are ABI-adjacent changes with no current payoff.
 - **Trigger:** Act when the custom branch needs a real fix again, or when a second non-atomic target appears; until then the tests keep it cheap to carry.
 
-### A-24. `Shaped` — non-rectangular custom-draw widget base class
+### A-24. Widget extension: custom hit-test, value binding, event hooks
 
 **Priority: HIGH — blocks V-5 instrument widgets and Batch H custom elements.**
 
-Context: current `Widget` is rectangular (`position` + `size`), draws a
-background + text by default, and hit-tests via point-in-rect. Industrial
-instrument UIs (gauge dials, VU meters, knobs, trend lines) need
-non-rectangular shapes with custom hit-testing and value binding. A new
-base class `Shaped` extends `Widget` with this contract, keeping the
-existing widget tree, dispatcher, and damage tracking untouched.
+Context: current `Widget` hit-tests via point-in-rect and has no value
+binding or per-widget event hooks. Industrial instrument UIs (gauge dials,
+VU meters, knobs, trend lines) need non-rectangular hit-testing, value
+injection, and drag/step interaction. **Decision (2026-09-10): extend
+Widget directly rather than introducing a separate `Shaped` base class.**
+Rationale: custom hit-test, value binding, and event hooks are not
+"non-rectangular" features — they are general widget capabilities that
+any subclass (round button, custom slider, etc.) may use. A separate
+class adds inheritance depth with no architectural benefit. Collision
+detection also benefits: a unified `hit()` interface on all widgets
+makes shape-vs-shape intersection straightforward.
 
-**Contract (architecture-level, normative in `ARCHITECTURE.md` §4.3):**
+**Contract changes (normative in `ARCHITECTURE.md` §4.3 and
+`code-contract.md` §3):**
 
-- `Shaped : public Widget` — leaf node (no child widgets; sub-drawing is
-  all in `draw_content`).
-- **Shape is undefined at the base class level.** Subclasses define both
-  the visual shape and the hit-test shape. The base class provides:
-  - `virtual void draw_content(Graphics& g, Rect content_rect) = 0`
-    — subclass draws its entire visual here; `Graphics` is already
-    clipped to the widget rect by the framework's `clip_safe()` chain.
-  - `virtual bool hit_shape(int x, int y) const = 0` — subclass returns
-    true if (x,y) is inside the interactive area of the shape (circle,
-    arc sector, arbitrary path). Replaces the default rect hit-test.
-  - `bool hit(int x, int y) const override` — delegates to
-    `hit_shape()`; the dispatcher's existing pressed-target lock
-    (`touch_id` match) works unchanged.
-- **Value binding** (the data→visual seam):
-  - `void set_value(float v)` / `float get_value() const` / `void
-    set_range(float lo, float hi)` — value injection; `set_value` calls
-    `mark_dirty()`.
-  - `on_value_changed(float new_val)` — virtual hook, default no-op;
-    subclasses override for alarms / side effects.
-- **Event hooks** (optional overrides, default no-ops):
-  - `virtual bool on_pointer(input_event& ev)` — return true to consume
-    (knob drag, slider move); pressed-target lock handles DOWN→MOVE→UP
-    continuity automatically.
+- **Custom hit-test**: `Widget::hit(int x, int y)` remains virtual.
+  Default: point-in-rect (unchanged). Subclasses override for
+  circle/arc/arbitrary shape. No new virtual — `hit()` is the
+  interface. The dispatcher's existing pressed-target lock
+  (`touch_id` match) works unchanged for any `hit()` override.
+  Collision detection: `widget_a->hit(widget_b->cx, widget_b->cy)`
+  works uniformly for all widgets regardless of shape.
+- **Value binding** (new Widget members, default no-ops):
+  - `void set_value(float v)` / `float get_value() const` /
+    `void set_range(float lo, float hi)` — value injection;
+    `set_value` calls `mark_dirty()`.
+  - `virtual void on_value_changed(float new_val)` — hook for
+    alarms / side effects, default no-op.
+- **Event hooks** (new Widget virtuals, default no-ops):
+  - `virtual bool on_pointer(input_event& ev)` — return true to
+    consume (knob drag, slider move); pressed-target lock handles
+    DOWN→MOVE→UP continuity automatically.
   - `virtual bool on_key(input_event& ev)` — keyboard-driven value
     adjustment.
-- **Damage rect**: subclass bounding box (the widget `pos`+`size`).
-  Conservative for non-rectangular shapes (outer rect includes air);
-  correct and zero-bug. No changes to `walk_damage` / damage hard-clip.
-- **`measure()` default**: returns current `size` (same as Widget).
-  Subclasses override if natural size depends on content (e.g.
-  SegmentDisplay measures its digit width).
-- **`draw_at()` override in `Shaped`**: calls `draw_content()` only;
-  no background draw, no child traversal (leaf node).
+- **Damage rect**: unchanged. Non-rectangular widgets report their
+  bounding box (conservative outer rect). No changes to `walk_damage`
+  / damage hard-clip.
+- **`draw_at()` override**: subclasses that skip the default
+  rectangular background fully override `draw_at()` (the existing
+  pattern — `Button::draw_at()` already does this).
 - **No RTTI**: traversal uses existing `pick`/`child_count`/`child_at`/
-  `hit` virtuals; `Shaped::hit` is the only new virtual in the chain.
-  `static_cast` to `Shaped*` is forbidden outside builder-owned code
-  (same rule as all widgets).
+  `hit` virtuals. `static_cast` to specific widget types is forbidden
+  outside builder-owned code (same rule as all widgets).
 - **Tree removal**: unchanged — `CanvasWindow::remove_from` /
   `InputDispatcher::evict` if subtree ever saw input.
 
 **First subclasses (product deliverables, not architecture):**
 - `GaugeDial` — arc ticks + needle + optional red-zone sector +
   center-axis dot. Parameters: arc range (deg), colors, needle width.
-  Demonstrates: `hit_shape` (arc-sector test), `draw_content`
-  (arc + line + pie fill), `set_value` (needle angle = f(value)).
+  Demonstrates: `hit()` override (arc-sector test), `draw_at()`
+  override (arc + line + pie fill), `set_value` (needle angle = f(value)).
 - `Knob` — circular rotary knob with indicator line. Parameters:
   radius, angle range, color. Demonstrates: `on_pointer` (drag
-  rotation), `hit_shape` (circle test), value change on drag.
+  rotation), `hit()` override (circle test), value change on drag.
 
-**Placement in tree**: `imcore` (shared with all targets); a leaf
-widget like Button/Label, not a container. Test:
-`test_shaped_hit` verifies `hit_shape` round-trip through dispatcher;
-`test_gauge_dial` verifies needle angle = f(value) pixel-correctness.
+**Placement in tree**: `imui` (shared with all targets); direct
+Widget subclasses like Button/Label. Tests:
+`test_hit_override` verifies custom `hit()` round-trip through
+dispatcher; `test_gauge_dial` verifies needle angle = f(value)
+pixel-correctness; `test_collision` verifies shape-vs-shape
+intersection via unified `hit()`.
 
-**Interaction with Batch H (HTML/CSS parser):** Shaped subclasses
+**Interaction with Batch H (HTML/CSS parser):** Widget subclasses
 expand the HTML parser's tag-mapping table:
 `<gauge>` → `GaugeDial`, `<knob>` → `Knob`, etc. The HTML parser
-declares the element and its style properties; the Shaped subclass
-handles rendering and interaction. Without Shaped, the HTML parser is
-limited to rectangular widgets only.
+declares the element and its style properties; the Widget subclass
+handles rendering and interaction.
 
 **Interaction with V-5:** GaugeDial, Knob, and TrendLine (the
-existing hero_chart promoted to a Shaped subclass) are the V-5
-"composition widgets" — they replace the current hand-rolled
+existing hero_chart promoted to a parameterized Widget subclass) are
+the V-5 "composition widgets" — they replace the current hand-rolled
 `draw_at()` overrides in the showcase with reusable, parameterized
 components.
 
