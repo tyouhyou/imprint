@@ -134,6 +134,28 @@ support "a little at a time" as the boundary demands):**
 - H-4. `ScrollPanel` + `overflow` (moderate — needs a scroll container).
 - H-5. Widened selector support (class/descendant) if a real use case demands
   it.
+- H-6. `SvgWidget` — SVG as a widget subclass (recorded 2026-09-10,
+  **unscheduled — note only, no priority**):
+  - `SvgWidget : Widget` (imui, beside Button/Label). Parses an SVG text
+    into a compact `DrawCommand[]` byte array once at construction
+    (`.ui`-embed / `asset_gen` precedent); `draw_at()` executes the
+    sequence on the existing Graphics primitives at runtime (zero parse
+    cost). Default: display-only (rect `hit()`, no `on_input()`), like
+    Label. Subclasses may override `hit()`/`on_input()`/`set_value()`
+    for interactive or value-driven SVG.
+  - Alignment with Batch H: HTML parser's tag-mapping table gains
+    `<svg>` → `SvgWidget` — same mechanism as `<gauge>` → GaugeDial.
+  - Phased internally: (a) static geometry subset — `rect`, `circle`,
+    `ellipse`, `line`, `polyline`, `polygon` + `fill`/`stroke`/
+    `stroke-width` + `viewBox` (~400 lines, maps to existing Graphics
+    primitives); (b) `path` (Bezier M/L/C/Q/A) + `transform`
+    translate/rotate/scale (~600 lines, needs new Bezier rasterization
+    primitive); (c) out-of-scope: filters, gradient defs, clipPath,
+    symbol/use, animation.
+  - Embedded caution: Bezier rasterization at runtime may cost more than
+    pre-rendered pixel assets (asset_gen precedent) — SVG suits reusable
+    UI-drawing widgets (icons, gauge faces, decoration), not
+    pixel-dense assets.
 
 **Cost estimate (discussion):** core version ≈ 1500–2000 lines C++ total, of
 which the text-wrapping engine (H-1) is the prerequisite piece; a minimal
