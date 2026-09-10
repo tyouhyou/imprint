@@ -13,6 +13,8 @@ add_executable(
     test_label.cpp
     test_dialog.cpp
     test_dispatch.cpp
+    test_hit_override.cpp
+    test_on_input_custom.cpp
     test_focus.cpp
     test_canvas_window.cpp
     test_board.cpp

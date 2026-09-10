@@ -387,6 +387,30 @@ keeps only API-level supplements.
   released before the next key. When the pressed target is hidden
   mid-press, pointer events deliver `on_cancel` first, then clear the
   press; later move/release events are not delivered.
+- **Pointer-supplied lifecycle (A-24 contract, no interface change)**:
+  `Widget::on_input()` is the **sole** event entry; `hit(x, y)` is the
+  point test. The dispatcher's pointer rules an override author must know:
+  - `hit()` is **widget-local** (parent `pick()` already translated) and
+    the virtual's default is `visible &&` point-in-rect; an override
+    replaces the point test and must check `visible` itself. It is on the
+    hot path — allocation-free and cheap.
+  - `on_input()` receives **absolute/client-space** coordinates (`ev.x/y`;
+    subtract `get_absolute_position()` for local geometry, as Slider
+    does). Return **true** = consumed/state changed (frame repaints, a
+    press forms the pressed-target lock and may grab focus);
+    **false** = unconsumed (a press that returns false is never claimed).
+  - **Drag semantics need `captures_pointer()` = true**: while a capture
+    press is held, every move is delivered regardless of where the pointer
+    is, with no drift cancel. A **non-capturing** pressed widget is never
+    fed moves; a move still on the widget just resets the drift counter,
+    one off it cancels the press after the slop (mouse 8 px immediate;
+    touch two consecutive off-target moves — one glitch sample must not
+    eat a click).
+  - Release always reaches the held `pressed_target` even after the
+    pointer leaves the widget (commit-on-release widgets rely on this);
+    a new press while one is held cancels the old first (`on_cancel`).
+  - Overridden geometry (`hit`) and `draw_at` must be symmetric; damage
+    stays rectangle-based (bounding box is the conservative choice).
 - Wheel channel: `ev.delta` is measured in **signed notches** (one wheel
   step = ±1); shells normalize before dispatch (win =
   `GET_WHEEL_DELTA_WPARAM / WHEEL_DELTA`, free-spinning sub-notch

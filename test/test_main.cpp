@@ -5,6 +5,8 @@ int test_button();
 int test_label();
 int test_dialog();
 int test_dispatch();
+int test_hit_override();
+int test_on_input_custom();
 int test_focus();
 int test_canvas_window();
 int test_board();
@@ -67,6 +69,8 @@ int main()
     total += test_label();
     total += test_dialog();
     total += test_dispatch();
+    total += test_hit_override();
+    total += test_on_input_custom();
     total += test_focus();
     total += test_canvas_window();
     total += test_board();

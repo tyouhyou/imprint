@@ -202,6 +202,43 @@ satisfies. Changing any of these is an architecture change.
   size survives a main-axis grow.
 - Every state setter reports damage (`mark_dirty`) and layout change
   (`mark_layout_dirty`); this is a per-widget authoring obligation.
+- **`hit()` override pattern (A-24).** `hit(x, y)` is a widget-local point
+  test — coordinates arrive already translated by the parent's `pick()`
+  recursive descent. The default is `visible &&` point-in-rect
+  (`widget.cpp:179`). An override replaces that point test wholesale; it
+  must reproduce the `visible` gate itself, keep the same widget-local
+  coordinate space, and answer only the shape question (a knob's circle, a
+  gauge's arc sector). The dispatcher calls `hit()` on the input hot path
+  (both initial pick-up and every move-head drift check), so an override
+  must be cheap and allocation-free. **`hit()` must be symmetric with
+  `draw_at()`'s geometry**: a widget that draws a shape must hit on exactly
+  that shape. Damage recovery repaints rectangles — when the shape differs
+  from the bounds, report the bounding box conservatively; the rasterizer
+  never cares about shape. No `Shape` abstraction — override `hit()`
+  directly; extract one only when collision detection becomes a real
+  requirement.
+- **`on_input()` override pattern (A-24).** `on_input()` is the sole event
+  entry (`widget.hpp:453`): the dispatcher routes press / release / move /
+  wheel / key events to the picked widget. **`return true` = event consumed
+  / state changed** (the dispatcher reports the change to the frame, and a
+  press that returns true forms the pressed-target lock and grabs focus if
+  focusable); `return false` = unconsumed (a press that returns false is
+  **not** claimed, so no lock forms). A widget that wants drag semantics
+  (slider, knob) must override `captures_pointer()`: while a capturing
+  widget is held, **every** move reaches it regardless of location and the
+  drift/cancel rule does not apply. A **non-capturing** pressed widget never
+  receives moves at all — a move still over the widget only resets the
+  drift counter, and a move off it cancels the press once it exceeds the
+  slop (mouse: 8 px at once; touch: two consecutive off-target moves, to
+  survive a single glitch sample). A release always reaches the held
+  `pressed_target` even when the pointer left the widget, and `on_action` /
+  commit-on-release widgets rely on that. Hidden mid-press: the dispatcher
+  cancels a pressed widget that becomes effectively invisible before any
+  further pointer event. Coordinates in `on_input()` are **global** (the
+  event's `x/y` are client/client-backend space); a widget positions hit
+  geometry with its own offset. The virtuals a widget author may override
+  for geometry are `pick`, `child_count`, `child_at`, `hit` (no RTTI
+  everywhere); `static_cast` only on nodes the builder created itself.
 - **Tree mutation protocol**: removing a subtree that ever reached a
   dispatcher must go through `InputDispatcher::evict` /
   `CanvasWindow::remove_from` so pressed/focus/modal references are cleared

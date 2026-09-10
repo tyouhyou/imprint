@@ -14,9 +14,12 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **A-24** (0.5–1 day) — document existing `hit()`/`on_input()`
-   override patterns + tests; zero interface change. Unlocks V-5
-   composition widgets AND Batch H custom elements.
+1. **A-24 — done** (2026-09-10): the `hit()`/`on_input()` override
+   contract is documented in ARCHITECTURE §4.3 + code-contract §3 and
+   locked by `test_hit_override` + `test_on_input_custom`; zero interface
+   change. The A-24 source analysis (no new Widget methods, Shape is
+   YAGNI, GaugeDial/Knob as first overriding subclasses) is the seeded
+   basis for V-5 step 2.
 2. **V-5 composition widgets + dashboard** (3–5 days) — `draw_arc_aa`,
    GaugeDial, Knob, TrendLine pawn, then the factory-console dashboard
    + self-benchmark panel. Highest ROI right now: this is what turns
@@ -339,80 +342,6 @@ Conclusions recorded so they are not re-derived:
 - Today every non-embedded build uses `std::shared_ptr` (`zb::SharedPtr` is an alias); the ~150-line non-atomic implementation exists only for targets without atomics (NDS ARM9: devkitARM ships no libatomic). Its semantics are locked by `test_ptr.cpp` (compiled against the custom branch on the host) and the CI non-atomic matrix job runs the whole battery against it.
 - **What is deferred:** Collapsing the duality — either `std::shared_ptr` on the NDS too (needs a toolchain decision: `__atomic` support on arm926ej-s / shipping a libatomic) or an intrusive refcount owned by the objects themselves. Both are ABI-adjacent changes with no current payoff.
 - **Trigger:** Act when the custom branch needs a real fix again, or when a second non-atomic target appears; until then the tests keep it cheap to carry.
-
-### A-24. Document existing `hit()`/`on_input()` override patterns + tests (no interface change)
-
-**Priority: HIGH — execution order step 1 — blocks V-5 instrument widgets and Batch H custom elements.**
-
-Source-path read (2026-09-10) revealed that the framework **already has**
-the two capabilities needed for non-rectangular interactive widgets:
-
-1. **`Widget::hit(int x, int y)`** — virtual, default point-in-rect
-   (`widget.cpp:179`). Subclasses can override for circle/arc/arbitrary
-   shape. The dispatcher's `pick_target_internal()` calls `hit()` during
-   recursive descent; coordinate space is widget-local (translated by
-   parent's `pick()`). Pressed-target lock (`touch_id` match) works
-   unchanged for any `hit()` override.
-
-2. **`Widget::on_input(const input_event& ev)`** — virtual, sole event
-   entry point (`widget.hpp:453`). Dispatcher calls
-   `target->on_input(ev)` directly after `pick_target()` finds the
-   deepest hit widget. All existing widgets (Button, Checkbox, Slider,
-   ListBox, RadioButton, TextInput) already override this for their
-   event handling. Return true = event consumed / state changed;
-   false = unconsumed.
-
-**Decision: no new Widget methods needed.** The existing `hit()` and
-`on_input()` virtuals are the correct extension points. Value binding
-is widget-specific (Slider already has `set_value()`, Checkbox has
-`set_checked()`), not a Widget-base concern. A Shape abstraction
-is YAGNI — override `hit()` directly; extract Shape only when
-collision detection is a real requirement.
-
-**What A-24 delivers (documentation + testing, not interface change):**
-
-- **Document `hit()` override pattern**: how to override for
-  non-rectangular shapes, coordinate space (widget-local), damage
-  rect semantics (bounding box, conservative), interaction with
-  `pick()` recursive descent. Normative text in `ARCHITECTURE.md` §4.3
-  and `code-contract.md` §3.
-- **Document `on_input()` override pattern**: how to handle pointer
-  and key events, when to return true vs false, interaction with
-  pressed-target lock and `captures_pointer()`. Existing pattern
-  already used by all widgets — just needs explicit documentation.
-- **Write `test_hit_override`**: custom `hit()` (circle) round-trip
-  through dispatcher; verify press/release/move are delivered correctly
-  to a non-rectangular widget; verify off-shape clicks are rejected.
-- **Write `test_on_input_custom`**: custom `on_input()` override
-  (e.g. a widget that consumes move events for drag behavior);
-  verify pressed-target lock works with the custom override.
-- **Verify existing tests pass**: `test_dispatch`, `test_app_flow`,
-  `test_click_cancel` etc. must remain green — A-24 makes zero
-  interface changes.
-
-**Optional follow-up (not blocking):** convenience layers
-`on_pointer_event()` / `on_key_event()` inside `on_input()` default
-implementation — lets simple widgets avoid `switch(ev.type)`. Only
-worth adding when a second or third widget benefits from it.
-
-**First subclasses (product deliverables, after A-24 tests pass):**
-- `GaugeDial` — arc ticks + needle + optional red-zone sector +
-  center-axis dot. Parameters: arc range (deg), colors, needle width.
-  Demonstrates: `hit()` override (arc-sector test), `draw_at()`
-  override (arc + line + pie fill), widget-specific `set_value(float)`.
-- `Knob` — circular rotary knob with indicator line. Parameters:
-  radius, angle range, color. Demonstrates: `on_input()` override
-  (drag rotation), `hit()` override (circle test), value change on
-  drag.
-
-**Interaction with Batch H:** Widget subclasses with custom `hit()`
-expand the HTML parser's tag-mapping table:
-`<gauge>` → `GaugeDial`, `<knob>` → `Knob`, etc.
-
-**Interaction with V-5:** GaugeDial, Knob, and TrendLine (existing
-hero_chart promoted to a parameterized Widget subclass) are the V-5
-"composition widgets" — reusable, parameterized replacements for the
-current hand-rolled `draw_at()` overrides in the showcase.
 
 ### A-23. Selective build/package switches (Condition-triggered)
 
