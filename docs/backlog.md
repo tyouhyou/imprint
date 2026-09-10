@@ -269,7 +269,7 @@ Conclusions recorded so they are not re-derived:
 - **What is deferred:** Collapsing the duality — either `std::shared_ptr` on the NDS too (needs a toolchain decision: `__atomic` support on arm926ej-s / shipping a libatomic) or an intrusive refcount owned by the objects themselves. Both are ABI-adjacent changes with no current payoff.
 - **Trigger:** Act when the custom branch needs a real fix again, or when a second non-atomic target appears; until then the tests keep it cheap to carry.
 
-### A-24. Widget custom hit-test + on_input() documentation and tests
+### A-24. Document existing `hit()`/`on_input()` override patterns + tests (no interface change)
 
 **Priority: HIGH — blocks V-5 instrument widgets and Batch H custom elements.**
 
