@@ -269,94 +269,79 @@ Conclusions recorded so they are not re-derived:
 - **What is deferred:** Collapsing the duality — either `std::shared_ptr` on the NDS too (needs a toolchain decision: `__atomic` support on arm926ej-s / shipping a libatomic) or an intrusive refcount owned by the objects themselves. Both are ABI-adjacent changes with no current payoff.
 - **Trigger:** Act when the custom branch needs a real fix again, or when a second non-atomic target appears; until then the tests keep it cheap to carry.
 
-### A-24. Widget extension: custom hit-test, value binding, event hooks
+### A-24. Widget custom hit-test + on_input() documentation and tests
 
 **Priority: HIGH — blocks V-5 instrument widgets and Batch H custom elements.**
 
-Context: current `Widget` hit-tests via point-in-rect and has no value
-binding or per-widget event hooks. Industrial instrument UIs (gauge dials,
-VU meters, knobs, trend lines) need non-rectangular hit-testing, value
-injection, and drag/step interaction. **Decision (2026-09-10): extend
-Widget directly rather than introducing a separate `Shaped` base class.**
-Rationale: custom hit-test, value binding, and event hooks are not
-"non-rectangular" features — they are general widget capabilities that
-any subclass (round button, custom slider, etc.) may use. A separate
-class adds inheritance depth with no architectural benefit. Collision
-detection also benefits: a unified `hit()` interface on all widgets
-makes shape-vs-shape intersection straightforward.
+Source-path read (2026-09-10) revealed that the framework **already has**
+the two capabilities needed for non-rectangular interactive widgets:
 
-**Contract changes (normative in `ARCHITECTURE.md` §4.3 and
-`code-contract.md` §3):**
+1. **`Widget::hit(int x, int y)`** — virtual, default point-in-rect
+   (`widget.cpp:179`). Subclasses can override for circle/arc/arbitrary
+   shape. The dispatcher's `pick_target_internal()` calls `hit()` during
+   recursive descent; coordinate space is widget-local (translated by
+   parent's `pick()`). Pressed-target lock (`touch_id` match) works
+   unchanged for any `hit()` override.
 
-- **Custom hit-test**: `Widget::hit(int x, int y)` remains virtual.
-  Default: point-in-rect (unchanged). Subclasses override for
-  circle/arc/arbitrary shape. No new virtual — `hit()` is the
-  interface. The dispatcher's existing pressed-target lock
-  (`touch_id` match) works unchanged for any `hit()` override.
-  Collision detection: `widget_a->hit(widget_b->cx, widget_b->cy)`
-  works uniformly for all widgets regardless of shape.
-- **Value binding** (new Widget members, default no-ops):
-  - `void set_value(float v)` / `float get_value() const` /
-    `void set_range(float lo, float hi)` — value injection;
-    `set_value` calls `mark_dirty()`.
-  - `virtual void on_value_changed(float new_val)` — hook for
-    alarms / side effects, default no-op.
-- **Event hook** (single unified entry point):
-  - `virtual bool on(input_event& ev)` — the only event entry point.
-    Return true to consume (stop propagation), false to pass.
-    Default dispatches to `on_pointer_event()` / `on_key_event()` by
-    type. Dispatcher calls this directly after `hit()` confirms the
-    target; pressed-target lock handles DOWN→MOVE→UP continuity.
-  - `virtual bool on_pointer_event(input_event& ev)` — convenience
-    layer, default returns false. Subclasses override this if they
-    only care about pointer events.
-  - `virtual bool on_key_event(input_event& ev)` — convenience layer,
-    default returns false. Subclasses override this if they only care
-    about key events.
-  - Two override styles: (A) override `on()` for full control (complex
-    widgets like Knob), or (B) override `on_pointer_event()` / `on_key_event()`
-    for type-specific handling (simple widgets like Checkbox). Both
-    return through `on()`.
-- **Damage rect**: unchanged. Non-rectangular widgets report their
-  bounding box (conservative outer rect). No changes to `walk_damage`
-  / damage hard-clip.
-- **`draw_at()` override**: subclasses that skip the default
-  rectangular background fully override `draw_at()` (the existing
-  pattern — `Button::draw_at()` already does this).
-- **No RTTI**: traversal uses existing `pick`/`child_count`/`child_at`/
-  `hit` virtuals. `static_cast` to specific widget types is forbidden
-  outside builder-owned code (same rule as all widgets).
-- **Tree removal**: unchanged — `CanvasWindow::remove_from` /
-  `InputDispatcher::evict` if subtree ever saw input.
+2. **`Widget::on_input(const input_event& ev)`** — virtual, sole event
+   entry point (`widget.hpp:453`). Dispatcher calls
+   `target->on_input(ev)` directly after `pick_target()` finds the
+   deepest hit widget. All existing widgets (Button, Checkbox, Slider,
+   ListBox, RadioButton, TextInput) already override this for their
+   event handling. Return true = event consumed / state changed;
+   false = unconsumed.
 
-**First subclasses (product deliverables, not architecture):**
+**Decision: no new Widget methods needed.** The existing `hit()` and
+`on_input()` virtuals are the correct extension points. Value binding
+is widget-specific (Slider already has `set_value()`, Checkbox has
+`set_checked()`), not a Widget-base concern. A Shape abstraction
+is YAGNI — override `hit()` directly; extract Shape only when
+collision detection is a real requirement.
+
+**What A-24 delivers (documentation + testing, not interface change):**
+
+- **Document `hit()` override pattern**: how to override for
+  non-rectangular shapes, coordinate space (widget-local), damage
+  rect semantics (bounding box, conservative), interaction with
+  `pick()` recursive descent. Normative text in `ARCHITECTURE.md` §4.3
+  and `code-contract.md` §3.
+- **Document `on_input()` override pattern**: how to handle pointer
+  and key events, when to return true vs false, interaction with
+  pressed-target lock and `captures_pointer()`. Existing pattern
+  already used by all widgets — just needs explicit documentation.
+- **Write `test_hit_override`**: custom `hit()` (circle) round-trip
+  through dispatcher; verify press/release/move are delivered correctly
+  to a non-rectangular widget; verify off-shape clicks are rejected.
+- **Write `test_on_input_custom`**: custom `on_input()` override
+  (e.g. a widget that consumes move events for drag behavior);
+  verify pressed-target lock works with the custom override.
+- **Verify existing tests pass**: `test_dispatch`, `test_app_flow`,
+  `test_click_cancel` etc. must remain green — A-24 makes zero
+  interface changes.
+
+**Optional follow-up (not blocking):** convenience layers
+`on_pointer_event()` / `on_key_event()` inside `on_input()` default
+implementation — lets simple widgets avoid `switch(ev.type)`. Only
+worth adding when a second or third widget benefits from it.
+
+**First subclasses (product deliverables, after A-24 tests pass):**
 - `GaugeDial` — arc ticks + needle + optional red-zone sector +
   center-axis dot. Parameters: arc range (deg), colors, needle width.
   Demonstrates: `hit()` override (arc-sector test), `draw_at()`
-  override (arc + line + pie fill), `set_value` (needle angle = f(value)).
+  override (arc + line + pie fill), widget-specific `set_value(float)`.
 - `Knob` — circular rotary knob with indicator line. Parameters:
-  radius, angle range, color. Demonstrates: `on()` override (drag
-  rotation via pointer events), `hit()` override (circle test), value
-  change on drag.
+  radius, angle range, color. Demonstrates: `on_input()` override
+  (drag rotation), `hit()` override (circle test), value change on
+  drag.
 
-**Placement in tree**: `imui` (shared with all targets); direct
-Widget subclasses like Button/Label. Tests:
-`test_hit_override` verifies custom `hit()` round-trip through
-dispatcher; `test_gauge_dial` verifies needle angle = f(value)
-pixel-correctness; `test_collision` verifies shape-vs-shape
-intersection via unified `hit()`.
-
-**Interaction with Batch H (HTML/CSS parser):** Widget subclasses
+**Interaction with Batch H:** Widget subclasses with custom `hit()`
 expand the HTML parser's tag-mapping table:
-`<gauge>` → `GaugeDial`, `<knob>` → `Knob`, etc. The HTML parser
-declares the element and its style properties; the Widget subclass
-handles rendering and interaction.
+`<gauge>` → `GaugeDial`, `<knob>` → `Knob`, etc.
 
-**Interaction with V-5:** GaugeDial, Knob, and TrendLine (the
-existing hero_chart promoted to a parameterized Widget subclass) are
-the V-5 "composition widgets" — they replace the current hand-rolled
-`draw_at()` overrides in the showcase with reusable, parameterized
-components.
+**Interaction with V-5:** GaugeDial, Knob, and TrendLine (existing
+hero_chart promoted to a parameterized Widget subclass) are the V-5
+"composition widgets" — reusable, parameterized replacements for the
+current hand-rolled `draw_at()` overrides in the showcase.
 
 ### A-23. Selective build/package switches (Condition-triggered)
 
