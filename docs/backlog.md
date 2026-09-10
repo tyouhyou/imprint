@@ -9,14 +9,41 @@
 > Completed items are removed upon completion (A-numbering is stable, gaps
 > represent finished work; history lives in `git log`).
 
-## 1. Product & Feature Backlog
+## 0. Execution Order (2026-09-10)
+
+Agreed sequence — a map through the backlog, not a new state machine.
+Dependency-driven: each tier unlocks what follows.
+
+1. **A-24** (0.5–1 day) — document existing `hit()`/`on_input()`
+   override patterns + tests; zero interface change. Unlocks V-5
+   composition widgets AND Batch H custom elements.
+2. **V-5 composition widgets + dashboard** (3–5 days) — `draw_arc_aa`,
+   GaugeDial, Knob, TrendLine pawn, then the factory-console dashboard
+   + self-benchmark panel. Highest ROI right now: this is what turns
+   the recent industrial mockups (Series 7 / Model 500, `design/htmldemo/`)
+   into something real running in the framework, and the promotion
+   material for the repo.
+3. **V-3 re-record & re-shoot** — only after V-5 exists to record;
+   captures the new dashboard, not the old showcase.
+4. **Batch H core** (3–5 days) — HTML/CSS rendering path; the
+   tag-mapping table now has `<gauge>`/`<knob>` available because of
+   A-24 + the V-5 widgets.
+5. **Quick wins** (<1 day each, opportunistic): **L-3** list_box width
+   trap (real bug fix), **S-1 WIREFRAME** (layout-debug view + low-power
+   mode), **I-2b** device overlay (pairs naturally with S-1 for
+   presentation).
+6. **Explicitly NOT now**: H-1 text wrapping (until a real `<p>` need),
+   H-6 SVG & S-2 SKETCH (recorded, unscheduled), F-1/F-2, I-1, V-4,
+   A-4/A-21/A-23, D-*, Batch G. Condition-triggered items stay
+   trigger-gated.
 
 ### Batch V — Visual Presentation (Active; started 2026-09-05)
 
 Goal: close the "works but looks primitive" gap against other UI
 frameworks. Principle: modern look = rasterizer primitives (imcore
 Graphics) + themed demo content; widgets stay theme-token driven, no
-widget redesign, no animation system.
+widget redesign, no animation system. V-5 + V-3 are execution order
+steps 2–3.
 
 - **V-1. Rasterizer primitives** — **done** (2026-09-05): linear
   gradient fill, rounded rect draw/fill, tinted `draw_image`, AA
@@ -40,7 +67,7 @@ widget redesign, no animation system.
   default-OFF question — decide both when the first real
   compressed-asset use case appears; until then the procedural
   generator covers the demo.
-- **V-3. Re-record & re-shoot**: GIF + per-platform static frames
+- **V-3. Re-record & re-shoot** (execution order step 3): GIF + per-platform static frames
   (win / X11 / mac), README hero layout, three-language READMEs aligned.
 - **V-0. Promote `gif_encoder`** — **done** (2026-09-05):
   `zb::ui::GifWriter` lives in `imcore/codec/gif` beside png/jpeg; input
@@ -49,7 +76,7 @@ widget redesign, no animation system.
   pacing, file driving) stays app-side. `test_gif` pins the block
   structure (GCE terminator included, bb916e7) and determinism; the
   recorder builds against the codec unchanged.
-- **V-5. Modern dashboard demo pass** (added 2026-09-06; the
+- **V-5. Modern dashboard demo pass** (execution order step 2; added 2026-09-06; the
   buyer-facing showcase pass — also the prototype of the future
   embedded device page, see the device-selection discussion in the
   handoff notes):
@@ -76,15 +103,15 @@ widget redesign, no animation system.
 
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 
-- **L-1. Widget-level margin/padding API**:
+- **L-1. Widget-level margin/padding API** (quick win later:
   - Context: Button `measure()` vs draw padding discrepancy fixed in `65087b8`. A general margin/padding model across widgets and containers remains unscheduled.
 - **L-2. `.ui` alignment attributes (`halign` / `valign`)** — **externally claimed** (GitHub issue #2 assigned to @tecnolgd, 2026-09-05; do not implement here — review their PR against `docs/design-file.md` grammar when it lands):
   - Context: Declarative `.ui` alignment syntax. Currently apps use explicit `set_v_align` / `set_h_align` in application code (`f74ab48`). Good-first-issue #2 opened.
   - Review default framework alignment strategy (e.g. text centering vs top-left default).
-- **L-3. `list_box rows=` declaration width trap**:
+- **L-3. `list_box rows=` declaration width trap** (execution order step 5):
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
 
-### Batch H — HTML/CSS Rendering Path (Medium-high priority; added 2026-09-09)
+### Batch H — HTML/CSS Rendering Path (Medium-high priority — execution order step 4; added 2026-09-09)
 
 Goal: an optional declarative smooth-path that renders an HTML/CSS **subset**
 (no JS) through the existing widget tree, complementing the `.ui` design file.
@@ -169,7 +196,7 @@ docs.
 the first shipped consumer appears. Consumer-side, not a new C-ABI surface at
 this stage.
 
-### Batch S — Render Modes: Sketch & Wireframe (Unscheduled; added 2026-09-09)
+### Batch S — Render Modes: Sketch & Wireframe (Unscheduled; S-1 is execution order step 5; added 2026-09-09)
 
 Alternative rendering modes for the same widget tree. Not new widget
 classes — these are `Graphics`-layer `RenderMode` switches (~150 lines
@@ -178,7 +205,7 @@ rendered in WIREFRAME mode shows only structural bones; in SKETCH mode
 it looks hand-drawn. The widget tree, dispatcher, damage tracking, and
 Widget hit-testing are all unchanged.
 
-- **S-1. WIREFRAME mode**:跳过填充，只画 1px 边框和文字骨架；
+- **S-1. WIREFRAME mode** (execution order step 5):跳过填充，只画 1px 边框和文字骨架；
   grid/spacing 可选显示。Use cases:
   - **Layout debug view**：开发者查看界面布局结构，隐藏视觉噪音。
   - **e-ink / low-power mode**：减少像素翻转量，延长 e-ink 屏幕
@@ -204,7 +231,7 @@ Orthogonal to Widget hit-test/shape (A-24) and to theme (colors/tokens)
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
   - Watch `.ui` file changes on disk and reload in-place without restarting the previewer.
-- **I-2b. Device overlay**: bezel/chrome around the presented buffer
+- **I-2b. Device overlay** (execution order step 5): bezel/chrome around the presented buffer
   matching target screen constraints (e.g., dual NDS 256x192 screens,
   framebuffer 320x240).
 
@@ -293,7 +320,7 @@ Conclusions recorded so they are not re-derived:
 
 ### A-24. Document existing `hit()`/`on_input()` override patterns + tests (no interface change)
 
-**Priority: HIGH — blocks V-5 instrument widgets and Batch H custom elements.**
+**Priority: HIGH — execution order step 1 — blocks V-5 instrument widgets and Batch H custom elements.**
 
 Source-path read (2026-09-10) revealed that the framework **already has**
 the two capabilities needed for non-rectangular interactive widgets:
