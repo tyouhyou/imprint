@@ -301,12 +301,22 @@ makes shape-vs-shape intersection straightforward.
     `set_value` calls `mark_dirty()`.
   - `virtual void on_value_changed(float new_val)` — hook for
     alarms / side effects, default no-op.
-- **Event hooks** (new Widget virtuals, default no-ops):
-  - `virtual bool on_pointer(input_event& ev)` — return true to
-    consume (knob drag, slider move); pressed-target lock handles
-    DOWN→MOVE→UP continuity automatically.
-  - `virtual bool on_key(input_event& ev)` — keyboard-driven value
-    adjustment.
+- **Event hook** (single unified entry point):
+  - `virtual bool on(input_event& ev)` — the only event entry point.
+    Return true to consume (stop propagation), false to pass.
+    Default dispatches to `on_pointer_event()` / `on_key_event()` by
+    type. Dispatcher calls this directly after `hit()` confirms the
+    target; pressed-target lock handles DOWN→MOVE→UP continuity.
+  - `virtual bool on_pointer_event(input_event& ev)` — convenience
+    layer, default returns false. Subclasses override this if they
+    only care about pointer events.
+  - `virtual bool on_key_event(input_event& ev)` — convenience layer,
+    default returns false. Subclasses override this if they only care
+    about key events.
+  - Two override styles: (A) override `on()` for full control (complex
+    widgets like Knob), or (B) override `on_pointer_event()` / `on_key_event()`
+    for type-specific handling (simple widgets like Checkbox). Both
+    return through `on()`.
 - **Damage rect**: unchanged. Non-rectangular widgets report their
   bounding box (conservative outer rect). No changes to `walk_damage`
   / damage hard-clip.
@@ -325,8 +335,9 @@ makes shape-vs-shape intersection straightforward.
   Demonstrates: `hit()` override (arc-sector test), `draw_at()`
   override (arc + line + pie fill), `set_value` (needle angle = f(value)).
 - `Knob` — circular rotary knob with indicator line. Parameters:
-  radius, angle range, color. Demonstrates: `on_pointer` (drag
-  rotation), `hit()` override (circle test), value change on drag.
+  radius, angle range, color. Demonstrates: `on()` override (drag
+  rotation via pointer events), `hit()` override (circle test), value
+  change on drag.
 
 **Placement in tree**: `imui` (shared with all targets); direct
 Widget subclasses like Button/Label. Tests:
