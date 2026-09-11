@@ -88,7 +88,6 @@ namespace zb::app::showcase
         void toggle_theme();
         void advance();
         void advance_dashboard();
-        void update_input_echo(const zb::input::input_event &ev);
         void run_bench();
         void bench_check_hash(int half);
         [[nodiscard]] uint32_t buffer_hash() const;
@@ -136,16 +135,13 @@ namespace zb::app::showcase
         zb::ui::TrendLine *trend_ = nullptr;
         zb::ui::Knob *setpoint_knob_ = nullptr;
         zb::ui::Slider *setpoint_slider_ = nullptr;
-        zb::ui::Label *knob_readout_ = nullptr;
+        zb::ui::Label *setpoint_readout_ = nullptr;
         zb::ui::Label *console_ppm_ = nullptr;
         zb::ui::ToggleSwitch *pump_toggle_ = nullptr;
         zb::ui::ToggleSwitch *coolant_toggle_ = nullptr;
-        zb::ui::ListBox *alarm_list_ = nullptr;
         zb::ui::Button *bench_btn_ = nullptr;
         zb::ui::Label *bench_out_ = nullptr;
-        zb::ui::Label *bench_in_ = nullptr;
         int sample_ = 0;
-        std::vector<std::string> alarm_log_;
 
         // self-check runtime
         bool bench_active_ = false;
@@ -167,8 +163,6 @@ namespace zb::app::showcase
         zb::event::Subscription<> sub_bench_;
         zb::event::Subscription<int> sub_setpoint_slider_;
         zb::event::Subscription<int> sub_setpoint_knob_;
-        zb::event::Subscription<bool> sub_pump_;
-        zb::event::Subscription<bool> sub_coolant_;
         zb::event::Subscription<const void *> sub_painted_;
         zb::event::Subscription<> sub_back_;
         zb::event::Subscription<int> sub_slider_;

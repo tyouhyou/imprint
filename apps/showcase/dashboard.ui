@@ -1,33 +1,23 @@
-# V-5 step 3: factory-console dashboard. A desktop-oriented console page
-# (the 64px gauges and the 48px trend cost more vertical budget than the
-# 256x192 embedded frame -- the embedded promo stays on hero/gallery).
-# The toggle/gauge/knob/trend tags materialize through the ui_builder
-# tag table, the same design-file path every widget ships through.
-column spacing=6 padding=8
+column id="dash_page" spacing=4 padding=6
   row spacing=6
     label text="FACTORY CONSOLE"
-    label id="console_ppm" text="---- u/min" width=88
-    button id="dash_back_btn" text="PANEL"
+    label id="console_ppm" text="0000 u/min"
+    button id="dash_back_btn" text="BACK" width=56
   row spacing=6
     gauge id="temp_gauge" min=0 max=200 value=120
-    gauge id="press_gauge" min=0 max=100 value=58
-    gauge id="flow_gauge" min=0 max=100 value=40
+    gauge id="press_gauge" min=0 max=200 value=150
+    gauge id="flow_gauge" min=0 max=100 value=32
+  label text="TREND / SETPOINT"
+  trend id="trend" width=292 height=36
+  row spacing=4
+    knob id="setpoint_knob" min=0 max=100 value=40
+    slider id="setpoint_slider" min=0 max=100 step=5 width=76
   row spacing=6
-    trend id="trend" width=280 height=48
-    column spacing=4
-      label text="SET POINT"
-      row spacing=4
-        knob id="setpoint_knob" min=0 max=100 value=40
-        slider id="setpoint_slider" min=0 max=100 step=5
-      label id="knob_readout" text="40"
-  row spacing=8
+    label id="setpoint_value" text="40"
     label text="PUMP"
     toggle id="pump_toggle" checked=true
     label text="COOLANT"
     toggle id="coolant_toggle"
   row spacing=6
-    label text="ALARMS"
-    list_box id="alarm_list" rows=2 width=132 items="ALL SYSTEMS NOMINAL" "WATCH COOLANT"
-    button id="bench_btn" text="SELF-CHECK"
-    label id="bench_out" text="IDLE" width=168
-    label id="bench_in" text="-" width=128
+    button id="bench_btn" text="SELF-CHECK" width=68
+    label id="bench_out" text="RT:0 PX/F:0 FPS:--" width=172

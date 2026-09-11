@@ -130,7 +130,46 @@ int main(int argc, char **argv)
         frame(app);
     }
 
-    // 4: light hero, then the gallery with its asset row
+    // 4: the factory console (V-5 step 3). Plant-sim moves grow the
+    // trend, a live drag walks the setpoint knob (the readout follows),
+    // the toggles flip, then SELF-CHECK drives the same knob through
+    // three real drag round-trips and stamps PIXELS MATCH
+    click(app, win, "dash_btn");
+    for (int i = 0; i < 14; ++i)
+    {
+        app.input(touch_ev(input_type::mouse_move, 4, 4));
+        frame(app);
+    }
+    if (auto *knob = win.root().find_by_id("setpoint_knob"))
+    {
+        const auto p = knob->get_absolute_position();
+        const auto s = knob->get_size();
+        const int cx = p.x + s.width / 2;
+        const int cy = p.y + s.height / 2;
+        app.input(touch_ev(input_type::mouse_left_down, cx, cy));
+        frame(app);
+        app.input(touch_ev(input_type::mouse_move, cx, cy - 2));
+        frame(app);
+        app.input(touch_ev(input_type::mouse_left_up, cx, cy - 2));
+        frame(app);
+        app.input(touch_ev(input_type::mouse_left_down, cx, cy));
+        frame(app);
+        app.input(touch_ev(input_type::mouse_move, cx, cy + 2));
+        frame(app);
+        app.input(touch_ev(input_type::mouse_left_up, cx, cy + 2));
+        frame(app);
+    }
+    click(app, win, "pump_toggle");
+    click(app, win, "coolant_toggle");
+    click(app, win, "bench_btn");
+    for (int i = 0; i < 12; ++i)
+    {
+        frame(app);  // hold on the verified console
+    }
+
+    // 5: back to the hero, light hero, then the gallery with its asset
+    // row (the recorder's historic closing choreography)
+    click(app, win, "dash_back_btn");
     click(app, win, "theme_btn");
     click(app, win, "gallery_btn");
     if (auto *slider = win.root().find_by_id("demo_slider"))
@@ -150,7 +189,7 @@ int main(int argc, char **argv)
         frame(app);
     }
 
-    // 5: back to the hero, dark again -- the closing money shot
+    // 6: back to the hero, dark again -- the closing money shot
     click(app, win, "back_btn");
     click(app, win, "theme_btn");
     frame(app);

@@ -251,10 +251,35 @@ namespace zb::ui
             // apply after the pixel form: set_size marks both axes
             // explicit, the declaration then clears its axis's
             // explicitness
-            if (has_prop(n, "width") || has_prop(n, "height"))
+            const bool has_width = has_prop(n, "width");
+            const bool has_height = has_prop(n, "height");
+            if (has_width || has_height)
             {
-                w.set_size(static_cast<int>(prop_of(n, "width", 0LL)),
-                           static_cast<int>(prop_of(n, "height", 0LL)));
+                if (has_width == has_height)
+                {
+                    // both declared (or neither leniently): two-axis set
+                    w.set_size(static_cast<int>(prop_of(n, "width", 0LL)),
+                               static_cast<int>(prop_of(n, "height", 0LL)));
+                }
+                else
+                {
+                    // a one-axis declaration keeps the widget's own other
+                    // axis (its measure, e.g. a button's text height) --
+                    // set_size marks both explicit, so clear the missing
+                    // axis's flag right after
+                    const int wp = static_cast<int>(prop_of(n, "width", 0LL));
+                    const int hp = static_cast<int>(prop_of(n, "height", 0LL));
+                    if (has_width)
+                    {
+                        w.set_size(wp, w.get_size().height);
+                        w.set_height_auto(w.get_size().height);
+                    }
+                    else
+                    {
+                        w.set_size(w.get_size().width, hp);
+                        w.set_width_auto(w.get_size().width);
+                    }
+                }
                 const int w_pct = as_percent(prop_of(n, "width", std::string{}));
                 const int h_pct = as_percent(prop_of(n, "height", std::string{}));
                 if (w_pct > 0)

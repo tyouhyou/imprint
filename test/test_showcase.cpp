@@ -261,12 +261,11 @@ int test_showcase()
         auto *knob = static_cast<Knob *>(root(app).find_by_id("setpoint_knob"));
         auto *slider = static_cast<Slider *>(root(app).find_by_id("setpoint_slider"));
         auto *pump = static_cast<ToggleSwitch *>(root(app).find_by_id("pump_toggle"));
-        auto *alarms = static_cast<ListBox *>(root(app).find_by_id("alarm_list"));
+        auto *readout = static_cast<Label *>(root(app).find_by_id("setpoint_value"));
         auto *bench = static_cast<Label *>(root(app).find_by_id("bench_out"));
-        auto *echo = static_cast<Label *>(root(app).find_by_id("bench_in"));
         auto *bench_btn = static_cast<Button *>(root(app).find_by_id("bench_btn"));
         EXPECT(temp != nullptr && trend != nullptr && knob != nullptr && slider != nullptr);
-        EXPECT(pump != nullptr && alarms != nullptr && bench != nullptr && echo != nullptr);
+        EXPECT(pump != nullptr && readout != nullptr && bench != nullptr);
         EXPECT(bench_btn != nullptr);
         // design-file values landed (the custom tags materialize through
         // the ui_builder tag table)
@@ -291,6 +290,7 @@ int test_showcase()
         app.input(key);
         app.input(key);
         EXPECT(knob->get_value() == 42 && slider->get_value() == 42);
+        EXPECT(readout->get_text() == u"42");
         // each event advances the sim: the knob click is down+up = 2,
         // the two arrow keys 2 more
         EXPECT(trend->get_count() == 8 + 4);
@@ -305,9 +305,22 @@ int test_showcase()
         EXPECT(knob->get_value() == 42);  // returned, not left displaced
         const std::u16string out = bench->get_text();
         EXPECT(out.find(u"MATCH") != std::u16string::npos);
+    }
 
-        // the input echo lifted from its placeholder
-        EXPECT(echo->get_text() != u"-");
+    // dashboard page at the embedded/recording window size (320x240):
+    // every console control fits inside the frame
+    {
+        const auto holder = make_app(320, 240);
+        auto &app = *holder;
+        auto *dash_btn = static_cast<Button *>(root(app).find_by_id("dash_btn"));
+        EXPECT(dash_btn != nullptr);
+        click_center(app, *dash_btn);
+        app.paint();
+        expect_fit(app, 320, 240,
+                   {"temp_gauge", "press_gauge", "flow_gauge", "trend",
+                    "setpoint_knob", "setpoint_slider", "pump_toggle",
+                    "coolant_toggle", "bench_btn", "bench_out",
+                    "dash_back_btn", "console_ppm"});
     }
 
     // theme toggle repaints the frame; the showcase boots dark (V-2),

@@ -240,14 +240,12 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
         trend_ = static_cast<zb::ui::TrendLine *>(page->find_by_id("trend"));
         setpoint_knob_ = static_cast<zb::ui::Knob *>(page->find_by_id("setpoint_knob"));
         setpoint_slider_ = static_cast<zb::ui::Slider *>(page->find_by_id("setpoint_slider"));
-        knob_readout_ = static_cast<zb::ui::Label *>(page->find_by_id("knob_readout"));
+        setpoint_readout_ = static_cast<zb::ui::Label *>(page->find_by_id("setpoint_value"));
         console_ppm_ = static_cast<zb::ui::Label *>(page->find_by_id("console_ppm"));
         pump_toggle_ = static_cast<zb::ui::ToggleSwitch *>(page->find_by_id("pump_toggle"));
         coolant_toggle_ = static_cast<zb::ui::ToggleSwitch *>(page->find_by_id("coolant_toggle"));
-        alarm_list_ = static_cast<zb::ui::ListBox *>(page->find_by_id("alarm_list"));
         bench_btn_ = static_cast<zb::ui::Button *>(page->find_by_id("bench_btn"));
         bench_out_ = static_cast<zb::ui::Label *>(page->find_by_id("bench_out"));
-        bench_in_ = static_cast<zb::ui::Label *>(page->find_by_id("bench_in"));
 
         if (trend_ != nullptr)
         {
@@ -258,9 +256,9 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
         const auto set_readout = [this](const int v) {
             char buf[16];
             std::snprintf(buf, sizeof buf, "%d", v);
-            if (knob_readout_ != nullptr)
+            if (setpoint_readout_ != nullptr)
             {
-                knob_readout_->set_text(buf);
+                setpoint_readout_->set_text(buf);
             }
         };
         if (setpoint_knob_ != nullptr && setpoint_slider_ != nullptr)
@@ -276,28 +274,6 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
                 setpoint_knob_->set_value(v);
                 set_readout(v);
             });
-        }
-
-        const auto post_alarm = [this](const char *msg) {
-            alarm_log_.push_back(msg);
-            while (alarm_log_.size() > 3)
-            {
-                alarm_log_.erase(alarm_log_.begin());
-            }
-            if (alarm_list_ != nullptr)
-            {
-                alarm_list_->set_items(alarm_log_);
-            }
-        };
-        if (pump_toggle_ != nullptr)
-        {
-            sub_pump_ = pump_toggle_->changed.subscribe(
-                [post_alarm](const bool on) { post_alarm(on ? "PUMP ON" : "PUMP OFF"); });
-        }
-        if (coolant_toggle_ != nullptr)
-        {
-            sub_coolant_ = coolant_toggle_->changed.subscribe(
-                [post_alarm](const bool on) { post_alarm(on ? "COOLANT ON" : "COOLANT OFF"); });
         }
 
         if (auto *dash_back_btn = static_cast<zb::ui::Button *>(page->find_by_id("dash_back_btn"));
@@ -513,7 +489,6 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
                 advance();
             }
         }
-        update_input_echo(ev);
         window_->input(ev);
     }
 
@@ -546,44 +521,6 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
             std::snprintf(buf, sizeof buf, "%04d u/min", sample_ * 12 % 10000);
             console_ppm_->set_text(buf);
         }
-    }
-
-    // the input echo: the last decoded event, lifted live on the console
-    void Showcase::update_input_echo(const zb::input::input_event &ev)
-    {
-        if (bench_in_ == nullptr)
-        {
-            return;
-        }
-        using t = zb::input::input_type;
-        const char *kind = "EV";
-        switch (ev.type)
-        {
-        case t::mouse_left_down:
-            kind = "TL DOWN";
-            break;
-        case t::mouse_left_up:
-            kind = "TL UP";
-            break;
-        case t::mouse_move:
-            kind = "MOVE";
-            break;
-        case t::mouse_wheel:
-            kind = "WHEEL";
-            break;
-        case t::key_down:
-            kind = "KEY";
-            break;
-        case t::key_up:
-            kind = "KEY+";
-            break;
-        default:
-            kind = "EV";
-            break;
-        }
-        char buf[48];
-        std::snprintf(buf, sizeof buf, "%s %d,%d", kind, ev.x, ev.y);
-        bench_in_->set_text(buf);
     }
 
     // SELF-CHECK: drive the setpoint knob with real drag events (the

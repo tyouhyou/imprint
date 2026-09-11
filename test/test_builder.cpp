@@ -300,6 +300,32 @@ int test_builder()
         EXPECT(kn != nullptr && kn->get_value() == 40 && kn->get_step() == 5);
     }
 
+    // a one-axis size declaration keeps the other axis's own measure
+    // (regression: width= only used to force the height to an explicit
+    // 0 -- buttons and sliders collapsed flat and became unclickable)
+    {
+        bool ok = false;
+        zb::ui::ui_node tree = parse_ui_text(
+            "column spacing=4\n"
+            "  button id=\"bw\" text=\"SELF-CHECK\" width=68\n"
+            "  slider id=\"sh\" height=20\n",
+            &ok);
+        EXPECT(ok);
+        FlexPanel host;
+        host.set_size(300, 240);
+        build(host, tree);
+        host.layout();
+        auto *bw = static_cast<Button *>(host.find_by_id("bw"));
+        auto *sh = static_cast<Slider *>(host.find_by_id("sh"));
+        EXPECT(bw != nullptr && sh != nullptr);
+        EXPECT(bw->get_size().width == 68);
+        EXPECT(bw->get_size().height > 0);      // auto text height, not 0
+        EXPECT(bw->is_width_explicit() && !bw->is_height_explicit());
+        EXPECT(sh->get_size().height == 20);
+        EXPECT(sh->get_size().width > 0);       // auto track width, not 0
+        EXPECT(!sh->is_width_explicit() && sh->is_height_explicit());
+    }
+
     // host root node is documentation only... panel() children flow
     return test::report("builder");
 }
