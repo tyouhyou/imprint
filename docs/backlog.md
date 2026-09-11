@@ -26,8 +26,13 @@ Dependency-driven: each tier unlocks what follows.
    the recent industrial mockups (Series 7 / Model 500, `design/htmldemo/`)
    into something real running in the framework, and the promotion
    material for the repo.
-3. **V-3 re-record & re-shoot** — only after V-5 exists to record;
-   captures the new dashboard, not the old showcase.
+3. **V-3 re-record & re-shoot** — **done** (2026-09-11): GIF
+   re-recorded with the factory-console dashboard (188 frames);
+   320×240 layout fits the recorder and real window. Montage-refresh
+   and per-platform screenshot refresh (win/mac/linux/nds) pending
+   maintainer — the hero page changed only by adding the CONSOLE
+   button, so the existing montage is one click stale. Next step is
+   Batch H core.
 4. **Batch H core** (3–5 days) — HTML/CSS rendering path; the
    tag-mapping table now has `<gauge>`/`<knob>` available because of
    A-24 + the V-5 widgets.
@@ -70,8 +75,19 @@ steps 2–3.
   default-OFF question — decide both when the first real
   compressed-asset use case appears; until then the procedural
   generator covers the demo.
-- **V-3. Re-record & re-shoot** (execution order step 3): GIF + per-platform static frames
-  (win / X11 / mac), README hero layout, three-language READMEs aligned.
+- **V-3. Re-record & re-shoot** — **done** (2026-09-11): 188-frame GIF
+  (10 s) re-recorded with the V-5 factory-console dashboard; the
+  three-page recorder choreography (hero → start → replay → dashboard
+  with sim growth, live knob drags, SELF-CHECK PIXELS MATCH → light
+  gallery → back to dark) fits the 320×240 canvas the real window and
+  WASM use. Dashboard designed to 320 natively (content width 304);
+  the one-axis `width=` only bug (`apply_common` zeroed the other
+  axis's explicitness, collapsing buttons flat) was caught here and
+  fixed with a one-axis setter path in `apply_common` (regression
+  locked in `test_builder`). Per-platform screenshot refresh
+  (montage/win/mac/nds/linux) deferred to maintainer — the hero page
+  changed only by adding the CONSOLE button; existing montage is one
+  click stale. READMEs (three languages) updated.
 - **V-0. Promote `gif_encoder`** — **done** (2026-09-05):
   `zb::ui::GifWriter` lives in `imcore/codec/gif` beside png/jpeg; input
   is `const core::Color*` through the normalized accessors (A-19, so

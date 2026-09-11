@@ -18,7 +18,7 @@ Imprint UI は、極小・依存ゼロ・ソフトウェアレンダリングの
 
 **[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— 上のページは WebAssembly ビルド。ニンテンドーDS のフレームは同じソースの devkitARM ビルドです。
 
-<img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：ダークで起動しチャートが描き出され、START でプログレスバーが充填、REPLAY でチャートを再生、ライトの全ウィジェットページと影カード資産、ダークで締める">
+<img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：ダークで起動しチャートが描き出され、START でプログレスバーが充填、REPLAY でチャートを再生、ファクトリーコンソールのダッシュボード（ゲージ・ライブトレンド・セットポイントノブ・SELF-CHECK が PIXELS MATCH を刻印）、ライトの全ウィジェットページと影カード資産、ダークで締める">
 
 同じ showcase がそのまま 4 つのネイティブシェルで動作——Nintendo DS では 690 KB ROM・60 fps:
 
@@ -166,7 +166,7 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 
 **Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
 
-**showcase**（`-DSTORY=showcase`）——マルチターゲット・モンタージュの元になるウィジェットギャラリー。ダークで起動し、フレームワーク自身のラスタライザで描いたアニメーションチャート（角丸カード上のアンチエイリアス曲線＋グラデーション領域、app 側 tween が少しずつ描き出す）で開始。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と、アルファ資産合成付きの全ウィジェットページ（9-slice 影カード、アクセント色にティントしたボール。資産は `tools/asset_gen` がビルド時に生成）。`assets/showcase/` のフレームはこれらのビルドから生成。レコーダーは完全に決定論的で、Windows/macOS/Linux でバイト単位で同一の GIF を生成します。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
+**showcase**（`-DSTORY=showcase`）——マルチターゲット・モンタージュの元になるウィジェットギャラリー。ダークで起動し、フレームワーク自身のラスタライザで描いたアニメーションチャート（角丸カード上のアンチエイリアス曲線＋グラデーション領域、app 側 tween が少しずつ描き出す）で開始。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と、アルファ資産合成付きの全ウィジェットページ（9-slice 影カード、アクセント色にティントしたボール。資産は `tools/asset_gen` がビルド時に生成）、ファクトリーコンソールのダッシュボードページ（ゲージ、ライブトレンドチャート、セットポイントのノブ＋スライダー、ポンプ/クーラントトグル）と SELF-CHECK ボタン——実際のドラッグでノブを操作し、同じ状態の 2 回のレンダリングがバイト単位で一致したとき PIXELS MATCH を刻印（決定論ランタイムの証明）。`assets/showcase/` のフレームはこれらのビルドから生成。レコーダーは完全に決定論的で、Windows/macOS/Linux でバイト単位で同一の GIF を生成します。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
 
 **三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。
 
