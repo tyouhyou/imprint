@@ -20,3 +20,4 @@ column spacing=6 padding=8
   row spacing=6
     button id="theme_btn" text="DARK"
     button id="gallery_btn" text="GALLERY"
+    button id="dash_btn" text="CONSOLE"

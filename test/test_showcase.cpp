@@ -203,7 +203,7 @@ int test_showcase()
         auto &app = *holder;
         expect_fit(app, 256, 192,
                    {"cpu_bar", "mem_bar", "temp_bar", "state_value", "start_btn",
-                    "stop_btn", "gallery_btn", "theme_btn"});
+                    "stop_btn", "gallery_btn", "theme_btn", "dash_btn"});
         auto *gallery_btn = static_cast<Button *>(root(app).find_by_id("gallery_btn"));
         click_center(app, *gallery_btn);
         app.paint();
@@ -241,6 +241,73 @@ int test_showcase()
                theme().field_bg.pixel);
         // the corner outside card and shadow tail stays the page
         EXPECT(px(app, sp.x + 1, sp.y + 1) == theme().background.pixel);
+    }
+
+    // V-5 step 3: the factory console mounts from the CONSOLE button;
+    // the plant sim advances one deterministic sample per input, the
+    // knob/slider pair syncs, and the self-check drives the knob with
+    // real drag events then stamps PIXELS MATCH when two renders of the
+    // same state hash byte-identically
+    {
+        const auto holder = make_app(640, 480);
+        auto &app = *holder;
+        auto *dash_btn = static_cast<Button *>(root(app).find_by_id("dash_btn"));
+        EXPECT(dash_btn != nullptr);
+        click_center(app, *dash_btn);
+        app.paint();
+
+        auto *temp = static_cast<GaugeDial *>(root(app).find_by_id("temp_gauge"));
+        auto *trend = static_cast<TrendLine *>(root(app).find_by_id("trend"));
+        auto *knob = static_cast<Knob *>(root(app).find_by_id("setpoint_knob"));
+        auto *slider = static_cast<Slider *>(root(app).find_by_id("setpoint_slider"));
+        auto *pump = static_cast<ToggleSwitch *>(root(app).find_by_id("pump_toggle"));
+        auto *alarms = static_cast<ListBox *>(root(app).find_by_id("alarm_list"));
+        auto *bench = static_cast<Label *>(root(app).find_by_id("bench_out"));
+        auto *echo = static_cast<Label *>(root(app).find_by_id("bench_in"));
+        auto *bench_btn = static_cast<Button *>(root(app).find_by_id("bench_btn"));
+        EXPECT(temp != nullptr && trend != nullptr && knob != nullptr && slider != nullptr);
+        EXPECT(pump != nullptr && alarms != nullptr && bench != nullptr && echo != nullptr);
+        EXPECT(bench_btn != nullptr);
+        // design-file values landed (the custom tags materialize through
+        // the ui_builder tag table)
+        EXPECT(knob->get_value() == 40 && slider->get_value() == 40);
+        EXPECT(pump->is_checked());
+        // trend seeded by the app, console page drawn over the frame
+        EXPECT(trend->get_count() == 8);
+        EXPECT(temp->get_value() == 120);
+        EXPECT(px(app, 3, 3) == theme().background.pixel);
+        const auto tp = trend->get_absolute_position();
+        EXPECT(px(app, tp.x + 8, tp.y + 2) == theme().field_bg.pixel);
+
+        // plant sim: one deterministic sample per input event, and a
+        // click focuses the knob (arrow keys then step it)
+        const auto kp = knob->get_absolute_position();
+        const auto ks = knob->get_size();
+        click(app, kp.x + ks.width / 2, kp.y + ks.height / 2);
+        app.paint();
+        zb::input::input_event key = {};
+        key.type = zb::input::input_type::key_down;
+        key.key = static_cast<int>(zb::input::key_code::right);
+        app.input(key);
+        app.input(key);
+        EXPECT(knob->get_value() == 42 && slider->get_value() == 42);
+        // each event advances the sim: the knob click is down+up = 2,
+        // the two arrow keys 2 more
+        EXPECT(trend->get_count() == 8 + 4);
+
+        // self-check: 3 drag round-trips on the knob; the sim is frozen
+        // while the bench synthetic inputs run, and the bench click's
+        // down+up are the only events that advanced the plant
+        const auto c0 = trend->get_count();
+        click_center(app, *bench_btn);
+        app.paint();
+        EXPECT(trend->get_count() == c0 + 2);
+        EXPECT(knob->get_value() == 42);  // returned, not left displaced
+        const std::u16string out = bench->get_text();
+        EXPECT(out.find(u"MATCH") != std::u16string::npos);
+
+        // the input echo lifted from its placeholder
+        EXPECT(echo->get_text() != u"-");
     }
 
     // theme toggle repaints the frame; the showcase boots dark (V-2),

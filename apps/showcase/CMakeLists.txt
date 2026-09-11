@@ -8,7 +8,8 @@ target_include_directories(showcase_app
 # the shipping form on every target)
 set(SHOWCASE_UI
     ${CMAKE_CURRENT_SOURCE_DIR}/hero.ui
-    ${CMAKE_CURRENT_SOURCE_DIR}/gallery.ui)
+    ${CMAKE_CURRENT_SOURCE_DIR}/gallery.ui
+    ${CMAKE_CURRENT_SOURCE_DIR}/dashboard.ui)
 set(SHOWCASE_UI_HEADER ${CMAKE_CURRENT_BINARY_DIR}/showcase_ui.gen.hpp)
 if (NDS_PLATFORM)
     # the ui_embed host tool does not build under the ARM toolchain; the
