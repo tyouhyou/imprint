@@ -515,5 +515,90 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 4, 0) != core::colors::White.pixel);
     }
 
+    // draw_arc_aa: shape, endpoints and sample points are path-neutral
+    // (both trig paths agree there); the interior and the unswept half
+    // stay untouched. Angles are the math convention measured from +x;
+    // on the raster's screen coordinates (y down) a positive sweep runs
+    // visually clockwise, so 0..180 sweeps the lower half.
+    {
+        auto g = core::Graphics::make_ptr(21, 21);
+        g->fill(core::colors::Black);
+        g->draw_arc_aa(10, 10, 7, 0, 180, core::colors::White);
+        EXPECT(test::pixel_at(*g, 17, 10) == core::colors::White.pixel);  // 0deg endpoint
+        EXPECT(test::pixel_at(*g, 3, 10) == core::colors::White.pixel);   // 180deg endpoint
+        EXPECT(test::pixel_at(*g, 10, 17) == core::colors::White.pixel);  // 90deg sample (lower)
+        EXPECT(test::pixel_at(*g, 15, 15) == core::colors::White.pixel);  // 45deg sample
+        EXPECT(test::pixel_at(*g, 10, 10) != core::colors::White.pixel);  // hollow center
+        EXPECT(test::pixel_at(*g, 10, 3) != core::colors::White.pixel);   // 270deg not swept
+        EXPECT(test::pixel_at(*g, 18, 10) != core::colors::White.pixel);  // outside
+    }
+
+    // negative sweep walks the same pixels as its positive mirror
+    {
+        auto gcw = core::Graphics::make_ptr(21, 21);
+        auto gccw = core::Graphics::make_ptr(21, 21);
+        gcw->fill(core::colors::Black);
+        gccw->fill(core::colors::Black);
+        gcw->draw_arc_aa(10, 10, 7, 0, 180, core::colors::White);
+        gccw->draw_arc_aa(10, 10, 7, 180, -180, core::colors::White);
+        bool same = true;
+        for (int y = 0; y < 21; ++y)
+        {
+            for (int x = 0; x < 21; ++x)
+            {
+                same = same && (test::pixel_at(*gcw, x, y) == test::pixel_at(*gccw, x, y));
+            }
+        }
+        EXPECT(same);
+    }
+
+    // full circle relocates to draw_circle_aa: multi-turn and negative
+    // sweeps converge to the exact-chord ring
+    {
+        auto ga = core::Graphics::make_ptr(21, 21);
+        auto gc = core::Graphics::make_ptr(21, 21);
+        ga->fill(core::colors::Black);
+        gc->fill(core::colors::Black);
+        ga->draw_arc_aa(10, 10, 7, 0, 360, core::colors::White);
+        gc->draw_circle_aa(10, 10, 7, core::colors::White);
+        bool same = true;
+        for (int y = 0; y < 21; ++y)
+        {
+            for (int x = 0; x < 21; ++x)
+            {
+                same = same && (test::pixel_at(*ga, x, y) == test::pixel_at(*gc, x, y));
+            }
+        }
+        EXPECT(same);
+        ga->draw_arc_aa(10, 10, 7, 100, -720, core::colors::White);  // still the ring, no seam
+        EXPECT(test::pixel_at(*ga, 10, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*ga, 10, 17) == core::colors::White.pixel);
+    }
+
+    // degenerate: zero sweep draws nothing, radius 0 plots the center
+    {
+        auto g = core::Graphics::make_ptr(21, 21);
+        g->fill(core::colors::Black);
+        g->draw_arc_aa(10, 10, 7, 0, 0, core::colors::White);
+        EXPECT(test::pixel_at(*g, 17, 10) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 10, 10) != core::colors::White.pixel);
+        g->draw_arc_aa(10, 10, 0, 30, 90, core::colors::White);
+        EXPECT(test::pixel_at(*g, 10, 10) == core::colors::White.pixel);
+    }
+
+    // the arc's write path respects clip_safe like every raster entry
+    {
+        auto gk = core::Graphics::make_ptr(21, 21);
+        gk->fill(core::colors::Black);
+        {
+            auto guard = gk->clip_safe(0, 0, 11, 21);
+            EXPECT(static_cast<bool>(guard));
+            gk->draw_arc_aa(10, 10, 7, 0, 180, core::colors::White);
+        }
+        EXPECT(test::pixel_at(*gk, 17, 10) != core::colors::White.pixel);  // 0deg endpoint clipped
+        EXPECT(test::pixel_at(*gk, 10, 17) == core::colors::White.pixel);  // 90deg endpoint visible
+        EXPECT(test::pixel_at(*gk, 3, 10) == core::colors::White.pixel);   // 180deg endpoint visible
+    }
+
     return test::report("graphics");
 }

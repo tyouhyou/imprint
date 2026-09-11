@@ -236,6 +236,25 @@ namespace zb::ui::core
         void draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr);
         void draw_circle_aa(int x, int y, int radius, const Color &colr);
 
+        /*
+         * Anti-aliased circular arc (Batch V-5). Integer degrees in the
+         * math convention: start_deg measured from +x (3 o'clock),
+         * positive sweep_deg runs counter-clockwise (on the raster's
+         * screen coordinates, y down, that is visually clockwise -- the
+         * same convention as SVG/Canvas arcs). sweep == 0 draws nothing;
+         * |sweep| >= 360 draws the full circle (degenerates to
+         * draw_circle_aa). The arc is a polyline of samples kept within
+         * ~1px of each other (the step follows the radius), each segment
+         * drawn through draw_line_aa, so endpoints plot solid and every
+         * write still goes through plot_aa (V-1), inheriting
+         * clip/damage/16bpp.
+         * Trig follows USE_INTEGER_GEOMETRY: OFF (desktop) = IEEE float
+         * sin/cos; ON (FPU-less targets) = compile-time-generated 1-degree
+         * lookup table, no runtime float. Both paths agree on each sample
+         * within +-0.5px at radius <= 128 (see code-contract.md).
+         */
+        void draw_arc_aa(int cx, int cy, int radius, int start_deg, int sweep_deg, const Color &colr);
+
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, float accuracy = 0.01);
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, float accuracy = 0.01);
         void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, float accuracy = 0.01);

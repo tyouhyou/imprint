@@ -99,6 +99,88 @@ namespace
         }
         return x;
     }
+
+    /*
+     * Normalize any integer degree into [0, 360); the arc angle walk uses
+     * it so multi-turn sweeps wrap (V-5 never needs the turn count).
+     */
+    inline int norm_deg(const int d)
+    {
+        const int r = d % 360;
+        return r >= 0 ? r : r + 360;
+    }
+
+    constexpr double kDegToRad = 3.14159265358979323846 / 180.0;
+
+#if defined(USE_INTEGER_GEOMETRY)
+    /*
+     * 1-degree sin/cos over the whole circle from a compile-time-generated
+     * [0, 90] quarter table (V-5 two-trig-path policy). The table is
+     * evaluated by the host compiler -- a constexpr Taylor series, so no
+     * libm call and no runtime floating point on the target -- scaled by
+     * 256 (8-bit fraction) and rounded; quadrant symmetry expands it to
+     * 360 degrees. Coordinates are one int32 multiply + shift per sample.
+     */
+    constexpr int kArcSinScale = 256;
+
+    constexpr int arc_sin_deg_q(const int deg)
+    {
+        const double x = deg * kDegToRad;
+        const double x2 = x * x;
+        const double s = x * (1.0 - x2 / 6.0 + x2 * x2 / 120.0 - x2 * x2 * x2 / 5040.0 + x2 * x2 * x2 * x2 / 362880.0);
+        return static_cast<int>(s * kArcSinScale + 0.5);
+    }
+
+    struct ArcSinLut
+    {
+        int16_t q[91];
+        constexpr ArcSinLut() : q{}
+        {
+            for (int i = 0; i <= 90; ++i)
+            {
+                q[i] = static_cast<int16_t>(arc_sin_deg_q(i));
+            }
+        }
+    };
+    constexpr ArcSinLut kArcSinLut{};
+
+    inline int arc_sin_q(const int deg)
+    {
+        const int d = norm_deg(deg);
+        const int quad = d / 90;
+        const int r = d % 90;
+        switch (quad)
+        {
+        case 0: return kArcSinLut.q[r];
+        case 1: return kArcSinLut.q[90 - r];
+        case 2: return -kArcSinLut.q[r];
+        default: return -kArcSinLut.q[90 - r];
+        }
+    }
+    inline int arc_cos_q(const int deg) { return arc_sin_q(norm_deg(90 - deg)); }
+#endif
+
+    /*
+     * Sample the arc point at integer degree `deg` onto the circle
+     * (cx, cy, radius), rounded to the pixel grid. USE_INTEGER_GEOMETRY
+     * selects the lookup path (no runtime float); otherwise IEEE float
+     * sin/cos. Both agree on each sample to within +-0.5px at radius <=
+     * 128 (locked by the gated arc expectations in test_graphics).
+     */
+    inline void arc_point(const int deg, const int cx, const int cy, const int radius, int &ox, int &oy)
+    {
+#if defined(USE_INTEGER_GEOMETRY)
+        const int vx = arc_cos_q(deg) * radius;
+        const int vy = arc_sin_q(deg) * radius;
+        // round half away from zero on the 256-scaled value
+        ox = cx + (vx >= 0 ? (vx + 128) >> 8 : -((-vx + 128) >> 8));
+        oy = cy + (vy >= 0 ? (vy + 128) >> 8 : -((-vy + 128) >> 8));
+#else
+        const double a = deg * kDegToRad;
+        ox = cx + static_cast<int>(std::floor(radius * std::cos(a) + 0.5));
+        oy = cy + static_cast<int>(std::floor(radius * std::sin(a) + 0.5));
+#endif
+    }
 }  // namespace
 
 Graphics::Graphics(uint32_t width, uint32_t height, void *data)
@@ -854,6 +936,51 @@ void Graphics::draw_circle_aa(int x, int y, int radius, const Color &colr)
         {
             plot4(px, py + 1, frac8);
         }
+    }
+}
+
+void Graphics::draw_arc_aa(int cx, int cy, int radius, int start_deg, int sweep_deg, const Color &colr)
+{
+    if (sweep_deg == 0)
+    {
+        return;
+    }
+    if (radius <= 0)
+    {
+        draw_pixel(cx, cy, colr);
+        return;
+    }
+    if (sweep_deg >= 360 || sweep_deg <= -360)
+    {
+        // the full ring: the exact-chord circle AA covers every pixel
+        // exactly once, without the polyline closure seam
+        draw_circle_aa(cx, cy, radius, colr);
+        return;
+    }
+
+    const int dir = sweep_deg > 0 ? 1 : -1;
+    const int sweep = dir * sweep_deg;  // positive magnitude
+
+    // sample step keeps the chord length within ~1px: chord ~= radius *
+    // step_deg * pi/180 -> step_deg = ceil(57.3 / radius), floored at 1
+    // degree so large radii keep chords at or below one pixel
+    int step = (radius + 56) / radius;
+    if (step < 1)
+    {
+        step = 1;
+    }
+    const int nseg = (sweep + step - 1) / step;
+
+    int prev_x = 0, prev_y = 0;
+    arc_point(norm_deg(start_deg), cx, cy, radius, prev_x, prev_y);
+    for (int k = 1; k <= nseg; ++k)
+    {
+        const int deg = norm_deg(start_deg + dir * (k * step < sweep ? k * step : sweep));
+        int x = 0, y = 0;
+        arc_point(deg, cx, cy, radius, x, y);
+        draw_line_aa(prev_x, prev_y, x, y, colr);
+        prev_x = x;
+        prev_y = y;
     }
 }
 
