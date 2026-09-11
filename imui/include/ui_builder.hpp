@@ -163,6 +163,33 @@ namespace zb::ui
         n.prop("min", min).prop("max", max);
         return n;
     }
+    inline ui_node toggle(const bool checked_value = false)
+    {
+        ui_node n;
+        n.type = "toggle";
+        n.checked(checked_value);
+        return n;
+    }
+    inline ui_node gauge(const long long min, const long long max)
+    {
+        ui_node n;
+        n.type = "gauge";
+        n.prop("min", min).prop("max", max);
+        return n;
+    }
+    inline ui_node knob(const long long min, const long long max)
+    {
+        ui_node n;
+        n.type = "knob";
+        n.prop("min", min).prop("max", max);
+        return n;
+    }
+    inline ui_node trend()
+    {
+        ui_node n;
+        n.type = "trend";
+        return n;
+    }
     inline ui_node list_box(std::vector<std::string> items, const long long rows = 4)
     {
         ui_node n;

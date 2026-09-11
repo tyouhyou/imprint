@@ -21,8 +21,8 @@ Dependency-driven: each tier unlocks what follows.
    YAGNI, GaugeDial/Knob as first overriding subclasses) is the seeded
    basis for V-5 step 2.
 2. **V-5 composition widgets + dashboard** (3–5 days) — `draw_arc_aa`
-   (done), GaugeDial/Knob/TrendLine/toggle (done), then the factory-
-   console dashboard + self-benchmark panel. Highest ROI right now: this is what turns
+   (done), GaugeDial/Knob/TrendLine/toggle (done), factory-console
+   dashboard + self-benchmark panel (done). Highest ROI right now: this is what turns
    the recent industrial mockups (Series 7 / Model 500, `design/htmldemo/`)
    into something real running in the framework, and the promotion
    material for the repo.
@@ -110,17 +110,31 @@ steps 2–3.
     (32/16bpp × float/int); NDS cross-compile verified. Contract:
     ARCHITECTURE §2 + code-contract §3.2. Unlocks the showcase page
     (V-5 step 3).
-  - **Showcase page**: a factory-console themed dashboard (trend
-    chart, gauges, toggles, setpoint slider, alarm list, status
-    banner) — the genre its target audience (industrial /
-    instrument / kiosk) recognizes; doubles as the embedded device
-    page (same source tree, real sensor data on the device).
-  - **Self-benchmark panel** (app-side; simulated data on desktop,
-    real data once a device port lands): FPS with a render/flush
-    split, flush bytes vs full-frame bytes (the dirty-region
-    selling point), a steady-state zero-allocation line, and an
-    input-tape determinism verify (PIXELS MATCH) — the on-device
-    proof of the deterministic-runtime positioning.
+  - **Showcase page** — **done** (2026-09-11): factory-console themed
+    dashboard (trend chart, gauges, toggles, setpoint knob+slider,
+    alarm list, status banner, SELF-CHECK panel) mounts from the
+    CONSOLE button on the hero page; landing the four widgets as
+    design-file tags (`toggle`/`gauge`/`knob`/`trend` in the ui_builder
+    table with their property sets) means the page is authored in a
+    `.ui` file, and Batch H's tag-mapping table inherits them ready to
+    go. Deterministic plant sim advances one sample per input event
+    while mounted. Verified: four-gated suites pass (32/16bpp ×
+    float/int), the `.nds` showcase ROM builds with the dashboard
+    embedded. Unlocks V-3 re-record (execution order step 3).
+  - **Self-benchmark panel** — **done** (2026-09-11): SELF-CHECK drives
+    the knob with three 2px up/down drag round-trips through the real
+    input path, hashes the framebuffer byte-for-byte (FNV-1a) at the
+    raised state and the returned state, and stamps `PIXELS MATCH` when
+    all three pairs are byte-identical (the deterministic-runtime
+    proof); the dirty-region selling point rides along — the painted
+    subscription counts frame paints and the flushed (damaged) pixels,
+    reported as `RT`/`PX/F`/`FPS`, where sub-10ms wall-clock runs
+    (headless tests, the NDS poll) show `--` instead of a meaningless
+    frame count. The painted counter is frame-accurate because damage is driven by `frame_dirty`
+    at `paint()` (the showcase paints once per frame, not per widget).
+    The plant sim freezes while the bench runs so the comparison is
+    hash-stable; at 16bpp the hash is byte-based because the per-pixel
+    Color is 2 bytes there, not 4.
 
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 

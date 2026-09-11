@@ -248,6 +248,58 @@ int test_builder()
         EXPECT(ti->get_text() == u"hello!");
     }
 
+    // V-5 step 3: the composition widgets ride the tag table like every
+    // other tag -- fluent builder and .ui parser both land on them
+    {
+        auto doc = column({
+            toggle(true).named("sw"),
+            gauge(0, 200).named("gd").value(120),
+            knob(0, 100).named("kn").value(40).step(5),
+            trend().named("tr"),
+        });
+        FlexPanel host;
+        host.set_size(300, 240);
+        build(host, doc);
+        host.layout();
+
+        auto *sw = static_cast<ToggleSwitch *>(host.find_by_id("sw"));
+        auto *gd = static_cast<GaugeDial *>(host.find_by_id("gd"));
+        auto *kn = static_cast<Knob *>(host.find_by_id("kn"));
+        auto *tr = static_cast<TrendLine *>(host.find_by_id("tr"));
+        EXPECT(sw != nullptr && sw->is_checked());
+        EXPECT(gd != nullptr && gd->get_min() == 0 && gd->get_max() == 200 &&
+               gd->get_value() == 120);
+        EXPECT(kn != nullptr && kn->get_min() == 0 && kn->get_max() == 100 &&
+               kn->get_value() == 40 && kn->get_step() == 5);
+        EXPECT(tr != nullptr && tr->get_count() == 0);
+        // the widgets are live after materialize (measures, not the
+        // protected focus query)
+        EXPECT(sw->measure().width == 40 && gd->measure().height == 64);
+    }
+
+    // the same tags parse identically from a design file (the parser
+    // and the fluent builders share the tag table, contract 4.10)
+    {
+        bool ok = false;
+        zb::ui::ui_node tree = parse_ui_text(
+            "column spacing=4\n"
+            "  toggle id=\"sw\" checked=true\n"
+            "  gauge id=\"gd\" min=0 max=200 value=120\n"
+            "  knob id=\"kn\" min=0 max=100 value=40 step=5\n",
+            &ok);
+        EXPECT(ok);
+        FlexPanel host;
+        host.set_size(300, 240);
+        build(host, tree);
+        host.layout();
+        auto *sw = static_cast<ToggleSwitch *>(host.find_by_id("sw"));
+        auto *gd = static_cast<GaugeDial *>(host.find_by_id("gd"));
+        auto *kn = static_cast<Knob *>(host.find_by_id("kn"));
+        EXPECT(sw != nullptr && sw->is_checked());
+        EXPECT(gd != nullptr && gd->get_value() == 120);
+        EXPECT(kn != nullptr && kn->get_value() == 40 && kn->get_step() == 5);
+    }
+
     // host root node is documentation only... panel() children flow
     return test::report("builder");
 }

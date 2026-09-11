@@ -3,6 +3,8 @@
 #include "button.hpp"
 #include "checkbox.hpp"
 #include "flex_panel.hpp"
+#include "gauge_dial.hpp"
+#include "knob.hpp"
 #include "label.hpp"
 #include "list_box.hpp"
 #include "logging.hpp"
@@ -11,6 +13,8 @@
 #include "radio_button.hpp"
 #include "slider.hpp"
 #include "text_input.hpp"
+#include "toggle_switch.hpp"
+#include "trend_line.hpp"
 #include "widget.hpp"
 
 namespace zb::ui
@@ -122,6 +126,22 @@ namespace zb::ui
             {
                 return std::make_unique<ProgressBar>();
             }
+            if (t == "toggle")
+            {
+                return std::make_unique<ToggleSwitch>();
+            }
+            if (t == "gauge")
+            {
+                return std::make_unique<GaugeDial>();
+            }
+            if (t == "knob")
+            {
+                return std::make_unique<Knob>();
+            }
+            if (t == "trend")
+            {
+                return std::make_unique<TrendLine>();
+            }
             if (t == "list_box")
             {
                 return std::make_unique<ListBox>();
@@ -157,6 +177,22 @@ namespace zb::ui
         ProgressBar *as_progress_bar(Widget &w)
         {
             return static_cast<ProgressBar *>(&w);
+        }
+        ToggleSwitch *as_toggle(Widget &w)
+        {
+            return static_cast<ToggleSwitch *>(&w);
+        }
+        GaugeDial *as_gauge(Widget &w)
+        {
+            return static_cast<GaugeDial *>(&w);
+        }
+        Knob *as_knob(Widget &w)
+        {
+            return static_cast<Knob *>(&w);
+        }
+        TrendLine *as_trend(Widget &w)
+        {
+            return static_cast<TrendLine *>(&w);
         }
         ListBox *as_list(Widget &w)
         {
@@ -284,6 +320,31 @@ namespace zb::ui
                 p.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
                             static_cast<int>(prop_of(n, "max", 100LL)));
                 p.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                return;
+            }
+            if (t == "toggle")
+            {
+                if (prop_of(n, "checked", false))
+                {
+                    as_toggle(w)->set_checked(true);
+                }
+                return;
+            }
+            if (t == "gauge")
+            {
+                GaugeDial &g = *as_gauge(w);
+                g.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
+                            static_cast<int>(prop_of(n, "max", 100LL)));
+                g.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                return;
+            }
+            if (t == "knob")
+            {
+                Knob &k = *as_knob(w);
+                k.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
+                            static_cast<int>(prop_of(n, "max", 100LL)));
+                k.set_step(static_cast<int>(prop_of(n, "step", 1LL)));
+                k.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
                 return;
             }
             if (t == "list_box")
