@@ -272,6 +272,19 @@ satisfies. Changing any of these is an architecture change.
 - `Graphics` can wrap an external writable buffer (wrapper mode) — the
   shape used by hosts that supply the framebuffer (WASM, Python,
   `CanvasWindow::create(w, h, buffer)`).
+- **AA raster primitives (V-1, V-5 arc).** `draw_line_aa` (Wu
+  two-pixel split), `draw_circle_aa` (exact-chord coverage) and
+  `draw_arc_aa` (sampled polyline) write exclusively through the private
+  `plot_aa` — the coverage value IS the blend weight, applied regardless
+  of the `alpha_enabled` switch; at 16bpp coverage quantizes to
+  plot/skip at half and the stroke stays one pixel wide. Angular work
+  follows the **two-trig-path policy**: desktop (`USE_INTEGER_GEOMETRY`
+  OFF) uses IEEE float `sin`/`cos`; FPU-less targets (the NDS toolchain
+  forces it ON) use a compile-time-generated 1-degree lookup table
+  (0–90°, symmetry-expanded) with no runtime float. Both paths agree to
+  within ±0.5px at radius ≤ 128, so `draw_arc_aa` is deterministic on
+  both — the arc serves as the build-matrix precedent for the V-5
+  widgets. API-level detail is in code-contract.md.
 - `clip_safe()` returns a stack RAII `ClipGuard` (zero allocation per widget
   per frame); off-screen widgets get an invalid guard and draw nothing.
 - **Presentation seam (A-1).** The kernel renders exactly one internal
@@ -364,7 +377,7 @@ satisfies. Changing any of these is an architecture change.
 | Option                    | Default | NDS toolchain | Meaning                                   |
 |---------------------------|---------|---------------|-------------------------------------------|
 | `COLOR_DEPTH`             | 32      | 16 (FORCE)    | bits per pixel; 16 = embedded only        |
-| `USE_INTEGER_GEOMETRY`    | OFF     | ON (FORCE)    | integer circle/ellipse bounds (no FPU)    |
+| `USE_INTEGER_GEOMETRY`    | OFF     | ON (FORCE)    | integer circle/ellipse bounds + arc trig lookup (no FPU)    |
 | `USE_NON_ATOMIC_PTR`      | OFF     | ON (FORCE)    | non-atomic `SharedPtr` refcount (no libatomic) |
 | `USE_PNG` / `USE_JPEG` | OFF | OFF    | optional features; codecs are vendored stb |
 | `FONT_SUBSET`             | ON      | ON            | build-time 5x7 glyph subset (needs Python) |

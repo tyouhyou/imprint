@@ -738,12 +738,28 @@ obligations:
   `fill` clamps by the same boundaries then intersects, degenerating to
   an early exit). `draw_image` (plain and tinted), `fill_gradient` and
   the round-rect pair all plot per-pixel through `draw_pixel`/`draw_line`
-  and inherit the same clipping; the AA pair (`draw_line_aa` /
-  `draw_circle_aa`) writes through `plot_aa` — the same
+  and inherit the same clipping; the AA primitives (`draw_line_aa` /
+  `draw_circle_aa` / `draw_arc_aa`) write through `plot_aa` — the same
   offset/bounds/damage gate, then a coverage-weighted source-over blend
   that runs regardless of the `alpha_enabled` switch. Direct drawing
   without `clip_safe` is therefore also safe in damage mode
   (`test_raster_damage` pins this).
+- **`draw_arc_aa` angular contract (V-5)**: integer degrees in the math
+  convention, `start_deg` measured from +x (3 o'clock), positive
+  `sweep_deg` counter-clockwise — on the raster's screen coordinates
+  (y down) that is visually clockwise, matching SVG/Canvas arc angles.
+  `sweep_deg == 0` draws nothing, `|sweep_deg| >= 360`
+  draws the full circle (the two degenerate arcs clamp to it, no
+  overlap). The arc is a polyline of circle points sampled every
+  `max(1, ceil(57.3 / radius))` degrees (±0.5px chord spacing), each
+  segment drawn through `draw_line_aa` so endpoints plot solid and
+  every write stays on `plot_aa`. **Two trig paths** (both
+  deterministic): with `USE_INTEGER_GEOMETRY` OFF, IEEE float
+  `sin`/`cos`; with it ON (NDS toolchain forces it), a
+  compile-time-generated 1-degree lookup table over 0–90° expanded by
+  symmetry — no runtime floating point. Both paths agree on each sample
+  to within ±0.5px at radius ≤ 128, so the same call renders
+  sub-pixel-identically on desktop and FPU-less targets.
 - Invariant: a node with `subtree_dirty_` true implies all its ancestors
   are true (maintained jointly by bubble-set on the way up and
   post-order recomputation); bubbling may terminate early on that

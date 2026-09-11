@@ -83,10 +83,22 @@ steps 2–3.
   buyer-facing showcase pass — also the prototype of the future
   embedded device page, see the device-selection discussion in the
   handoff notes):
-  - **Arc primitive**: an opt-in AA arc (`draw_arc_aa`, the V-1
-    `*_aa` precedent — explicit call, never a global default);
-    unlocks gauge/donut rings. Battery-locked, with 16bpp
-    degradation notes (the HeroChart depth-notes precedent).
+  - **Arc primitive** — **done** (2026-09-11): opt-in AA `draw_arc_aa`
+    (integer degrees, math convention 0° = +x, positive sweep visually
+    clockwise on screen y-down — SVG/Canvas-compatible), a sampled
+    polyline through `draw_line_aa`, every write on `plot_aa`
+    (clip/damage/16bpp inherited); full circle degenerates to
+    `draw_circle_aa`, zero sweep draws nothing. **Two-trig-path
+    policy**: desktop (`USE_INTEGER_GEOMETRY` OFF) uses IEEE float
+    sin/cos; FPU-less targets (NDS FORCE ON) use a compile-time-generated
+    1° lookup table (constexpr Taylor into a 91-entry int16 quarter
+    table, symmetry-expanded — no runtime float). Both paths agree
+    ±0.5px at r ≤ 128, locked by the four-gated arc expectations in
+    test_graphics (32/16bpp × float/int); the CI `linux-nonatomic-ptr`
+    job now also configures `USE_INTEGER_GEOMETRY=ON` so the int path
+    has a permanent test seat. Contract: ARCHITECTURE §4.4/§4.9 +
+    code-contract (AA/damage paragraph). Unlocks the gauge/donut ring
+    widgets (V-5 step 2).
   - **Composition widgets** from existing primitives: toggle switch
     (rounded capsule + dot), gauge ring (arc + ticks), big-numeral
     readouts (build-time TTF subset / vendored stb runtime text —

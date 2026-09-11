@@ -14,11 +14,13 @@ set(COLOR_DEPTH 32 CACHE STRING "Pixel color depth in bits (16 or 32). Set 16 fo
 # external font library.
 set(USE_PNG OFF CACHE BOOL "Switch it to ON if png file processing is needed.")
 set(USE_JPEG OFF CACHE BOOL "Switch it to ON if jpeg file processing is needed.")
-# Integer-only geometry: no std::sqrt in the circle/ellipse scanlines for
-# FPU-less embedded targets (the NDS toolchain sets this automatically).
-# The default keeps the floating-point bounds, which are pixel-identical
-# (the integer branch is the algebraic equivalent).
-set(USE_INTEGER_GEOMETRY OFF CACHE BOOL "Switch it to ON for FPU-less embedded targets (integer-only circle/ellipse bounds).")
+# Integer-only geometry: no std::sqrt in the circle/ellipse scanlines and
+# no runtime floating point in the arc trig for FPU-less embedded targets
+# (the NDS toolchain sets this automatically). The default keeps the
+# floating-point bounds/trig, which on desktop stay deterministic (IEEE)
+# and on FPU-less targets are replaced by algebraic/lookup equivalents
+# within the same sub-pixel contract.
+set(USE_INTEGER_GEOMETRY OFF CACHE BOOL "Switch it to ON for FPU-less embedded targets (integer-only circle/ellipse bounds + arc trig lookup).")
 # Non-atomic shared pointer: zb::SharedPtr falls back to a plain-int
 # refcount implementation for targets without atomic instructions
 # (devkitARM's NDS ships no libatomic; the toolchain sets this

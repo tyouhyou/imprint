@@ -74,8 +74,9 @@ jobs:
           ./build_ci/bin/test_imui
 
   # the whole framework linked against the non-atomic SharedPtr branch
-  # (the NDS build): test_ptr.cpp locks its semantics, this job locks the
-  # rest of the framework on top of it
+  # and the integer-geometry path (the NDS build: no libatomic, no FPU);
+  # test_ptr.cpp locks the refcount semantics, this job locks the rest of
+  # the framework on top of both variants
   linux-nonatomic-ptr:
     runs-on: ubuntu-latest
     container: gcc:13
@@ -84,9 +85,9 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install build tools
         run: apt-get update && apt-get install -y --no-install-recommends cmake make
-      - name: Configure, build, test (USE_NON_ATOMIC_PTR=ON)
+      - name: Configure, build, test (USE_NON_ATOMIC_PTR=ON + USE_INTEGER_GEOMETRY=ON)
         run: |
-          cmake -S . -B build_ci -DUSE_NON_ATOMIC_PTR=ON
+          cmake -S . -B build_ci -DUSE_NON_ATOMIC_PTR=ON -DUSE_INTEGER_GEOMETRY=ON
           cmake --build build_ci -j"$(nproc)"
           ./build_ci/bin/test_imui
           ./build_ci/bin/test_zbapi

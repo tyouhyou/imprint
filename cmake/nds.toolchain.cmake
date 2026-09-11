@@ -56,8 +56,9 @@ set(NDS_PLATFORM ON CACHE BOOL "Building for the Nintendo DS" FORCE)
 set(COLOR_DEPTH 16 CACHE STRING "Pixel color depth in bits (16 or 32). Set 16 for embedded framebuffers." FORCE)
 
 # NDS ARM9 has no FPU: keep the geometry scanlines integer-only (no
-# std::sqrt); see the USE_INTEGER_GEOMETRY comment in imcore/CMakeLists.txt
-set(USE_INTEGER_GEOMETRY ON CACHE BOOL "Switch it to ON for FPU-less embedded targets (integer-only circle/ellipse bounds)." FORCE)
+# std::sqrt) and the arc trig on the compile-time lookup table; see the
+# USE_INTEGER_GEOMETRY comment in imcore/CMakeLists.txt
+set(USE_INTEGER_GEOMETRY ON CACHE BOOL "Switch it to ON for FPU-less embedded targets (integer-only circle/ellipse bounds + arc trig lookup)." FORCE)
 
 # devkitARM's NDS toolchain has no libatomic: zb::SharedPtr switches to
 # plain-int (non-atomic) refcounts; the UI is single-threaded, so this is
