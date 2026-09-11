@@ -289,6 +289,41 @@ keeps only API-level supplements.
   ARCHITECTURE.md §4.8; API-level supplement — wasm hosts register the
   callback via `addFunction` (build needs `ALLOW_TABLE_GROWTH=1`).
 
+### 3.2 V-5 composition widgets (ToggleSwitch / GaugeDial / Knob / TrendLine)
+
+All four are ordinary `Widget` subclasses built from the rasterizer
+primitives (V-1 + `draw_arc_aa`), theme-token driven, with no animation
+system (standing non-goals):
+
+- **Color source (contract 10.3)**: every color a widget draws is the
+  active `theme()` token read at draw time (accent / border / field_bg /
+  text), each overridable per-widget through a setter that marks dirty
+  only when the override actually changes.
+- **Display-only (GaugeDial, TrendLine)**: not focusable, consumes no
+  input, fires no events, `measure()` returns a fixed natural size
+  (the ProgressBar rule). `set_value()` clamps to the range and marks
+  dirty only on an actual change — a steadily fed gauge never repaints.
+- **Interactive (ToggleSwitch, Knob)**: focusable; the `changed` event
+  fires on user interaction only, programmatic setters are silent (the
+  Slider/Checkbox rule). Pointer press/release follows the Checkbox state
+  machine (ToggleSwitch: toggle on in-area release, cancel on drag-away;
+  activation toggles immediately). Knob takes the Slider keyboard/wheel
+  path (up/down step, wheel step) plus a vertical drag (drag up = value
+  up), capturing the pointer while held.
+- **Circular `hit()` (GaugeDial, Knob)**, the first in-tree A-24
+  overriding consumers: `hit(x, y)` is the widget-local disc of radius
+  `min(w, h)/2 - 1` (matches the drawn face), reproducing the base
+  `is_visible()` gate. The override is allocation-free and symmetric with
+  `draw_at()`'s geometry (§4.3); damage recovery still uses the
+  rectangular bounds.
+- **Angle math**: these widgets position geometry (ticks, needles,
+  pointers) through the public `core::point_on_circle` helper — the same
+  integer-degree + two-trig-path convention as `draw_arc_aa`
+  (0° = +x, positive CCW, visually CW on y-down screens); GaugeDial's
+  default arc runs −225° → +45° (270° sweep, gap in the lower half).
+- Integer math only; both color depths degrade through the existing
+  quantization rules.
+
 ### 3.1 Character event contract
 
 - `input_event.ch` (int, 0 = no character) is the **printable character**

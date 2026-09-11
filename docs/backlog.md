@@ -20,9 +20,9 @@ Dependency-driven: each tier unlocks what follows.
    change. The A-24 source analysis (no new Widget methods, Shape is
    YAGNI, GaugeDial/Knob as first overriding subclasses) is the seeded
    basis for V-5 step 2.
-2. **V-5 composition widgets + dashboard** (3–5 days) — `draw_arc_aa`,
-   GaugeDial, Knob, TrendLine pawn, then the factory-console dashboard
-   + self-benchmark panel. Highest ROI right now: this is what turns
+2. **V-5 composition widgets + dashboard** (3–5 days) — `draw_arc_aa`
+   (done), GaugeDial/Knob/TrendLine/toggle (done), then the factory-
+   console dashboard + self-benchmark panel. Highest ROI right now: this is what turns
    the recent industrial mockups (Series 7 / Model 500, `design/htmldemo/`)
    into something real running in the framework, and the promotion
    material for the repo.
@@ -99,11 +99,17 @@ steps 2–3.
     has a permanent test seat. Contract: ARCHITECTURE §4.4/§4.9 +
     code-contract (AA/damage paragraph). Unlocks the gauge/donut ring
     widgets (V-5 step 2).
-  - **Composition widgets** from existing primitives: toggle switch
-    (rounded capsule + dot), gauge ring (arc + ticks), big-numeral
-    readouts (build-time TTF subset / vendored stb runtime text —
-    no external library). Theme-token driven; no widget redesign,
-    no animation system (standing non-goals).
+  - **Composition widgets** — **done** (2026-09-11): `ToggleSwitch`,
+    `GaugeDial`, `Knob`, `TrendLine` landed; first A-24 `hit()`/`on_input()`
+    overriding consumers in-tree (GaugeDial/Knob circular hit); public
+    `core::point_on_circle` helper (same integer-degree + two-trig-path
+    convention as `draw_arc_aa`) supplies needle/tick geometry; no widget
+    redesign, no animation system (standing non-goals). Theme-token
+    driven; both `changed` events fire on user interaction only
+    (programmatic setters are silent). Four-gated test battery passes
+    (32/16bpp × float/int); NDS cross-compile verified. Contract:
+    ARCHITECTURE §2 + code-contract §3.2. Unlocks the showcase page
+    (V-5 step 3).
   - **Showcase page**: a factory-console themed dashboard (trend
     chart, gauges, toggles, setpoint slider, alarm list, status
     banner) — the genre its target audience (industrial /
