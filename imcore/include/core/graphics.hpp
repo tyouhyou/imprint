@@ -358,4 +358,17 @@ namespace zb::ui::core
 
 #pragma endregion
     };
+
+    /*
+     * Sample the point at integer degree `deg` on the circle
+     * (cx, cy, radius), rounded to the pixel grid, into (*ox, *oy).
+     * Same convention and two-trig-path policy as draw_arc_aa (0° = +x,
+     * positive CCW, visually CW on y-down screens): USE_INTEGER_GEOMETRY
+     * OFF uses IEEE float, ON uses the compile-time lookup table; both
+     * agree within +-0.5px at radius <= 128. The composition widgets
+     * (GaugeDial/Knob ticks, needles, pointers) position geometry with
+     * it -- the same integer-degree math, so the needle and the arc
+     * always agree at every color depth.
+     */
+    void point_on_circle(int cx, int cy, int radius, int deg, int *ox, int *oy);
 }

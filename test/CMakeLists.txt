@@ -50,6 +50,10 @@ add_executable(
     test_shell_presenter.cpp
     test_theme.cpp
     test_showcase.cpp
+    test_toggle_switch.cpp
+    test_gauge_dial.cpp
+    test_knob.cpp
+    test_trend_line.cpp
 )
 
 target_link_libraries(

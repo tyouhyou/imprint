@@ -16,6 +16,10 @@ add_library(
     src/text_input.cpp
     src/dialog.cpp
     src/dispatcher.cpp
+    src/toggle_switch.cpp
+    src/gauge_dial.cpp
+    src/knob.cpp
+    src/trend_line.cpp
 )
 
 target_include_directories(

@@ -46,6 +46,10 @@ int test_pixel_traits();
 int test_shell_presenter();
 int test_theme();
 int test_showcase();
+int test_toggle_switch();
+int test_gauge_dial();
+int test_knob();
+int test_trend_line();
 
 #if defined(_WIN32)
 int test_win_input();
@@ -109,6 +113,10 @@ int main()
     total += test_shell_presenter();
     total += test_theme();
     total += test_showcase();
+    total += test_toggle_switch();
+    total += test_gauge_dial();
+    total += test_knob();
+    total += test_trend_line();
 
 #if defined(_WIN32)
     total += test_win_input();

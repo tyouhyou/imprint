@@ -984,6 +984,11 @@ void Graphics::draw_arc_aa(int cx, int cy, int radius, int start_deg, int sweep_
     }
 }
 
+void zb::ui::core::point_on_circle(const int cx, const int cy, const int radius, const int deg, int *ox, int *oy)
+{
+    arc_point(norm_deg(deg), cx, cy, radius, *ox, *oy);
+}
+
 /** draw 8 pixels for circle */
 void Graphics::draw_8pixels(int x, int y, int px, int py, const Color &colr)
 {
