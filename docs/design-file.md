@@ -40,6 +40,9 @@ documents.
 - `id=` names a node for later lookup (`find_by_id`); an unquoted
   integer value is accepted and stored as its decimal string.
   `items=` accepts multiple space-separated quoted strings.
+- `halign=` accepts the quoted values `left`, `center`, or `right`;
+  `valign=` accepts `top`, `center`, or `bottom`. These values control
+  text placement inside the widget's allocated bounds.
 - A line starting with `#` is a comment.
 - **Continuation**: a single backslash at end of line joins the next
   physical line (the marker and newline are removed, the next line's
@@ -69,7 +72,8 @@ The tag and property set is defined by the factory/property tables in
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
 `text_input`), with properties including
-`id`, `text`, `size`, `pos`, `named`, `checked`, `group`, `step`,
+`id`, `text`, `size`, `pos`, `valign` (`top`, `center`, `bottom`),
+`halign` (`left`, `center`, `right`), `named`, `checked`, `group`, `step`,
 `min`, `max`, `value`, `rows`, `spacing`, `padding`, `wrap`, `flex`,
 `visible`. A `width`/`height` value of the form `N%` (1..100) declares
 that axis as a percentage of the FlexPanel parent's content box,

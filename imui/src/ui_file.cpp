@@ -421,6 +421,17 @@ namespace zb::ui
                                << ": items must be quoted strings";
                         }
                     }
+                     else if(key == "halign" || key == "valign")
+                    {
+                        if(const auto *s  = std::get_if<std::string>(&value))
+                        {
+                            rec.node.props.emplace_back(key, *s);
+                        }
+                        else
+                        {
+                            LW << "ui_file: line " << first_line << ": " << key << "needs a quoted string (e.g., \"center\")";
+                        }
+                    }
                     else
                     {
                         rec.node.props.emplace_back(key, std::move(value));

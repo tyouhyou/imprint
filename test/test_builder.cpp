@@ -247,6 +247,40 @@ int test_builder()
         d.dispatch(host, char_down('!'));
         EXPECT(ti->get_text() == u"hello!");
     }
+    
+     // alignment attributes materialization
+    {
+        const std::pair<const char*, Widget::h_align> h_cases[] = {
+            {"left", Widget::h_align::left},
+            {"center", Widget::h_align::center},
+            {"right", Widget::h_align::right},
+        };
+        for (const auto& c : h_cases) {
+            auto doc = column({
+                label("Test").named("l").prop("halign", std::string(c.first)),
+            });
+            FlexPanel host;
+            host.set_size(100, 50);
+            build(host, doc);
+            host.layout();
+            EXPECT(host.find_by_id("l")->get_h_align() == c.second);
+        }
+
+        const std::pair<const char*, Widget::v_align> v_cases[] = {
+            {"top", Widget::v_align::top},
+            {"center", Widget::v_align::center},
+            {"bottom", Widget::v_align::bottom},
+        };
+        for (const auto& c : v_cases) {
+            auto doc = column({
+                label("Test").named("l").prop("valign", std::string(c.first)),
+            });
+            FlexPanel host;
+            host.set_size(100, 50);
+            build(host, doc);
+            host.layout();
+            EXPECT(host.find_by_id("l")->get_v_align() == c.second);
+        }
 
     // V-5 step 3: the composition widgets ride the tag table like every
     // other tag -- fluent builder and .ui parser both land on them
@@ -328,4 +362,5 @@ int test_builder()
 
     // host root node is documentation only... panel() children flow
     return test::report("builder");
+    }
 }
