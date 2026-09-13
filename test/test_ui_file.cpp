@@ -300,6 +300,43 @@ column id="main" spacing=4 padding=8
         EXPECT(find_ui_file(kUiFiles[0].name) == &kUiFiles[0]);
         EXPECT(find_ui_file("no_such.ui") == nullptr);
     }
+    
+    // alignment attributes parsing: halign and valign
+    {
+        ui_node root = parse_ui_text(
+            "column\n"
+            " label id=\"aligned\" width=240 height=60 halign=\"center\" valign=\"bottom\"\n",
+            nullptr);
+        EXPECT(root.type == "column");
+        EXPECT(root.children.size() == 1);
+
+        const auto &lbl = root.children[0];
+        EXPECT(lbl.type == "label");
+
+        // find properties by name
+        std::string h_val = "";
+        std::string v_val = "";
+        for (const auto& prop : lbl.props) {
+            if (prop.first == "halign") {
+                h_val = test::vget<std::string>(prop.second);
+            } else if (prop.first == "valign") {
+                v_val = test::vget<std::string>(prop.second);
+            }
+        }
+        EXPECT(h_val == "center");
+        EXPECT(v_val == "bottom");
+
+        FlexPanel host;
+        host.set_size(300, 100);
+        build(host, root);
+        host.layout();
+        auto *aligned = host.find_by_id("aligned");
+        EXPECT(aligned != nullptr);
+        EXPECT(aligned->get_h_align() == Widget::h_align::center);
+        EXPECT(aligned->get_v_align() == Widget::v_align::bottom);
+        EXPECT(aligned->get_size().width == 240);
+        EXPECT(aligned->get_size().height == 60);
+    }
 
     return test::report("ui_file");
 }

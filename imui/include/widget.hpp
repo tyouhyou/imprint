@@ -304,6 +304,8 @@ namespace zb::ui
             valign = a;
             mark_dirty();
         }
+        [[nodiscard]] h_align get_h_align() const { return halign; }
+        [[nodiscard]] v_align get_v_align() const { return valign; }
 
         /*
          * Sets the primary glyph provider (e.g. a TtfRuntimeProvider).
