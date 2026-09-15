@@ -1487,6 +1487,42 @@ int test_html()
 #endif
     }
 
+    // circle keeps its silhouette under top/bottom insets (model500
+    // knobs): a zero x-offset paints neither left nor right — the
+    // centered blur spill is dropped, only the offset axis bands
+    {
+        ui_node doc = parse_html(
+            "<div>"
+            "<div style=\"width:54px;height:54px;background:#ffffff;"
+            "border-radius:50%;"
+            "box-shadow: inset 0 2px 3px black\">"
+            "</div></div>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(100, 80);
+        build(host, doc);
+        host.layout();
+        auto *face = host.get_items()[0].child.get();
+        core::Graphics g(100, 80, nullptr);
+        g.fill(core::Color::from(128, 128, 128));
+        host.draw(g);
+        const auto fp = face->get_position();
+        // top band still paints (row 1, center column)
+#if COLOR_DEPTH == 32
+        EXPECT(test::pixel_at(g, fp.x + 27, fp.y + 1) ==
+               core::Color::from(85, 85, 85).pixel);
+#else
+        EXPECT(test::pixel_at(g, fp.x + 27, fp.y + 1) ==
+               core::colors::Black.pixel);
+#endif
+        // left/right mid-edge stays the white face (no side spill);
+        // the old both-sides rule painted these black
+        EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
+               core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, fp.x + 53, fp.y + 27) ==
+               core::colors::White.pixel);
+    }
+
     // H-7c flex-basis: auto (default demand), px, and %
     {
         ui_node r = parse_html(

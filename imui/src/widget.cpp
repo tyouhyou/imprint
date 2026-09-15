@@ -323,9 +323,11 @@ namespace zb::ui
             area.fill_rect(0, 0, s.width - 1, bh - 1, b->c);
         }
         // inset shadows (P-2e): bands hug the sides picked by the
-        // offset sign (zero offset = both sides), alpha falling off
-        // inward; the all-sides case rides shrinking outlines
-        // (radius-aware), single sides ride chord-clipped lines
+        // offset sign (zero offset = neither side — the blur spill on
+        // the centered axis is dropped so circles keep their round
+        // silhouette; the all-sides (0,0) case rides shrinking
+        // outlines, radius-aware), alpha falling off inward; single
+        // sides ride chord-clipped lines
         if (shadows && ext_ != nullptr)
         {
             for (int k = 0; k < ext_->n_sh_in && k < 2; ++k)
@@ -333,11 +335,11 @@ namespace zb::ui
                 const shadow_spec &sh = ext_->sh_in[k];
                 const int bands = sh.blur <= 0 ? 1 : sh.blur;
                 const int base = dress_.border_w + sh.spread;
-                const bool left = sh.ox >= 0;
-                const bool right = sh.ox <= 0;
-                const bool top = sh.oy >= 0;
-                const bool bottom = sh.oy <= 0;
-                const bool all = left && right && top && bottom;
+                const bool all = (sh.ox == 0 && sh.oy == 0);
+                const bool left = sh.ox > 0;
+                const bool right = sh.ox < 0;
+                const bool top = sh.oy > 0;
+                const bool bottom = sh.oy < 0;
                 // band alpha: exact falloff on 32bpp; on binary depths
                 // the base alpha already reads 0/1, so bands keep or
                 // drop by the half-coverage rule (plot_aa precedent)

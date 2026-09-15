@@ -737,7 +737,11 @@ system (standing non-goals):
   linear alpha falloff (exact on 32bpp; binary depths keep/drop bands
   by the half-coverage rule — the base alpha already reads 0/1 there),
   starting inside the border, after the border — full inset depth
-  for dial faces, knob edges, toggle tracks. Split-side bands
+  for dial faces, knob edges, toggle tracks. Sides are picked by strict
+  offset sign (ox > 0 left, ox < 0 right, oy > 0 top, oy < 0 bottom;
+  a zero axis paints neither side — the centered blur spill is
+  dropped so circles keep their silhouette; (0,0) rides the
+  all-sides curved outlines below). Split-side bands
   anti-alias their chord-cut ends with the fill coverage formula
   (`plot_aa` fringe in the band color, so the falloff alpha stacks;
   binary depths inherit the half-coverage behavior). Outer shadows paint their
