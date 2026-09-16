@@ -87,6 +87,10 @@ namespace zb::ui
         // "transparent" values are no-ops at materialize time
         ui_node &background(std::string c) { return prop("background", std::move(c)); }
         ui_node &color(std::string c) { return prop("color", std::move(c)); }
+        // type size (code-contract §2.4): bare pixel size 1..128, resolved
+        // at materialize against the process font family (tolerance:
+        // out-of-range/missing-family keeps the current provider)
+        ui_node &font_size(const long long px) { return prop("font_size", px); }
 
         // control properties
         ui_node &checked(const bool c) { return prop("checked", c); }

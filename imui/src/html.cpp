@@ -3438,7 +3438,29 @@ namespace zb::ui
                     n.prop("shadow_color", c);
                 }
             }
-            // font-size: parsed and ignored (no per-widget size seam yet)
+            // per-widget font size (code-contract §2.4): Npx or bare N;
+            // malformed/empty drops the declaration silently (Tolerance),
+            // range/family tolerance applies at materialize time
+            if (const std::string *fs = fold_lookup(folded, "font-size"))
+            {
+                std::string t = css_trim(ascii_lower(*fs));
+                if (t.size() > 2 && t.compare(t.size() - 2, 2, "px") == 0)
+                {
+                    t = t.substr(0, t.size() - 2);
+                }
+                long long px = 0;
+                if (parse_svg_num(css_trim(t), px) && px > 0)
+                {
+                    n.prop("font_size", px);
+                }
+            }
+            // small: the 12px caption default (the 16px body default is
+            // the TTF_PIXEL_SIZE build default); an explicit font-size
+            // above wins
+            if (e.tag == "small" && fold_lookup(folded, "font-size") == nullptr)
+            {
+                n.prop("font_size", 12LL);
+            }
 
             for (const Decl &d : folded)
             {

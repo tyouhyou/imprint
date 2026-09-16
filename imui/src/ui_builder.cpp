@@ -793,6 +793,34 @@ namespace zb::ui
                         static_cast<int>(prop_of(n, "shadow_dy", 0LL)));
                 }
             }
+            // per-widget font size (code-contract §2.4): presence-gated
+            // bare pixel size; tolerance (never throws): out-of-range or
+            // missing-family warns once and keeps the current provider.
+            // Without IMCORE_HAS_TTF_RUNTIME has_font_family() is false,
+            // so the declaration is silently ignored there (documented
+            // degradation — no per-build branch at the call site).
+            if (has_prop(n, "font_size"))
+            {
+                const long long px = prop_of(n, "font_size", 0LL);
+                if (px > 0)
+                {
+                    if (px >= 1 && px <= 128 && has_font_family())
+                    {
+                        w.set_font_size(static_cast<int>(px));
+                    }
+                    else
+                    {
+                        static bool warned = false;
+                        if (!warned)
+                        {
+                            warned = true;
+                            LW << "ui_builder: font_size out of range 1..128 "
+                                  "or no font family installed; kept the "
+                                  "current provider";
+                        }
+                    }
+                }
+            }
         if(has_prop(n, "halign"))
         {
             const std::string halign = prop_of(n, "halign", std::string{});
