@@ -190,5 +190,91 @@ int test_runtime_ttf()
         }
     }
 
+    // per-widget font size (code-contract §2.4): set_font_size resolves
+    // the family provider eagerly and measure follows; 0 clears to the
+    // process default; missing family / out-of-range throw (init path)
+    {
+        clear_font_family();
+        EXPECT(!has_font_family());
+        Label w0;
+        bool threw = false;
+        try
+        {
+            w0.set_font_size(16);
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+
+        set_font_family(family);
+        EXPECT(has_font_family());
+        Label w;
+        EXPECT(w.font_size() == 0);
+        w.set_text("Hello");
+        w.set_font_size(24);
+        EXPECT(w.font_size() == 24);
+        EXPECT(w.measure().height == 24);
+        // the same memoized instance as the direct provider path
+        Label direct;
+        direct.set_text("Hello");
+        direct.set_glyph_provider(family.provider_for(24));
+        EXPECT(w.measure().width == direct.measure().width);
+        w.set_font_size(16);
+        EXPECT(w.font_size() == 16);
+        EXPECT(w.measure().height == 16);
+        w.set_font_size(0);
+        EXPECT(w.font_size() == 0);
+        threw = false;
+        try
+        {
+            w.set_font_size(129);
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+        // explicit-family overload needs no process family
+        clear_font_family();
+        Label w2;
+        w2.set_text("Hi");
+        w2.set_font_size(20, family);
+        EXPECT(w2.font_size() == 20);
+        EXPECT(w2.measure().height == 20);
+        clear_font_family();
+    }
+
+    // builder integration: the font_size prop resolves via the process
+    // family; tolerance (no family / out-of-range) keeps the provider
+    // and never throws
+    {
+        set_font_family(family);
+        FlexPanel host;
+        auto doc = column({label("Hi").named("t").font_size(24)});
+        build(host, doc);
+        Widget *t = host.find_by_id("t");
+        EXPECT(t != nullptr);
+        EXPECT(t->font_size() == 24);
+        clear_font_family();
+
+        FlexPanel host2;
+        auto doc2 = column({label("Hi").named("u").font_size(24)});
+        build(host2, doc2);
+        Widget *u = host2.find_by_id("u");
+        EXPECT(u != nullptr);
+        EXPECT(u->font_size() == 0);
+
+        set_font_family(family);
+        FlexPanel host3;
+        auto doc3 = column({label("Hi").named("v").font_size(1000)});
+        build(host3, doc3);
+        Widget *v = host3.find_by_id("v");
+        EXPECT(v != nullptr);
+        EXPECT(v->font_size() == 0);
+        clear_font_family();
+    }
+
     return test::report("runtime_ttf");
 }

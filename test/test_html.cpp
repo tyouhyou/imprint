@@ -874,7 +874,7 @@ int test_html()
         EXPECT(test::vget<long long>(node_prop_v(tr, "height")) == 30);
     }
 
-    // D: contracted minutiae -- unquoted numeric ids, ignored font-size,
+    // D: contracted minutiae -- unquoted numeric ids, font-size mapping,
     // display/flex-direction no-ops, stacked style blocks incl. body ones
     {
         ui_node r = parse_html("<div id=7><label>x</label></div>\n", nullptr);
@@ -883,7 +883,8 @@ int test_html()
 
         ui_node r2 = parse_html(
             "<label style=\"font-size: 20px\">hi</label>\n", nullptr);
-        EXPECT(find_prop(r2.children[0], "font-size") < 0);  // parsed, ignored
+        EXPECT(test::vget<long long>(
+                   node_prop_v(r2.children[0], "font_size")) == 20);
         EXPECT(test::vget<std::string>(
                    node_prop_v(r2.children[0], "text")) == "hi");
 
@@ -907,6 +908,29 @@ int test_html()
         EXPECT(r4.children.size() == 1);
         EXPECT(test::vget<std::string>(
                    node_prop_v(r4.children[0], "color")) == "green");
+    }
+
+    // font-size mapping (code-contract §2.4): Npx/bare land as the
+    // font_size node prop; small defaults to 12 unless explicit wins;
+    // malformed/negative/zero drop the declaration silently
+    {
+        ui_node bare = parse_html("<label style=\"font-size: 24\">x</label>\n", nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(bare.children[0], "font_size")) == 24);
+
+        ui_node sm = parse_html("<small>cap</small>\n", nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(sm.children[0], "font_size")) == 12);
+
+        ui_node smx = parse_html("<small style=\"font-size: 18px\">cap</small>\n", nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(smx.children[0], "font_size")) == 18);
+
+        ui_node bad = parse_html("<label style=\"font-size: banana\">x</label>\n", nullptr);
+        EXPECT(find_prop(bad.children[0], "font_size") < 0);
+
+        ui_node neg = parse_html("<label style=\"font-size: -4px\">x</label>\n", nullptr);
+        EXPECT(find_prop(neg.children[0], "font_size") < 0);
+
+        ui_node plain = parse_html("<label>x</label>\n", nullptr);
+        EXPECT(find_prop(plain.children[0], "font_size") < 0);
     }
 
     // E: lexical doc-claims -- unclosed frames finalize at EOF, a
