@@ -835,8 +835,34 @@ namespace zb::ui
         [[nodiscard]] bool has_text_shadow() const
         {
             return ext_ != nullptr && ext_->has_text != 0 &&
-                   ext_->shadow_color.a() != 0;
+                    ext_->shadow_color.a() != 0;
         }
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+        /*
+         * Per-widget font size (code-contract §2.4): resolves
+         * provider_for(px) against the widget's family (explicit
+         * argument, else the process font family) and installs it
+         * through set_glyph_provider (eager resolve — the draw path
+         * is untouched). px <= 0 clears the declaration and resets
+         * the primary provider to the process default; out-of-range
+         * px or a missing family throws zb::ui::error (init path).
+         * Init path: may allocate (first family copy, provider memo).
+         */
+        void set_font_size(int px);
+        void set_font_size(int px, const TtfFamily &family);
+        [[nodiscard]] int font_size() const
+        {
+            return (ext_ != nullptr && ext_->has_font != 0)
+                       ? ext_->font_px
+                       : 0;
+        }
+#else
+        // Documented degradation (code-contract §2.4): without
+        // IMCORE_HAS_TTF_RUNTIME the declaration is ignored (5x7 has
+        // no sizes, the build-time subset has exactly one).
+        void set_font_size(int px) { (void)px; }
+        [[nodiscard]] int font_size() const { return 0; }
+#endif
 
         /*
          * Sets the primary glyph provider (e.g. a TtfRuntimeProvider).
@@ -1183,15 +1209,21 @@ namespace zb::ui
             shadow_spec sh_in[2]{};
             int16_t letter_px = 0;
             int16_t margin[4] = {0, 0, 0, 0};  // t/r/b/l in-flow margins (H-3)
+            int16_t font_px = 0;  // per-widget size declaration (0 = unset)
             uint8_t text_flags = 0;  // bit0 = bold (double-strike)
             core::Color shadow_color{};
             int8_t shadow_dx = 0;
             int8_t shadow_dy = 0;
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+            TtfFamily font_family{};  // anchor copy: the sized provider
+                                      // never outlives its family (§2.4)
+#endif
             uint8_t has_pos = 0;
             uint8_t has_grad = 0;
             uint8_t has_rep = 0;
             uint8_t has_bord = 0;
             uint8_t has_text = 0;
+            uint8_t has_font = 0;
             uint8_t has_margin = 0;
             uint8_t n_sh_out = 0;
             uint8_t n_sh_in = 0;
@@ -1278,6 +1310,21 @@ namespace zb::ui
          * (covers/measure), so every setter that changes either resets
          * the cache. advance_of() (arbitrary runs) stays uncached.
          */
-        mutable int advance_cache_ = -1;
+         mutable int advance_cache_ = -1;
     };
+
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    /*
+     * Process font family (code-contract §2.4): the family
+     * set_font_size(px) resolves against when the caller passes none.
+     * Parallel to set_default_glyph_provider; empty by default.
+     * Init path: may allocate (the family handle copy).
+     */
+    void set_font_family(const TtfFamily &family);
+    void clear_font_family();
+    [[nodiscard]] bool has_font_family();
+    [[nodiscard]] const TtfFamily &font_family();
+#else
+    [[nodiscard]] inline bool has_font_family() { return false; }
+#endif
 }

@@ -39,6 +39,80 @@ namespace zb::ui
         return default_provider_state();
     }
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    namespace
+    {
+        // process font family (code-contract §2.4): the family the
+        // single-argument set_font_size resolves against. A plain
+        // function-static (not leaked): widgets hold their own anchor
+        // copy, and the shared family state is refcounted, so no
+        // lifetime hazard either way.
+        TtfFamily &font_family_state()
+        {
+            static TtfFamily fam;
+            return fam;
+        }
+        bool &font_family_set()
+        {
+            static bool set = false;
+            return set;
+        }
+    }  // namespace
+
+    void set_font_family(const TtfFamily &family)
+    {
+        font_family_state() = family;
+        font_family_set() = true;
+    }
+
+    void clear_font_family()
+    {
+        font_family_state() = TtfFamily();
+        font_family_set() = false;
+    }
+
+    bool has_font_family() { return font_family_set(); }
+
+    const TtfFamily &font_family() { return font_family_state(); }
+
+    void Widget::set_font_size(const int px)
+    {
+        if (!has_font_family())
+        {
+            throw error("Widget::set_font_size: no font family installed "
+                        "(set_font_family or the two-argument overload)");
+        }
+        set_font_size(px, font_family_state());
+    }
+
+    void Widget::set_font_size(const int px, const TtfFamily &family)
+    {
+        if (px <= 0)
+        {
+            // 0 = unset (the percent convention): drop the declaration
+            // and reset the primary provider to the process default
+            if (ext_ != nullptr)
+            {
+                ext_->has_font = 0;
+                ext_->font_px = 0;
+                ext_->font_family = TtfFamily();
+            }
+            set_glyph_provider(zb::SharedPtr<GlyphProvider>());
+            return;
+        }
+        if (px < 1 || px > 128)
+        {
+            throw error("Widget::set_font_size: pixel size out of range 1..128");
+        }
+        zb::SharedPtr<GlyphProvider> provider = family.provider_for(px);
+        ensure_ext();
+        ext_->has_font = 1;
+        ext_->font_px = static_cast<int16_t>(px);
+        ext_->font_family = family;
+        set_glyph_provider(provider);
+    }
+#endif
+
     Widget::Widget() : bitmap_fallback_(fallback_singleton())
     {
     }
