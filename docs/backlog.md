@@ -244,7 +244,8 @@ support "a little at a time" as the boundary demands):**
   demanded it)**: tag/`.class`/`#id` compounds, descendant chains,
   comma groups, specificity cascade, `:root` variables + `var()`.
   Remainder stays out: child/sibling/attribute selectors,
-  pseudo-elements, inheritance, `var()` inside `@media` (no at-rules).
+  inheritance, `var()` inside `@media` (no at-rules).
+  Pseudo-elements move to H-10 (below).
 - H-6. `SvgWidget` — SVG as a widget subclass (recorded 2026-09-10,
   **unscheduled — note only, no priority**):
   - `SvgWidget : Widget` (imui, beside Button/Label). Parses an SVG text
@@ -393,6 +394,13 @@ support "a little at a time" as the boundary demands):**
   buffers win on conflict. `parse_color` is the shared resolver
   (declared in `html.hpp` to keep `ui_builder.hpp` light for the
   ui_embed host tool).
+- H-10. Pseudo-element correspondence (next up after the knob-roundness
+  fix, raised 2026-09-16): `::before` / `::after` (model500 `.knob`
+  pointer tick is the driving case — currently inert per the
+  `docs/html-path.md` tolerance table, so framework knobs miss the
+  pointer). Narrow subset only: static box/line content on the originating
+  element, no dynamic behavior; contract change grows the whitelist when
+  it lands.
 
 **Cost estimate (discussion):** core version ≈ 1500–2000 lines C++ total, of
 which the text-wrapping engine (H-1) is the prerequisite piece; a minimal

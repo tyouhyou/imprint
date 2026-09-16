@@ -122,7 +122,7 @@ applies unchanged.
 | Element not in the whitelist | **LW warning + skipped**; its content is dropped. "Not in the table = not built" — the honest signal, so mistyped customs (`<metter>`) or unsupported HTML (`<table>`, `<input>`, `<form>`) never render a wrong structure |
 | `<br>` inside an inline element (`<span>`) | the parser warns (no line breaking until H-1) and degrades the break to a word space in the single-line label; the spacer child is dropped by leaf materialization with a warning (the same rule as `.ui` leaf children); place `br` as a child of a container |
 | Attribute not in the whitelist | silently tolerated (`class=` drives selector matching) |
-| Selector beyond tag/`.class`/`#id`/descendant/comma (child/sibling/attribute/pseudo) | silently inert, body consumed (pseudo-element selectors log one LW per rule — they usually carry visible content intent) |
+| Selector beyond tag/`.class`/`#id`/descendant/comma (child/sibling/attribute/pseudo) | silently inert, body consumed (pseudo-element selectors log one LW per rule — they usually carry visible content intent; `::before`/`::after` correspondence is backlog H-10, next up) |
 | Unknown `var(--name)` without fallback | declaration dropped silently (malformed-value tolerance) |
 | Style declaration not in the whitelist | **LW warning + ignored** (the element keeps its default presentation) |
 | Malformed value (bad color, bad number, bad percent) | silently defaulted (the shared property table's tolerance) |
@@ -293,4 +293,4 @@ backlog H-6):
 A new element or property is a contract change: add the row here (and in
 the design-file property table when it is a shared property), implement
 the mapping and tag-table entry, lock it with a test — the `ui_builder`
-tag-table precedent. Follow-ups H-1..H-7 each grow the whitelist.
+tag-table precedent. Follow-ups H-1..H-10 each grow the whitelist.
