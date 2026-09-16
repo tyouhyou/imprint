@@ -784,8 +784,13 @@ system (standing non-goals):
   anti-alias their chord-cut ends with the fill coverage formula
   (`plot_aa` fringe in the band color, so the falloff alpha stacks;
   binary depths inherit the half-coverage behavior). Outer shadows paint their
-  silhouette (spread-expanded, plus 2 soft bands when blurred) UNDER
-  the background — and the per-widget clip keeps only the inside part,
+  silhouette (spread-expanded) UNDER the background, feathered over the
+  blur radius when blurred: the core dims as 2/(blur+2) (rounded) and up
+  to `blur` outlines (capped at 6) keep halving outward, so a large blur
+  fades instead of ending in a hard wall inside rounded corners (the
+  model500 knob's square bottom); blur==0 keeps the hard silhouette.
+  Binary depths drop the dimmed core by the same half rule and keep the
+  first halo solid. The per-widget clip keeps only the inside part,
   which an opaque background then covers: with no shell-level overdraw
   in the architecture, outer glows/drop shadows on opaque boxes are
   accepted but invisible (bulb/LED glow, amp drop; recorded as the
