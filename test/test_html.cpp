@@ -1547,6 +1547,71 @@ int test_html()
                core::colors::White.pixel);
     }
 
+    // model500 .knob exact dress (conic face + border + double inset,
+    // no outer shadow): the face silhouette is a symmetric circle —
+    // apex rows narrow and centered, mid rows full width. Guards the
+    // "five knobs look flat" report against regression.
+    {
+        ui_node doc = parse_html(
+            "<div>"
+            "<div style=\"width:54px;height:54px;border-radius:50%;"
+            "background:conic-gradient(from 210deg, #8f9186 0, #dfdfda 45deg, "
+            "#dfdfda 315deg, #8f9186 360deg);"
+            "border:1px solid rgba(0,0,0,0.5);"
+            "box-shadow: inset 0 1px 2px rgba(255,255,255,0.8), "
+            "inset 0 -2px 4px rgba(0,0,0,0.5)\">"
+            "</div></div>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(100, 80);
+        build(host, doc);
+        host.layout();
+        auto *knob = host.get_items()[0].child.get();
+        const auto ks = knob->get_size();
+        EXPECT(ks.width == 54);
+        EXPECT(ks.height == 54);
+        core::Graphics g(100, 80, nullptr);
+        const core::Color gray = core::Color::from(128, 128, 128);
+        g.fill(gray);
+        host.draw(g);
+        const auto kp = knob->get_position();
+        auto covered = [&](const int x, const int y) {
+            return test::pixel_at(g, x, y) != gray.pixel;
+        };
+        // transparent corners, covered apexes and mid-edge
+        EXPECT(!covered(kp.x, kp.y));
+        EXPECT(!covered(kp.x + 53, kp.y));
+        EXPECT(!covered(kp.x, kp.y + 53));
+        EXPECT(!covered(kp.x + 53, kp.y + 53));
+        EXPECT(covered(kp.x + 26, kp.y));
+        EXPECT(covered(kp.x + 27, kp.y));
+        EXPECT(covered(kp.x + 26, kp.y + 53));
+        EXPECT(covered(kp.x + 27, kp.y + 53));
+        EXPECT(covered(kp.x, kp.y + 27));
+        EXPECT(covered(kp.x + 53, kp.y + 27));
+        // row symmetry: every row's covered span mirrors its counterpart
+        // (same chord + same fringe quantization top/bottom on any depth)
+        for (int r = 0; r < 54; ++r)
+        {
+            int lt = -1, rt = -1, lb = -1, rb = -1;
+            for (int c = 0; c < 54; ++c)
+            {
+                if (covered(kp.x + c, kp.y + r))
+                {
+                    if (lt < 0) lt = c;
+                    rt = c;
+                }
+                if (covered(kp.x + c, kp.y + 53 - r))
+                {
+                    if (lb < 0) lb = c;
+                    rb = c;
+                }
+            }
+            EXPECT(lt == lb);
+            EXPECT(rt == rb);
+        }
+    }
+
     // H-7c flex-basis: auto (default demand), px, and %
     {
         ui_node r = parse_html(
