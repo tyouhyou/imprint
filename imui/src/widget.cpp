@@ -246,9 +246,15 @@ namespace zb::ui
             area.enable_alpha(true);
         }
         // outer silhouettes first (P-2e): spread-expanded rounded box
-        // at the offset + two soft bands when blurred, all under the
-        // background (the widget clip keeps the inside part — see the
-        // contract's overdraw note). Wireframe skips shadows (bones).
+        // at the offset, all under the background (the widget clip keeps
+        // the inside part — see the contract's overdraw note). A blurred
+        // shadow feathers over its blur radius: the core dims as
+        // 2/(blur+2) and up to `blur` outlines keep halving outward
+        // (capped where the steps turn invisible), so a large blur fades
+        // before the widget edge instead of ending in a hard wall —
+        // the model500 knob's square bottom was the full-alpha core of
+        // `0 3px 6px` with only two halo steps. blur==0 keeps the hard
+        // silhouette exactly. Wireframe skips shadows (bones).
         const bool shadows =
             area.get_render_mode() == core::Graphics::render_mode::full;
         if (shadows && ext_ != nullptr)
@@ -260,30 +266,55 @@ namespace zb::ui
                 const int y0 = sh.oy - sh.spread;
                 const int x1 = s.width - 1 + sh.ox + sh.spread;
                 const int y1 = s.height - 1 + sh.oy + sh.spread;
-                area.fill_round_rect_aa(x0, y0, x1, y1, radius + sh.spread,
-                                        sh.c);
                 if (sh.blur > 0 && sh.c.a() > 0)
                 {
-                    // soft bands halve twice; binary depths keep/drop
-                    // by the same half rule (the block already knows
-                    // the base alpha is nonzero)
-                    core::Color soft = sh.c;
+                    // feathered core + halving halo over the blur radius;
+                    // the core dims as 2/(blur+2) (rounded), so a large
+                    // blur fades before the widget edge instead of ending
+                    // in a hard wall. Binary depths apply the same half
+                    // rule to the dimmed core (kept only while it still
+                    // covers half the base alpha); the first halo stays
+                    // solid and the rest drop, as before.
+                    const int base_a = static_cast<int>(sh.c.a());
+                    const int core_a =
+                        (base_a * 2 + (sh.blur + 2) / 2) / (sh.blur + 2);
+                    core::Color core = sh.c;
                     if constexpr (core::Color::per_channel_blend)
                     {
-                        soft.set_a(static_cast<uint8_t>(sh.c.a() / 2));
-                    }
-                    area.draw_round_rect_aa(x0 - 1, y0 - 1, x1 + 1, y1 + 1,
-                                            radius + sh.spread + 1, soft);
-                    if constexpr (core::Color::per_channel_blend)
-                    {
-                        soft.set_a(static_cast<uint8_t>(sh.c.a() / 4));
+                        core.set_a(static_cast<uint8_t>(core_a));
                     }
                     else
                     {
-                        soft.set_a(0);
+                        core.set_a(2 * core_a >= base_a ? sh.c.a() : 0);
                     }
-                    area.draw_round_rect_aa(x0 - 2, y0 - 2, x1 + 2, y1 + 2,
-                                            radius + sh.spread + 2, soft);
+                    area.fill_round_rect_aa(x0, y0, x1, y1,
+                                            radius + sh.spread, core);
+                    const int bands = sh.blur < 6 ? sh.blur : 6;
+                    int step_a = static_cast<int>(core.a());
+                    for (int k = 1; k <= bands; ++k)
+                    {
+                        core::Color soft = sh.c;
+                        if constexpr (core::Color::per_channel_blend)
+                        {
+                            step_a /= 2;
+                            soft.set_a(static_cast<uint8_t>(step_a));
+                        }
+                        else if (k > 1)
+                        {
+                            soft.set_a(0);
+                        }
+                        area.draw_round_rect_aa(x0 - k, y0 - k, x1 + k, y1 + k,
+                                                radius + sh.spread + k, soft);
+                        if (step_a == 0 && core::Color::per_channel_blend)
+                        {
+                            break;
+                        }
+                    }
+                }
+                else
+                {
+                    area.fill_round_rect_aa(x0, y0, x1, y1,
+                                            radius + sh.spread, sh.c);
                 }
             }
         }
