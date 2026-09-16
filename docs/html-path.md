@@ -133,7 +133,7 @@ applies unchanged.
 | Element | `ui_node` tag | Notes |
 |---|---|---|
 | `div` | `column` / `row` | default `column` (block reading order); `flex-direction: row` → `row`, and a bare `display: flex` also selects `row` (the CSS flex default — stylesheets that lay out with `display: flex` alone depend on it). `display: block` (or anything else) keeps `column`. The div is a content-measuring flex container, **not** HTML block layout; it never stretches to fill a parent's main axis. `flex:` markup drives fill |
-| `p`, `span`, `label`, `small` | `label` | single-line labels; no wrapping until H-1 (`small` keeps no size distinction — `font-size` has no widget seam yet) |
+| `p`, `span`, `label`, `small` | `label` | single-line labels; no wrapping until H-1 (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins) |
 | `button` | `button` | `text` = element text content |
 | `checkbox` | `checkbox` | `text` = content; `checked` = **attribute presence** (HTML semantics) |
 | `radio` | `radio` | `text` = content; `checked` = presence; `group` |
@@ -187,7 +187,7 @@ applies unchanged.
 | `top` / `left` / `right` / `bottom` | `Npx`, `N%`, bare `0`, `auto` | abs offsets against the containing-block content box (`auto` = unset; only read on absolutely positioned elements) |
 | `transform` | `translate(X[, Y])` (`%` of self or px) | shift after abs placement; any other function drops the declaration |
 | `color` | same color forms | the shared `color` property (text color) |
-| `font-size` | `Npx` | **parsed and ignored** (no per-widget size seam; deferred with a future `set_font_size`) |
+| `font-size` | `Npx` | per-widget pixel size (`set_font_size`, code-contract §2.4): `N` clamps to 1..128, out-of-range/missing-family warns once and keeps the current provider; explicit per element, never inherited; ignored without `IMCORE_HAS_TTF_RUNTIME` (documented degradation) |
 | `letter-spacing` | `Npx` | per-code-unit tracking in measure and draw (trailing unit included, per CSS); negative clamps to 0 |
 | `font-weight` | `bold`, or a number ≥ 600 → on; `normal` / < 600 → off | double-strike: second pass shifted +1px, no bold variant |
 | `text-shadow` | `DXpx DYpx [blur] <color>` | one solid offset copy drawn first; blur parsed-and-ignored; a comma list keeps the first shadow only |
@@ -249,8 +249,10 @@ backlog H-6):
 - `text x y`: the element content drawn with the widget text seam
   (provider fallback chain included); `x/y` is the baseline start,
   `fill` defaults to the theme text, `text-anchor` selects
-  start/middle/end, `font-size`/`font-family` are accepted and ignored
-  (no per-widget size seam yet).
+  start/middle/end, `font-family` is accepted and ignored; item-level
+  `font-size` inside `svg` is accepted and ignored (per-`svg_text`
+  sizes stay deferred — the `svg` element's own `font-size` sizes the
+  whole canvas, code-contract §2.4).
 - `g` never builds: inside `svg` it is transparent and folds
   `stroke`/`stroke-width`/`stroke-linecap`/`opacity`/`fill`/
   `text-anchor` onto its descendant `line`/`text` (nearest ancestor

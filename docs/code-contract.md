@@ -226,8 +226,8 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   `provider_for(px)` (1..128; outside the range throws — the init-path
   rule §1.1). Equal `px` returns the same instance; the widget never
   knows a family exists — per-size providers ride `set_glyph_provider`
-  unchanged. A future `set_font_size(px)` convenience would need no
-  seam change.
+  unchanged. The `set_font_size(px)` convenience (below) resolves through
+  this seam and adds no new provider interface.
 - **Sources**: `TtfFamily::from_file(path)` owns a copy of the font
   bytes; `from_memory(bytes, n)` **borrows** — the caller's buffer must
   outlive the family (the ROM-blob case; build-time packing follows the
@@ -255,6 +255,45 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   never rasterizes (advances only); `line_metrics` is computed once per
   size (ascent/descent/line height, no linegap — the same formula as
   the build-time subset).
+
+**Per-widget font size (`set_font_size`)**: the runtime family's
+multi-size capability (`provider_for`) exposed per widget, so HTML
+`font-size` and `.ui` `font_size` have a widget seam to land on:
+
+- `Widget::set_font_size(px)` (init path, 1..128) resolves
+  `provider_for(px)` against the widget's family (explicit argument or
+  the process font family, see below) and installs it through the
+  existing `set_glyph_provider` seam — eager resolve, so the draw path
+  is untouched and warm draws stay allocation-free (§8). `px <= 0`
+  clears the declaration (the axis/percent convention: 0 = unset) and
+  resets the primary provider to the process default; out-of-range
+  `px` and a missing family throw `zb::ui::error` on the C++ call
+  (§1.1), while the declarative builders (`ui_builder`, `html`) apply
+  tolerance instead (warn once and keep the current provider).
+- State lives in the heap `ext_` sidecar (`font_px`, 0 = unset; bare
+  widgets stay allocation-free and read 0), so the inline Widget size
+  gates hold. Like every content setter it clears the `advance_cache_`
+  and reports damage + layout invalidation (§7); `measure()` follows
+  automatically through the resolved provider.
+- Family source, in order: the explicit `TtfFamily` argument when the
+  caller has one, else the process font family installed by
+  `set_font_family()` (parallel to `set_default_glyph_provider`, empty
+  by default). The widget holds a family copy for its declaration, so
+  a provider never outlives its anchor (the L-5 ownership rule above).
+  Overwriting semantics: `set_font_size` replaces the primary provider
+  (a prior explicit `set_glyph_provider` is not restored on clear —
+  clear resets to the process default); an explicit
+  `set_glyph_provider` after `set_font_size` wins until the next
+  `set_font_size` call.
+- No inheritance: a child never inherits its parent's size (the
+  `color` policy) — every sized widget carries its own declaration.
+- Degradation (documented, not a bug): builds without
+  `IMCORE_HAS_TTF_RUNTIME` ignore the declaration (5x7 has no sizes;
+  the single-size build-time subset has exactly one) — same standing
+  as the 16bpp AA-to-binary rule. `make_text_image` stays
+  bitmap-backed. Per-`svg_text` sizes stay deferred: an `svg` element's
+  own `font_size` sizes the whole canvas through this seam; item-level
+  `font-size` inside `svg` is accepted and ignored.
 
 **Widget text dressing (P-2a)**: three additive, default-off properties
   on the widget text seam (`draw_text` / `draw_text_at` / `advance_of` /
@@ -794,7 +833,8 @@ system (standing non-goals):
   string (batch K/N9; grammar defined in `docs/design-file.md`).
 - Contract boundary (must not enter the description layer): dynamic models
   (ListBox's ItemText function pointer), event subscriptions (Event<>
-  wiring), font/glyph content, runtime-generated text. The description
+  wiring), font/glyph content (font bytes, family names — the `font_size`
+  metric is allowed, §2.4), runtime-generated text. The description
   layer carries static structure + props + id only.
 - id references: `Widget::find_by_id` searches the subtree depth-first and
   returns the first match (linear search; for wiring/debugging only, not
@@ -875,7 +915,7 @@ dispatcher's raw pointers against dangling/UAF:
 ## 7. Layout protocol (batch J5 final)
 
 - `layout_dirty_` is the layout invalidation flag: geometry/content
-  setters (set_size, set_size_auto, set_text, set_glyph_provider; container add_child/remove_child,
+  setters (set_size, set_size_auto, set_text, set_glyph_provider, set_font_size; container add_child/remove_child,
   set_orientation/set_spacing/set_padding) call `mark_layout_dirty()`
   which bubbles to the root along the parent chain (zero allocation). A
   fresh tree starts dirty (`layout_dirty_ = true`). Layout clears the

@@ -185,10 +185,14 @@ powerful for industrial instrument pages.
   map to the existing `find_by_id` lookup.
 - CSS subset: `display: flex` + `flex-direction`, `width/height` (px and `N%`
   → existing `set_width_percent`/`set_height_percent`), `background-color`,
-  `color` (→ `set_text_color`), `padding`, gap/spacing, `font-size` (where the
-  GlyphProvider supports it).
+  `color` (→ `set_text_color`), `padding`, gap/spacing, `font-size`
+  (→ `set_font_size`, code-contract §2.4; needs `USE_TTF_RUNTIME` + a
+  `TtfFamily`, otherwise documented no-op).
 - Styling via inline `style=` and an optional `<style>` block; **no** CSS
   selectors beyond tag/type and simple `#id` matching.
+- Font follow-ups (recorded, unscheduled): CJK multi-provider fallback
+  (Latin → CJK → 5x7) + `.html` codepoint scanning; `USE_FONT_SIZE`
+  default resolving to the vendored OFL font instead of system fonts.
 
 **Hard support boundary — the whitelist is the contract (rewritten 2026-09-12).**
 The element/attribute/CSS-property whitelists in `docs/html-path.md` are

@@ -76,7 +76,7 @@ widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `halign` (`left`, `center`, `right`), `named`, `checked`, `group`, `step`,
 `min`, `max`, `value`, `rows`, `spacing`, `padding`, `wrap`, `flex`,
 `margin_t`, `margin_r`, `margin_b`, `margin_l`,
-`visible`, `background`, `color`. A `width`/`height` value of the form
+`visible`, `background`, `color`, `font_size`. A `width`/`height` value of the form
 `N%` (1..100) declares
 that axis as a percentage of the FlexPanel parent's content box,
 resolved at layout time — it never becomes an explicit size, and outside
@@ -87,7 +87,10 @@ subset (`transparent`, `black`, `white`, `red`, `green`, `blue`,
 silently dropped (nothing is set — the tolerated-value rule).
 `background` sets the widget's background color, `color` its text color;
 `transparent` for either is a no-op (the default "no background / theme
-text" stays). Both the fluent builder and the
+text" stays). `font_size` is a bare integer pixel size (1..128,
+`set_font_size`, code-contract §2.4) — out-of-range values and builds
+without `IMCORE_HAS_TTF_RUNTIME` keep the current provider per the
+tolerance rule. Both the fluent builder and the
 parser feed the same tables, so anything expressible in C++ builder
 form parses identically from text.
 
@@ -122,7 +125,8 @@ properties, and ids only — never:
 
 - dynamic models (e.g. `ListBox` item-text callbacks),
 - event wiring,
-- font/glyph content,
+- font/glyph content (font bytes, family names — the `font_size`
+  metric is allowed),
 - runtime-generated text.
 
 Events are wired after materialization: look widgets up with
