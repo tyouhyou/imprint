@@ -4433,6 +4433,81 @@ namespace zb::ui
         };
     }  // namespace
 
+    // CSS text-axis inheritance (contract 2.4): color, font-size,
+    // letter-spacing and font-weight inherit from the declaring element
+    // down through the tree. The converter turns a styled container's
+    // text into a CHILD label, so without this pass every declaration
+    // on a div/p/body stayed behind (the model500 knob labels all
+    // rendered at the bitmap fallback). Own declarations win; the
+    // inherited value stamps text-bearing nodes only — containers stay
+    // unstamped so no phantom per-size providers get created.
+    void inherit_text_props(ui_node &n, const std::string *color,
+                            const long long *font_px,
+                            const long long *letter_px,
+                            const long long *bold)
+    {
+        // effective values: the node's own declaration beats the
+        // inherited one
+        const std::string *own_color = nullptr;
+        const long long *own_font = nullptr;
+        const long long *own_letter = nullptr;
+        const long long *own_bold = nullptr;
+        bool has_text = false;
+        for (const auto &p : n.props)
+        {
+            if (p.first == "text")
+            {
+                has_text = true;
+            }
+            else if (p.first == "color")
+            {
+                own_color = std::get_if<std::string>(&p.second);
+            }
+            else if (p.first == "font_size")
+            {
+                own_font = std::get_if<long long>(&p.second);
+            }
+            else if (p.first == "letter_px")
+            {
+                own_letter = std::get_if<long long>(&p.second);
+            }
+            else if (p.first == "bold")
+            {
+                own_bold = std::get_if<long long>(&p.second);
+            }
+        }
+        const std::string *eff_color = own_color != nullptr ? own_color : color;
+        const long long *eff_font = own_font != nullptr ? own_font : font_px;
+        const long long *eff_letter =
+            own_letter != nullptr ? own_letter : letter_px;
+        const long long *eff_bold = own_bold != nullptr ? own_bold : bold;
+
+        if (has_text)
+        {
+            if (own_color == nullptr && eff_color != nullptr)
+            {
+                n.prop("color", *eff_color);
+            }
+            if (own_font == nullptr && eff_font != nullptr)
+            {
+                n.prop("font_size", *eff_font);
+            }
+            if (own_letter == nullptr && eff_letter != nullptr)
+            {
+                n.prop("letter_px", *eff_letter);
+            }
+            if (own_bold == nullptr && eff_bold != nullptr)
+            {
+                n.prop("bold", *eff_bold);
+            }
+        }
+
+        for (ui_node &c : n.children)
+        {
+            inherit_text_props(c, eff_color, eff_font, eff_letter, eff_bold);
+        }
+    }
+
     ui_node parse_html(const char *html, bool *ok, html_page *page)
     {
         if (ok != nullptr)
@@ -4504,6 +4579,7 @@ namespace zb::ui
             {
                 ui_node kept =
                     convert_elem(*ps.root, ps.rules, vars, no_ancestors);
+                inherit_text_props(kept, nullptr, nullptr, nullptr, nullptr);
                 if (ok != nullptr)
                 {
                     *ok = !kept.children.empty();
@@ -4515,6 +4591,7 @@ namespace zb::ui
         {
             doc.children.push_back(convert_elem(*c, ps.rules, vars, top_chain));
         }
+        inherit_text_props(doc, nullptr, nullptr, nullptr, nullptr);
 
         if (ok != nullptr)
         {

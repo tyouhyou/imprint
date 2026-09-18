@@ -285,8 +285,18 @@ multi-size capability (`provider_for`) exposed per widget, so HTML
   clear resets to the process default); an explicit
   `set_glyph_provider` after `set_font_size` wins until the next
   `set_font_size` call.
-- No inheritance: a child never inherits its parent's size (the
-  `color` policy) — every sized widget carries its own declaration.
+- Text-axis inheritance is a PARSE-TIME pass of the html path, not a
+  draw-time behavior: `parse_html` propagates `color`, `font-size`,
+  `letter-spacing` and `font-weight` (the CSS-inherited text axis)
+  from the declaring element down to the text labels the converter
+  synthesizes — a styled container's text renders as a CHILD label, so
+  without the pass every container declaration stayed behind it (the
+  model500 knob labels rendered at the bitmap fallback). Own
+  declarations win; the inherited value stamps text-bearing nodes only
+  (containers stay unstamped, so no phantom per-size providers are
+  created). `.ui` documents keep the explicit per-widget rule: a `.ui`
+  child never inherits its parent's size (each sized widget carries
+  its own declaration).
 - Degradation (documented, not a bug): builds without
   `IMCORE_HAS_TTF_RUNTIME` ignore the declaration (5x7 has no sizes;
   the single-size build-time subset has exactly one) — same standing
@@ -940,6 +950,12 @@ dispatcher's raw pointers against dangling/UAF:
   the damage walk. When off, current behavior (explicit
   set_position/set_size preserved verbatim, manual layout idempotent) is
   unchanged. UI-description hosts (ui_preview) must opt in explicitly.
+  The preview host is also the font-family install point for the html
+  path (contract 2.4): under `USE_TTF_RUNTIME` it installs the vendored
+  Inter as the process family before building screens
+  (`IM_PREVIEW_TTF_FONT` build default, `UI_PREVIEW_FONT` runtime
+  override; load failure degrades to the 5x7 bitmap with a warning),
+  which is what makes per-widget `font_size` resolve at all.
 - **The in-paint order (layout → damage → draw) is defined
   architecturally in ARCHITECTURE.md §4.1**; API obligation: mark_dirty
   calls triggered inside layout must be picked up by the subsequent

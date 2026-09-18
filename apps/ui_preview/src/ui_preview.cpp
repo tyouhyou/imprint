@@ -8,6 +8,10 @@
 #include "html.hpp"
 #include "logging.hpp"
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+#include "text/runtime_ttf_provider.hpp"
+#endif
+
 namespace zb::app::ui_preview
 {
     bool is_html_path(const std::string &path)
@@ -73,11 +77,56 @@ namespace zb::app::ui_preview
         make_window(max_client_width, max_client_height, buffer);
     }
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    // Font-family install point (contract 2.4 plan 2): the preview host
+    // resolves per-widget font_size declarations against this family.
+    // Without it the builder keeps the 5x7 bitmap and font-size stays
+    // ignored (documented degradation). UI_PREVIEW_FONT overrides the
+    // build default; a load failure degrades to the bitmap with a log.
+    void install_font_family()
+    {
+        if (zb::ui::has_font_family())
+        {
+            return;
+        }
+        const char *path = std::getenv("UI_PREVIEW_FONT");
+#ifdef IM_PREVIEW_TTF_FONT
+        if (path == nullptr)
+        {
+            path = IM_PREVIEW_TTF_FONT;
+        }
+#endif
+        if (path == nullptr || *path == '\0')
+        {
+            LW << "ui_preview: no preview font (UI_PREVIEW_FONT unset, "
+                  "no build default); font_size stays ignored";
+            return;
+        }
+        try
+        {
+            // function-static anchor: the family state holds a copy,
+            // the handle stays alive for static-lifetime widgets
+            static zb::ui::TtfFamily family =
+                zb::ui::TtfFamily::from_file(path);
+            zb::ui::set_font_family(family);
+            LD << "ui_preview: font family installed from '" << path << "'";
+        }
+        catch (const zb::ui::error &e)
+        {
+            LW << "ui_preview: cannot load font '" << path
+               << "': " << e.what();
+        }
+    }
+#endif
+
     void UiPreview::make_window(uint32_t max_client_width,
                                  uint32_t max_client_height, void *buffer)
     {
         _width = static_cast<int32_t>(max_client_width);
         _height = static_cast<int32_t>(max_client_height);
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+        install_font_family();
+#endif
         // B2: parse before creating, so the first usable document's page
         // can size the window. An externally supplied buffer is a
         // fixed-size host constraint (the NDS shape) and wins over the

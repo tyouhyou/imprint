@@ -607,7 +607,12 @@ int test_html()
         EXPECT(test::vget<std::string>(node_prop_v(r, "color")) == "#112233");
         EXPECT(test::vget<long long>(node_prop_v(r, "spacing")) == 7);
         EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "color")) == "blue");
-        EXPECT(find_prop(r.children[1], "color") < 0);  // no fallback: dropped
+        // a variable that is invalid at computed-value time falls back to
+        // UNSET, and color is an inherited property: the span picks up the
+        // div's declared color through the text-inheritance pass (the
+        // browser behaves the same)
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[1], "color")) ==
+               "#112233");
     }
 
     // P-1 paint: background shorthand (solid/linear/radial layers),
