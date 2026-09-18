@@ -7,6 +7,7 @@
 #include <memory>
 #include <string>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include "logging.hpp"
@@ -483,11 +484,15 @@ namespace zb::ui
             std::vector<std::string> classes;
         };
         // a selector chain in descendant order (last part = subject);
-        // vars_only (exact ":root") collects --* and never matches
+        // vars_only (exact ":root") collects --* and never matches.
+        // pseudo marks a pseudo-element rule (H-10: 1 = ::before,
+        // 2 = ::after); it never matches an element itself, only its
+        // generated box through fold_pseudo.
         struct Selector
         {
             std::vector<Compound> parts;
             bool vars_only = false;
+            int pseudo = 0;
             int ids = 0, classes = 0, tags = 0;  // specificity sums
         };
         struct Rule
@@ -864,16 +869,52 @@ namespace zb::ui
                     i = j + 1;
                     continue;
                 }
+                // H-10 pseudo mark: a trailing ::before/::after
+                // (legacy single-colon included) strips to its base and
+                // falls through to the chain parse; anything else
+                // pseudo stays inert
+                int pseudo = 0;
                 if (part.find(':') != std::string::npos ||
                     part.find('[') != std::string::npos ||
                     part.find('(') != std::string::npos)
                 {
-                    if (part.find(':') != std::string::npos)
+                    const std::string low = ascii_lower(part);
+                    const char *const tails[4] = {"::before", "::after",
+                                                  ":before", ":after"};
+                    for (int ti = 0; ti < 4 && pseudo == 0; ++ti)
                     {
-                        saw_pseudo = true;
+                        const std::string tail = tails[ti];
+                        if (low.size() > tail.size() &&
+                            low.compare(low.size() - tail.size(),
+                                        tail.size(), tail) == 0)
+                        {
+                            std::string base = part.substr(
+                                0, part.size() - tail.size());
+                            const std::size_t end =
+                                base.find_last_not_of(" \t\n\r");
+                            if (end != std::string::npos)
+                            {
+                                base.erase(end + 1);
+                            }
+                            if (!base.empty() &&
+                                base.find(':') == std::string::npos &&
+                                base.find('[') == std::string::npos &&
+                                base.find('(') == std::string::npos)
+                            {
+                                pseudo = (ti % 2 == 0) ? 1 : 2;
+                                part = base;
+                            }
+                        }
                     }
-                    i = j + 1;  // pseudo/attribute/function: inert part
-                    continue;
+                    if (pseudo == 0)
+                    {
+                        if (part.find(':') != std::string::npos)
+                        {
+                            saw_pseudo = true;
+                        }
+                        i = j + 1;  // pseudo/attribute/function: inert part
+                        continue;
+                    }
                 }
                 // descendant chain: compounds separated by whitespace
                 Selector s;
@@ -916,6 +957,7 @@ namespace zb::ui
                 }
                 if (ok && !s.parts.empty())
                 {
+                    s.pseudo = pseudo;
                     out.push_back(std::move(s));
                 }
                 i = j + 1;
@@ -1230,6 +1272,12 @@ namespace zb::ui
                 bool any = false;
                 for (const Selector &s : rules[i].selectors)
                 {
+                    // H-10: pseudo-element selectors never style the
+                    // element itself (fold_pseudo owns them)
+                    if (s.pseudo != 0)
+                    {
+                        continue;
+                    }
                     if (!selector_matches(s, e.tag, id, classes, ancestors))
                     {
                         continue;
@@ -1288,6 +1336,86 @@ namespace zb::ui
                                    inline_style.data() + inline_style.size(),
                                    inline_decls);
                 for (const Decl &d : inline_decls)
+                {
+                    if (d.prop.size() > 2 && d.prop[0] == '-' && d.prop[1] == '-')
+                    {
+                        continue;
+                    }
+                    std::string value;
+                    if (!subst_vars(d.value, vars, value))
+                    {
+                        continue;
+                    }
+                    folded.push_back({d.prop, value, d.important});
+                }
+            }
+        }
+
+        // pseudo-element fold (H-10): like fold_style but only
+        // selectors carrying the wanted mark contribute, ordered by
+        // the same specificity-then-document cascade. Inline styles
+        // never apply to generated boxes. Empty out = no rule matched.
+        void fold_pseudo(const Elem &e, const Rules &rules,
+                         const VarMap &vars,
+                         const std::vector<Ancestor> &ancestors,
+                         const int kind, std::vector<Decl> &folded)
+        {
+            const std::string &id = e.attr("id");
+            const std::vector<std::string> classes = class_list(e.attr("class"));
+            struct Hit
+            {
+                int ids = 0, classes = 0, tags = 0;
+                std::size_t order = 0;
+                const Rule *rule = nullptr;
+            };
+            std::vector<Hit> hits;
+            for (std::size_t i = 0; i < rules.size(); ++i)
+            {
+                int bi = -1, bc = 0, bt = 0;
+                bool any = false;
+                for (const Selector &s : rules[i].selectors)
+                {
+                    if (s.pseudo != kind)
+                    {
+                        continue;
+                    }
+                    if (!selector_matches(s, e.tag, id, classes, ancestors))
+                    {
+                        continue;
+                    }
+                    any = true;
+                    if (s.ids > bi ||
+                        (s.ids == bi && (s.classes > bc ||
+                                         (s.classes == bc && s.tags > bt))))
+                    {
+                        bi = s.ids;
+                        bc = s.classes;
+                        bt = s.tags;
+                    }
+                }
+                if (any)
+                {
+                    hits.push_back({bi, bc, bt, i, &rules[i]});
+                }
+            }
+            std::sort(hits.begin(), hits.end(), [](const Hit &a, const Hit &b) {
+                if (a.ids != b.ids)
+                {
+                    return a.ids < b.ids;
+                }
+                if (a.classes != b.classes)
+                {
+                    return a.classes < b.classes;
+                }
+                if (a.tags != b.tags)
+                {
+                    return a.tags < b.tags;
+                }
+                return a.order < b.order;
+            });
+            for (const Hit &h : hits)
+            {
+                for (const Decl &d : h.rule->decls)
                 {
                     if (d.prop.size() > 2 && d.prop[0] == '-' && d.prop[1] == '-')
                     {
@@ -2838,6 +2966,274 @@ namespace zb::ui
             n.children.push_back(std::move(t));
         }
 
+        // H-10 pseudo-element box (narrow subset): folds the ::before
+        // (kind 1) or ::after (kind 2) rules for the element and lands
+        // before_*/after_* paint props on its node (a paint-only box —
+        // no layout, no hit-testing). Supported: content:"" only
+        // (anything else generates no box); position:absolute
+        // required; width/height/left/top/right/bottom, margin
+        // longhands (fractional px snap half-away-from-zero via
+        // parse_svg_num, negatives drop like the shared tolerance);
+        // single-layer background (any supported form, copied with
+        // the paint prefix); Npx/50% border-radius; bare rotate()
+        // transform (translate() ignored: generated boxes resolve
+        // without layout flow); transform-origin as 1-2 %/px/keyword
+        // tokens (default 50%). Anything richer is ignored with one
+        // warning. Lengths reuse the shared parsers, so boxes resolve
+        // like real elements at paint time.
+        bool convert_pseudo(const int line, const int kind, const Elem &e,
+                            const Rules &rules, const VarMap &vars,
+                            const std::vector<Ancestor> &ancestors,
+                            ui_node &n)
+        {
+            std::vector<Decl> folded;
+            fold_pseudo(e, rules, vars, ancestors, kind, folded);
+            if (folded.empty())
+            {
+                return false;
+            }
+            const char *const pname = kind == 1 ? "::before" : "::after";
+            const std::string pre = kind == 1 ? "before_" : "after_";
+            const std::string *co = fold_lookup(folded, "content");
+            if (co == nullptr)
+            {
+                return false;
+            }
+            {
+                const std::string t = css_trim(*co);
+                if (t != "\"\"" && t != "''")
+                {
+                    LW << "html: line " << line << ": " << pname
+                       << " content is not \"\"; no box generated (H-10)";
+                    return false;
+                }
+            }
+            if (const std::string *d = fold_lookup(folded, "display"))
+            {
+                if (ascii_lower(*d) == "none")
+                {
+                    return false;
+                }
+            }
+            bool absolute = false;
+            if (const std::string *ps = fold_lookup(folded, "position"))
+            {
+                absolute = css_trim(ascii_lower(*ps)) == "absolute";
+            }
+            if (!absolute)
+            {
+                LW << "html: line " << line << ": " << pname
+                   << " is not absolutely positioned; no box (H-10)";
+                return false;
+            }
+            if (const std::string *w = fold_lookup(folded, "width"))
+            {
+                apply_length(n, pre + "w", *w);
+            }
+            if (const std::string *h = fold_lookup(folded, "height"))
+            {
+                apply_length(n, pre + "h", *h);
+            }
+            const char *const sides[4] = {"left", "top", "right", "bottom"};
+            const char *const side_keys[4] = {"l", "t", "r", "b"};
+            for (int si = 0; si < 4; ++si)
+            {
+                if (const std::string *sv = fold_lookup(folded, sides[si]))
+                {
+                    const std::string t = css_trim(*sv);
+                    if (!t.empty() && ascii_lower(t) != "auto")
+                    {
+                        n.prop(pre + side_keys[si], t);
+                    }
+                }
+            }
+            // margin longhands snap to whole px (halves away from zero);
+            // negatives fall out like the shared tolerance, silently:
+            // pseudo boxes never reach the shared margin warning
+            const char *const mlong[4] = {"margin-left", "margin-top",
+                                          "margin-right", "margin-bottom"};
+            const char *const mkeys[4] = {"ml", "mt", "mr", "mb"};
+            for (int mi = 0; mi < 4; ++mi)
+            {
+                if (const std::string *mv = fold_lookup(folded, mlong[mi]))
+                {
+                    std::string t = css_trim(ascii_lower(*mv));
+                    if (t.size() > 2 &&
+                        t.compare(t.size() - 2, 2, "px") == 0)
+                    {
+                        t = t.substr(0, t.size() - 2);
+                    }
+                    long long v = 0;
+                    if (parse_svg_num(t, v) && v >= 0)
+                    {
+                        n.prop(pre + mkeys[mi], v);
+                    }
+                }
+            }
+            // single-layer background only; multi-layer drops the paint
+            if (const std::string *bg = fold_lookup(folded, "background"))
+            {
+                std::vector<std::string> layers;
+                split_layers(*bg, layers);
+                if (layers.size() == 1)
+                {
+                    ui_node tmp;
+                    if (parse_bg_layer(tmp, layers[0]))
+                    {
+                        for (const auto &p : tmp.props)
+                        {
+                            n.prop(pre + p.first, p.second);
+                        }
+                    }
+                }
+                else
+                {
+                    LW << "html: line " << line << ": " << pname
+                       << " multi-layer background ignored (H-10)";
+                }
+            }
+            else if (const std::string *bc =
+                         fold_lookup(folded, "background-color"))
+            {
+                n.prop(pre + "background", *bc);
+            }
+            if (const std::string *br = fold_lookup(folded, "border-radius"))
+            {
+                const std::string t = css_trim(ascii_lower(*br));
+                if (t == "50%")
+                {
+                    n.prop(pre + "radius_half", true);
+                }
+                else if (t.size() > 2 &&
+                         t.compare(t.size() - 2, 2, "px") == 0)
+                {
+                    long long px = 0;
+                    if (parse_svg_num(t.substr(0, t.size() - 2), px) &&
+                        px >= 0)
+                    {
+                        n.prop(pre + "radius_px", px);
+                    }
+                }
+            }
+            // transform: one bare rotate(Ndeg); translate() is
+            // ignored (generated boxes resolve without layout flow);
+            // anything combined drops the whole transform
+            if (const std::string *tf = fold_lookup(folded, "transform"))
+            {
+                std::string tx;
+                std::string ty;
+                if (parse_translate(*tf, tx, ty))
+                {
+                    LW << "html: line " << line << ": " << pname
+                       << " translate() ignored (H-10)";
+                }
+                else
+                {
+                    const std::string t = css_trim(ascii_lower(*tf));
+                    long long deg = 0;
+                    if (t.size() > 11 &&
+                        t.compare(0, 7, "rotate(") == 0 &&
+                        t.back() == ')' &&
+                        t.compare(t.size() - 4, 3, "deg") == 0 &&
+                        parse_svg_num(t.substr(7, t.size() - 7 - 4), deg))
+                    {
+                        n.prop(pre + "rot_ang", deg);
+                    }
+                    else
+                    {
+                        LW << "html: line " << line << ": " << pname
+                           << " transform '" << *tf
+                           << "' is not translate()/rotate(); ignored";
+                    }
+                }
+            }
+            // transform-origin: 1-2 tokens of N%/Npx/bare/keyword
+            // (default 50%); keywords map to 0/50/100%
+            if (const std::string *to = fold_lookup(folded, "transform-origin"))
+            {
+                std::vector<std::string> toks;
+                std::string cur;
+                for (const char c : css_trim(ascii_lower(*to)))
+                {
+                    if (c == ' ' || c == '\t')
+                    {
+                        if (!cur.empty())
+                        {
+                            toks.push_back(cur);
+                            cur.clear();
+                        }
+                    }
+                    else
+                    {
+                        cur.push_back(c);
+                    }
+                }
+                if (!cur.empty())
+                {
+                    toks.push_back(cur);
+                }
+                if (!toks.empty() && toks.size() <= 2)
+                {
+                    bool clean = true;
+                    for (std::size_t ti = 0; clean && ti < 2; ++ti)
+                    {
+                        const std::string tok =
+                            ti < toks.size() ? toks[ti] : "50%";
+                        long long v = 50;
+                        bool pct = true;
+                        if (tok == "left" || tok == "top")
+                        {
+                            v = 0;
+                        }
+                        else if (tok == "center")
+                        {
+                            v = 50;
+                        }
+                        else if (tok == "right" || tok == "bottom")
+                        {
+                            v = 100;
+                        }
+                        else
+                        {
+                            std::string u = tok;
+                            pct = false;
+                            if (!u.empty() && u.back() == '%')
+                            {
+                                pct = true;
+                                u.pop_back();
+                            }
+                            else if (u.size() > 2 &&
+                                     u.compare(u.size() - 2, 2, "px") == 0)
+                            {
+                                u = u.substr(0, u.size() - 2);
+                            }
+                            if (!parse_svg_num(u, v))
+                            {
+                                clean = false;
+                            }
+                        }
+                        if (clean)
+                        {
+                            n.prop(pre + (ti == 0 ? "rot_ox" : "rot_oy"), v);
+                            n.prop(pre + (ti == 0 ? "rot_ox_pct" : "rot_oy_pct"),
+                                   pct);
+                        }
+                    }
+                    if (!clean)
+                    {
+                        LW << "html: line " << line << ": " << pname
+                           << " transform-origin '" << *to << "' ignored";
+                    }
+                }
+                else if (!toks.empty())
+                {
+                    LW << "html: line " << line << ": " << pname
+                       << " transform-origin '" << *to << "' ignored";
+                }
+            }
+            return true;
+        }
+
         ui_node convert_elem(const Elem &e, const Rules &rules,
                              const VarMap &vars,
                              const std::vector<Ancestor> &ancestors)
@@ -3529,6 +3925,10 @@ namespace zb::ui
             {
                 n.children.push_back(convert_elem(*c, rules, vars, below));
             }
+            // H-10 generated boxes land on the originating node
+            // (::before paints first, ::after last — see paint order)
+            convert_pseudo(e.line, 1, e, rules, vars, ancestors, n);
+            convert_pseudo(e.line, 2, e, rules, vars, ancestors, n);
             return n;
         }
 

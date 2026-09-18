@@ -772,29 +772,38 @@ system (standing non-goals):
 - Box shadows (P-2e): `box-shadow: [inset] ox oy [blur [spread]]
   color` comma lists (paren-aware split; up to 2 outer + 2 inset per
   widget, extras warn-and-drop at parse; a malformed entry drops
-  alone). Inset shadows paint as up-to-`blur` inner 1px bands with
-  linear alpha falloff (exact on 32bpp; binary depths keep/drop bands
-  by the half-coverage rule — the base alpha already reads 0/1 there),
-  starting inside the border, after the border — full inset depth
-  for dial faces, knob edges, toggle tracks. Sides are picked by strict
-  offset sign (ox > 0 left, ox < 0 right, oy > 0 top, oy < 0 bottom;
-  a zero axis paints neither side — the centered blur spill is
-  dropped so circles keep their silhouette; (0,0) rides the
-  all-sides curved outlines below). Split-side bands
-  anti-alias their chord-cut ends with the fill coverage formula
-  (`plot_aa` fringe in the band color, so the falloff alpha stacks;
-  binary depths inherit the half-coverage behavior). Outer shadows paint their
+  alone). Inset shadows composite the blurred exterior of a shifted,
+  spread-contracted rounded hole, clipped to the rounded padding box,
+  after the border. Both offset magnitude and direction apply; a centered
+  shadow uses the same algorithm as a directional one. The hole and clip
+  use the fill raster's inclusive bounds, radius clamp and continuous
+  quarter-pixel row chords (the same arc-center geometry as the fills —
+  the inset reaches the tangent rows it used to lose); positive spread
+  contracts the hole, including its corner radius.
+  Blur uses a separable, normalized integer triangular kernel with support
+  `[-blur, blur]` and weights `blur + 1 - abs(offset)` on each axis.
+  This is a bounded CPU approximation, not browser-exact Gaussian blur.
+  Zero blur uses the unfiltered hole. Each pixel composites once per shadow;
+  32bpp multiplies shadow alpha by coverage, and binary depths use the
+  standard half-coverage rule. Scratch storage is bounded independently of
+  widget dimensions; no heap allocation or offscreen color buffer is needed.
+  Outer shadows paint their
   silhouette (spread-expanded) UNDER the background, feathered over the
-  blur radius when blurred: the core dims as 2/(blur+2) (rounded) and up
+  blur radius when blurred: the core keeps half the base alpha (a blurred
+  disc reads half strength at its own edge) and up
   to `blur` outlines (capped at 6) keep halving outward, so a large blur
   fades instead of ending in a hard wall inside rounded corners (the
   model500 knob's square bottom); blur==0 keeps the hard silhouette.
   Binary depths drop the dimmed core by the same half rule and keep the
-  first halo solid. The per-widget clip keeps only the inside part,
-  which an opaque background then covers: with no shell-level overdraw
-  in the architecture, outer glows/drop shadows on opaque boxes are
-  accepted but invisible (bulb/LED glow, amp drop; recorded as the
-  overdraw follow-up, not a parse gap). Wireframe skips shadows.
+  first halo solid. Outer shadows paint in a dedicated first pass under a
+  clip expanded by offset+spread+blur in every direction (bounded by the
+  parent's clip); the painted spill is then cut at the box edge by the
+  box's own clip, so a drop shadow extends past the box like the
+  browser's. Damage reports the expanded bounds so partial repaints
+  cover the shadow. The per-widget box clip keeps only the inside part
+  for the opaque face; the outside part now stays visible: outer
+  glows/drop shadows on opaque boxes are visible within the parent's
+  clip (the model500 knob drop). Wireframe skips shadows.
   `Graphics::corner_chord` (the fill chord formula, integer-only) is
   public for the band clip.
 - HTML page box: `html_page` (per-axis width/height/background presence)
@@ -1096,6 +1105,23 @@ obligations:
   the image cache in wireframe (a cached face would blit opaque):
   glyphs write straight to the screen, so flips need no invalidation
   and the miss counter only tracks FULL-mode cache misses.
+- **Continuous rounded geometry (rim gate)**: every rounded-rect raster
+  (the fills' row spans, the translucent border stroke band, the inset
+  shadow's hole and clip) evaluates the box on the pixel-center grid in
+  1/4-px fixed point — inclusive pixel indices are pixels, arc centers
+  sit at `(left + r, top + r)` and `(right + 1 - r, bottom + 1 - r)`
+  continuously, and tangent rows keep their real chord instead of
+  collapsing a row early (the index-space chords made even-sized boxes'
+  bottom arc drop out: the model500 knob's bright leak ring between the
+  border ring and the inset shadow). The translucent 1px border itself
+  (per-channel blend, r ≥ 2) takes a signed-distance stroke band on the
+  same grid — the ring one pixel inside the box edge, linear 1px
+  coverage ramp, midline half a pixel in — instead of the polyline
+  (which leaves under-covered seams at the diagonals and tangents);
+  opaque and binary borders keep the polyline. `draw_line_aa`'s
+  `skip_first` (arc joints) skips the CALLER's start pixel through the
+  endpoint normalization, so clockwise and counter-clockwise arcs
+  rasterize identically.
 - **`draw_arc_aa` angular contract (V-5)**: integer degrees in the math
   convention, `start_deg` measured from +x (3 o'clock), positive
   `sweep_deg` counter-clockwise — on the raster's screen coordinates

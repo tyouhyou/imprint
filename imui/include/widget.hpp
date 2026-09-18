@@ -267,8 +267,10 @@ namespace zb::ui
             core::Color c{};
         };
         // one box shadow (P-2e): px offset, blur/spread px, color.
-        // Inset paints inner bands (full effect); outer paints its
-        // silhouette under the box (clip-bound — see the contract).
+        // Inset paints a blurred hole mask (see the contract); outer
+        // paints its silhouette in a dedicated pass under a clip that
+        // reaches past the box by offset+spread+blur (bounded by the
+        // parent's clip — see draw_background_shadows_only).
         struct shadow_spec
         {
             int8_t ox = 0;
@@ -276,6 +278,37 @@ namespace zb::ui
             uint8_t blur = 0;
             uint8_t spread = 0;
             core::Color c{};
+        };
+        // generated box (H-10 narrow: static ::before/::after
+        // content). A paint-only box resolved against this widget at
+        // paint time: geometry in px (sides as % of self or px),
+        // solid or three-stop-linear paint, corner radius, and an
+        // optional clockwise rotation about the origin. No layout,
+        // no hit-testing, clipped to this widget like outer shadows.
+        struct pseudo_spec
+        {
+            int16_t w = 0;
+            int16_t h = 0;
+            int16_t off[4] = {0, 0, 0, 0};  // l/t/r/b
+            int16_t margin[4] = {0, 0, 0, 0};  // l/t/r/b
+            int16_t rot_ang = 0;
+            int16_t rot_ox = 50;
+            int16_t rot_oy = 50;
+            core::Color bg{};
+            core::Color mid{};
+            core::Color to{};
+            uint8_t has_w = 0;
+            uint8_t has_h = 0;
+            uint8_t off_mask = 0;  // present sides bitmask
+            uint8_t off_pct = 0;   // % sides bitmask
+            uint8_t has_bg = 0;
+            uint8_t grad_kind = 0;  // 0 solid, 5 three-stop linear
+            uint8_t grad_mid_p = 50;
+            uint8_t grad_h = 0;
+            uint8_t radius_kind = 0;  // 0 none, 1 px, 2 half
+            uint16_t radius_px = 0;
+            uint8_t rot_ox_pct = 1;
+            uint8_t rot_oy_pct = 1;
         };
 
         /*
@@ -343,6 +376,30 @@ namespace zb::ui
                 p->pctmask &= static_cast<uint8_t>(~(1U << (4 + axis)));
             }
             mark_layout_dirty();
+        }
+        // generated box (H-10): attaches a parsed pseudo paint box;
+        // the builder fills every field, paint resolves it. Mutable
+        // access for the builder only.
+        void set_pseudo(const int kind, const pseudo_spec &spec)
+        {
+            if (kind < 0 || kind > 1)
+            {
+                return;
+            }
+            ensure_ext();
+            ext_->pseudo[kind] = spec;
+            ext_->has_pseudo[kind] = 1;
+            mark_dirty();
+        }
+        [[nodiscard]] const pseudo_spec *pseudo(const int kind) const
+        {
+            if (kind < 0 || kind > 1)
+            {
+                return nullptr;
+            }
+            return (ext_ != nullptr && ext_->has_pseudo[kind] != 0)
+                       ? &ext_->pseudo[kind]
+                       : nullptr;
         }
         [[nodiscard]] bool is_positioned() const
         {
@@ -485,8 +542,34 @@ namespace zb::ui
          * damage); a repaint requested while not a single widget reported
          * damage falls back to a full-frame repaint.
          */
-        void mark_dirty() { mark_dirty_rect(get_absolute_position().x, get_absolute_position().y, size.width, size.height); }
+        void mark_dirty()
+        {
+            int l = 0, t = 0, r = 0, b = 0;
+            outer_shadow_pad(l, t, r, b);
+            const auto p = get_absolute_position();
+            mark_dirty_rect(p.x - l, p.y - t,
+                            size.width + l + r, size.height + t + b);
+        }
         void mark_dirty(const int x, const int y, const int w, const int h) { mark_dirty_rect(x, y, w, h); }
+        // outer shadow visual margin (P-2e): how far the silhouettes can
+        // reach past the box (offset, spread, blur); the damage rect and
+        // the shadow draw clip grow by it
+        void outer_shadow_pad(int &l, int &t, int &r, int &b) const
+        {
+            l = t = r = b = 0;
+            if (ext_ == nullptr)
+            {
+                return;
+            }
+            for (int i = 0; i < ext_->n_sh_out && i < 2; ++i)
+            {
+                const shadow_spec &sh = ext_->sh_out[i];
+                l = std::max(l, -sh.ox + static_cast<int>(sh.spread) + sh.blur);
+                t = std::max(t, -sh.oy + static_cast<int>(sh.spread) + sh.blur);
+                r = std::max(r, sh.ox + static_cast<int>(sh.spread) + sh.blur);
+                b = std::max(b, sh.oy + static_cast<int>(sh.spread) + sh.blur);
+            }
+        }
         [[nodiscard]] bool is_dirty() const { return dirty_; }
         // this widget or any descendant reported damage since the last
         // paint (the window's repaint-owed source, see CanvasWindow)
@@ -957,6 +1040,14 @@ namespace zb::ui
 
         // draws the background (color then image); called by draw()
         void draw_background(core::Graphics &area) const;
+        // P-2e phase 1: only the outer-shadow silhouettes, painted under
+        // an expanded clip that reaches past the box by offset+spread+blur
+        void draw_background_shadows_only(core::Graphics &g) const;
+        void draw_background_impl(core::Graphics &area, bool full,
+                                  int sh_dx = 0, int sh_dy = 0) const;
+        // generated box paint (H-10): resolves pseudo(kind) against
+        // this widget and paints it; no-op when absent
+        void paint_pseudo(core::Graphics &area, int kind) const;
 
         /*
          * Effective text color (theme contract 10.3): the per-widget
@@ -1207,6 +1298,7 @@ namespace zb::ui
             bord_t bord{};
             shadow_spec sh_out[2]{};
             shadow_spec sh_in[2]{};
+            pseudo_spec pseudo[2]{};  // 0 ::before, 1 ::after
             int16_t letter_px = 0;
             int16_t margin[4] = {0, 0, 0, 0};  // t/r/b/l in-flow margins (H-3)
             int16_t font_px = 0;  // per-widget size declaration (0 = unset)
@@ -1222,6 +1314,7 @@ namespace zb::ui
             uint8_t has_grad = 0;
             uint8_t has_rep = 0;
             uint8_t has_bord = 0;
+            uint8_t has_pseudo[2] = {0, 0};
             uint8_t has_text = 0;
             uint8_t has_font = 0;
             uint8_t has_margin = 0;

@@ -589,8 +589,11 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 3, 2) == core::colors::White.pixel);    // corner span
         if (core::ImColor_Depth == 32)
         {
-            EXPECT(test::pixel_at(*g, 2, 2) == core::Color::from(153, 153, 153).pixel);
-            EXPECT(test::pixel_at(*g, 19, 2) == core::Color::from(153, 153, 153).pixel);
+            // the corner boundary lands exactly on the pixel-center
+            // grid here (continuous chord at 1/4 px), so the first cut
+            // pixels are fully covered — no faint fringe anymore
+            EXPECT(test::pixel_at(*g, 2, 2) == core::colors::White.pixel);
+            EXPECT(test::pixel_at(*g, 19, 2) == core::colors::White.pixel);
             EXPECT(test::pixel_at(*g, 1, 2) != core::colors::White.pixel);
         }
         // zero radius is the plain fill_rect

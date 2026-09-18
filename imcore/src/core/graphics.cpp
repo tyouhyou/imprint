@@ -67,6 +67,58 @@ namespace
     }
 
     /*
+     * Rounded-rect row span on the pixel-center grid, in 1/4-px units.
+     * The old index-space chords (dy = row - (bottom - r)) measured even
+     * boxes against half-pixel arc centers, so their tangent rows
+     * collapsed a full row early: the model500 knob's conic face
+     * underfilled the whole bottom arc and leaked bright pixels between
+     * the border ring and the inset shadow. Arc centers sit at
+     * (left + r, top + r) and (right + 1 - r, bottom + 1 - r)
+     * continuously; straight-run rows keep the full span.
+     */
+    struct span_q
+    {
+        int lx;      // first full pixel
+        int rx;      // last full pixel (lx > rx = nothing this row)
+        int fl, fr;  // 0..255 coverage of the partial pixels lx-1 / rx+1
+    };
+
+    span_q rounded_span_q(const int left, const int top, const int right,
+                          const int bottom, const int r, const int row)
+    {
+        const int w = right - left + 1;
+        const int r4 = 4 * r;
+        const int y4 = 4 * row + 2;
+        const int top_arc4 = 4 * top + r4;
+        const int bot_arc4 = 4 * (bottom + 1) - r4;
+        const int dy4 = std::max(0, std::max(top_arc4 - y4, y4 - bot_arc4));
+        span_q s{left, right, 0, 0};
+        if (dy4 > 0)
+        {
+            const int chord4 = corner_chord(r4, dy4);
+            // the row's boundaries ride the CORNER arcs (left + r -
+            // chord, right + 1 - r + chord); a box-center ± chord form
+            // would draw a circle, shrinking every rounded rect's edge
+            // rows (the locked top-edge span test caught exactly that)
+            const int lo4 = 4 * left + r4 - chord4;
+            const int hi4 = 4 * (right + 1) - r4 + chord4;
+            s.lx = std::max(left, (lo4 + 1) / 4);   // first center >= lo
+            s.rx = std::min(right, (hi4 - 3) / 4);  // last center <= hi
+            if (s.lx > s.rx)
+            {
+                s.lx = 1;
+                s.rx = 0;
+                return s;
+            }
+            const int fl = 4 * s.lx - lo4;
+            const int fr = hi4 - 4 * (s.rx + 1);
+            s.fl = fl > 0 ? fl * 255 / 4 : 0;
+            s.fr = fr > 0 ? fr * 255 / 4 : 0;
+        }
+        return s;
+    }
+
+    /*
      * Channel-wise linear interpolation through the 8-bit-normalized
      * accessors (A-19); `steps` must be > 0, `i` in [0, steps].
      */
@@ -961,15 +1013,90 @@ void Graphics::draw_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
         return;
     }
 
+    // Translucent 1px rims take a signed-distance band rasterization.
+    // The stroke follows the rounded rect's continuous outline (box
+    // [left, right+1] x [top, bottom+1]; inclusive indices are pixels)
+    // evaluated on the pixel-center grid, so the ring fades linearly
+    // over one pixel on every side and diagonal — the polyline fallback
+    // leaves under-covered seams at the diagonals and tangents (the
+    // model500 knob's broken lower rim and flat sides). Opaque and
+    // binary depths keep the polyline (locked pixel expectations);
+    // wireframe keeps it too.
+    if constexpr (Color::per_channel_blend)
+    {
+        if (colr.a() > 0 && colr.a() < 0xFF &&
+            render_mode_ != render_mode::wireframe && r >= 2)
+        {
+            // 1px stroke inside the box edge: sdf in [-1, 0], midline
+            // half a pixel in. Point-sampled coverage is the triangle
+            // 1 - |sdf + 0.5| — at the box edge the pixel center sits
+            // ON the midline (even-sized circles: the 54px knob's rim
+            // row centers are 26.5px from the middle), so south/east
+            // rims get the same full coverage north/west do. The old
+            // pixel-corner grid put the band a half pixel further out,
+            // clipping the whole lower arc away (the knob's bright
+            // lower leak where the border should read).
+            const int w256 = (right - left + 1) * 128;
+            const int h256 = (bottom - top + 1) * 128;
+            const int rr256 = r * 256;
+            const int ex256 = w256 - rr256;
+            const int ey256 = h256 - rr256;
+            const int cx256 = left * 256 + w256;
+            const int cy256 = top * 256 + h256;
+            const auto rim_cov = [&](const int colx, const int row) {
+                const int dx = std::abs(colx * 256 + 128 - cx256) - ex256;
+                const int dy = std::abs(row * 256 + 128 - cy256) - ey256;
+                int64_t sd;
+                if (dx > 0 && dy > 0)
+                {
+                    sd = static_cast<int64_t>(isqrt_floor(
+                             1LL * dx * dx + 1LL * dy * dy)) -
+                         rr256;
+                }
+                else
+                {
+                    sd = 1LL * (dx > dy ? dx : dy) - rr256;
+                }
+                const int64_t ad = (sd + 128) < 0 ? -(sd + 128) : sd + 128;
+                if (ad >= 256)
+                {
+                    return 0;
+                }
+                return 255 - static_cast<int>(ad * 255 >> 8);
+            };
+            for (int row = top; row <= bottom; ++row)
+            {
+                for (int colx = left; colx <= right; ++colx)
+                {
+                    const int cov = rim_cov(colx, row);
+                    if (cov > 0)
+                    {
+                        plot_aa(colx, row, cov, colr);
+                    }
+                }
+            }
+            return;
+        }
+    }
     // four straight edges (axis-aligned, so draw_line_aa stays solid)
     // plus four quarter-arc corners. Angles are the draw_arc_aa
-    // convention (0 = +x, positive sweep visually clockwise, y down):
-    // each corner runs from one edge tangent to the other, and the arc
-    // extremes coincide with the edge endpoints, so no pixel plots twice.
-    draw_line_aa(left + r, top, right - r, top, colr);
-    draw_line_aa(left + r, bottom, right - r, bottom, colr);
-    draw_line_aa(left, top + r, left, bottom - r, colr);
-    draw_line_aa(right, top + r, right, bottom - r, colr);
+    // convention (0 = +x, positive sweep visually clockwise, y down).
+    // Each straight edge stops one pixel short of the corner tangent:
+    // the arc polyline already plots its start point, so sharing the
+    // tangent pixel would paint it twice — invisible for opaque colors
+    // but stacking (squared alpha) for translucent ones (rgba borders
+    // and shadow outlines read double-dark at the four tangents).
+    // Tiny boxes whose edge collapses to the tangents draw arcs only.
+    if (left + r + 1 <= right - r - 1)
+    {
+        draw_line_aa(left + r + 1, top, right - r - 1, top, colr);
+        draw_line_aa(left + r + 1, bottom, right - r - 1, bottom, colr);
+    }
+    if (top + r + 1 <= bottom - r - 1)
+    {
+        draw_line_aa(left, top + r + 1, left, bottom - r - 1, colr);
+        draw_line_aa(right, top + r + 1, right, bottom - r - 1, colr);
+    }
     draw_arc_aa(left + r, top + r, r, 180, 90, colr);      // TL: west -> north
     draw_arc_aa(right - r, top + r, r, 270, 90, colr);     // TR: north -> east
     draw_arc_aa(right - r, bottom - r, r, 0, 90, colr);    // BR: east -> south
@@ -1006,33 +1133,144 @@ void Graphics::fill_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
     // rows stay solid full-width spans
     for (int row = top; row <= bottom; ++row)
     {
-        int dy;
-        if (row < top + r)
+        const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+        if (sp.lx > sp.rx)
         {
-            dy = top + r - row;
-        }
-        else if (row > bottom - r)
-        {
-            dy = row - (bottom - r);
-        }
-        else
-        {
-            dy = 0;
-        }
-        if (dy == 0)
-        {
-            draw_line(left, row, right, row, colr);
             continue;
         }
-        const int64_t t = 1LL * r * r - 1LL * dy * dy;
-        const int dx = static_cast<int>(isqrt_floor(t));
-        const int64_t rem = t - 1LL * dx * dx;
-        const int frac8 = static_cast<int>(rem * 255 / (2LL * dx + 1));
-        draw_line(left + r - dx, row, right - r + dx, row, colr);
-        if (frac8 > 0)
+        draw_line(sp.lx, row, sp.rx, row, colr);
+        if (sp.fl > 0)
         {
-            plot_aa(left + r - dx - 1, row, frac8, colr);
-            plot_aa(right - r + dx + 1, row, frac8, colr);
+            plot_aa(sp.lx - 1, row, sp.fl, colr);
+        }
+        if (sp.fr > 0)
+        {
+            plot_aa(sp.rx + 1, row, sp.fr, colr);
+        }
+    }
+}
+
+void Graphics::fill_round_rect_rotated(int x, int y, int w, int h, int radius, int angle_deg,
+                                       int pivot_x, int pivot_y, const Color &colr)
+{
+    if (w <= 0 || h <= 0)
+    {
+        return;
+    }
+    int r = radius < 0 ? 0 : radius;
+    const int half = (w < h ? w : h) / 2;
+    if (r > half)
+    {
+        r = half;
+    }
+    const int deg = norm_deg(angle_deg);
+    // 256-scaled trig, dual-path like arc_point/conic_theta: the LUT
+    // lives behind USE_INTEGER_GEOMETRY, desktop uses libm
+    int cos256 = 256;
+    int sin256 = 0;
+#if defined(USE_INTEGER_GEOMETRY)
+    cos256 = arc_cos_q(deg);
+    sin256 = arc_sin_q(deg);
+#else
+    {
+        const double a = deg * kDegToRad;
+        const double c = std::cos(a) * 256.0;
+        const double s = std::sin(a) * 256.0;
+        cos256 = static_cast<int>(c >= 0.0 ? c + 0.5 : c - 0.5);
+        sin256 = static_cast<int>(s >= 0.0 ? s + 0.5 : s - 0.5);
+    }
+#endif
+    // rotated corners bound the raster walk (one spare pixel ring)
+    int bx0 = 0, by0 = 0, bx1 = 0, by1 = 0;
+    {
+        bool first = true;
+        const int cxs[2] = {x, x + w};
+        const int cys[2] = {y, y + h};
+        for (const int qx : cxs)
+        {
+            for (const int qy : cys)
+            {
+                const int64_t dx = static_cast<int64_t>(qx - pivot_x) * 256;
+                const int64_t dy = static_cast<int64_t>(qy - pivot_y) * 256;
+                const int rx =
+                    pivot_x + static_cast<int>((dx * cos256 - dy * sin256) / 65536);
+                const int ry =
+                    pivot_y + static_cast<int>((dx * sin256 + dy * cos256) / 65536);
+                if (first)
+                {
+                    bx0 = bx1 = rx;
+                    by0 = by1 = ry;
+                    first = false;
+                }
+                else
+                {
+                    if (rx < bx0)
+                    {
+                        bx0 = rx;
+                    }
+                    if (rx > bx1)
+                    {
+                        bx1 = rx;
+                    }
+                    if (ry < by0)
+                    {
+                        by0 = ry;
+                    }
+                    if (ry > by1)
+                    {
+                        by1 = ry;
+                    }
+                }
+            }
+        }
+        --bx0;
+        --by0;
+        ++bx1;
+        ++by1;
+    }
+    const int64_t hw = static_cast<int64_t>(w) * 256 / 2;
+    const int64_t hh = static_cast<int64_t>(h) * 256 / 2;
+    const int64_t rr = static_cast<int64_t>(r) * 256;
+    const int64_t ex = hw - rr;
+    const int64_t ey = hh - rr;
+    // box center into the pivot frame, UNROTATED: the SDF tests
+    // the inverse-mapped pixel against the box where it started,
+    // so the center stays put while only pixels rotate back
+    const int64_t dcx = static_cast<int64_t>(x) * 256 + hw -
+                        static_cast<int64_t>(pivot_x) * 256;
+    const int64_t dcy = static_cast<int64_t>(y) * 256 + hh -
+                        static_cast<int64_t>(pivot_y) * 256;
+    for (int row = by0; row <= by1; ++row)
+    {
+        for (int col = bx0; col <= bx1; ++col)
+        {
+            // pixel center into the pivot frame, rotated back by -angle
+            const int64_t dx = (static_cast<int64_t>(col - pivot_x) * 256) + 128;
+            const int64_t dy = (static_cast<int64_t>(row - pivot_y) * 256) + 128;
+            const int64_t lx = (dx * cos256 + dy * sin256) / 256 - dcx;
+            const int64_t ly = (-dx * sin256 + dy * cos256) / 256 - dcy;
+            const int64_t qx = (lx >= 0 ? lx : -lx) - ex;
+            const int64_t qy = (ly >= 0 ? ly : -ly) - ey;
+            int64_t d;
+            if (qx > 0 && qy > 0)
+            {
+                d = isqrt_floor(qx * qx + qy * qy) - rr;
+            }
+            else
+            {
+                // straight edge / interior: the corner radius still
+                // stands off the distance (missing it thins every
+                // straight run by r and clips r off each end)
+                d = (qx > qy ? qx : qy) - rr;
+            }
+            // coverage: 1px linear ramp over the zero crossing
+            int64_t cov = (128 - d) * 255 + 128;
+            cov >>= 8;
+            if (cov <= 0)
+            {
+                continue;
+            }
+            plot_aa(col, row, cov > 255 ? 255 : static_cast<int>(cov), colr);
         }
     }
 }
@@ -1085,11 +1323,14 @@ void Graphics::fill_gradient(int x1, int y1, int x2, int y2, const Color &from, 
 
     // fractional chord edge (the fill_round_rect_aa formula): the two
     // pixels just outside the span blend by coverage
-    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int frac8) {
-        if (frac8 > 0)
+    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int fl, const int fr) {
+        if (fl > 0)
         {
-            plot_aa(lx - 1, row, frac8, lc);
-            plot_aa(rx + 1, row, frac8, rc);
+            plot_aa(lx - 1, row, fl, lc);
+        }
+        if (fr > 0)
+        {
+            plot_aa(rx + 1, row, fr, rc);
         }
     };
 
@@ -1110,38 +1351,17 @@ void Graphics::fill_gradient(int x1, int y1, int x2, int y2, const Color &from, 
         }
         for (int row = top; row <= bottom; ++row)
         {
-            int dy = 0;
-            if (r > 0)
+            const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+            if (sp.lx > sp.rx)
             {
-                if (row < top + r)
-                {
-                    dy = top + r - row;
-                }
-                else if (row > bottom - r)
-                {
-                    dy = row - (bottom - r);
-                }
-            }
-            if (dy == 0)
-            {
-                // rounded middle rows still walk per pixel (the color
-                // varies along the row); the square case returned above
-                for (int col = left; col <= right; ++col)
-                {
-                    draw_pixel(col, row, col_color(col));
-                }
                 continue;
             }
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            const int lx = left + r - dx;
-            const int rx = right - r + dx;
-            for (int col = lx; col <= rx; ++col)
+            for (int col = sp.lx; col <= sp.rx; ++col)
             {
                 draw_pixel(col, row, col_color(col));
             }
-            fringe(lx, rx, row, col_color(lx), col_color(rx), frac8);
+            fringe(sp.lx, sp.rx, row, col_color(sp.lx), col_color(sp.rx),
+                   sp.fl, sp.fr);
         }
     }
     else
@@ -1150,30 +1370,13 @@ void Graphics::fill_gradient(int x1, int y1, int x2, int y2, const Color &from, 
         for (int row = top; row <= bottom; ++row)
         {
             const Color c = steps == 0 ? from : lerp_color(from, to, row - top, steps);
-            int dy = 0;
-            if (r > 0)
+            const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+            if (sp.lx > sp.rx)
             {
-                if (row < top + r)
-                {
-                    dy = top + r - row;
-                }
-                else if (row > bottom - r)
-                {
-                    dy = row - (bottom - r);
-                }
-            }
-            if (dy == 0)
-            {
-                draw_line(left, row, right, row, c);
                 continue;
             }
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            const int lx = left + r - dx;
-            const int rx = right - r + dx;
-            draw_line(lx, row, rx, row, c);
-            fringe(lx, rx, row, c, c, frac8);
+            draw_line(sp.lx, row, sp.rx, row, c);
+            fringe(sp.lx, sp.rx, row, c, c, sp.fl, sp.fr);
         }
     }
 }
@@ -1240,37 +1443,18 @@ void Graphics::fill_radial(int x1, int y1, int x2, int y2, const int cx, const i
 
     for (int row = top; row <= bottom; ++row)
     {
-        int dy = 0;
-        if (r > 0)
-        {
-            if (row < top + r)
-            {
-                dy = top + r - row;
-            }
-            else if (row > bottom - r)
-            {
-                dy = row - (bottom - r);
-            }
-        }
-        int lx = left;
-        int rx = right;
-        int frac8 = 0;
-        if (dy > 0)
-        {
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            lx = left + r - dx;
-            rx = right - r + dx;
-        }
-        for (int col = lx; col <= rx; ++col)
+        const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+        for (int col = sp.lx; col <= sp.rx; ++col)
         {
             draw_pixel(col, row, shade(col, row));
         }
-        if (frac8 > 0)
+        if (sp.fl > 0)
         {
-            plot_aa(lx - 1, row, frac8, shade(lx, row));
-            plot_aa(rx + 1, row, frac8, shade(rx, row));
+            plot_aa(sp.lx - 1, row, sp.fl, shade(sp.lx, row));
+        }
+        if (sp.fr > 0)
+        {
+            plot_aa(sp.rx + 1, row, sp.fr, shade(sp.rx, row));
         }
     }
 }
@@ -1299,10 +1483,12 @@ void Graphics::fill_conic(int x1, int y1, int x2, int y2, int from_deg, const in
         r = half;
     }
 
-    // rect-midpoint center (contract: no `at` yet); the sweep origin
-    // normalizes like the stop positions (any integer degree)
-    const int acx = (left + right) / 2;
-    const int acy = (top + bottom) / 2;
+    // continuous center via doubled offsets: the integer-midpoint
+    // center put even boxes' sweep origin half a pixel off (the knob's
+    // dark sector sat one degree high). conic_theta is scale-invariant,
+    // so the doubled vector keeps the 1-degree resolution.
+    const int c2x = 2 * left + (right - left + 1);
+    const int c2y = 2 * top + (bottom - top + 1);
     int from = from_deg % 360;
     if (from < 0)
     {
@@ -1310,7 +1496,7 @@ void Graphics::fill_conic(int x1, int y1, int x2, int y2, int from_deg, const in
     }
 
     auto shade = [&](const int x, const int y) {
-        int t = conic_theta(x - acx, y - acy) - from;
+        int t = conic_theta(2 * x + 1 - c2x, 2 * y + 1 - c2y) - from;
         t %= 360;
         if (t < 0)
         {
@@ -1340,37 +1526,18 @@ void Graphics::fill_conic(int x1, int y1, int x2, int y2, int from_deg, const in
 
     for (int row = top; row <= bottom; ++row)
     {
-        int dy = 0;
-        if (r > 0)
-        {
-            if (row < top + r)
-            {
-                dy = top + r - row;
-            }
-            else if (row > bottom - r)
-            {
-                dy = row - (bottom - r);
-            }
-        }
-        int lx = left;
-        int rx = right;
-        int frac8 = 0;
-        if (dy > 0)
-        {
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            lx = left + r - dx;
-            rx = right - r + dx;
-        }
-        for (int col = lx; col <= rx; ++col)
+        const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+        for (int col = sp.lx; col <= sp.rx; ++col)
         {
             draw_pixel(col, row, shade(col, row));
         }
-        if (frac8 > 0)
+        if (sp.fl > 0)
         {
-            plot_aa(lx - 1, row, frac8, shade(lx, row));
-            plot_aa(rx + 1, row, frac8, shade(rx, row));
+            plot_aa(sp.lx - 1, row, sp.fl, shade(sp.lx, row));
+        }
+        if (sp.fr > 0)
+        {
+            plot_aa(sp.rx + 1, row, sp.fr, shade(sp.rx, row));
         }
     }
 }
@@ -1419,11 +1586,14 @@ void Graphics::fill_gradient3(int x1, int y1, int x2, int y2, const Color &from,
         return lerp_color(mid, to, t - t_mid, steps - t_mid);
     };
 
-    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int frac8) {
-        if (frac8 > 0)
+    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int fl, const int fr) {
+        if (fl > 0)
         {
-            plot_aa(lx - 1, row, frac8, lc);
-            plot_aa(rx + 1, row, frac8, rc);
+            plot_aa(lx - 1, row, fl, lc);
+        }
+        if (fr > 0)
+        {
+            plot_aa(rx + 1, row, fr, rc);
         }
     };
 
@@ -1441,36 +1611,17 @@ void Graphics::fill_gradient3(int x1, int y1, int x2, int y2, const Color &from,
         }
         for (int row = top; row <= bottom; ++row)
         {
-            int dy = 0;
-            if (r > 0)
+            const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+            if (sp.lx > sp.rx)
             {
-                if (row < top + r)
-                {
-                    dy = top + r - row;
-                }
-                else if (row > bottom - r)
-                {
-                    dy = row - (bottom - r);
-                }
-            }
-            if (dy == 0)
-            {
-                for (int col = left; col <= right; ++col)
-                {
-                    draw_pixel(col, row, col_color(col));
-                }
                 continue;
             }
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            const int lx = left + r - dx;
-            const int rx = right - r + dx;
-            for (int col = lx; col <= rx; ++col)
+            for (int col = sp.lx; col <= sp.rx; ++col)
             {
                 draw_pixel(col, row, col_color(col));
             }
-            fringe(lx, rx, row, col_color(lx), col_color(rx), frac8);
+            fringe(sp.lx, sp.rx, row, col_color(sp.lx), col_color(sp.rx),
+                   sp.fl, sp.fr);
         }
     }
     else
@@ -1479,30 +1630,13 @@ void Graphics::fill_gradient3(int x1, int y1, int x2, int y2, const Color &from,
         for (int row = top; row <= bottom; ++row)
         {
             const Color c = ramp(row - top, steps);
-            int dy = 0;
-            if (r > 0)
+            const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+            if (sp.lx > sp.rx)
             {
-                if (row < top + r)
-                {
-                    dy = top + r - row;
-                }
-                else if (row > bottom - r)
-                {
-                    dy = row - (bottom - r);
-                }
-            }
-            if (dy == 0)
-            {
-                draw_line(left, row, right, row, c);
                 continue;
             }
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            const int lx = left + r - dx;
-            const int rx = right - r + dx;
-            draw_line(lx, row, rx, row, c);
-            fringe(lx, rx, row, c, c, frac8);
+            draw_line(sp.lx, row, sp.rx, row, c);
+            fringe(sp.lx, sp.rx, row, c, c, sp.fl, sp.fr);
         }
     }
 }
@@ -1566,11 +1700,14 @@ void Graphics::fill_linear_stops(int x1, int y1, int x2, int y2, const int *stop
 
     // fractional chord edge (the fill_round_rect_aa formula): the two
     // pixels just outside the span blend by coverage
-    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int frac8) {
-        if (frac8 > 0)
+    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int fl, const int fr) {
+        if (fl > 0)
         {
-            plot_aa(lx - 1, row, frac8, lc);
-            plot_aa(rx + 1, row, frac8, rc);
+            plot_aa(lx - 1, row, fl, lc);
+        }
+        if (fr > 0)
+        {
+            plot_aa(rx + 1, row, fr, rc);
         }
     };
 
@@ -1588,36 +1725,17 @@ void Graphics::fill_linear_stops(int x1, int y1, int x2, int y2, const int *stop
         }
         for (int row = top; row <= bottom; ++row)
         {
-            int dy = 0;
-            if (r > 0)
+            const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+            if (sp.lx > sp.rx)
             {
-                if (row < top + r)
-                {
-                    dy = top + r - row;
-                }
-                else if (row > bottom - r)
-                {
-                    dy = row - (bottom - r);
-                }
-            }
-            if (dy == 0)
-            {
-                for (int col = left; col <= right; ++col)
-                {
-                    draw_pixel(col, row, ramp(col - left, steps));
-                }
                 continue;
             }
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            const int lx = left + r - dx;
-            const int rx = right - r + dx;
-            for (int col = lx; col <= rx; ++col)
+            for (int col = sp.lx; col <= sp.rx; ++col)
             {
                 draw_pixel(col, row, ramp(col - left, steps));
             }
-            fringe(lx, rx, row, ramp(lx - left, steps), ramp(rx - left, steps), frac8);
+            fringe(sp.lx, sp.rx, row, ramp(sp.lx - left, steps),
+                   ramp(sp.rx - left, steps), sp.fl, sp.fr);
         }
     }
     else
@@ -1626,30 +1744,13 @@ void Graphics::fill_linear_stops(int x1, int y1, int x2, int y2, const int *stop
         for (int row = top; row <= bottom; ++row)
         {
             const Color c = ramp(row - top, steps);
-            int dy = 0;
-            if (r > 0)
+            const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+            if (sp.lx > sp.rx)
             {
-                if (row < top + r)
-                {
-                    dy = top + r - row;
-                }
-                else if (row > bottom - r)
-                {
-                    dy = row - (bottom - r);
-                }
-            }
-            if (dy == 0)
-            {
-                draw_line(left, row, right, row, c);
                 continue;
             }
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            const int lx = left + r - dx;
-            const int rx = right - r + dx;
-            draw_line(lx, row, rx, row, c);
-            fringe(lx, rx, row, c, c, frac8);
+            draw_line(sp.lx, row, sp.rx, row, c);
+            fringe(sp.lx, sp.rx, row, c, c, sp.fl, sp.fr);
         }
     }
 }
@@ -1755,55 +1856,67 @@ void Graphics::fill_repeating(int x1, int y1, int x2, int y2, const bool horizon
         }
         return;
     }
-    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int frac8) {
-        if (frac8 > 0)
+    auto fringe = [&](const int lx, const int rx, const int row, const Color &lc, const Color &rc, const int fl, const int fr) {
+        if (fl > 0)
         {
-            plot_aa(lx - 1, row, frac8, lc);
-            plot_aa(rx + 1, row, frac8, rc);
+            plot_aa(lx - 1, row, fl, lc);
+        }
+        if (fr > 0)
+        {
+            plot_aa(rx + 1, row, fr, rc);
         }
     };
     for (int row = top; row <= bottom; ++row)
     {
-        int dy = 0;
-        if (row < top + r)
-        {
-            dy = top + r - row;
-        }
-        else if (row > bottom - r)
-        {
-            dy = row - (bottom - r);
-        }
-        int lx = left;
-        int rx = right;
-        int frac8 = 0;
-        if (dy > 0)
-        {
-            const int dx = corner_chord(r, dy);
-            const int64_t t = 1LL * r * r - 1LL * dy * dy;
-            frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 / (2LL * dx + 1));
-            lx = left + r - dx;
-            rx = right - r + dx;
-        }
-        for (int col = lx; col <= rx; ++col)
+        const span_q sp = rounded_span_q(left, top, right, bottom, r, row);
+        for (int col = sp.lx; col <= sp.rx; ++col)
         {
             draw_pixel(col, row, horizontal ? stripe(col - left) : stripe(row - top));
         }
-        if (frac8 > 0)
+        if (sp.fl > 0 || sp.fr > 0)
         {
-            const Color lc = horizontal ? stripe(lx - left) : stripe(row - top);
-            const Color rc = horizontal ? stripe(rx - left) : stripe(row - top);
-            fringe(lx, rx, row, lc, rc, frac8);
+            const Color lc = horizontal ? stripe(sp.lx - left) : stripe(row - top);
+            const Color rc = horizontal ? stripe(sp.rx - left) : stripe(row - top);
+            fringe(sp.lx, sp.rx, row, lc, rc, sp.fl, sp.fr);
         }
     }
 }
 
-void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr)
+void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr,
+                            const bool skip_first)
 {
     if (x1 == x2 || y1 == y2)
     {
+        if (skip_first)
+        {
+            // the joint pixel belongs to the previous segment: step one
+            // past it, or draw nothing when the run collapses to it
+            if (x1 == x2 && y1 == y2)
+            {
+                return;
+            }
+            if (x1 == x2)
+            {
+                const int step = y2 > y1 ? 1 : -1;
+                draw_line(x1, y1 + step, x2, y2, colr);
+                return;
+            }
+            const int step = x2 > x1 ? 1 : -1;
+            draw_line(x1 + step, y1, x2, y2, colr);
+            return;
+        }
         draw_line(x1, y1, x2, y2, colr);  // axis-aligned runs need no coverage
         return;
     }
+
+    // The skipped pixel is the CALLER's start (x1, y1) — the arc's prev
+    // sample. The transpose/flip normalization below reorders the
+    // endpoints, so the skip has to follow the start through the swaps;
+    // skipping whatever lands at x1 afterwards dropped flat-region
+    // samples whose neighbors never replotted them (cw/ccw arcs
+    // rasterized differently).
+    const int sx = x1;
+    const int sy = y1;
 
     // transpose steep lines so x always drives the walk
     const bool steep = std::abs(y2 - y1) > std::abs(x2 - x1);
@@ -1817,6 +1930,12 @@ void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr)
         std::swap(x1, x2);
         std::swap(y1, y2);
     }
+    // the caller's start after normalization (steep swaps coordinates,
+    // the flip swaps endpoints)
+    const bool start_at_x1 = steep ? (x1 == sy && y1 == sx)
+                                   : (x1 == sx && y1 == sy);
+    const bool skip_x1 = skip_first && start_at_x1;
+    const bool skip_x2 = skip_first && !start_at_x1;
     const int dx = x2 - x1;
     const int dy = y2 - y1;
     const auto plot = [&](const int cx, const int cy, const int cov)
@@ -1831,8 +1950,14 @@ void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr)
         }
     };
 
-    plot(x1, y1, 255);
-    plot(x2, y2, 255);
+    if (!skip_x1)
+    {
+        plot(x1, y1, 255);
+    }
+    if (!skip_x2)
+    {
+        plot(x2, y2, 255);
+    }
 
     // exact rational walk (no fixed-point drift): ideal y = y1 +
     // dy*(cx-x1)/dx; pixel floor(y) gets 255-frac8, pixel floor(y)+1
@@ -1923,6 +2048,81 @@ void Graphics::draw_arc_aa(int cx, int cy, int radius, int start_deg, int sweep_
     const int dir = sweep_deg > 0 ? 1 : -1;
     const int sweep = dir * sweep_deg;  // positive magnitude
 
+    if constexpr (Color::per_channel_blend)
+    {
+        // Each translucent pixel belongs to one octant; shared diagonal
+        // and axis pixels must not composite the same color twice.
+        if (colr.a() > 0 && colr.a() < 0xFF)
+        {
+            const int from = norm_deg(start_deg);
+            // math angle from the CSS-convention theta: 0 = +x,
+            // positive toward +y (visually clockwise, y down), so
+            // phi = theta - 90 (east: 90 -> 0; south: 180 -> 90).
+            // (The mirrored form here used to swap north/south,
+            // dropping the tangent pixel at the top of round rects.)
+            const auto inside = [&](const int dx, const int dy) {
+                const int phi = norm_deg(conic_theta(dx, dy) - 90);
+                if (dir > 0)
+                {
+                    return norm_deg(phi - from) <= sweep;
+                }
+                return norm_deg(from - phi) <= sweep;
+            };
+            const auto put = [&](const int dx, const int dy,
+                                 const int cov) {
+                if (inside(dx, dy))
+                {
+                    plot_aa(cx + dx, cy + dy, cov, colr);
+                }
+            };
+            const auto mirror = [&](const int x, const int y,
+                                    const int cov) {
+                if (cov <= 0)
+                {
+                    return;
+                }
+                put(x, y, cov);
+                if (x != 0)
+                {
+                    put(-x, y, cov);
+                }
+                if (y != 0)
+                {
+                    put(x, -y, cov);
+                    if (x != 0)
+                    {
+                        put(-x, -y, cov);
+                    }
+                }
+            };
+            for (int minor = 0; minor <= radius; ++minor)
+            {
+                const int64_t t = 1LL * radius * radius - 1LL * minor * minor;
+                const int major = static_cast<int>(isqrt_floor(t));
+                if (minor > major + 1)
+                {
+                    break;
+                }
+                const int64_t rem = t - 1LL * major * major;
+                const int frac8 =
+                    static_cast<int>(rem * 255 / (2LL * major + 1));
+                const auto octants = [&](const int edge, const int cov) {
+                    if (minor <= edge)
+                    {
+                        mirror(minor, edge, cov);
+                    }
+                    if (minor < edge)
+                    {
+                        mirror(edge, minor, cov);
+                    }
+                };
+                octants(major, 255 - frac8);
+                octants(major + 1, frac8);
+            }
+            return;
+        }
+    }
+
     // sample step keeps the chord length within ~1px: chord ~= radius *
     // step_deg * pi/180 -> step_deg = ceil(57.3 / radius), floored at 1
     // degree so large radii keep chords at or below one pixel
@@ -1940,7 +2140,9 @@ void Graphics::draw_arc_aa(int cx, int cy, int radius, int start_deg, int sweep_
         const int deg = norm_deg(start_deg + dir * (k * step < sweep ? k * step : sweep));
         int x = 0, y = 0;
         arc_point(deg, cx, cy, radius, x, y);
-        draw_line_aa(prev_x, prev_y, x, y, colr);
+        // joints belong to the previous segment (k == 1 owns the arc
+        // start); re-plotting them would stack a translucent color
+        draw_line_aa(prev_x, prev_y, x, y, colr, k != 1);
         prev_x = x;
         prev_y = y;
     }

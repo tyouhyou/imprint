@@ -1,6 +1,7 @@
 #include "widget.hpp"
 
 #include <algorithm>
+#include <array>
 
 #include "text/utf8.hpp"
 
@@ -8,6 +9,147 @@ namespace zb::ui
 {
     namespace
     {
+        struct shadow_span
+        {
+            int left = 0;
+            int right = -1;
+            int fringe_l = 0;
+            int fringe_r = 0;
+        };
+
+        // Row span of a rounded box on the pixel-center grid, in 1/4-px
+        // units (corner_chord works on integers, so the half-pixel
+        // centers ride scaled coordinates). Arc centers sit at
+        // (left + r, top + r) / (right + 1 - r, bottom + 1 - r)
+        // continuously; straight-run rows keep the full span. The old
+        // index-space chords measured even boxes against half-pixel arc
+        // centers, collapsing tangent rows a row early — the model500
+        // knob's padding circle lost its last-row clip, so the inset
+        // shadow dropped the whole bottom arc (the bright leak ring
+        // inside the rim).
+        shadow_span rounded_shadow_span(int left, int top, int right,
+                                        int bottom, int radius, int row)
+        {
+            if (left > right || top > bottom || row < top || row > bottom)
+            {
+                return {};
+            }
+            const int r = std::max(0, std::min(radius,
+                std::min(right - left + 1, bottom - top + 1) / 2));
+            const int r4 = 4 * r;
+            const int y4 = 4 * row + 2;
+            const int top_arc4 = 4 * top + r4;
+            const int bot_arc4 = 4 * (bottom + 1) - r4;
+            const int dy4 = std::max(0, std::max(top_arc4 - y4, y4 - bot_arc4));
+            const int chord4 = core::Graphics::corner_chord(r4, dy4);
+            const int lo4 = 4 * left + r4 - chord4;
+            const int hi4 = 4 * (right + 1) - r4 + chord4;
+            shadow_span s;
+            s.left = std::max(left, (lo4 + 1) / 4);
+            s.right = std::min(right, (hi4 - 3) / 4);
+            if (s.left > s.right)
+            {
+                return {};  // sub-pixel chord: the blur smears the sliver
+            }
+            // partial pixels just outside the full run (fractions of
+            // 255; 0 when the chord lands on a pixel boundary)
+            const int fl = 4 * s.left - lo4;
+            const int fr = hi4 - 4 * (s.right + 1);
+            s.fringe_l = fl > 0 ? fl * 255 / 4 : 0;
+            s.fringe_r = fr > 0 ? fr * 255 / 4 : 0;
+            return s;
+        }
+
+        int triangle_prefix(int offset, int blur)
+        {
+            if (offset < -blur)
+            {
+                return 0;
+            }
+            const int norm = (blur + 1) * (blur + 1);
+            if (offset >= blur)
+            {
+                return norm;
+            }
+            if (offset <= 0)
+            {
+                const int n = offset + blur + 1;
+                return n * (n + 1) / 2;
+            }
+            const int n = blur - offset;
+            return norm - n * (n + 1) / 2;
+        }
+
+        void paint_inset_shadow(core::Graphics &area, int width, int height,
+                                int radius, int border, int ox, int oy,
+                                int blur, int spread, const core::Color &color)
+        {
+            const int left = border;
+            const int top = border;
+            const int right = width - 1 - border;
+            const int bottom = height - 1 - border;
+            if (left > right || top > bottom || color.a() == 0)
+            {
+                return;
+            }
+        // Continuous radii: the box is `width` px wide (the old
+        // (width-1)/2 index clamp shaved the padding circle a full
+        // pixel on even boxes, thinning the inset all around and
+        // collapsing its bottom arc).
+        const int outer_radius = std::max(0, std::min(radius,
+            std::min(width, height) / 2));
+        const int inner_radius = std::max(0, outer_radius - border);
+            const int norm = (blur + 1) * (blur + 1);
+            const int64_t divisor = 1LL * norm * norm;
+            // Shadow blur is uint8_t; row spans bound scratch space even
+            // for large widgets and avoid allocating a mask per frame.
+            std::array<shadow_span, 511> rows;
+            for (int y = top; y <= bottom; ++y)
+            {
+                const auto clip = rounded_shadow_span(left, top, right, bottom,
+                                                       inner_radius, y);
+                for (int dy = -blur; dy <= blur; ++dy)
+                {
+                    rows[dy + blur] = rounded_shadow_span(
+                        left + spread + ox, top + spread + oy,
+                        right - spread + ox, bottom - spread + oy,
+                        std::max(0, inner_radius - spread), y + dy);
+                }
+                const int start = std::max(left, clip.left - 1);
+                const int end = std::min(right, clip.right + 1);
+            for (int x = start; x <= end; ++x)
+            {
+                const int coverage = x < clip.left ? clip.fringe_l
+                                     : x > clip.right ? clip.fringe_r
+                                                      : 255;
+                if (coverage == 0)
+                {
+                    continue;
+                }
+                int64_t hole = 0;
+                for (int dy = -blur; dy <= blur; ++dy)
+                {
+                    const auto &row = rows[dy + blur];
+                    if (row.left > row.right)
+                    {
+                        continue;
+                    }
+                    int horizontal = 255 *
+                        (triangle_prefix(row.right - x, blur) -
+                         triangle_prefix(row.left - x - 1, blur));
+                    horizontal += row.fringe_l *
+                        std::max(0, blur + 1 - std::abs(row.left - 1 - x));
+                    horizontal += row.fringe_r *
+                        std::max(0, blur + 1 - std::abs(row.right + 1 - x));
+                    hole += 1LL * horizontal * (blur + 1 - std::abs(dy));
+                }
+                    const int shadow = 255 - static_cast<int>((hole + divisor / 2) /
+                                                                             divisor);
+                    area.plot_aa(x, y, (shadow * coverage + 127) / 255, color);
+                }
+            }
+        }
+
         // process-level shared fallback provider (batch J6): constructed
         // at the first widget construction, then leaked so it outlives
         // every widget, including static-storage ones destroyed after
@@ -142,25 +284,164 @@ namespace zb::ui
         if (g.damage_on())
         {
             const auto abs = get_absolute_position();
-            if (!g.damage_intersects(abs.x, abs.y, size.width, size.height))
+            int pl = 0, pt = 0, pr = 0, pb = 0;
+            outer_shadow_pad(pl, pt, pr, pb);
+            if (!g.damage_intersects(abs.x - pl, abs.y - pt,
+                                     size.width + pl + pr, size.height + pt + pb))
             {
                 return;
             }
         }
 
-        // clip_safe restricts g's draw area to this widget and restores it
-        // on scope exit; no allocation per widget per frame
-        auto area = g.clip_safe(position.x, position.y, size.width, size.height);
+        // P-2e: outer shadows may reach past the box (within the
+        // parent's clip): phase 1 paints the shadow silhouettes under
+        // the expanded clip (the guard restores the parent clip on
+        // scope exit); phase 2 repaints the full dress + content under
+        // the widget's own clip, which cuts the shadow spill at the
+        // box edge
+        draw_background_shadows_only(g);
+        {
+            auto box_area = g.clip_safe(position.x, position.y, size.width, size.height);
+            if (!box_area)
+            {
+                return;
+            }
+            draw_background(g);
+            draw_at(g);
+            // ::after paints above the whole subtree (H-10)
+            paint_pseudo(g, 1);
+        }
+    }
+
+    // generated box paint (H-10 narrow): resolves the box against the
+    // widget (sides % of self or px, margins push inward), then paints
+    // solid / three-stop-linear / rotated-solid. Anything else was
+    // refused at build; an unresolvable box skips silently.
+    void Widget::paint_pseudo(core::Graphics &area, const int kind) const
+    {
+        const pseudo_spec *ps = pseudo(kind);
+        if (ps == nullptr)
+        {
+            return;
+        }
+        const auto s = get_size();
+        auto side = [&](const int i) {
+            int v = ps->off[i];
+            if ((ps->off_pct & (1U << i)) != 0U)
+            {
+                v = v * (i % 2 == 0 ? s.width : s.height) / 100;
+            }
+            return v;
+        };
+        const bool has_l = (ps->off_mask & 1U) != 0U;
+        const bool has_t = (ps->off_mask & 2U) != 0U;
+        const bool has_r = (ps->off_mask & 4U) != 0U;
+        const bool has_b = (ps->off_mask & 8U) != 0U;
+        int x = 0;
+        int w = 0;
+        if (ps->has_w != 0)
+        {
+            w = ps->w;
+            x = has_l ? side(0) + ps->margin[0]
+                      : (has_r ? s.width - side(2) - ps->margin[2] - w : 0);
+        }
+        else if (has_l && has_r)
+        {
+            x = side(0) + ps->margin[0];
+            w = s.width - x - side(2) - ps->margin[2];
+        }
+        else
+        {
+            return;
+        }
+        int y = 0;
+        int h = 0;
+        if (ps->has_h != 0)
+        {
+            h = ps->h;
+            y = has_t ? side(1) + ps->margin[1]
+                      : (has_b ? s.height - side(3) - ps->margin[3] - h : 0);
+        }
+        else if (has_t && has_b)
+        {
+            y = side(1) + ps->margin[1];
+            h = s.height - y - side(3) - ps->margin[3];
+        }
+        else
+        {
+            return;
+        }
+        if (w <= 0 || h <= 0)
+        {
+            return;
+        }
+        int radius = 0;
+        if (ps->radius_kind == 2)
+        {
+            radius = std::min(w, h) / 2;
+        }
+        else if (ps->radius_kind == 1)
+        {
+            const int half = std::min(w, h) / 2;
+            radius = ps->radius_px < half ? ps->radius_px : half;
+        }
+        const bool bak = area.is_alpha_enabled();
+        area.enable_alpha(true);
+        if (ps->rot_ang != 0)
+        {
+            // rotated paints solid only (builder refused the rest)
+            if (ps->grad_kind == 0)
+            {
+                const int ox = ps->rot_ox_pct != 0 ? ps->rot_ox * w / 100
+                                                  : ps->rot_ox;
+                const int oy = ps->rot_oy_pct != 0 ? ps->rot_oy * h / 100
+                                                  : ps->rot_oy;
+                area.fill_round_rect_rotated(x, y, w, h, radius, ps->rot_ang,
+                                             x + ox, y + oy, ps->bg);
+            }
+        }
+        else if (ps->grad_kind == 5)
+        {
+            area.fill_gradient3(x, y, x + w - 1, y + h - 1, ps->bg, ps->mid,
+                                ps->grad_mid_p, ps->to, ps->grad_h != 0,
+                                radius);
+        }
+        else if (radius > 0)
+        {
+            area.fill_round_rect_aa(x, y, x + w - 1, y + h - 1, radius,
+                                    ps->bg);
+        }
+        else
+        {
+            area.fill_rect(x, y, x + w - 1, y + h - 1, ps->bg);
+        }
+        area.enable_alpha(bak);
+    }
+
+    void Widget::draw_background(core::Graphics &area) const
+    {
+        draw_background_impl(area, true, 0, 0);
+    }
+
+    void Widget::draw_background_shadows_only(core::Graphics &g) const
+    {
+        int pl = 0, pt = 0, pr = 0, pb = 0;
+        outer_shadow_pad(pl, pt, pr, pb);
+        // position is relative to the current (parent) clip — the same
+        // convention draw() uses for the box clip
+        auto area = g.clip_safe(position.x - pl, position.y - pt,
+                                size.width + pl + pr, size.height + pt + pb);
         if (!area)
         {
             return;
         }
-
-        draw_background(g);
-        draw_at(g);
+        // the expanded clip's origin is the padded box; the shadow
+        // silhouettes shift by (pl, pt) to stay at the widget position
+        draw_background_impl(g, false, pl, pt);
     }
 
-    void Widget::draw_background(core::Graphics &area) const
+    void Widget::draw_background_impl(core::Graphics &area, bool full,
+                                      const int sh_dx, const int sh_dy) const
     {
         const auto s = get_size();
         // corner radius shared by the background and the border (P-1):
@@ -219,11 +500,7 @@ namespace zb::ui
         {
             blend = true;
         }
-        // shadow colors blend too (P-2e); inset bands always blend
-        // (the falloff manufactures translucency even from opaque
-        // base colors — without this the radius-0 aliased outlines
-        // overwrite raw), outer silhouettes blend when translucent
-        // or blurred (soft bands)
+        // Filtered shadow coverage requires blending even for opaque colors.
         if (ext_ != nullptr)
         {
             if (ext_->n_sh_in > 0)
@@ -262,22 +539,25 @@ namespace zb::ui
             for (int i = 0; i < ext_->n_sh_out && i < 2; ++i)
             {
                 const shadow_spec &sh = ext_->sh_out[i];
-                const int x0 = sh.ox - sh.spread;
-                const int y0 = sh.oy - sh.spread;
-                const int x1 = s.width - 1 + sh.ox + sh.spread;
-                const int y1 = s.height - 1 + sh.oy + sh.spread;
+                const int x0 = sh_dx + sh.ox - sh.spread;
+                const int y0 = sh_dy + sh.oy - sh.spread;
+                const int x1 = sh_dx + s.width - 1 + sh.ox + sh.spread;
+                const int y1 = sh_dy + s.height - 1 + sh.oy + sh.spread;
                 if (sh.blur > 0 && sh.c.a() > 0)
                 {
                     // feathered core + halving halo over the blur radius;
-                    // the core dims as 2/(blur+2) (rounded), so a large
-                    // blur fades before the widget edge instead of ending
-                    // in a hard wall. Binary depths apply the same half
-                    // rule to the dimmed core (kept only while it still
-                    // covers half the base alpha); the first halo stays
-                    // solid and the rest drop, as before.
+                    // the core keeps half the base alpha (a blurred disc
+                    // reads half strength at its own edge, whatever the
+                    // blur), and up to `blur` outlines (capped at 6) keep
+                    // halving outward, so the spill falls softly instead
+                    // of ending in a hard wall (the old square bottom) or
+                    // thinning into a pale gap (the 2/(blur+2) core read
+                    // as a white ring outside the model500 knob). Binary
+                    // depths apply the same half rule to the core (kept
+                    // only while it still covers half the base alpha);
+                    // the first halo stays solid and the rest drop.
                     const int base_a = static_cast<int>(sh.c.a());
-                    const int core_a =
-                        (base_a * 2 + (sh.blur + 2) / 2) / (sh.blur + 2);
+                    const int core_a = (base_a + 1) / 2;
                     core::Color core = sh.c;
                     if constexpr (core::Color::per_channel_blend)
                     {
@@ -317,6 +597,13 @@ namespace zb::ui
                                             radius + sh.spread, sh.c);
                 }
             }
+        }
+        if (!full)
+        {
+            // shadow-only phase: the background and everything after it
+            // repaint under the widget's own clip (draw_background)
+            area.enable_alpha(bak);
+            return;
         }
         if (background.has_value())
         {
@@ -427,242 +714,22 @@ namespace zb::ui
             const int bh = b->w > s.height ? s.height : b->w;
             area.fill_rect(0, 0, s.width - 1, bh - 1, b->c);
         }
-        // inset shadows (P-2e): bands hug the sides picked by the
-        // offset sign (zero offset = neither side — the blur spill on
-        // the centered axis is dropped so circles keep their round
-        // silhouette; the all-sides (0,0) case rides shrinking
-        // outlines, radius-aware), alpha falling off inward; single
-        // sides ride chord-clipped lines
         if (shadows && ext_ != nullptr)
         {
             for (int k = 0; k < ext_->n_sh_in && k < 2; ++k)
             {
                 const shadow_spec &sh = ext_->sh_in[k];
-                const int bands = sh.blur <= 0 ? 1 : sh.blur;
-                const int base = dress_.border_w + sh.spread;
-                const bool all = (sh.ox == 0 && sh.oy == 0);
-                const bool left = sh.ox > 0;
-                const bool right = sh.ox < 0;
-                const bool top = sh.oy > 0;
-                const bool bottom = sh.oy < 0;
-                // band alpha: exact falloff on 32bpp; on binary depths
-                // the base alpha already reads 0/1, so bands keep or
-                // drop by the half-coverage rule (plot_aa precedent)
-                auto band_color = [&](const int i) {
-                    core::Color c = sh.c;
-                    if (bands > 1)
-                    {
-                        if constexpr (core::Color::per_channel_blend)
-                        {
-                            c.set_a(static_cast<uint8_t>(sh.c.a() *
-                                                         (bands - i) / bands));
-                        }
-                        else if ((bands - i) * 2 < bands)
-                        {
-                            c.set_a(0);
-                        }
-                    }
-                    return c;
-                };
-                if (all)
-                {
-                    for (int i = 0; i < bands; ++i)
-                    {
-                        const int o = base + i;
-                        if (o * 2 >= s.width || o * 2 >= s.height)
-                        {
-                            break;
-                        }
-                        area.draw_round_rect_aa(
-                            o, o, s.width - 1 - o, s.height - 1 - o,
-                            radius > o ? radius - o : 0, band_color(i));
-                    }
-                    continue;
-                }
-                // paintable x-span of a band row (rounded corners cut)
-                auto row_span = [&](const int row, int &lx, int &rx) {
-                    lx = 0;
-                    rx = s.width - 1;
-                    if (radius <= 0)
-                    {
-                        return;
-                    }
-                    int dy = 0;
-                    if (row < radius)
-                    {
-                        dy = radius - row;
-                    }
-                    else if (row > s.height - 1 - radius)
-                    {
-                        dy = row - (s.height - 1 - radius);
-                    }
-                    if (dy > 0)
-                    {
-                        const int dx = core::Graphics::corner_chord(radius, dy);
-                        lx = radius - dx;
-                        rx = s.width - 1 - radius + dx;
-                    }
-                };
-                // paintable y-span of a band column (transposed)
-                auto col_span = [&](const int col, int &ty, int &by) {
-                    ty = 0;
-                    by = s.height - 1;
-                    if (radius <= 0)
-                    {
-                        return;
-                    }
-                    int dx = 0;
-                    if (col < radius)
-                    {
-                        dx = radius - col;
-                    }
-                    else if (col > s.width - 1 - radius)
-                    {
-                        dx = col - (s.width - 1 - radius);
-                    }
-                    if (dx > 0)
-                    {
-                        const int dy = core::Graphics::corner_chord(radius, dx);
-                        ty = radius - dy;
-                        by = s.height - 1 - radius + dy;
-                    }
-                };
-                // AA fringe on a chord-cut band end (the fill corner
-                // formula): the pixel just outside the span blends by
-                // coverage in the band color, so the falloff alpha
-                // stacks (binary depths inherit the half rule)
-                auto row_fringe = [&](const int row, const int lx, const int rx,
-                                      const core::Color &c) {
-                    if (radius <= 0)
-                    {
-                        return;
-                    }
-                    int dy = 0;
-                    if (row < radius)
-                    {
-                        dy = radius - row;
-                    }
-                    else if (row > s.height - 1 - radius)
-                    {
-                        dy = row - (s.height - 1 - radius);
-                    }
-                    if (dy <= 0)
-                    {
-                        return;
-                    }
-                    const int dx = core::Graphics::corner_chord(radius, dy);
-                    const int64_t t = 1LL * radius * radius - 1LL * dy * dy;
-                    const int frac8 = static_cast<int>((t - 1LL * dx * dx) * 255 /
-                                                       (2LL * dx + 1));
-                    if (frac8 > 0)
-                    {
-                        area.plot_aa(lx - 1, row, frac8, c);
-                        area.plot_aa(rx + 1, row, frac8, c);
-                    }
-                };
-                auto col_fringe = [&](const int col, const int ty, const int by,
-                                      const core::Color &c) {
-                    if (radius <= 0)
-                    {
-                        return;
-                    }
-                    int dx = 0;
-                    if (col < radius)
-                    {
-                        dx = radius - col;
-                    }
-                    else if (col > s.width - 1 - radius)
-                    {
-                        dx = col - (s.width - 1 - radius);
-                    }
-                    if (dx <= 0)
-                    {
-                        return;
-                    }
-                    const int dy = core::Graphics::corner_chord(radius, dx);
-                    const int64_t t = 1LL * radius * radius - 1LL * dx * dx;
-                    const int frac8 = static_cast<int>((t - 1LL * dy * dy) * 255 /
-                                                       (2LL * dy + 1));
-                    if (frac8 > 0)
-                    {
-                        area.plot_aa(col, ty - 1, frac8, c);
-                        area.plot_aa(col, by + 1, frac8, c);
-                    }
-                };
-                if (top)
-                {
-                    for (int i = 0; i < bands; ++i)
-                    {
-                        const int row = base + i;
-                        if (row >= s.height)
-                        {
-                            break;
-                        }
-                        int lx = 0;
-                        int rx = 0;
-                        row_span(row, lx, rx);
-                        const core::Color bc = band_color(i);
-                        area.draw_line(lx, row, rx, row, bc);
-                        row_fringe(row, lx, rx, bc);
-                    }
-                }
-                if (bottom)
-                {
-                    for (int i = 0; i < bands; ++i)
-                    {
-                        const int row = s.height - 1 - base - i;
-                        if (row < 0)
-                        {
-                            break;
-                        }
-                        int lx = 0;
-                        int rx = 0;
-                        row_span(row, lx, rx);
-                        const core::Color bc = band_color(i);
-                        area.draw_line(lx, row, rx, row, bc);
-                        row_fringe(row, lx, rx, bc);
-                    }
-                }
-                if (left)
-                {
-                    for (int i = 0; i < bands; ++i)
-                    {
-                        const int col = base + i;
-                        if (col >= s.width)
-                        {
-                            break;
-                        }
-                        int ty = 0;
-                        int by = 0;
-                        col_span(col, ty, by);
-                        const core::Color bc = band_color(i);
-                        area.draw_line(col, ty, col, by, bc);
-                        col_fringe(col, ty, by, bc);
-                    }
-                }
-                if (right)
-                {
-                    for (int i = 0; i < bands; ++i)
-                    {
-                        const int col = s.width - 1 - base - i;
-                        if (col < 0)
-                        {
-                            break;
-                        }
-                        int ty = 0;
-                        int by = 0;
-                        col_span(col, ty, by);
-                        const core::Color bc = band_color(i);
-                        area.draw_line(col, ty, col, by, bc);
-                        col_fringe(col, ty, by, bc);
-                    }
-                }
+                paint_inset_shadow(area, s.width, s.height, radius,
+                                   dress_.border_w, sh.ox, sh.oy,
+                                   sh.blur, sh.spread, sh.c);
             }
         }
         if (blend)
         {
             area.enable_alpha(bak);
         }
+        // ::before paints above the dress, below the children (H-10)
+        paint_pseudo(area, 0);
     }
 
     const GlyphProvider *Widget::primary_provider() const

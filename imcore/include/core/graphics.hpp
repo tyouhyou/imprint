@@ -332,9 +332,13 @@ namespace zb::ui::core
          * half coverage and the stroke stays one pixel wide. Endpoints
          * plot solid. Integer-only math (FPU-less targets included);
          * every write goes through plot_aa, so the clip/damage
-         * conventions (A-12/A-13) hold.
+         * conventions (A-12/A-13) hold. skip_first leaves the start
+         * pixel untouched (polyline joints: the previous segment
+         * already plotted it — plotting twice would stack a
+         * translucent color); the plotted set is unchanged.
          */
-        void draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr);
+        void draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr,
+                          bool skip_first = false);
         void draw_circle_aa(int x, int y, int radius, const Color &colr);
 
         /*
@@ -351,16 +355,29 @@ namespace zb::ui::core
          * Anti-aliased round-rect pair (AA adoption): fill_round_rect_aa
          * keeps the solid middle spans and blends only the fractional
          * corner-chord edges; draw_round_rect_aa joins four draw_line_aa
-         * edges with four 90-degree draw_arc_aa corners (the arc
-         * extremes coincide with the edge endpoints, so no pixel plots
-         * twice). In wireframe mode the fill degrades to the AA outline.
-         * A non-positive radius falls back to the plain rect, like the
-         * aliased pair.
+         * edges (each stopping one pixel short of the corner tangents)
+         * with four 90-degree draw_arc_aa corners whose extremes supply
+         * the tangent pixels, so no pixel plots twice. In wireframe mode
+         * the fill degrades to the AA outline. A non-positive radius
+         * falls back to the plain rect, like the aliased pair.
          */
         void draw_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
                                 const Color &colr);
         void fill_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
                                 const Color &colr);
+
+        /*
+         * Anti-aliased rotated rounded-rect fill (H-10): the (x, y, w,
+         * h) box with corner radius, rotated angle_deg clockwise about
+         * (pivot_x, pivot_y) — the CSS rotate()/transform-origin
+         * convention, y down. Integer-only SDF (256-scaled LUT trig,
+         * isqrt corner distance); every pixel plots at most once
+         * through plot_aa, so translucent colors never stack. A zero
+         * angle is the caller's cue to use the plain fill instead.
+         */
+        void fill_round_rect_rotated(int x, int y, int w, int h, int radius,
+                                     int angle_deg, int pivot_x, int pivot_y,
+                                     const Color &colr);
 
         /*
          * Anti-aliased circular arc (Batch V-5). Integer degrees in the

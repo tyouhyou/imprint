@@ -376,6 +376,197 @@ namespace zb::ui
         {
             // element opacity folds into every paint color here (P-2d)
             const long long op = elem_opacity(n);
+            // H-10 generated boxes: before_*/after_* props assemble a
+            // paint-only box on the widget (no layout, no hit). Warns
+            // once per failure class; unresolvable boxes stay detached.
+            for (int pk = 0; pk < 2; ++pk)
+            {
+                const std::string pre = pk == 0 ? "before_" : "after_";
+                const std::string wkey = pre + "w";
+                const std::string hkey = pre + "h";
+                const bool want =
+                    has_prop(n, wkey.c_str()) ||
+                    has_prop(n, hkey.c_str()) ||
+                    has_prop(n, (pre + "l").c_str()) ||
+                    has_prop(n, (pre + "t").c_str()) ||
+                    has_prop(n, (pre + "r").c_str()) ||
+                    has_prop(n, (pre + "b").c_str());
+                if (!want)
+                {
+                    continue;
+                }
+                Widget::pseudo_spec ps;
+                const char *const sk[4] = {"l", "t", "r", "b"};
+                for (int si = 0; si < 4; ++si)
+                {
+                    const std::string key = pre + sk[si];
+                    if (!has_prop(n, key.c_str()))
+                    {
+                        continue;
+                    }
+                    int v = 0;
+                    bool pct = false;
+                    if (!parse_abs_offset(
+                            prop_of(n, key.c_str(), std::string{}), v, pct))
+                    {
+                        continue;
+                    }
+                    const int c = v < -32767 ? -32767
+                                             : (v > 32767 ? 32767 : v);
+                    ps.off[si] = static_cast<int16_t>(c);
+                    ps.off_mask |= static_cast<uint8_t>(1U << si);
+                    if (pct)
+                    {
+                        ps.off_pct |= static_cast<uint8_t>(1U << si);
+                    }
+                }
+                const long long pw = prop_of(n, wkey.c_str(), -1LL);
+                const long long ph = prop_of(n, hkey.c_str(), -1LL);
+                if (pw >= 0 && pw <= 32767)
+                {
+                    ps.has_w = 1;
+                    ps.w = static_cast<int16_t>(pw);
+                }
+                if (ph >= 0 && ph <= 32767)
+                {
+                    ps.has_h = 1;
+                    ps.h = static_cast<int16_t>(ph);
+                }
+                const char *const mk[4] = {"ml", "mt", "mr", "mb"};
+                // margin order on the node is l/t/r/b like the offsets
+                const int mo[4] = {0, 1, 2, 3};
+                for (int mi = 0; mi < 4; ++mi)
+                {
+                    const long long mv =
+                        prop_of(n, (pre + mk[mi]).c_str(), 0LL);
+                    ps.margin[mo[mi]] =
+                        static_cast<int16_t>(mv < 0 ? 0
+                                                   : (mv > 32767 ? 32767 : mv));
+                }
+                core::Color solid;
+                const bool has_solid = parse_color(
+                    prop_of(n, (pre + "background").c_str(), std::string{}),
+                    solid);
+                core::Color lfrom;
+                core::Color lmid;
+                core::Color lto;
+                const bool has_lin3 =
+                    parse_stop_color(
+                        prop_of(n, (pre + "bg_lin_from").c_str(),
+                                std::string{}),
+                        lfrom) &&
+                    parse_stop_color(
+                        prop_of(n, (pre + "bg_lin3_mid").c_str(),
+                                std::string{}),
+                        lmid) &&
+                    parse_stop_color(
+                        prop_of(n, (pre + "bg_lin_to").c_str(), std::string{}),
+                        lto);
+                if (has_solid)
+                {
+                    ps.has_bg = 1;
+                    ps.bg = fold_opacity(solid, op);
+                }
+                else if (has_lin3)
+                {
+                    ps.has_bg = 1;
+                    ps.grad_kind = 5;
+                    ps.bg = fold_opacity(lfrom, op);
+                    ps.mid = fold_opacity(lmid, op);
+                    ps.to = fold_opacity(lto, op);
+                    ps.grad_mid_p = static_cast<uint8_t>(
+                        prop_of(n, (pre + "bg_lin3_p").c_str(), 50LL) < 0
+                            ? 0
+                            : (prop_of(n, (pre + "bg_lin3_p").c_str(), 50LL) >
+                                       100
+                                   ? 100
+                                   : prop_of(n, (pre + "bg_lin3_p").c_str(),
+                                             50LL)));
+                    ps.grad_h =
+                        prop_of(n, (pre + "bg_lin_h").c_str(), true) ? 1 : 0;
+                }
+                else
+                {
+                    static bool warned_paint = false;
+                    if (!warned_paint)
+                    {
+                        warned_paint = true;
+                        LW << "ui_builder: pseudo box without supported "
+                              "paint stays detached (H-10)";
+                    }
+                    continue;
+                }
+                if (prop_of(n, (pre + "radius_half").c_str(), false))
+                {
+                    ps.radius_kind = 2;
+                }
+                else if (has_prop(n, (pre + "radius_px").c_str()))
+                {
+                    const long long rp =
+                        prop_of(n, (pre + "radius_px").c_str(), 0LL);
+                    if (rp >= 0)
+                    {
+                        ps.radius_kind = 1;
+                        ps.radius_px = static_cast<uint16_t>(
+                            rp > 65535 ? 65535 : rp);
+                    }
+                }
+                const int ang = static_cast<int>(
+                    prop_of(n, (pre + "rot_ang").c_str(), 0LL));
+                if (ang != 0)
+                {
+                    if (ps.grad_kind != 0)
+                    {
+                        static bool warned_rot = false;
+                        if (!warned_rot)
+                        {
+                            warned_rot = true;
+                            LW << "ui_builder: rotation on a non-plain "
+                                  "pseudo box paints unrotated (H-10)";
+                        }
+                    }
+                    else
+                    {
+                        const bool oxp =
+                            prop_of(n, (pre + "rot_ox_pct").c_str(), true);
+                        const bool oyp =
+                            prop_of(n, (pre + "rot_oy_pct").c_str(), true);
+                        ps.rot_ang = static_cast<int16_t>(
+                            ang < -32768 ? -32768
+                                         : (ang > 32767 ? 32767 : ang));
+                        const long long oxv = prop_of(
+                            n, (pre + "rot_ox").c_str(), oxp ? 50LL : 0LL);
+                        const long long oyv = prop_of(
+                            n, (pre + "rot_oy").c_str(), oyp ? 50LL : 0LL);
+                        ps.rot_ox = static_cast<int16_t>(
+                            oxv < -32768 ? -32768
+                                         : (oxv > 32767 ? 32767 : oxv));
+                        ps.rot_oy = static_cast<int16_t>(
+                            oyv < -32768 ? -32768
+                                         : (oyv > 32767 ? 32767 : oyv));
+                        ps.rot_ox_pct = oxp ? 1 : 0;
+                        ps.rot_oy_pct = oyp ? 1 : 0;
+                    }
+                }
+                const bool sx = ps.has_w != 0 ||
+                                ((ps.off_mask & 1U) != 0U &&
+                                 (ps.off_mask & 4U) != 0U);
+                const bool sy = ps.has_h != 0 ||
+                                ((ps.off_mask & 2U) != 0U &&
+                                 (ps.off_mask & 8U) != 0U);
+                if (!sx || !sy)
+                {
+                    static bool warned_size = false;
+                    if (!warned_size)
+                    {
+                        warned_size = true;
+                        LW << "ui_builder: pseudo box without resolvable "
+                              "size stays detached (H-10)";
+                    }
+                    continue;
+                }
+                w.set_pseudo(pk, ps);
+            }
             // P-1 paint dressing: radial wins over linear when both are
             // set (contract); a mistyped half leaves the color unset
             if (has_prop(n, "bg_rad_from") && has_prop(n, "bg_rad_to"))

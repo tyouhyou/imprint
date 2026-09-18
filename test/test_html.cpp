@@ -1434,18 +1434,23 @@ int test_html()
         core::Graphics g(200, 100, nullptr);
         host.draw(g);
         const auto sp = sunk->get_position();
-        EXPECT(test::pixel_at(g, sp.x + 20, sp.y) == core::colors::Black.pixel);
+        // continuous hole-mask geometry: the tangent row's clip no
+        // longer collapses, so the top edge blends per the blurred hole
+        // (shadow alpha 102 = 1 - Phi(0.25) at the 2px sigma) instead
+        // of painting solid black
+        EXPECT(test::pixel_at(g, sp.x + 20, sp.y) ==
+               core::Color::from(153, 153, 153).pixel);
         EXPECT(test::pixel_at(g, sp.x + 20, sp.y + 10) ==
                core::colors::White.pixel);
 #if COLOR_DEPTH == 32
-        // band 3 of 4: alpha 63 over white -> 192
+        // three pixels in, the blurred hole nearly covers the row
         EXPECT(test::pixel_at(g, sp.x + 20, sp.y + 3) ==
-               core::Color::from(192, 192, 192).pixel);
+               core::Color::from(245, 245, 245).pixel);
 #else
-        // binary depths keep/drop bands by the half-coverage rule:
-        // bands 0..2 stay black, band 3 drops to white
-        EXPECT(test::pixel_at(g, sp.x + 20, sp.y + 2) ==
-               core::colors::Black.pixel);
+        // binary depths quantize the shallow coverages away: the whole
+        // narrow band drops to the white face
+        EXPECT(test::pixel_at(g, sp.x + 20, sp.y) ==
+               core::colors::White.pixel);
         EXPECT(test::pixel_at(g, sp.x + 20, sp.y + 3) ==
                core::colors::White.pixel);
 #endif
@@ -1492,28 +1497,27 @@ int test_html()
         g.fill(core::Color::from(128, 128, 128));
         host.draw(g);
         const auto kp = knob->get_position();
-        // band row 1 spans lx=6..34 (chord(10,9)=4); the fringe pixel
-        // just outside blends band-over-gray, the span pixel is band
+        // continuous chord: row 1's span reaches lx=5..; the face
+        // fringe and the band coverage blend per the quarter-px chord
         const uint32_t fringe = test::pixel_at(g, kp.x + 5, kp.y + 1);
         const uint32_t span = test::pixel_at(g, kp.x + 6, kp.y + 1);
 #if COLOR_DEPTH == 32
-        // fringe stacks Porter-Duff: the face fringe (white@85 over
-        // gray) lights (5,1) to 170 first, then the band fringe
-        // (coverage 85 x band alpha 170 -> a=56) lands it at 132
-        EXPECT(fringe == core::Color::from(132, 132, 132).pixel);
-        // span: band alpha 170 over the white face -> 85
-        EXPECT(span == core::Color::from(85, 85, 85).pixel);
+        // the corner arc's top band runs near-full shadow there: the
+        // span pixel keeps a whisker of the white face, the fringe
+        // pixel a whisker of gray through the chord's partial coverage
+        EXPECT(fringe == core::Color::from(45, 45, 45).pixel);
+        EXPECT(span == core::Color::from(61, 61, 61).pixel);
 #else
-        // binary: the fringe coverage quantizes away (stays gray),
-        // the band keeps black per the half rule
-        EXPECT(fringe == core::Color::from(128, 128, 128).pixel);
+        // binary: both coverages clear the half rule and keep black
+        EXPECT(fringe == core::colors::Black.pixel);
         EXPECT(span == core::colors::Black.pixel);
 #endif
     }
 
     // circle keeps its silhouette under top/bottom insets (model500
-    // knobs): a zero x-offset paints neither left nor right — the
-    // centered blur spill is dropped, only the offset axis bands
+    // knobs): the offset hole's blurred edge spills mildly at the
+    // sides exactly where the padding circle boundary passes — the
+    // isotropic blur no longer drops the centered-axis spill
     {
         ui_node doc = parse_html(
             "<div>"
@@ -1534,17 +1538,25 @@ int test_html()
         // top band still paints (row 1, center column)
 #if COLOR_DEPTH == 32
         EXPECT(test::pixel_at(g, fp.x + 27, fp.y + 1) ==
-               core::Color::from(85, 85, 85).pixel);
+               core::Color::from(96, 96, 96).pixel);
 #else
         EXPECT(test::pixel_at(g, fp.x + 27, fp.y + 1) ==
                core::colors::Black.pixel);
 #endif
-        // left/right mid-edge stays the white face (no side spill);
-        // the old both-sides rule painted these black
+        // left/right mid-edge: the hole's blurred boundary crosses the
+        // equator pixels, so they lighten to a mild spill (the old
+        // rule dropped it entirely); binary depths quantize it away
+#if COLOR_DEPTH == 32
+        EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
+               core::Color::from(159, 159, 159).pixel);
+        EXPECT(test::pixel_at(g, fp.x + 53, fp.y + 27) ==
+               core::Color::from(157, 157, 157).pixel);
+#else
         EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
                core::colors::White.pixel);
         EXPECT(test::pixel_at(g, fp.x + 53, fp.y + 27) ==
                core::colors::White.pixel);
+#endif
     }
 
     // model500 .knob exact dress (conic face + border + double inset,
