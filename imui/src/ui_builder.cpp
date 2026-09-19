@@ -1056,21 +1056,46 @@ namespace zb::ui
         // column/row document root configures the build host (H-7 A+B:
         // a kept flex body grounds the host with its direction and
         // viewport-centering placement, not just spacing/padding).
-        void apply_flex_config(FlexPanel &f, const ui_node &n)
+        // Host transfer runs presence-gated: only props the root
+        // declares reconfigure the host, so pre-configured host state
+        // survives (the same presence rule as the geometry props and
+        // the child margins). Direction still transfers — the row/column
+        // tag itself declares it.
+        void apply_flex_config(FlexPanel &f, const ui_node &n,
+                               const bool presence_gated = false)
         {
             f.set_direction(n.type == "row" ? FlexPanel::flex_direction::row
                                             : FlexPanel::flex_direction::column);
-            f.set_spacing(static_cast<int>(prop_of(n, "spacing", 0LL)));
-            f.set_padding(static_cast<int>(prop_of(n, "padding", 0LL)));
-            f.set_wrap(prop_of(n, "wrap", false));
-            const long long jc = prop_of(n, "justify", 0LL);
-            f.set_justify_content((jc >= 0 && jc <= 4)
-                                      ? static_cast<FlexPanel::justify>(jc)
-                                      : FlexPanel::justify::start);
-            const long long ac = prop_of(n, "align", 0LL);
-            f.set_align_items((ac >= 0 && ac <= 3)
-                                  ? static_cast<FlexPanel::align>(ac)
-                                  : FlexPanel::align::start);
+            const auto gate = [presence_gated, &n](const char *key)
+            {
+                return !presence_gated || has_prop(n, key);
+            };
+            if (gate("spacing"))
+            {
+                f.set_spacing(static_cast<int>(prop_of(n, "spacing", 0LL)));
+            }
+            if (gate("padding"))
+            {
+                f.set_padding(static_cast<int>(prop_of(n, "padding", 0LL)));
+            }
+            if (gate("wrap"))
+            {
+                f.set_wrap(prop_of(n, "wrap", false));
+            }
+            if (gate("justify"))
+            {
+                const long long jc = prop_of(n, "justify", 0LL);
+                f.set_justify_content((jc >= 0 && jc <= 4)
+                                          ? static_cast<FlexPanel::justify>(jc)
+                                          : FlexPanel::justify::start);
+            }
+            if (gate("align"))
+            {
+                const long long ac = prop_of(n, "align", 0LL);
+                f.set_align_items((ac >= 0 && ac <= 3)
+                                      ? static_cast<FlexPanel::align>(ac)
+                                      : FlexPanel::align::start);
+            }
         }
 
         void apply_control_props(Widget &w, const ui_node &n)
@@ -1525,24 +1550,41 @@ namespace zb::ui
         // is documentation; a row/column root configures the host as its
         // own widget would be configured (direction + H-7 placement ride
         // along, so a kept flex body grounds the host); any other root
-        // keeps the historical spacing/padding-only transfer
+        // keeps the historical spacing/padding-only transfer. All of it
+        // is presence-gated (see apply_flex_config): an omitted prop
+        // never resets pre-configured host state.
         if (host.is_flex_container() &&
             (root.type == "row" || root.type == "column"))
         {
-            apply_flex_config(*as_flex(host), root);
+            apply_flex_config(*as_flex(host), root, true);
         }
         else if (host.is_flex_container())
         {
             FlexPanel &f = *as_flex(host);
-            f.set_spacing(static_cast<int>(prop_of(root, "spacing", 0LL)));
-            f.set_padding(static_cast<int>(prop_of(root, "padding", 0LL)));
-            f.set_wrap(prop_of(root, "wrap", false));
+            if (has_prop(root, "spacing"))
+            {
+                f.set_spacing(static_cast<int>(prop_of(root, "spacing", 0LL)));
+            }
+            if (has_prop(root, "padding"))
+            {
+                f.set_padding(static_cast<int>(prop_of(root, "padding", 0LL)));
+            }
+            if (has_prop(root, "wrap"))
+            {
+                f.set_wrap(prop_of(root, "wrap", false));
+            }
         }
         else
         {
             Panel &p = *as_panel(host);
-            p.set_spacing(static_cast<int>(prop_of(root, "spacing", 0LL)));
-            p.set_padding(static_cast<int>(prop_of(root, "padding", 0LL)));
+            if (has_prop(root, "spacing"))
+            {
+                p.set_spacing(static_cast<int>(prop_of(root, "spacing", 0LL)));
+            }
+            if (has_prop(root, "padding"))
+            {
+                p.set_padding(static_cast<int>(prop_of(root, "padding", 0LL)));
+            }
         }
         // the root's own box dress styles the host (contract: document
         // frame paints on the host; geometry never transfers)

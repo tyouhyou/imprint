@@ -825,9 +825,14 @@ system (standing non-goals):
   initial screen size document → shell → app default (warn on default)
   before materializing. Init-path only, like the parse itself.
 - `build(host, root)`: the root node itself is the document (the host is
-  the real container; the root tag does not instantiate a widget); root's
-  spacing/padding/wrap apply when the host is a FlexPanel, spacing/padding
-  when it is a Panel; root's children are materialized into the host one
+  the real container; the root tag does not instantiate a widget); the
+  root configures the host by PRESENCE: spacing/padding/wrap transfer to
+  a FlexPanel host (spacing/padding to a Panel host) only when the root
+  actually declares them, a row/column root transfers its direction by
+  its tag and justify/align only when declared — pre-configured host
+  state survives for everything the root omits (the same presence rule
+  as the geometry props and the child margins below). Root's children
+  are materialized into the host one
   by one. The root's own box dress — solid/gradient background, border,
   radius, text color — styles the host (a styled document root paints
   its frame on the host); geometry never transfers (width/height,

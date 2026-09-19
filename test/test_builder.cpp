@@ -513,6 +513,63 @@ int test_builder()
                core::Color::from(255, 0, 0).pixel);
     }
 
+    // build() host transfer is presence-gated: an omitted root prop
+    // never resets pre-configured host state (the old unconditional
+    // spacing/padding transfer clobbered hosts configured before build),
+    // while a declared prop still transfers
+    {
+        FlexPanel host;
+        host.set_size(60, 60);
+        host.set_padding(8);
+        host.set_spacing(5);
+        ui_node doc = parse_html(
+            "<div><div style=\"width:20px;height:20px;background:#000000\">"
+            "<label>a</label></div></div>\n",
+            nullptr);
+        build(host, doc);
+        host.layout();
+        const auto cp = host.get_items()[0].child->get_position();
+        EXPECT(cp.x == 8 && cp.y == 8);
+
+        // a root that DECLARES padding transfers it (over the preset)
+        FlexPanel host2;
+        host2.set_size(60, 60);
+        host2.set_padding(8);
+        ui_node doc2 = parse_html(
+            "<div style=\"padding:3px\">"
+            "<div style=\"width:20px;height:20px;background:#000000\">"
+            "<label>b</label></div></div>\n",
+            nullptr);
+        build(host2, doc2);
+        host2.layout();
+        const auto cp2 = host2.get_items()[0].child->get_position();
+        EXPECT(cp2.x == 3 && cp2.y == 3);
+
+        // a column root grounds direction by its tag and transfers
+        // declared props only: omitted padding keeps the host's 8
+        FlexPanel host3;
+        host3.set_size(60, 60);
+        host3.set_padding(8);
+        auto doc3 = column({label("c").named("cl")});
+        build(host3, doc3);
+        host3.layout();
+        const auto cp3 = host3.get_items()[0].child->get_position();
+        EXPECT(cp3.x == 8 && cp3.y == 8);
+
+        // Panel hosts take the same presence rule
+        Panel phost;
+        phost.set_size(60, 60);
+        phost.set_padding(7);
+        ui_node doc4 = parse_html(
+            "<div><div style=\"width:20px;height:20px;background:#000000\">"
+            "<label>d</label></div></div>\n",
+            nullptr);
+        build(phost, doc4);
+        phost.layout();
+        const auto cp4 = phost.get_children()[0]->get_position();
+        EXPECT(cp4.x == 7 && cp4.y == 7);
+    }
+
     return test::report("builder");
     }
 }
