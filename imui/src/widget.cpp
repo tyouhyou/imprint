@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 
 #include "text/utf8.hpp"
 
@@ -45,14 +46,19 @@ namespace zb::ui
             const int lo4 = 4 * left + r4 - chord4;
             const int hi4 = 4 * (right + 1) - r4 + chord4;
             shadow_span s;
-            s.left = std::max(left, (lo4 + 1) / 4);
-            s.right = std::min(right, (hi4 - 3) / 4);
+            // first/last FULL pixels: ceil(lo4/4) and hi4/4 - 1, with the
+            // fractional remainder carried as explicit partial pixels
+            // just outside (fractions of 255). Rounding both edges to
+            // nearest keeps the span mirror-symmetric — the old
+            // floor-at-the-start rule painted a half-covered edge pixel
+            // as full on one side only, and the blur leaked that 1/4-px
+            // bias straight into the spill (the disc mirror lock).
+            s.left = std::max(left, (lo4 + 3) / 4);
+            s.right = std::min(right, hi4 / 4 - 1);
             if (s.left > s.right)
             {
                 return {};  // sub-pixel chord: the blur smears the sliver
             }
-            // partial pixels just outside the full run (fractions of
-            // 255; 0 when the chord lands on a pixel boundary)
             const int fl = 4 * s.left - lo4;
             const int fr = hi4 - 4 * (s.right + 1);
             s.fringe_l = fl > 0 ? fl * 255 / 4 : 0;
@@ -149,6 +155,99 @@ namespace zb::ui
                 }
             }
         }
+
+    // Outer (drop) shadow: the blurred silhouette indicator — the exact
+    // mirror of the inset's hole. Mask = spread-expanded, offset rounded
+    // box from the same continuous quarter-px row chords; filter = the
+    // same separable normalized integer triangular kernel (support
+    // [-blur, blur], weights blur + 1 - |offset| on each axis). A
+    // blurred edge reads half strength at the silhouette contour and
+    // decays smoothly over the blur radius. The old approximation (flat
+    // half-alpha core + stepped halo rings) put a 2x luminance wall
+    // exactly at the contour — the knob's "popped ring" — and the rings'
+    // SDF tails stacked darker crescents on the diagonal arcs. Two
+    // passes: horizontal is the inset's analytic interval formula per
+    // mask row into an int32 line block, vertical is the weighted dy sum
+    // normalized by norm^2 (the inset's hole math). plot_aa gates
+    // clip/damage and binary depths (half-coverage rule).
+    void paint_outer_shadow(core::Graphics &area, const int x0, const int y0,
+                            const int x1, const int y1, const int radius,
+                            const int blur, const core::Color &color)
+    {
+        if (x0 > x1 || y0 > y1 || blur <= 0 || color.a() == 0)
+        {
+            return;
+        }
+        const int norm = (blur + 1) * (blur + 1);
+        const int64_t divisor = 1LL * norm * norm;
+        // coverage is nonzero only within blur (+1 fringe) of the
+        // silhouette; that block bounds the scratch
+        const int xr0 = x0 - blur - 1;
+        const int xr1 = x1 + blur + 1;
+        const int yr0 = y0 - blur;
+        const int yr1 = y1 + blur;
+        const long long bw = xr1 - xr0 + 1;
+        const long long bh = yr1 - yr0 + 1;
+        // retained scratch grown to the high-water mark: no per-frame
+        // allocation (the inset binds scratch to blur for the same
+        // reason); paints are single-threaded
+        static std::vector<int32_t> buf;
+        const size_t need = static_cast<size_t>(bw * bh);
+        if (buf.size() < need)
+        {
+            buf.resize(need);
+        }
+        std::fill(buf.begin(), buf.begin() + need, 0);
+        // pass 1 — horizontal triangular of each mask row (rows outside
+        // the silhouette stay zero)
+        for (int row = y0; row <= y1; ++row)
+        {
+            const shadow_span sp =
+                rounded_shadow_span(x0, y0, x1, y1, radius, row);
+            if (sp.left > sp.right)
+            {
+                continue;
+            }
+            const int xl = std::max(xr0, sp.left - 1 - blur);
+            const int xr = std::min(xr1, sp.right + 1 + blur);
+            for (int x = xl; x <= xr; ++x)
+            {
+                int horizontal = 255 *
+                    (triangle_prefix(sp.right - x, blur) -
+                     triangle_prefix(sp.left - 1 - x, blur));
+                horizontal += sp.fringe_l *
+                    std::max(0, blur + 1 - std::abs(sp.left - 1 - x));
+                horizontal += sp.fringe_r *
+                    std::max(0, blur + 1 - std::abs(sp.right + 1 - x));
+                buf[static_cast<size_t>((row - yr0) * bw + (x - xr0))] =
+                    horizontal;
+            }
+        }
+        // pass 2 — vertical weighted sum, normalized like the inset's
+        // hole (the kernel sums to norm per axis, norm^2 total)
+        for (int y = yr0; y <= yr1; ++y)
+        {
+            const int dy0 = std::max(-blur, y0 - y);
+            const int dy1 = std::min(blur, y1 - y);
+            for (int x = xr0; x <= xr1; ++x)
+            {
+                int64_t sum = 0;
+                for (int dy = dy0; dy <= dy1; ++dy)
+                {
+                    sum += 1LL *
+                           buf[static_cast<size_t>((y + dy - yr0) * bw +
+                                                   (x - xr0))] *
+                           (blur + 1 - std::abs(dy));
+                }
+                const int coverage =
+                    static_cast<int>((sum + divisor / 2) / divisor);
+                if (coverage > 0)
+                {
+                    area.plot_aa(x, y, coverage, color);
+                }
+            }
+        }
+    }
 
         // process-level shared fallback provider (batch J6): constructed
         // at the first widget construction, then leaked so it outlives
@@ -525,13 +624,11 @@ namespace zb::ui
         // outer silhouettes first (P-2e): spread-expanded rounded box
         // at the offset, all under the background (the widget clip keeps
         // the inside part — see the contract's overdraw note). A blurred
-        // shadow feathers over its blur radius: the core dims as
-        // 2/(blur+2) and up to `blur` outlines keep halving outward
-        // (capped where the steps turn invisible), so a large blur fades
-        // before the widget edge instead of ending in a hard wall —
-        // the model500 knob's square bottom was the full-alpha core of
-        // `0 3px 6px` with only two halo steps. blur==0 keeps the hard
-        // silhouette exactly. Wireframe skips shadows (bones).
+        // shadow is the silhouette indicator run through the SAME
+        // separable normalized triangular kernel as the inset: half
+        // strength at the contour, smooth decay over ±blur. blur==0
+        // keeps the hard silhouette exactly. Wireframe skips shadows
+        // (bones).
         const bool shadows =
             area.get_render_mode() == core::Graphics::render_mode::full;
         if (shadows && ext_ != nullptr)
@@ -545,51 +642,13 @@ namespace zb::ui
                 const int y1 = sh_dy + s.height - 1 + sh.oy + sh.spread;
                 if (sh.blur > 0 && sh.c.a() > 0)
                 {
-                    // feathered core + halving halo over the blur radius;
-                    // the core keeps half the base alpha (a blurred disc
-                    // reads half strength at its own edge, whatever the
-                    // blur), and up to `blur` outlines (capped at 6) keep
-                    // halving outward, so the spill falls softly instead
-                    // of ending in a hard wall (the old square bottom) or
-                    // thinning into a pale gap (the 2/(blur+2) core read
-                    // as a white ring outside the model500 knob). Binary
-                    // depths apply the same half rule to the core (kept
-                    // only while it still covers half the base alpha);
-                    // the first halo stays solid and the rest drop.
-                    const int base_a = static_cast<int>(sh.c.a());
-                    const int core_a = (base_a + 1) / 2;
-                    core::Color core = sh.c;
-                    if constexpr (core::Color::per_channel_blend)
-                    {
-                        core.set_a(static_cast<uint8_t>(core_a));
-                    }
-                    else
-                    {
-                        core.set_a(2 * core_a >= base_a ? sh.c.a() : 0);
-                    }
-                    area.fill_round_rect_aa(x0, y0, x1, y1,
-                                            radius + sh.spread, core);
-                    const int bands = sh.blur < 6 ? sh.blur : 6;
-                    int step_a = static_cast<int>(core.a());
-                    for (int k = 1; k <= bands; ++k)
-                    {
-                        core::Color soft = sh.c;
-                        if constexpr (core::Color::per_channel_blend)
-                        {
-                            step_a /= 2;
-                            soft.set_a(static_cast<uint8_t>(step_a));
-                        }
-                        else if (k > 1)
-                        {
-                            soft.set_a(0);
-                        }
-                        area.draw_round_rect_aa(x0 - k, y0 - k, x1 + k, y1 + k,
-                                                radius + sh.spread + k, soft);
-                        if (step_a == 0 && core::Color::per_channel_blend)
-                        {
-                            break;
-                        }
-                    }
+                    // real blur, same kernel as the inset (see
+                    // paint_outer_shadow): no interior plateau, no
+                    // stepped halo — the spill decays smoothly from half
+                    // strength at the contour; binary depths threshold
+                    // the coverage at half inside plot_aa
+                    paint_outer_shadow(area, x0, y0, x1, y1,
+                                       radius + sh.spread, sh.blur, sh.c);
                 }
                 else
                 {

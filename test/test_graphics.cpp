@@ -614,16 +614,18 @@ int test_graphics()
         EXPECT(same);
     }
 
-    // fill_round_rect_aa at 16bpp: the 109-coverage fringe stays out
-    // (row 3) while the 218-coverage one plots (row 4)
+    // fill_round_rect_aa at 16bpp: the continuous quarter-px chord
+    // pulls row 3's span to x=1 (its center lands on the boundary) and
+    // row 4's with it; the zero-coverage outside pixel stays dark
     if (core::ImColor_Depth == 16)
     {
         auto g = core::Graphics::make_ptr(22, 12);
         g->fill(core::colors::Black);
         g->fill_round_rect_aa(1, 1, 20, 10, 4, core::colors::White);
         EXPECT(test::pixel_at(*g, 2, 3) == core::colors::White.pixel);
-        EXPECT(test::pixel_at(*g, 1, 3) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 1, 3) == core::colors::White.pixel);
         EXPECT(test::pixel_at(*g, 1, 4) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 0, 3) != core::colors::White.pixel);
     }
 
     // draw_round_rect_aa: solid edge extremes and tangents (arc sample

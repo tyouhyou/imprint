@@ -797,15 +797,19 @@ system (standing non-goals):
   32bpp multiplies shadow alpha by coverage, and binary depths use the
   standard half-coverage rule. Scratch storage is bounded independently of
   widget dimensions; no heap allocation or offscreen color buffer is needed.
-  Outer shadows paint their
-  silhouette (spread-expanded) UNDER the background, feathered over the
-  blur radius when blurred: the core keeps half the base alpha (a blurred
-  disc reads half strength at its own edge) and up
-  to `blur` outlines (capped at 6) keep halving outward, so a large blur
-  fades instead of ending in a hard wall inside rounded corners (the
-  model500 knob's square bottom); blur==0 keeps the hard silhouette.
-  Binary depths drop the dimmed core by the same half rule and keep the
-  first halo solid. Outer shadows paint in a dedicated first pass under a
+  Outer shadows paint their silhouette (spread-expanded, offset) UNDER
+  the background, blurred with the SAME separable, normalized integer
+  triangular kernel as the inset: the silhouette indicator is convolved
+  over `[-blur, blur]` on both axes and paints as coverage (a blurred
+  edge reads half strength at the silhouette contour and decays smoothly
+  to zero over the blur radius — no interior plateau, no stepped halo).
+  The mask rows reuse the fill raster's continuous quarter-pixel row
+  chords, so the spill keeps the real corner arcs. Scratch is one
+  int32 line block over silhouette ± blur, retained and grown to the
+  high-water mark (no per-frame allocation). blur==0 keeps the hard
+  silhouette; binary depths threshold the coverage at half (the standard
+  `plot_aa` rule, like the inset). Outer shadows paint in a dedicated
+  first pass under a
   clip expanded by offset+spread+blur in every direction (bounded by the
   parent's clip); the painted spill is then cut at the box edge by the
   box's own clip, so a drop shadow extends past the box like the
@@ -1123,13 +1127,21 @@ obligations:
   and the miss counter only tracks FULL-mode cache misses.
 - **Continuous rounded geometry (rim gate)**: every rounded-rect raster
   (the fills' row spans, the translucent border stroke band, the inset
-  shadow's hole and clip) evaluates the box on the pixel-center grid in
-  1/4-px fixed point — inclusive pixel indices are pixels, arc centers
+  shadow's hole and clip, the outer shadow's silhouette mask rows)
+  evaluates the box on the pixel-center grid in 1/4-px fixed point —
+  inclusive pixel indices are pixels, arc centers
   sit at `(left + r, top + r)` and `(right + 1 - r, bottom + 1 - r)`
   continuously, and tangent rows keep their real chord instead of
   collapsing a row early (the index-space chords made even-sized boxes'
   bottom arc drop out: the model500 knob's bright leak ring between the
-  border ring and the inset shadow). The translucent 1px border itself
+  border ring and the inset shadow). The fills keep the center-sampling
+  span convention (a pixel is full when its center is inside the chord,
+  one partial fringe neighbor); the shadow masks (inset hole and outer
+  silhouette, the inputs of a coverage blur) convert BOTH edges to
+  nearest with explicit partial pixels on either side — area-sampling,
+  so the mask is mirror-symmetric and the blur cannot leak a one-sided
+  quarter-pixel bias into the spill (the disc mirror lock). The
+  translucent 1px border itself
   (per-channel blend, r ≥ 2) takes a signed-distance stroke band on the
   same grid — the ring one pixel inside the box edge, linear 1px
   coverage ramp, midline half a pixel in — instead of the polyline

@@ -1441,14 +1441,14 @@ int test_html()
         const auto sp = sunk->get_position();
         // continuous hole-mask geometry: the tangent row's clip no
         // longer collapses, so the top edge blends per the blurred hole
-        // (shadow alpha 102 = 1 - Phi(0.25) at the 2px sigma) instead
-        // of painting solid black
-        EXPECT(test::pixel_at(g, sp.x + 20, sp.y) ==
-               core::Color::from(153, 153, 153).pixel);
         EXPECT(test::pixel_at(g, sp.x + 20, sp.y + 10) ==
                core::colors::White.pixel);
 #if COLOR_DEPTH == 32
-        // three pixels in, the blurred hole nearly covers the row
+        // the top edge blends (shadow alpha 102 = 1 - Phi(0.25) at the
+        // 2px sigma) instead of painting solid black; three pixels in,
+        // the blurred hole nearly covers the row
+        EXPECT(test::pixel_at(g, sp.x + 20, sp.y) ==
+               core::Color::from(153, 153, 153).pixel);
         EXPECT(test::pixel_at(g, sp.x + 20, sp.y + 3) ==
                core::Color::from(245, 245, 245).pixel);
 #else
@@ -1482,6 +1482,151 @@ int test_html()
         EXPECT(all_white);
     }
 
+    // outer shadow spill (P-2e real blur): the blurred silhouette
+    // indicator. Hand-derived locks for a square blur-1 case, then
+    // structural locks on a disc: exact mirror symmetry (the old
+    // chord-flat rim read as vertically ground sides) and monotonic
+    // outward decay (the old core->halo wall re-darkened the contour)
+    {
+        // blur 1, square 8x8: norm = 4, weights {1,2,1}. One pixel right
+        // of the box, straight edge: the horizontal triangular of each
+        // mask row is 255 * (Tp(-1) - Tp(-9)) = 255; the vertical window
+        // sums 255 * (1 + 2 + 1) -> coverage (1020 + 8) / 16 = 64 ->
+        // alpha 64 black over the white host = 191. Top/bottom corners
+        // lose one window row: (2 + 1) * 255 -> 48 -> 207. The diagonal
+        // keeps only the last row's tail: 255 -> 16 -> 239.
+        ui_node doc = parse_html(
+            "<div>"
+            "<div style=\"margin:8px;width:8px;height:8px;background:#ffffff;"
+            "box-shadow: 0 0 1px black\"><label>s</label></div>"
+            "</div>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(64, 64);
+        host.set_background_color(core::colors::White);
+        build(host, doc);
+        host.layout();
+        auto *sq = host.get_items()[0].child.get();
+        const auto sp = sq->get_position();
+        core::Graphics g(64, 64, nullptr);
+        host.draw(g);
+#if COLOR_DEPTH == 32
+        EXPECT(test::pixel_at(g, sp.x + 8, sp.y + 3) ==
+               core::Color::from(191, 191, 191).pixel);
+        EXPECT(test::pixel_at(g, sp.x + 8, sp.y) ==
+               core::Color::from(207, 207, 207).pixel);
+        EXPECT(test::pixel_at(g, sp.x + 8, sp.y + 8) ==
+               core::Color::from(239, 239, 239).pixel);
+        // the kernel and mask are symmetric: same spill on the left
+        EXPECT(test::pixel_at(g, sp.x - 1, sp.y + 3) ==
+               core::Color::from(191, 191, 191).pixel);
+#else
+        // binary depths quantize the shallow spill away entirely
+        EXPECT(test::pixel_at(g, sp.x + 8, sp.y + 3) ==
+               core::colors::White.pixel);
+#endif
+        // the kernel reaches nothing two pixels out
+        EXPECT(test::pixel_at(g, sp.x + 9, sp.y + 3) ==
+               core::colors::White.pixel);
+    }
+    {
+        // disc 30px, centered blur 3: the quarter-px mask is symmetric
+        // about the even box axis (pixel p mirrors 29 - p), so spill
+        // pairs must match exactly
+        ui_node doc = parse_html(
+            "<div>"
+            "<div style=\"margin:8px;width:30px;height:30px;border-radius:50%;"
+            "background:#ffffff;box-shadow: 0 0 3px rgba(0,0,0,0.5)\">"
+            "<label>c</label></div>"
+            "</div>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(80, 80);
+        host.set_background_color(core::colors::White);
+        build(host, doc);
+        host.layout();
+        auto *disc = host.get_items()[0].child.get();
+        const auto dp = disc->get_position();
+        core::Graphics g(80, 80, nullptr);
+        host.draw(g);
+        const auto lum = [&g](int x, int y)
+        {
+            const uint32_t p = test::pixel_at(g, x, y);
+            return static_cast<int>((p >> 16) & 0xFF);
+        };
+#if COLOR_DEPTH == 32
+        const int mid = dp.y + 15;  // row 15 mirrors row 14
+        {
+            // TEMP diagnostics
+            std::printf("disc dp=(%d,%d) midrow:", dp.x, dp.y);
+            for (int x = dp.x - 5; x <= dp.x + 34; ++x)
+            {
+                std::printf(" %3d", lum(x, mid));
+            }
+            std::printf("\n");
+        }
+        for (int k = 1; k <= 3; ++k)
+        {
+            EXPECT(lum(dp.x - k, mid) == lum(dp.x + 29 + k, mid));
+        }
+        const int midx = dp.x + 14;
+        for (int k = 1; k <= 3; ++k)
+        {
+            EXPECT(lum(midx, dp.y - k) == lum(midx, dp.y + 29 + k));
+        }
+        // monotonic decay outward (allow 1 of rounding): the spill only
+        // gets lighter away from the disc — darkness never re-darkens
+        // (the old core->halo wall did)
+        int prev = -1;
+        for (int k = 1; k <= 3; ++k)
+        {
+            const int v = lum(midx, dp.y + 29 + k);
+            if (prev >= 0)
+            {
+                EXPECT(v >= prev - 1);
+            }
+            prev = v;
+        }
+        prev = -1;
+        for (int k = 1; k <= 3; ++k)
+        {
+            const int v = lum(dp.x + 29 + k, mid);
+            if (prev >= 0)
+            {
+                EXPECT(v >= prev - 1);
+            }
+            prev = v;
+        }
+#endif
+    }
+    {
+        // blur 0 keeps the hard silhouette: offset 8x8 black block, the
+        // face cuts it at the box edge, the offset remainder stays solid
+        ui_node doc = parse_html(
+            "<div>"
+            "<div style=\"width:8px;height:8px;background:#ffffff;"
+            "box-shadow: 3px 2px 0px black\"><label>h</label></div>"
+            "</div>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(64, 64);
+        host.set_background_color(core::colors::White);
+        build(host, doc);
+        host.layout();
+        auto *hd = host.get_items()[0].child.get();
+        const auto hp = hd->get_position();
+        core::Graphics g(64, 64, nullptr);
+        host.draw(g);
+        EXPECT(test::pixel_at(g, hp.x + 10, hp.y + 5) ==
+               core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, hp.x + 5, hp.y + 9) ==
+               core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, hp.x + 11, hp.y + 5) ==
+               core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, hp.x + 5, hp.y + 10) ==
+               core::colors::White.pixel);
+    }
+
     // split-side inset bands AA their chord-cut ends (knob-rim
     // staircase): 41x21 white face, radius 10, top-only inset
     {
@@ -1510,8 +1655,11 @@ int test_html()
         // the corner arc's top band runs near-full shadow there: the
         // span pixel keeps a whisker of the white face, the fringe
         // pixel a whisker of gray through the chord's partial coverage
-        EXPECT(fringe == core::Color::from(45, 45, 45).pixel);
-        EXPECT(span == core::Color::from(61, 61, 61).pixel);
+        // (row 3's hole span starts a quarter pixel into pixel 4, so
+        // its left tail weighs 127/255 under the area-symmetric
+        // conversion)
+        EXPECT(fringe == core::Color::from(44, 44, 44).pixel);
+        EXPECT(span == core::Color::from(60, 60, 60).pixel);
 #else
         // binary: both coverages clear the half rule and keep black
         EXPECT(fringe == core::colors::Black.pixel);
@@ -1549,13 +1697,15 @@ int test_html()
                core::colors::Black.pixel);
 #endif
         // left/right mid-edge: the hole's blurred boundary crosses the
-        // equator pixels, so they lighten to a mild spill (the old
-        // rule dropped it entirely); binary depths quantize it away
+        // equator pixels, so they lighten to a mild spill; the area-
+        // symmetric span conversion makes BOTH sides read the same
+        // value (the old one-sided rounding gave 159 vs 157 — the rim
+        // read microscopically darker on one side)
 #if COLOR_DEPTH == 32
         EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
-               core::Color::from(159, 159, 159).pixel);
+               core::Color::from(170, 170, 170).pixel);
         EXPECT(test::pixel_at(g, fp.x + 53, fp.y + 27) ==
-               core::Color::from(157, 157, 157).pixel);
+               core::Color::from(170, 170, 170).pixel);
 #else
         EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
                core::colors::White.pixel);
