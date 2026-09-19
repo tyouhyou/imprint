@@ -86,7 +86,6 @@ namespace
     span_q rounded_span_q(const int left, const int top, const int right,
                           const int bottom, const int r, const int row)
     {
-        const int w = right - left + 1;
         const int r4 = 4 * r;
         const int y4 = 4 * row + 2;
         const int top_arc4 = 4 * top + r4;
@@ -110,10 +109,19 @@ namespace
                 s.rx = 0;
                 return s;
             }
-            const int fl = 4 * s.lx - lo4;
-            const int fr = hi4 - 4 * (s.rx + 1);
-            s.fl = fl > 0 ? fl * 255 / 4 : 0;
-            s.fr = fr > 0 ? fr * 255 / 4 : 0;
+            // corner arcs: the fringe pixel's coverage is its true area
+            // overlap with the rounded rect (8x8 subsample of the integer
+            // indicator, squared-distance corner test). The 1D chord
+            // fraction under-covers on the curve — the chord lands on a
+            // pixel boundary at a different sub-pixel position row by
+            // row, so a translucent border over the fill read the PAGE
+            // through the band's outer tail instead of the face (the
+            // model500 knob rim's speckle; the browser's background-clip
+            // paints the face anti-aliased to the border-box edge)
+            s.fl = Graphics::rounded_overlap255(left, top, right, bottom, r,
+                                               s.lx - 1, row);
+            s.fr = Graphics::rounded_overlap255(left, top, right, bottom, r,
+                                               s.rx + 1, row);
         }
         return s;
     }
@@ -318,6 +326,59 @@ int Graphics::corner_chord(const int r, const int dy)
 #endif
 }
 
+// THE single radius clamp (semantics on the declaration): pixel-count
+// box dimensions, one definition for every rounded primitive
+int Graphics::inscribed_radius(const int width, const int height,
+                               const int radius)
+{
+    if (radius <= 0 || width <= 0 || height <= 0)
+    {
+        return 0;
+    }
+    const int half = std::min(width, height) / 2;
+    return radius < half ? radius : half;
+}
+
+int Graphics::rounded_overlap255(const int left, const int top, const int right,
+                                 const int bottom, const int radius,
+                                 const int px, const int py)
+{
+    const int w = right - left + 1;
+    const int h = bottom - top + 1;
+    int r = inscribed_radius(w, h, radius);
+    if (w <= 0 || h <= 0 || r == 0)
+    {
+        // plain rect: the pixel is fully inside or outside
+        const bool inside = px >= left && px <= right && py >= top && py <= bottom;
+        return inside ? 255 : 0;
+    }
+    const int rr256 = r * 256;
+    const int ex256 = w * 128 - rr256;
+    const int ey256 = h * 128 - rr256;
+    const int cx256 = left * 256 + w * 128;
+    const int cy256 = top * 256 + h * 128;
+    constexpr int SUB = 8;           // 8x8 subsamples per pixel
+    constexpr int SUBQ = 256 / SUB;  // sub-cell in the 256 grid
+    int inside = 0;
+    for (int sy = 0; sy < SUB; ++sy)
+    {
+        const int Y = py * 256 + sy * SUBQ + SUBQ / 2;
+        const int qy = std::abs(Y - cy256) - ey256;
+        for (int sx = 0; sx < SUB; ++sx)
+        {
+            const int X = px * 256 + sx * SUBQ + SUBQ / 2;
+            const int qx = std::abs(X - cx256) - ex256;
+            if (qx <= 0 || qy <= 0
+                ? std::max(qx, qy) <= rr256
+                : 1LL * qx * qx + 1LL * qy * qy <= 1LL * rr256 * rr256)
+            {
+                ++inside;
+            }
+        }
+    }
+    return inside * 255 / (SUB * SUB);
+}
+
 Graphics::Graphics(uint32_t width, uint32_t height, void *data)
     : pixels{nullptr}
     , is_wrapper_mode{false}
@@ -414,6 +475,41 @@ Graphics::ClipGuard Graphics::clip_safe(int x, int y, int32_t width, int32_t hei
     draw_area = {cx, cy, cex, cey};
     draw_area_offset_enabled = true;
     draw_area_offset = {ax, ay};
+    return ClipGuard(*this, saved_area, saved_offset_enabled, saved_offset, true);
+}
+
+Graphics::ClipGuard Graphics::clip_surface_safe(int x, int y, int32_t width, int32_t height)
+{
+    if (width <= 0 || height <= 0)
+    {
+        return ClipGuard(*this, draw_area, draw_area_offset_enabled, draw_area_offset, false);
+    }
+
+    // intersect with the whole SURFACE, not the current draw area: the
+    // caller passes surface coordinates and means to escape nested box
+    // clips (the P-2e outer-shadow pass)
+    // int64 math: on devkitARM int32_t is long, so the raw expression
+    // would not mix with int in std::min
+    const int cx = static_cast<int>(std::max<int64_t>(x, 0));
+    const int cy = static_cast<int>(std::max<int64_t>(y, 0));
+    const int cex = static_cast<int>(
+        std::min<int64_t>(static_cast<int64_t>(x) + width - 1,
+                          static_cast<int64_t>(imsize.width) - 1));
+    const int cey = static_cast<int>(
+        std::min<int64_t>(static_cast<int64_t>(y) + height - 1,
+                          static_cast<int64_t>(imsize.height) - 1));
+    if (cex < cx || cey < cy)
+    {
+        return ClipGuard(*this, draw_area, draw_area_offset_enabled, draw_area_offset, false);
+    }
+
+    const imarea_t saved_area = draw_area;
+    const bool saved_offset_enabled = draw_area_offset_enabled;
+    const impoint_t saved_offset = draw_area_offset;
+
+    draw_area = {cx, cy, cex, cey};
+    draw_area_offset_enabled = true;
+    draw_area_offset = {x, y};
     return ClipGuard(*this, saved_area, saved_offset_enabled, saved_offset, true);
 }
 
@@ -924,12 +1020,7 @@ void Graphics::fill_round_rect(int x1, int y1, int x2, int y2, int radius, const
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
     if (r == 0)
     {
         fill_rect(left, top, right, bottom, colr);
@@ -965,12 +1056,7 @@ void Graphics::draw_round_rect(int x1, int y1, int x2, int y2, int radius, const
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
     if (r == 0)
     {
         draw_rect(left, top, right, bottom, colr);
@@ -1001,12 +1087,7 @@ void Graphics::draw_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
     if (r == 0)
     {
         draw_rect(left, top, right, bottom, colr);
@@ -1027,15 +1108,24 @@ void Graphics::draw_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
         if (colr.a() > 0 && colr.a() < 0xFF &&
             render_mode_ != render_mode::wireframe && r >= 2)
         {
-            // 1px stroke inside the box edge: sdf in [-1, 0], midline
-            // half a pixel in. Point-sampled coverage is the triangle
-            // 1 - |sdf + 0.5| — at the box edge the pixel center sits
+            // 1px stroke inside the box edge: sd in [-1, 0], midline
+            // half a pixel in. At the box edge the pixel center sits
             // ON the midline (even-sized circles: the 54px knob's rim
             // row centers are 26.5px from the middle), so south/east
             // rims get the same full coverage north/west do. The old
             // pixel-corner grid put the band a half pixel further out,
             // clipping the whole lower arc away (the knob's bright
             // lower leak where the border should read).
+            //
+            // Straight sections take the tent 1 - |sd + 0.5|: on a
+            // straight band edge that IS the exact pixel-area coverage.
+            // Corner arcs subsample the band indicator instead — the
+            // point-sampled tent loses mass where the midline sweeps
+            // across a column (the knob rim's speckle gaps and column
+            // jitter), while the box-filtered indicator conserves the
+            // ring's mass through the curve.
+            constexpr int SUB = 8;              // 8x8 subsamples per pixel
+            constexpr int SUBQ = 256 / SUB;     // sub-cell in the 256 grid
             const int w256 = (right - left + 1) * 128;
             const int h256 = (bottom - top + 1) * 128;
             const int rr256 = r * 256;
@@ -1043,26 +1133,48 @@ void Graphics::draw_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
             const int ey256 = h256 - rr256;
             const int cx256 = left * 256 + w256;
             const int cy256 = top * 256 + h256;
-            const auto rim_cov = [&](const int colx, const int row) {
+            const auto corner_sd = [&](const int px, const int py) -> int64_t
+            {
+                const int dx = std::abs(px - cx256) - ex256;
+                const int dy = std::abs(py - cy256) - ey256;
+                return static_cast<int64_t>(isqrt_floor(
+                           1LL * dx * dx + 1LL * dy * dy)) -
+                       rr256;
+            };
+            const auto rim_cov = [&](const int colx, const int row) -> int
+            {
                 const int dx = std::abs(colx * 256 + 128 - cx256) - ex256;
                 const int dy = std::abs(row * 256 + 128 - cy256) - ey256;
-                int64_t sd;
-                if (dx > 0 && dy > 0)
+                if (dx <= 0 || dy <= 0)
                 {
-                    sd = static_cast<int64_t>(isqrt_floor(
-                             1LL * dx * dx + 1LL * dy * dy)) -
-                         rr256;
+                    const int64_t sd = 1LL * (dx > dy ? dx : dy) - rr256;
+                    const int64_t ad = (sd + 128) < 0 ? -(sd + 128) : sd + 128;
+                    if (ad >= 256)
+                    {
+                        return 0;
+                    }
+                    return 255 - static_cast<int>(ad * 255 >> 8);
                 }
-                else
-                {
-                    sd = 1LL * (dx > dy ? dx : dy) - rr256;
-                }
-                const int64_t ad = (sd + 128) < 0 ? -(sd + 128) : sd + 128;
-                if (ad >= 256)
+                // corner arc. Isqrt-free mass bounds reject everything
+                // off the annulus: max(dx,dy) <= isqrt(dx^2+dy^2) <=
+                // dx+dy, so the point sd lies in [max - rr, sum - rr]
+                if (std::max(dx, dy) - rr256 > 0 ||
+                    1LL * dx + dy - rr256 < -256)
                 {
                     return 0;
                 }
-                return 255 - static_cast<int>(ad * 255 >> 8);
+                int inside = 0;
+                for (int sy = 0; sy < SUB; ++sy)
+                {
+                    const int py = row * 256 + sy * SUBQ + SUBQ / 2;
+                    for (int sx = 0; sx < SUB; ++sx)
+                    {
+                        const int px = colx * 256 + sx * SUBQ + SUBQ / 2;
+                        const int64_t sd = corner_sd(px, py);
+                        inside += (sd <= 0 && sd >= -256) ? 1 : 0;
+                    }
+                }
+                return inside * 255 / (SUB * SUB);
             };
             for (int row = top; row <= bottom; ++row)
             {
@@ -1116,12 +1228,7 @@ void Graphics::fill_round_rect_aa(int x1, int y1, int x2, int y2, int radius,
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
     if (r == 0)
     {
         fill_rect(left, top, right, bottom, colr);
@@ -1314,12 +1421,7 @@ void Graphics::fill_gradient(int x1, int y1, int x2, int y2, const Color &from, 
 
     // corner radius shared with the round-rect pair: clamp to half the
     // shorter side, non-positive keeps the square fast path
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
 
     // fractional chord edge (the fill_round_rect_aa formula): the two
     // pixels just outside the span blend by coverage
@@ -1394,12 +1496,7 @@ void Graphics::fill_radial(int x1, int y1, int x2, int y2, const int cx, const i
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
 
     // CSS farthest-corner extent: the radius reaches the remotest rect
     // corner from the center (cx/cy are rect-local pixels)
@@ -1476,12 +1573,7 @@ void Graphics::fill_conic(int x1, int y1, int x2, int y2, int from_deg, const in
         return;
     }
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
 
     // continuous center via doubled offsets: the integer-midpoint
     // center put even boxes' sweep origin half a pixel off (the knob's
@@ -1555,12 +1647,7 @@ void Graphics::fill_gradient3(int x1, int y1, int x2, int y2, const Color &from,
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
     const int mp = mid_p < 0 ? 0 : (mid_p > 100 ? 100 : mid_p);
 
     // two straight segments meeting exactly at mid (integer grid:
@@ -1662,12 +1749,7 @@ void Graphics::fill_linear_stops(int x1, int y1, int x2, int y2, const int *stop
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
 
     // N-stop ramp over percent positions (non-decreasing by contract):
     // the last stop at or below t owns the pixel, zero-length spans
@@ -1779,12 +1861,7 @@ void Graphics::fill_repeating(int x1, int y1, int x2, int y2, const bool horizon
         nstops = 6;
     }
 
-    int r = radius < 0 ? 0 : radius;
-    const int half = std::min(right - left, bottom - top) / 2;
-    if (r > half)
-    {
-        r = half;
-    }
+    int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
 
     auto stripe = [&](const int t) {
         int m = t % period;

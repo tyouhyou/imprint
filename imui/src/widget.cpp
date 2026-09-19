@@ -1,7 +1,6 @@
 #include "widget.hpp"
 
 #include <algorithm>
-#include <array>
 #include <vector>
 
 #include "text/utf8.hpp"
@@ -35,8 +34,8 @@ namespace zb::ui
             {
                 return {};
             }
-            const int r = std::max(0, std::min(radius,
-                std::min(right - left + 1, bottom - top + 1) / 2));
+            const int r = core::Graphics::inscribed_radius(
+                right - left + 1, bottom - top + 1, radius);
             const int r4 = 4 * r;
             const int y4 = 4 * row + 2;
             const int top_arc4 = 4 * top + r4;
@@ -66,24 +65,189 @@ namespace zb::ui
             return s;
         }
 
-        int triangle_prefix(int offset, int blur)
+        // Integer exp(-t) in Q16 (t arrives in Q16): the limit identity
+        // e^-t = (1 - t/2^16)^(2^16), seeded with a two-term Taylor and
+        // evaluated as 16 renormalized squarings in Q31. Deterministic
+        // integer math on every target — no FPU, no float, no runtime
+        // table — so desktop and NDS compute identical Gaussian weights.
+        int gauss_weight_q16(const int64_t t_q16)
         {
-            if (offset < -blur)
+            const int64_t y = (t_q16 + 1) >> 1;  // t / 2^16, in Q31
+            int64_t v = (1LL << 31) - y + ((y * y + (1LL << 31)) >> 32);
+            for (int i = 0; i < 16; ++i)
             {
-                return 0;
+                v = (v * v + (1LL << 30)) >> 31;
             }
-            const int norm = (blur + 1) * (blur + 1);
-            if (offset >= blur)
+            return static_cast<int>((v + (1 << 14)) >> 15);
+        }
+
+        // Blurred rounded-box coverage field shared by both shadow
+        // paths. Mask = the box's exact per-pixel area coverage
+        // (rounded_overlap255; straight-edge pixels sit on the box
+        // boundary, so only corner bands carry partial values). Filter
+        // = the CSS box-shadow Gaussian: sigma = blur/2, per-axis
+        // weights exp(-d^2/(2 sigma^2)) sampled at integer offsets,
+        // support ceil(1.5 blur) = 3 sigma, renormalized over the
+        // truncated window. Two separable prefix-sum passes —
+        // horizontal into an int64 line field, vertical through a
+        // per-column prefix — with one final normalization by wsum^2.
+        // The triangular kernel this replaces died at 1 blur with a
+        // linear slope and C0 kinks: the knob's shadows read harder
+        // than the browser's. The Gaussian keeps half strength at the
+        // contour but the falloff reaches 1.5 blur. Scratch is
+        // retained and grown to the high-water mark (no per-frame
+        // allocation; paints are single-threaded). Returns the field
+        // and its origin/extent; pixels outside it read zero.
+        const uint8_t *gaussian_field(const int mleft, const int mtop,
+                                      const int mright, const int mbottom,
+                                      const int mradius, const int blur,
+                                      int &fx0, int &fy0, int &fw, int &fh)
+        {
+            const int support = blur > 0 ? (3 * blur + 1) / 2 : 0;
+            static std::vector<int64_t> wtab;
+            if (static_cast<int>(wtab.size()) < support + 1)
             {
-                return norm;
+                wtab.resize(support + 1);
             }
-            if (offset <= 0)
+            for (int d = 0; d <= support; ++d)
             {
-                const int n = offset + blur + 1;
-                return n * (n + 1) / 2;
+                int64_t t_q16 = 0;
+                if (blur > 0)
+                {
+                    t_q16 = (2LL * d * d * 65536 + 1LL * blur * blur / 2) /
+                            (1LL * blur * blur);
+                }
+                wtab[static_cast<size_t>(d)] = gauss_weight_q16(t_q16);
             }
-            const int n = blur - offset;
-            return norm - n * (n + 1) / 2;
+            int64_t wsum = wtab[0];
+            for (int d = 1; d <= support; ++d)
+            {
+                wsum += 2 * wtab[static_cast<size_t>(d)];
+            }
+            const int64_t wsum2 = wsum * wsum;
+
+            // field region = mask box expanded by the support; the mask
+            // is zero past the box, so the clamped prefix reads below
+            // are the exact zero-padded convolution
+            fx0 = mleft - support;
+            fy0 = mtop - support;
+            fw = mright - mleft + 2 * support + 1;
+            fh = mbottom - mtop + 2 * support + 1;
+            const size_t need = static_cast<size_t>(fw) * fh;
+
+            static std::vector<uint8_t> mask;
+            if (mask.size() < need)
+            {
+                mask.resize(need);
+            }
+            std::fill(mask.begin(), mask.begin() + need, 0);
+            for (int y = mtop; y <= mbottom; ++y)
+            {
+                uint8_t *rowp = &mask[static_cast<size_t>(y - fy0) * fw +
+                                      (mleft - fx0)];
+                std::fill(rowp, rowp + (mright - mleft + 1), 255);
+            }
+            const int rc = core::Graphics::inscribed_radius(
+                mright - mleft + 1, mbottom - mtop + 1, mradius);
+            if (rc > 0)
+            {
+                for (int y = mtop; y <= mbottom; ++y)
+                {
+                    if (y >= mtop + rc && y <= mbottom - rc)
+                    {
+                        continue;  // straight-section row: all 255
+                    }
+                    uint8_t *rowp = &mask[static_cast<size_t>(y - fy0) * fw];
+                    for (int x = mleft; x < mleft + rc; ++x)
+                    {
+                        rowp[x - fx0] = static_cast<uint8_t>(
+                            core::Graphics::rounded_overlap255(
+                                mleft, mtop, mright, mbottom, mradius, x, y));
+                    }
+                    for (int x = mright - rc + 1; x <= mright; ++x)
+                    {
+                        rowp[x - fx0] = static_cast<uint8_t>(
+                            core::Graphics::rounded_overlap255(
+                                mleft, mtop, mright, mbottom, mradius, x, y));
+                    }
+                }
+            }
+
+            // pass 1 — horizontal: each output is the weighted window
+            // sum of the row's mask, read as prefix differences
+            static std::vector<int64_t> hbuf;
+            if (hbuf.size() < need)
+            {
+                hbuf.resize(need);
+            }
+            static std::vector<int64_t> pfx;
+            if (static_cast<int>(pfx.size()) < fw + 1)
+            {
+                pfx.resize(fw + 1);
+            }
+            for (int y = 0; y < fh; ++y)
+            {
+                const uint8_t *mp = &mask[static_cast<size_t>(y) * fw];
+                pfx[0] = 0;
+                int64_t acc = 0;
+                for (int x = 0; x < fw; ++x)
+                {
+                    pfx[x + 1] = acc += mp[x];
+                }
+                int64_t *hp = &hbuf[static_cast<size_t>(y) * fw];
+                for (int x = 0; x < fw; ++x)
+                {
+                    int64_t h = 0;
+                    for (int d = -support; d <= support; ++d)
+                    {
+                        const int64_t w =
+                            wtab[static_cast<size_t>(d < 0 ? -d : d)];
+                        const int hi = x + d + 1;
+                        const int lo = x - d;
+                        h += w * (pfx[hi < 0 ? 0 : hi > fw ? fw : hi] -
+                                  pfx[lo < 0 ? 0 : lo > fw ? fw : lo]);
+                    }
+                    hp[x] = h;
+                }
+            }
+
+            // pass 2 — vertical, same prefix scheme on the line field,
+            // normalized once at the very end
+            static std::vector<uint8_t> cov;
+            if (cov.size() < need)
+            {
+                cov.resize(need);
+            }
+            static std::vector<int64_t> colp;
+            if (static_cast<int>(colp.size()) < fh + 1)
+            {
+                colp.resize(fh + 1);
+            }
+            for (int x = 0; x < fw; ++x)
+            {
+                colp[0] = 0;
+                int64_t acc = 0;
+                for (int y = 0; y < fh; ++y)
+                {
+                    colp[y + 1] = acc += hbuf[static_cast<size_t>(y) * fw + x];
+                }
+                for (int y = 0; y < fh; ++y)
+                {
+                    int64_t v = 0;
+                    for (int d = -support; d <= support; ++d)
+                    {
+                        const int64_t w =
+                            wtab[static_cast<size_t>(d < 0 ? -d : d)];
+                        const int hi = y + d + 1;
+                        const int lo = y - d;
+                        v += w * (colp[hi < 0 ? 0 : hi > fh ? fh : hi] -
+                                  colp[lo < 0 ? 0 : lo > fh ? fh : lo]);
+                    }
+                    cov[static_cast<size_t>(y) * fw + x] =
+                        static_cast<uint8_t>((v + wsum2 / 2) / wsum2);
+                }
+            }
+            return cov.data();
         }
 
         void paint_inset_shadow(core::Graphics &area, int width, int height,
@@ -98,156 +262,93 @@ namespace zb::ui
             {
                 return;
             }
-        // Continuous radii: the box is `width` px wide (the old
-        // (width-1)/2 index clamp shaved the padding circle a full
-        // pixel on even boxes, thinning the inset all around and
-        // collapsing its bottom arc).
-        const int outer_radius = std::max(0, std::min(radius,
-            std::min(width, height) / 2));
-        const int inner_radius = std::max(0, outer_radius - border);
-            const int norm = (blur + 1) * (blur + 1);
-            const int64_t divisor = 1LL * norm * norm;
-            // Shadow blur is uint8_t; row spans bound scratch space even
-            // for large widgets and avoid allocating a mask per frame.
-            std::array<shadow_span, 511> rows;
+            // Continuous radii: the box is `width` px wide (the old
+            // (width-1)/2 index clamp shaved the padding circle a full
+            // pixel on even boxes, thinning the inset all around and
+            // collapsing its bottom arc).
+            const int outer_radius = core::Graphics::inscribed_radius(
+                width, height, radius);
+            const int inner_radius = std::max(0, outer_radius - border);
+            // hole = padding box spread-contracted and offset. The blur
+            // field may not cover the whole padding box (offset holes
+            // push it away) — pixels past the field read hole 0, the
+            // full-strength inset band.
+            int fx0, fy0, fw, fh;
+            const uint8_t *field = gaussian_field(
+                left + spread + ox, top + spread + oy,
+                right - spread + ox, bottom - spread + oy,
+                std::max(0, inner_radius - spread), blur, fx0, fy0, fw, fh);
             for (int y = top; y <= bottom; ++y)
             {
                 const auto clip = rounded_shadow_span(left, top, right, bottom,
-                                                       inner_radius, y);
-                for (int dy = -blur; dy <= blur; ++dy)
-                {
-                    rows[dy + blur] = rounded_shadow_span(
-                        left + spread + ox, top + spread + oy,
-                        right - spread + ox, bottom - spread + oy,
-                        std::max(0, inner_radius - spread), y + dy);
-                }
+                                                      inner_radius, y);
                 const int start = std::max(left, clip.left - 1);
                 const int end = std::min(right, clip.right + 1);
-            for (int x = start; x <= end; ++x)
-            {
-                const int coverage = x < clip.left ? clip.fringe_l
-                                     : x > clip.right ? clip.fringe_r
-                                                      : 255;
-                if (coverage == 0)
+                for (int x = start; x <= end; ++x)
                 {
-                    continue;
-                }
-                int64_t hole = 0;
-                for (int dy = -blur; dy <= blur; ++dy)
-                {
-                    const auto &row = rows[dy + blur];
-                    if (row.left > row.right)
+                    // the clip's boundary pixels take their true area overlap
+                    // with the padding box: the 1D chord fraction flickers
+                    // row by row where the arc crosses pixel boundaries, and
+                    // the multiplied shadow read as beads along the rim (the
+                    // model500 knob's bottom inset)
+                    const int coverage =
+                        x < clip.left || x > clip.right
+                            ? core::Graphics::rounded_overlap255(left, top, right,
+                                                                 bottom,
+                                                                 inner_radius,
+                                                                 x, y)
+                            : 255;
+                    if (coverage == 0)
                     {
                         continue;
                     }
-                    int horizontal = 255 *
-                        (triangle_prefix(row.right - x, blur) -
-                         triangle_prefix(row.left - x - 1, blur));
-                    horizontal += row.fringe_l *
-                        std::max(0, blur + 1 - std::abs(row.left - 1 - x));
-                    horizontal += row.fringe_r *
-                        std::max(0, blur + 1 - std::abs(row.right + 1 - x));
-                    hole += 1LL * horizontal * (blur + 1 - std::abs(dy));
-                }
-                    const int shadow = 255 - static_cast<int>((hole + divisor / 2) /
-                                                                             divisor);
+                    int hole = 0;
+                    if (x >= fx0 && x < fx0 + fw && y >= fy0 && y < fy0 + fh)
+                    {
+                        hole = field[static_cast<size_t>(y - fy0) * fw +
+                                     (x - fx0)];
+                    }
+                    const int shadow = 255 - hole;
                     area.plot_aa(x, y, (shadow * coverage + 127) / 255, color);
                 }
             }
         }
 
-    // Outer (drop) shadow: the blurred silhouette indicator — the exact
-    // mirror of the inset's hole. Mask = spread-expanded, offset rounded
-    // box from the same continuous quarter-px row chords; filter = the
-    // same separable normalized integer triangular kernel (support
-    // [-blur, blur], weights blur + 1 - |offset| on each axis). A
-    // blurred edge reads half strength at the silhouette contour and
-    // decays smoothly over the blur radius. The old approximation (flat
-    // half-alpha core + stepped halo rings) put a 2x luminance wall
-    // exactly at the contour — the knob's "popped ring" — and the rings'
-    // SDF tails stacked darker crescents on the diagonal arcs. Two
-    // passes: horizontal is the inset's analytic interval formula per
-    // mask row into an int32 line block, vertical is the weighted dy sum
-    // normalized by norm^2 (the inset's hole math). plot_aa gates
-    // clip/damage and binary depths (half-coverage rule).
-    void paint_outer_shadow(core::Graphics &area, const int x0, const int y0,
-                            const int x1, const int y1, const int radius,
-                            const int blur, const core::Color &color)
-    {
-        if (x0 > x1 || y0 > y1 || blur <= 0 || color.a() == 0)
+        // Outer (drop) shadow: the blurred silhouette — the exact mirror
+        // of the inset's hole. Mask = spread-expanded, offset rounded
+        // box as exact area coverage; filter = the same CSS Gaussian
+        // through the shared gaussian_field (half strength at the
+        // contour, smooth decay out to 1.5 blur). The old approximation
+        // (flat half-alpha core + stepped halo rings) put a 2x luminance
+        // wall exactly at the contour; the triangular kernel after it
+        // still died at 1 blur with a linear slope. plot_aa gates
+        // clip/damage and binary depths (half-coverage rule).
+        void paint_outer_shadow(core::Graphics &area, const int x0,
+                                const int y0, const int x1, const int y1,
+                                const int radius, const int blur,
+                                const core::Color &color)
         {
-            return;
-        }
-        const int norm = (blur + 1) * (blur + 1);
-        const int64_t divisor = 1LL * norm * norm;
-        // coverage is nonzero only within blur (+1 fringe) of the
-        // silhouette; that block bounds the scratch
-        const int xr0 = x0 - blur - 1;
-        const int xr1 = x1 + blur + 1;
-        const int yr0 = y0 - blur;
-        const int yr1 = y1 + blur;
-        const long long bw = xr1 - xr0 + 1;
-        const long long bh = yr1 - yr0 + 1;
-        // retained scratch grown to the high-water mark: no per-frame
-        // allocation (the inset binds scratch to blur for the same
-        // reason); paints are single-threaded
-        static std::vector<int32_t> buf;
-        const size_t need = static_cast<size_t>(bw * bh);
-        if (buf.size() < need)
-        {
-            buf.resize(need);
-        }
-        std::fill(buf.begin(), buf.begin() + need, 0);
-        // pass 1 — horizontal triangular of each mask row (rows outside
-        // the silhouette stay zero)
-        for (int row = y0; row <= y1; ++row)
-        {
-            const shadow_span sp =
-                rounded_shadow_span(x0, y0, x1, y1, radius, row);
-            if (sp.left > sp.right)
+            if (x0 > x1 || y0 > y1 || blur <= 0 || color.a() == 0)
             {
-                continue;
+                return;
             }
-            const int xl = std::max(xr0, sp.left - 1 - blur);
-            const int xr = std::min(xr1, sp.right + 1 + blur);
-            for (int x = xl; x <= xr; ++x)
+            int fx0, fy0, fw, fh;
+            const uint8_t *field =
+                gaussian_field(x0, y0, x1, y1, radius, blur,
+                               fx0, fy0, fw, fh);
+            for (int y = fy0; y < fy0 + fh; ++y)
             {
-                int horizontal = 255 *
-                    (triangle_prefix(sp.right - x, blur) -
-                     triangle_prefix(sp.left - 1 - x, blur));
-                horizontal += sp.fringe_l *
-                    std::max(0, blur + 1 - std::abs(sp.left - 1 - x));
-                horizontal += sp.fringe_r *
-                    std::max(0, blur + 1 - std::abs(sp.right + 1 - x));
-                buf[static_cast<size_t>((row - yr0) * bw + (x - xr0))] =
-                    horizontal;
-            }
-        }
-        // pass 2 — vertical weighted sum, normalized like the inset's
-        // hole (the kernel sums to norm per axis, norm^2 total)
-        for (int y = yr0; y <= yr1; ++y)
-        {
-            const int dy0 = std::max(-blur, y0 - y);
-            const int dy1 = std::min(blur, y1 - y);
-            for (int x = xr0; x <= xr1; ++x)
-            {
-                int64_t sum = 0;
-                for (int dy = dy0; dy <= dy1; ++dy)
+                for (int x = fx0; x < fx0 + fw; ++x)
                 {
-                    sum += 1LL *
-                           buf[static_cast<size_t>((y + dy - yr0) * bw +
-                                                   (x - xr0))] *
-                           (blur + 1 - std::abs(dy));
-                }
-                const int coverage =
-                    static_cast<int>((sum + divisor / 2) / divisor);
-                if (coverage > 0)
-                {
-                    area.plot_aa(x, y, coverage, color);
+                    const int c = field[static_cast<size_t>(y - fy0) * fw +
+                                        (x - fx0)];
+                    if (c > 0)
+                    {
+                        area.plot_aa(x, y, c, color);
+                    }
                 }
             }
         }
-    }
 
         // process-level shared fallback provider (batch J6): constructed
         // at the first widget construction, then leaked so it outlives
@@ -392,12 +493,11 @@ namespace zb::ui
             }
         }
 
-        // P-2e: outer shadows may reach past the box (within the
-        // parent's clip): phase 1 paints the shadow silhouettes under
-        // the expanded clip (the guard restores the parent clip on
-        // scope exit); phase 2 repaints the full dress + content under
-        // the widget's own clip, which cuts the shadow spill at the
-        // box edge
+        // P-2e: outer shadows may reach past the box (bounded by the
+        // surface, see draw_background_shadows_only): phase 1 paints the
+        // shadow silhouettes under that escaped clip; phase 2 repaints
+        // the full dress + content under the widget's own clip, which
+        // cuts the shadow spill at the box edge
         draw_background_shadows_only(g);
         {
             auto box_area = g.clip_safe(position.x, position.y, size.width, size.height);
@@ -481,8 +581,7 @@ namespace zb::ui
         }
         else if (ps->radius_kind == 1)
         {
-            const int half = std::min(w, h) / 2;
-            radius = ps->radius_px < half ? ps->radius_px : half;
+            radius = core::Graphics::inscribed_radius(w, h, ps->radius_px);
         }
         const bool bak = area.is_alpha_enabled();
         area.enable_alpha(true);
@@ -526,10 +625,19 @@ namespace zb::ui
     {
         int pl = 0, pt = 0, pr = 0, pb = 0;
         outer_shadow_pad(pl, pt, pr, pb);
-        // position is relative to the current (parent) clip — the same
-        // convention draw() uses for the box clip
-        auto area = g.clip_safe(position.x - pl, position.y - pt,
-                                size.width + pl + pr, size.height + pt + pb);
+        // the shadow pass is bounded by the SURFACE, not the parent clip
+        // (P-2e): a browser box-shadow overdraws everything already
+        // painted and is covered only by later paint, while a parent-clip
+        // bound amputates the spill for shrink-wrapped parents (the
+        // model500 knob column is exactly as wide as its knob — the side
+        // spill vanished and the corners filled as hard-cut rectangle
+        // gradients). Paint order still matches the browser: this phase
+        // runs per widget in tree order, so later siblings' backgrounds
+        // cover earlier siblings' spill. Coordinates are surface
+        // absolute; the guard restores the parent clip on scope exit.
+        const auto abs = get_absolute_position();
+        auto area = g.clip_surface_safe(abs.x - pl, abs.y - pt,
+                                        size.width + pl + pr, size.height + pt + pb);
         if (!area)
         {
             return;
@@ -549,10 +657,10 @@ namespace zb::ui
         int radius = 0;
         if (dress_.radius_kind != 0)
         {
-            const int half_min = std::min(s.width, s.height) / 2;
-            radius = dress_.radius_kind == 2
-                         ? half_min
-                         : std::min<int>(dress_.radius_px, half_min);
+            // kind 2 is 50%: the inscribed radius itself (max request)
+            radius = core::Graphics::inscribed_radius(
+                s.width, s.height,
+                dress_.radius_kind == 2 ? (1 << 30) : dress_.radius_px);
         }
         // a dressed color below opaque paints blended; on 16bpp
         // (binary alpha) the enable is a visual no-op — alpha_blend
@@ -621,17 +729,23 @@ namespace zb::ui
         {
             area.enable_alpha(true);
         }
-        // outer silhouettes first (P-2e): spread-expanded rounded box
-        // at the offset, all under the background (the widget clip keeps
-        // the inside part — see the contract's overdraw note). A blurred
-        // shadow is the silhouette indicator run through the SAME
-        // separable normalized triangular kernel as the inset: half
-        // strength at the contour, smooth decay over ±blur. blur==0
-        // keeps the hard silhouette exactly. Wireframe skips shadows
-        // (bones).
+        // outer silhouettes (P-2e): painted ONCE per pixel, here in the
+        // shadow-only phase — spread-expanded rounded box at the offset,
+        // all under the background. The dress phase (full) must NOT
+        // repaint them: the field already lies under the face, and a
+        // second pass double-composited every box-interior pixel the
+        // rounded face leaves uncovered (the corner windows between a
+        // 50% face and its box) — the model500 knob's bottom corners
+        // read ~2x too dark, a dark wedge flush with the bottom tangent
+        // while the spill below the box (cut by the dress clip, single
+        // pass) stayed correct. A blurred shadow is the silhouette run
+        // through the SAME Gaussian as the inset (see
+        // paint_outer_shadow): half strength at the contour, smooth
+        // decay out to 1.5 blur. blur==0 keeps the hard silhouette
+        // exactly. Wireframe skips shadows (bones).
         const bool shadows =
             area.get_render_mode() == core::Graphics::render_mode::full;
-        if (shadows && ext_ != nullptr)
+        if (shadows && !full && ext_ != nullptr)
         {
             for (int i = 0; i < ext_->n_sh_out && i < 2; ++i)
             {
@@ -642,7 +756,7 @@ namespace zb::ui
                 const int y1 = sh_dy + s.height - 1 + sh.oy + sh.spread;
                 if (sh.blur > 0 && sh.c.a() > 0)
                 {
-                    // real blur, same kernel as the inset (see
+                    // real blur, same Gaussian as the inset (see
                     // paint_outer_shadow): no interior plateau, no
                     // stepped halo — the spill decays smoothly from half
                     // strength at the contour; binary depths threshold

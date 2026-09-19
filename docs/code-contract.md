@@ -790,36 +790,61 @@ system (standing non-goals):
   quarter-pixel row chords (the same arc-center geometry as the fills —
   the inset reaches the tangent rows it used to lose); positive spread
   contracts the hole, including its corner radius.
-  Blur uses a separable, normalized integer triangular kernel with support
-  `[-blur, blur]` and weights `blur + 1 - abs(offset)` on each axis.
-  This is a bounded CPU approximation, not browser-exact Gaussian blur.
-  Zero blur uses the unfiltered hole. Each pixel composites once per shadow;
+  Blur is the CSS box-shadow Gaussian: sigma = blur/2, per-axis weights
+  exp(-d^2/(2 sigma^2)) sampled at integer offsets, support
+  ceil(3 sigma) = ceil(1.5 blur), renormalized over the truncated window
+  (mass-conserving). Weights come from integer exp-by-squaring in fixed
+  point — no float, no runtime table — so every target computes
+  identical values. The mask is the hole box's exact per-pixel area
+  coverage (`Graphics::rounded_overlap255`); the filter runs as two
+  separable prefix-sum passes (horizontal into an int64 line field,
+  vertical through a per-column prefix) with a single final
+  normalization. Zero blur degenerates to the unfiltered mask. Each
+  pixel composites once per shadow;
   32bpp multiplies shadow alpha by coverage, and binary depths use the
   standard half-coverage rule. Scratch storage is bounded independently of
   widget dimensions; no heap allocation or offscreen color buffer is needed.
   Outer shadows paint their silhouette (spread-expanded, offset) UNDER
-  the background, blurred with the SAME separable, normalized integer
-  triangular kernel as the inset: the silhouette indicator is convolved
-  over `[-blur, blur]` on both axes and paints as coverage (a blurred
-  edge reads half strength at the silhouette contour and decays smoothly
-  to zero over the blur radius — no interior plateau, no stepped halo).
-  The mask rows reuse the fill raster's continuous quarter-pixel row
-  chords, so the spill keeps the real corner arcs. Scratch is one
-  int32 line block over silhouette ± blur, retained and grown to the
-  high-water mark (no per-frame allocation). blur==0 keeps the hard
+  the background, blurred with the SAME Gaussian as the inset (the
+  silhouette mask is `Graphics::rounded_overlap255` area coverage, so
+  the spill keeps the real corner arcs): a blurred edge reads half
+  strength at the silhouette contour and decays smoothly, reaching ~0
+  at 1.5 blur (the triangular kernel this replaced died at 1 blur with
+  a linear slope — the shadow read harder than the browser's). Scratch
+  is a uint8 mask plus an int64 line field over mask ± 3 sigma,
+  retained and grown to the high-water mark (no per-frame allocation).
+  blur==0 keeps the hard
   silhouette; binary depths threshold the coverage at half (the standard
   `plot_aa` rule, like the inset). Outer shadows paint in a dedicated
-  first pass under a
-  clip expanded by offset+spread+blur in every direction (bounded by the
-  parent's clip); the painted spill is then cut at the box edge by the
-  box's own clip, so a drop shadow extends past the box like the
-  browser's. Damage reports the expanded bounds so partial repaints
-  cover the shadow. The per-widget box clip keeps only the inside part
-  for the opaque face; the outside part now stays visible: outer
-  glows/drop shadows on opaque boxes are visible within the parent's
-  clip (the model500 knob drop). Wireframe skips shadows.
+  first pass under a clip expanded by offset+spread+ceil(1.5 blur) in
+  every direction — the filter's true support, not blur, so the tail
+  between blur and 1.5 blur survives — bounded by the SURFACE, not by
+  the parent's clip: a browser box-shadow overdraws everything already
+  painted and is covered only by later paint, so bounding the pass by
+  the parent clip amputates the spill for shrink-wrapped parents (a
+  column exactly as wide as its knob) — the model500 knob lost its side
+  spill and its corners filled as hard-cut rectangle gradients. The
+  silhouette field composites EXACTLY ONCE per pixel: the dress phase
+  (face, border, insets, under the widget's box clip) does NOT repaint
+  it — the first pass already laid the field under the face, so a
+  translucent face shows the shadow through at single coverage.
+  Repainting the silhouette in the dress phase double-composited the
+  box interior the rounded face leaves uncovered (the corner windows
+  between a 50% face and its box): the model500 knob's bottom corners
+  read ~2x too dark — dark wedges flush with the bottom tangent while
+  the spill below the box stayed correct. Paint order still matches the
+  browser: the shadow pass runs per widget in tree order, so later
+  siblings' backgrounds cover earlier siblings' spill, and outer
+  glows/drop shadows on opaque boxes reach past their box anywhere
+  within the surface (the model500 knob drop). Damage reports the
+  expanded bounds (the same offset+spread+1.5-blur margin) so partial
+  repaints cover the shadow. Wireframe skips shadows.
   `Graphics::corner_chord` (the fill chord formula, integer-only) is
-  public for the band clip.
+  public for the band clip; `Graphics::clip_surface_safe` is the
+  surface-bounded clip the shadow pass escapes nested box clips
+  through; `Graphics::inscribed_radius` is the single corner-radius
+  clamp (pixel-count semantics: 50% of a 54px circle is 27) that every
+  rounded primitive and span helper goes through.
 - HTML page box: `html_page` (per-axis width/height/background presence)
   is filled by `parse_html(text, ok, page)`; the consumer resolves the
   initial screen size document → shell → app default (warn on default)
@@ -1141,7 +1166,16 @@ obligations:
   bottom arc drop out: the model500 knob's bright leak ring between the
   border ring and the inset shadow). The fills keep the center-sampling
   span convention (a pixel is full when its center is inside the chord,
-  one partial fringe neighbor); the shadow masks (inset hole and outer
+  one partial fringe neighbor); on corner arcs that fringe neighbor's
+  coverage is the pixel's true AREA overlap with the rounded rect (an
+  8x8 subsample of the integer indicator, squared-distance corner test),
+  not the 1D chord fraction — the chord lands on a pixel boundary at
+  different sub-pixel positions row by row, and a translucent border
+  over the fill then read the PAGE through the band's outer tail instead
+  of the face (the model500 knob rim's speckle; the browser's
+  background-clip paints the face anti-aliased to the border-box edge).
+  Straight-run rows keep the exact 1D fraction. The shadow masks (inset
+  hole and outer
   silhouette, the inputs of a coverage blur) convert BOTH edges to
   nearest with explicit partial pixels on either side — area-sampling,
   so the mask is mirror-symmetric and the blur cannot leak a one-sided
@@ -1149,7 +1183,10 @@ obligations:
   translucent 1px border itself
   (per-channel blend, r ≥ 2) takes a signed-distance stroke band on the
   same grid — the ring one pixel inside the box edge, linear 1px
-  coverage ramp, midline half a pixel in — instead of the polyline
+  coverage ramp, midline half a pixel in — with corner-arc coverage
+  taken from an 8x8 subsample of the band indicator (mass-conserving
+  through the curve; the point-sampled tent is exact on straight edges
+  and stays there) — instead of the polyline
   (which leaves under-covered seams at the diagonals and tangents);
   opaque and binary borders keep the polyline. `draw_line_aa`'s
   `skip_first` (arc joints) skips the CALLER's start pixel through the

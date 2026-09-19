@@ -1488,13 +1488,16 @@ int test_html()
     // chord-flat rim read as vertically ground sides) and monotonic
     // outward decay (the old core->halo wall re-darkened the contour)
     {
-        // blur 1, square 8x8: norm = 4, weights {1,2,1}. One pixel right
-        // of the box, straight edge: the horizontal triangular of each
-        // mask row is 255 * (Tp(-1) - Tp(-9)) = 255; the vertical window
-        // sums 255 * (1 + 2 + 1) -> coverage (1020 + 8) / 16 = 64 ->
-        // alpha 64 black over the white host = 191. Top/bottom corners
-        // lose one window row: (2 + 1) * 255 -> 48 -> 207. The diagonal
-        // keeps only the last row's tail: 255 -> 16 -> 239.
+        // blur 1, square 8x8: the Gaussian is sigma = blur/2 = 0.5,
+        // support ceil(1.5 blur) = 2, integer Q16 weights
+        // {65536, 8869, 22} (exp-by-squaring of e^-2d^2), norm
+        // wsum = 83318. One pixel right of the box, straight edge row:
+        // the horizontal window sums (w1 + w2) * 255 — the mask ends at
+        // the box — and the vertical window re-weights the same rows'
+        // line field by wsum, so coverage = H / wsum = 27 -> alpha 27
+        // black over the white host = 228. The box's top row drops the
+        // w0 window row: 24 -> 231; the first row below the box keeps
+        // only the w1 + w2 tail: 3 -> 252.
         ui_node doc = parse_html(
             "<div>"
             "<div style=\"margin:8px;width:8px;height:8px;background:#ffffff;"
@@ -1512,14 +1515,14 @@ int test_html()
         host.draw(g);
 #if COLOR_DEPTH == 32
         EXPECT(test::pixel_at(g, sp.x + 8, sp.y + 3) ==
-               core::Color::from(191, 191, 191).pixel);
+               core::Color::from(228, 228, 228).pixel);
         EXPECT(test::pixel_at(g, sp.x + 8, sp.y) ==
-               core::Color::from(207, 207, 207).pixel);
+               core::Color::from(231, 231, 231).pixel);
         EXPECT(test::pixel_at(g, sp.x + 8, sp.y + 8) ==
-               core::Color::from(239, 239, 239).pixel);
+               core::Color::from(252, 252, 252).pixel);
         // the kernel and mask are symmetric: same spill on the left
         EXPECT(test::pixel_at(g, sp.x - 1, sp.y + 3) ==
-               core::Color::from(191, 191, 191).pixel);
+               core::Color::from(228, 228, 228).pixel);
 #else
         // binary depths quantize the shallow spill away entirely
         EXPECT(test::pixel_at(g, sp.x + 8, sp.y + 3) ==
@@ -1527,6 +1530,49 @@ int test_html()
 #endif
         // the kernel reaches nothing two pixels out
         EXPECT(test::pixel_at(g, sp.x + 9, sp.y + 3) ==
+               core::colors::White.pixel);
+    }
+    {
+        // the shadow pass is bounded by the SURFACE, not the parent clip
+        // (P-2e): this child has no margin, so its shrink-wrapped parent
+        // div is exactly the child's box and the whole spill falls
+        // outside the parent — the old parent-clip bound amputated it
+        // (the model500 knob column is exactly as wide as its knob: the
+        // side spill vanished and the corners filled as hard-cut
+        // rectangle gradients). Hand values are the blur-1 square's:
+        // 228 one pixel out on the straight edge (the Gaussian's
+        // straight-row spill, see the margin case above).
+        ui_node doc = parse_html(
+            "<div>"
+            "<div style=\"width:8px;height:8px;background:#ffffff;"
+            "box-shadow: 0 0 1px black\"><label>s</label></div>"
+            "</div>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(64, 64);
+        host.set_padding(8);
+        host.set_background_color(core::colors::White);
+        build(host, doc);
+        host.layout();
+        auto *wrap = host.get_items()[0].child.get();
+        const auto wp = wrap->get_position();
+        core::Graphics g(64, 64, nullptr);
+        host.draw(g);
+#if COLOR_DEPTH == 32
+        // both sides spill past the 8px wrapper: left pixel wp.x - 1 and
+        // right pixel wp.x + 8 (the wrapper ends at wp.x + 7)
+        EXPECT(test::pixel_at(g, wp.x + 8, wp.y + 3) ==
+               core::Color::from(228, 228, 228).pixel);
+        EXPECT(test::pixel_at(g, wp.x - 1, wp.y + 3) ==
+               core::Color::from(228, 228, 228).pixel);
+#else
+        EXPECT(test::pixel_at(g, wp.x + 8, wp.y + 3) ==
+               core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, wp.x - 1, wp.y + 3) ==
+               core::colors::White.pixel);
+#endif
+        // the kernel still reaches nothing two pixels out
+        EXPECT(test::pixel_at(g, wp.x + 9, wp.y + 3) ==
                core::colors::White.pixel);
     }
     {
@@ -1556,15 +1602,6 @@ int test_html()
         };
 #if COLOR_DEPTH == 32
         const int mid = dp.y + 15;  // row 15 mirrors row 14
-        {
-            // TEMP diagnostics
-            std::printf("disc dp=(%d,%d) midrow:", dp.x, dp.y);
-            for (int x = dp.x - 5; x <= dp.x + 34; ++x)
-            {
-                std::printf(" %3d", lum(x, mid));
-            }
-            std::printf("\n");
-        }
         for (int k = 1; k <= 3; ++k)
         {
             EXPECT(lum(dp.x - k, mid) == lum(dp.x + 29 + k, mid));
@@ -1653,13 +1690,13 @@ int test_html()
         const uint32_t span = test::pixel_at(g, kp.x + 6, kp.y + 1);
 #if COLOR_DEPTH == 32
         // the corner arc's top band runs near-full shadow there: the
-        // span pixel keeps a whisker of the white face, the fringe
-        // pixel a whisker of gray through the chord's partial coverage
-        // (row 3's hole span starts a quarter pixel into pixel 4, so
-        // its left tail weighs 127/255 under the area-symmetric
-        // conversion)
-        EXPECT(fringe == core::Color::from(44, 44, 44).pixel);
-        EXPECT(span == core::Color::from(60, 60, 60).pixel);
+        // Gaussian hole (sigma 1.5, support 5) reads 66/79 at the two
+        // pixels (the old triangular ramp read heavier tails), and the
+        // row-1 span [5..35] keeps both inside at full band coverage;
+        // re-derived through the same pipeline: fringe 44->40,
+        // span 60->56
+        EXPECT(fringe == core::Color::from(40, 40, 40).pixel);
+        EXPECT(span == core::Color::from(56, 56, 56).pixel);
 #else
         // binary: both coverages clear the half rule and keep black
         EXPECT(fringe == core::colors::Black.pixel);
@@ -1690,8 +1727,11 @@ int test_html()
         const auto fp = face->get_position();
         // top band still paints (row 1, center column)
 #if COLOR_DEPTH == 32
+        // the Gaussian hole reads 93 at the top-band pixel (sigma 1.5,
+        // support 5; the old triangular ramp read 96): shadow 255 - 93
+        // composites to 92 through the plot roundings
         EXPECT(test::pixel_at(g, fp.x + 27, fp.y + 1) ==
-               core::Color::from(96, 96, 96).pixel);
+               core::Color::from(92, 92, 92).pixel);
 #else
         EXPECT(test::pixel_at(g, fp.x + 27, fp.y + 1) ==
                core::colors::Black.pixel);
@@ -1699,13 +1739,15 @@ int test_html()
         // left/right mid-edge: the hole's blurred boundary crosses the
         // equator pixels, so they lighten to a mild spill; the area-
         // symmetric span conversion makes BOTH sides read the same
-        // value (the old one-sided rounding gave 159 vs 157 — the rim
-        // read microscopically darker on one side)
+        // value (the old one-sided rounding gave 159 vs 157). The
+        // Gaussian hole (sigma 1.5, support 5) reads 158 at the equator
+        // — a tighter tail than the triangular ramp's 170-era spill —
+        // so the band edge lightened 142 -> 156 on both sides.
 #if COLOR_DEPTH == 32
         EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
-               core::Color::from(170, 170, 170).pixel);
+               core::Color::from(156, 156, 156).pixel);
         EXPECT(test::pixel_at(g, fp.x + 53, fp.y + 27) ==
-               core::Color::from(170, 170, 170).pixel);
+               core::Color::from(156, 156, 156).pixel);
 #else
         EXPECT(test::pixel_at(g, fp.x, fp.y + 27) ==
                core::colors::White.pixel);
@@ -1757,18 +1799,45 @@ int test_html()
         EXPECT(covered(kp.x, kp.y + 27));
         EXPECT(covered(kp.x + 53, kp.y + 27));
         // row symmetry: every row's covered span mirrors its counterpart
-        // (same chord + same fringe quantization top/bottom on any depth)
+        // (same chord + same fringe quantization top/bottom on any depth).
+        // Locked on the FACE + border only: the two insets are vertical
+        // by design (top highlight, bottom shade) and tip the silhouette
+        // edge pixels across the host-gray equality at a handful of
+        // rows, which would say nothing about the silhouette itself.
+        ui_node sym = parse_html(
+            "<div>"
+            "<div style=\"width:54px;height:54px;border-radius:50%;"
+            "background:conic-gradient(from 210deg, #8f9186 0, #dfdfda 45deg, "
+            "#dfdfda 315deg, #8f9186 360deg)\">"
+            "</div></div>\n",
+            nullptr);
+        FlexPanel sym_host;
+        sym_host.set_size(100, 80);
+        build(sym_host, sym);
+        sym_host.layout();
+        auto *sym_knob = sym_host.get_items()[0].child.get();
+        const auto sp = sym_knob->get_position();
+        // black host: any nonzero face/ring coverage reads covered. The
+        // mid-gray host used to round the conic's dark-side fringe
+        // pixels back onto the host value while the bright side stayed
+        // covered — an artifact of the dress colors, not the silhouette.
+        core::Graphics sg(100, 80, nullptr);
+        sg.fill(core::colors::Black);
+        sym_host.draw(sg);
+        auto sym_covered = [&](const int x, const int y) {
+            return test::pixel_at(sg, x, y) != core::colors::Black.pixel;
+        };
         for (int r = 0; r < 54; ++r)
         {
             int lt = -1, rt = -1, lb = -1, rb = -1;
             for (int c = 0; c < 54; ++c)
             {
-                if (covered(kp.x + c, kp.y + r))
+                if (sym_covered(sp.x + c, sp.y + r))
                 {
                     if (lt < 0) lt = c;
                     rt = c;
                 }
-                if (covered(kp.x + c, kp.y + 53 - r))
+                if (sym_covered(sp.x + c, sp.y + 53 - r))
                 {
                     if (lb < 0) lb = c;
                     rb = c;

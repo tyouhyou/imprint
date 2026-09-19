@@ -89,6 +89,17 @@ namespace zb::ui::core
         [[nodiscard]] ClipGuard clip_safe(int x, int y, int32_t width, int32_t height);
 
         /*
+         * Like clip_safe(), but the request is in SURFACE coordinates and
+         * the intersection bound is the whole surface, not the current
+         * draw area: the escape hatch that lets the outer-shadow pass
+         * (P-2e) reach past nested box clips the way a browser box-shadow
+         * overdraws already painted content and is covered only by later
+         * paint. The local-coordinate origin is the requested box, like
+         * clip_safe().
+         */
+        [[nodiscard]] ClipGuard clip_surface_safe(int x, int y, int32_t width, int32_t height);
+
+        /*
          * Damage culling: when active, widgets whose bounds do not
          * intersect the reported region skip rendering entirely (whole
          * subtrees never reach the rasterizer). Set by the window once
@@ -322,6 +333,32 @@ namespace zb::ui::core
          * Integer-only (isqrt, no FPU); `dy <= 0` reads the full `r`.
          */
         static int corner_chord(int r, int dy);
+
+        /*
+         * THE single corner-radius clamp (P-2e): the largest radius
+         * that fits a `width` x `height` PIXEL box (the continuous
+         * extent is width x height — 50% of a 54px circle is 27). Every
+         * rounded primitive and span helper clamps through this one
+         * definition: the old inclusive-index form
+         * min(right-left, bottom-top)/2 read 53/2 = 26 on even boxes
+         * and bulged the outline into a rounded square (the model500
+         * knob's diagonal packets). Non-fit input (radius <= 0, empty
+         * box) returns 0.
+         */
+        static int inscribed_radius(int width, int height, int radius);
+
+        /*
+         * Area coverage (0..255) of pixel (px, py) inside the rounded
+         * rect, as an 8x8 subsample of the integer indicator (squared
+         * distance corner test — no sqrt). The single source of boundary
+         * anti-aliasing for the fills' corner-arc fringes and the
+         * widget's inset-shadow clip: a 1D chord fraction flickers where
+         * the arc crosses pixel boundaries row by row, and anything
+         * translucent painted over it (the knob's border ring) then
+         * reads the page through the gap.
+         */
+        static int rounded_overlap255(int left, int top, int right, int bottom,
+                                      int radius, int px, int py);
 
         /*
          * Anti-aliased opt-in variants (Batch V-1): Wu's two-pixel

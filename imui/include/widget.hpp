@@ -270,7 +270,8 @@ namespace zb::ui
         // Inset paints a blurred hole mask (see the contract); outer
         // paints its silhouette in a dedicated pass under a clip that
         // reaches past the box by offset+spread+blur (bounded by the
-        // parent's clip — see draw_background_shadows_only).
+        // surface, not the parent's clip — see
+        // draw_background_shadows_only).
         struct shadow_spec
         {
             int8_t ox = 0;
@@ -552,8 +553,10 @@ namespace zb::ui
         }
         void mark_dirty(const int x, const int y, const int w, const int h) { mark_dirty_rect(x, y, w, h); }
         // outer shadow visual margin (P-2e): how far the silhouettes can
-        // reach past the box (offset, spread, blur); the damage rect and
-        // the shadow draw clip grow by it
+        // reach past the box (offset, spread, the Gaussian's 1.5-blur
+        // support — not blur itself, the tail between blur and 1.5 blur
+        // must survive); the damage rect and the shadow draw clip grow
+        // by it
         void outer_shadow_pad(int &l, int &t, int &r, int &b) const
         {
             l = t = r = b = 0;
@@ -564,10 +567,11 @@ namespace zb::ui
             for (int i = 0; i < ext_->n_sh_out && i < 2; ++i)
             {
                 const shadow_spec &sh = ext_->sh_out[i];
-                l = std::max(l, -sh.ox + static_cast<int>(sh.spread) + sh.blur);
-                t = std::max(t, -sh.oy + static_cast<int>(sh.spread) + sh.blur);
-                r = std::max(r, sh.ox + static_cast<int>(sh.spread) + sh.blur);
-                b = std::max(b, sh.oy + static_cast<int>(sh.spread) + sh.blur);
+                const int spill = sh.blur > 0 ? (3 * sh.blur + 1) / 2 : 0;
+                l = std::max(l, -sh.ox + static_cast<int>(sh.spread) + spill);
+                t = std::max(t, -sh.oy + static_cast<int>(sh.spread) + spill);
+                r = std::max(r, sh.ox + static_cast<int>(sh.spread) + spill);
+                b = std::max(b, sh.oy + static_cast<int>(sh.spread) + spill);
             }
         }
         [[nodiscard]] bool is_dirty() const { return dirty_; }
