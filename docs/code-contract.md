@@ -337,6 +337,45 @@ multi-size capability (`provider_for`) exposed per widget, so HTML
   and `TtfSubsetProvider` (build-time table, zero runtime cost) remain
   the defaults for constrained targets that cannot ship a TTF at all.
 
+**Wrapped text (H-1)**: multi-line text on the widget text seam, the
+paragraph capability behind the html `p` element (html-path.md §Text
+wrapping):
+
+- API: `Widget::set_text_wrap(bool)` (default off) and
+  `Widget::set_line_height(int px)` (0 = unset → the provider's
+  line metrics). Both live in the `ext_` sidecar (`wrap_enabled`,
+  `line_h`), so bare widgets stay allocation-free and the inline
+  size gates hold. `set_line_height` clamps negatives to 0 and
+  reports damage + layout invalidation like every text setter.
+- The engine is greedy word wrapping over the stored u16 text: break
+  candidates at spaces (U+0020), `\n` is a hard break (the html `br`
+  inside a wrapping element), no hyphenation; a word wider than the
+  whole width sits alone on its line and clips. Pitch =
+  `line_height` when declared, else the provider `line_metrics`
+  height; block height = `(lines-1) × pitch + line height`.
+- Wrap width = the widget's current `size.width` (the assigned box:
+  an explicit size, a resolved percent, or the flex-assigned
+  extent). Zero width keeps the single-line demand — a wrap-enabled
+  label measures its max-content advance until a layout assigns a
+  box, then the convergent layout (§7, H-9) re-reads the now
+  multi-line height one round later. `Label::measure()` is
+  wrap-aware; other widgets draw wrapped (the seam is shared) but
+  keep their own measure — the declarative path only puts wrap on
+  `p`→`label`.
+- Line spans cache in the sidecar as `(offset, length)` pairs into
+  `text_` (no string copies), keyed by the wrap width and the text
+  state: every setter that clears `advance_cache_` also marks the
+  span cache stale (a shared `reset_wrap_cache()` beside those
+  sites), and a changed assigned width re-keys it lazily at use
+  time. A settled tree draws and measures allocation-free; the
+  recompute allocates only when the width actually changed (the
+  settling layout rounds), never per warm frame.
+- `draw_text` renders the span block: per-line `h_align` within the
+  box, whole-block `v_align` (first baseline at ascent, block height
+  as above), dressing (letter-spacing, double-strike bold,
+  text-shadow) applied per line through `draw_text_at`. SVG `text`
+  stays single-line by design.
+
 ---
 
 ## 3. Other API-shape rules
@@ -398,6 +437,35 @@ system (standing non-goals):
   default arc runs −225° → +45° (270° sweep, gap in the lower half).
 - Integer math only; both color depths degrade through the existing
   quantization rules.
+
+### 3.3 SVG path strokes (H-6 first cut)
+
+`SvgCanvas` gains a stroke-only path item beside its lines/texts
+(html-path.md §SVG subset is the dialect contract; the whitelist is the
+boundary):
+
+- C++ shape: `SvgCanvas::Path` — a pre-flattened polyline in viewBox
+  units (`std::vector<std::pair<double, double>>` points, `closed`,
+  stroke `color`/`width`/`round_caps`). The canvas strokes polylines;
+  it never parses `d` (the html converter owns command parsing,
+  curve flattening and subpath splitting; `d` parsing is not a
+  widget concern and stays out of the canvas).
+- Rendering: the same device-space stroke geometry as `line` —
+  per-pixel 2x2 supersampled capsule coverage over the
+  integer-Q10 polyline (per-point doubles map once, per-pixel math
+  stays fixed point), stroke width scaled by the viewBox geometric
+  mean, per-sample distance measured against the whole polyline so
+  joints never double-blend, `round_caps` adds end discs per subpath,
+  `Z` appends the closing segment. Coverage quantizes through the
+  standing color-depth rules (per-channel alpha scaling at 32bpp,
+  plot/skip at half at 16bpp). Allocation-free per draw (no
+  coverage buffers).
+- Draw order in `draw_at`: lines, then paths, then texts — document
+  order across kinds is not kept (documented deviation; the
+  declarative subset never interleaves them).
+- Determinism: parse-time flattening is plain IEEE double with a
+  fixed chord tolerance and depth cap, so desktop/WASM/NDS flatten
+  identically; the draw keeps the no-FPU-per-pixel rule.
 
 ### 3.1 Character event contract
 
@@ -1051,7 +1119,10 @@ dispatcher's raw pointers against dangling/UAF:
   without derived sizes settle after the first pass (every demand is a
   pure function of settled inputs) and pay one compare. The flag still
   clears when done — convergence happens inside one `layout()` call, so
-  a given state still triggers at most one layout per paint.
+  a given state still triggers at most one layout per paint. Wrapped
+  labels (§2 Wrapped text) ride the same rule: the first pass measures
+  the single-line advance, the assigned width lands, the next round
+  re-reads the multi-line height.
 - Text advance cache (batch J4) invalidation duty: any setter that
   changes glyph content (set_text/set_glyph_provider) must reset
   the cache; when adding such a setter, invalidate in the same change +

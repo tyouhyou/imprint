@@ -120,7 +120,7 @@ applies unchanged.
 | Construct | Handling |
 |---|---|
 | Element not in the whitelist | **LW warning + skipped**; its content is dropped. "Not in the table = not built" — the honest signal, so mistyped customs (`<metter>`) or unsupported HTML (`<table>`, `<input>`, `<form>`) never render a wrong structure |
-| `<br>` inside an inline element (`<span>`) | the parser warns (no line breaking until H-1) and degrades the break to a word space in the single-line label; the spacer child is dropped by leaf materialization with a warning (the same rule as `.ui` leaf children); place `br` as a child of a container |
+| `<br>` inside a single-line text element (`<span>`) | the parser warns and degrades the break to a word space in the single-line label; the spacer child is dropped by leaf materialization with a warning (the same rule as `.ui` leaf children); place `br` as a child of a container — inside a `p` no spacer is involved and the break is a real hard line break |
 | Attribute not in the whitelist | silently tolerated (`class=` drives selector matching) |
 | Selector beyond tag/`.class`/`#id`/descendant/comma (child/sibling/attribute/other-pseudo) | silently inert, body consumed (non-`::before`/`::after` pseudo parts log one LW per rule — they usually carry visible content intent); a trailing `::before`/`::after` instead strips to its base selector and produces a paint-only box (see the `::before` / `::after` whitelist row) |
 | Unknown `var(--name)` without fallback | declaration dropped silently (malformed-value tolerance) |
@@ -133,7 +133,8 @@ applies unchanged.
 | Element | `ui_node` tag | Notes |
 |---|---|---|
 | `div` | `column` / `row` | default `column` (block reading order); `flex-direction: row` → `row`, and a bare `display: flex` also selects `row` (the CSS flex default — stylesheets that lay out with `display: flex` alone depend on it). `display: block` (or anything else) keeps `column`. The div is a content-measuring flex container, **not** HTML block layout; it never stretches to fill a parent's main axis. `flex:` markup drives fill |
-| `p`, `span`, `label`, `small` | `label` | single-line labels; no wrapping until H-1 (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins) |
+| `p` | `label` | the paragraph element: the text wraps at the element's assigned width and `br` is a hard line break (§Text wrapping) |
+| `span`, `label`, `small` | `label` | single-line labels (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins) |
 | `button` | `button` | `text` = element text content |
 | `checkbox` | `checkbox` | `text` = content; `checked` = **attribute presence** (HTML semantics) |
 | `radio` | `radio` | `text` = content; `checked` = presence; `group` |
@@ -156,6 +157,7 @@ applies unchanged.
 | `checked` | checkbox / radio / toggle | boolean, by presence |
 | `group` | radio | radio group id (integer, any sign — equality-matched, never indexed) |
 | `viewBox` | svg / vectordial | four viewBox units (`minx miny w h`, space/comma separated, decimals round half away from zero); malformed, absent, or non-positive size = pixel units (coordinates map 1:1) |
+| `d` | path (inside svg) | path data, stroke-only (§SVG subset); `M m L l H h V v C c S s Q q T t Z z` with SVG number/separator grammar and implicit repeats; unsupported or malformed data drops the path with one warning |
 
 ## Whitelist — CSS properties (inline `style=` and `<style>` rules)
 
@@ -192,6 +194,7 @@ applies unchanged.
 | `letter-spacing` | `Npx` | per-code-unit tracking in measure and draw (trailing unit included, per CSS); negative clamps to 0 |
 | `font-weight` | `bold`, or a number ≥ 600 → on; `normal` / < 600 → off | double-strike: second pass shifted +1px, no bold variant |
 | `text-shadow` | `DXpx DYpx [blur] <color>` | one solid offset copy drawn first; blur parsed-and-ignored; a comma list keeps the first shadow only |
+| `line-height` | `Npx` | multi-line line pitch (`set_line_height`); 0/unset keeps the provider's line metrics; unitless/percent/malformed warns and keeps current |
 | `::before` / `::after` (selector tail) | rule body must declare `content: ""` (anything else drops the box); `position: absolute` required; one background layer (solid or 3-stop linear), `border-radius` (`Npx`/`50%`), bare `rotate()` | paint-only decoration box on the host widget (H-10): no layout, no hit-testing, not independently addressable — no id, no events, no handle; hit-testing belongs to the host widget. Use a real child element when you need an interactive target. Geometry/paint are re-specifiable at runtime via `Widget::set_pseudo` |
 
 ## `<style>` rule matching
@@ -234,9 +237,10 @@ applies unchanged.
 
 ## SVG subset (`svg` / `vectordial`)
 
-Only the instrument-dial shapes the demo documents use — everything
-else in SVG is out of scope (full path/fill/stroke model stays in
-backlog H-6):
+Only the instrument-dial shapes the demo documents use — stroke-only
+geometry plus baseline text; everything else in SVG (fills, gradients,
+transform, filters) is out of scope (the fill model stays in backlog
+H-6):
 
 - `viewBox="minx miny w h"` maps the viewBox onto the widget bounds by
   stretch (integer truncation toward zero; `preserveAspectRatio` is
@@ -268,15 +272,69 @@ backlog H-6):
   (documented degradation); absent `font-size` keeps the seam default
   (the `svg` element's own `font-size` sizes the whole canvas,
   code-contract §2.4).
+- `path d="..."`: stroke-only path data — the instrument curves the
+  demos draw (no fill model; the fill model stays in backlog H-6).
+  Grammar: the SVG path commands `M m L l H h V v C c S s Q q T t Z z`
+  (numbers with optional sign/decimals, space/comma separators,
+  implicit repeats per SVG — extra pairs after `M` are `L`, extra
+  triplets after `C` extra curves, etc.); `A`/`a` and anything
+  unparseable drop the whole path with one LW warning (an arc-capable
+  renderer is not pretended). Coordinates are viewBox units, decimals
+  accepted. Every curve segment flattens adaptively at parse time
+  (de Casteljau subdivision to a ~0.1 viewBox-unit chord tolerance,
+  depth-capped) into a polyline; the canvas then strokes the polyline
+  with the same device-space geometry as `line` (per-pixel capsule
+  coverage, 2x2 supersampled), with the per-sample distance measured
+  against the whole polyline — joints never double-blend, so
+  translucent glow strokes stay seamless. `stroke`, `stroke-width`,
+  `stroke-linecap`, `opacity` follow the `line` rules; `fill` is
+  accepted and ignored (`fill="none"` folded from a `g` is harmless —
+  paths do not fill). `Z` appends the closing segment; butt-capped
+  closed subpaths have no exposed ends. A degenerate subpath (a bare
+  `M`) draws a round-cap dot or nothing per the linecap.
 - `g` never builds: inside `svg` it is transparent and folds
   `stroke`/`stroke-width`/`stroke-linecap`/`opacity`/`fill`/
-  `text-anchor` onto its descendant `line`/`text` (nearest ancestor
-  wins, the element's own attribute wins over all). Outside `svg`,
-  `g`/`line`/`text` are off-whitelist elements (skipped with content
-  dropped, like every non-table tag).
+  `text-anchor` onto its descendant `line`/`path`/`text` (nearest
+  ancestor wins, the element's own attribute wins over all). Outside
+  `svg`, `g`/`line`/`path`/`text` are off-whitelist elements (skipped
+  with content dropped, like every non-table tag).
+- draw order within one canvas is `line`s, then `path`s, then
+  `text`s — document order across the three kinds is not kept (a
+  documented deviation; each kind keeps its own document order).
 - `svg` is meaningful as a container child (it sizes through the
   shared `width`/`height` lengths); nested inside a text element it
   falls into the leaf-children rule (dropped with a warning).
+
+## Text wrapping (`p`, H-1)
+
+`p` is the one wrapping element — the paragraph reflow that certifies
+multi-line text. The engine is greedy word wrapping on the widget text
+seam (code-contract §2 "Wrapped text"):
+
+- **Wrap width = the assigned box width**: an explicit or percent
+  width, or the flex-assigned extent (an HTML container's stretch
+  default and the single-line fill both assign the container content
+  width). A max-content context — an auto/shrink-wrapped container —
+  assigns the label's own single-line advance, so the text never
+  wraps there (the honest degenerate case).
+- Breaking is greedy at spaces (U+0020), CSS-`normal` style: no
+  hyphenation, no overflow shrink, no CJK per-unit breaks. A word
+  wider than the whole width sits alone on its line and clips at the
+  box edge.
+- `br` inside a `p` is a hard break (`\n` in the wrapped text);
+  consecutive breaks keep their empty lines.
+- Line pitch is the provider's line metrics, or `line-height: Npx`
+  when declared. Block height = `(lines-1) × pitch + line height`.
+- `text-align` does not exist in the subset: `h_align` places each
+  line inside the box (`center` centers every line), `v_align` places
+  the whole block.
+- measure() reports the wrapped block only once a width is assigned;
+  the first pass measures the single-line advance and the convergent
+  layout (code-contract §7, H-9) settles the height one round later.
+- Container bare text stays single-line anonymous labels (the
+  elements table rule); only a `p` (or a programmatic
+  `set_text_wrap`) wraps. The 5x7 bitmap fallback wraps with the same
+  rules at its own 8px pitch.
 
 ## Deliberate deviations from HTML
 - `div` is a content-measuring flex container, not a block box; its
@@ -288,8 +346,10 @@ backlog H-6):
   (the CSS non-auto rule). A single line fills the content cross box,
   so `center`/`end` place within the real extent and stretch fills the
   container; wrapped lines keep stacking from the padding origin.
-- No text flow: `p`/`span` are single-line labels, `br` is a one-line
-  spacer — real paragraph reflow waits for H-1.
+- No text flow beyond the paragraph: `p` wraps (§Text wrapping);
+  `span`/`label`/`small` stay single-line, container bare text stays
+  single-line anonymous labels, and a `br` is a hard break in a `p`
+  or a one-line spacer as a container child.
 - Entities are only the six named above (`&nbsp;` folds to a space).
 - `meter` is a `progress_bar`.
 - Widgets are the presentation: alignment, focus, and interaction follow
