@@ -254,7 +254,9 @@ backlog H-6):
   hairline (`0` drops the line); `stroke-linecap` selects `butt`
   (default) or `round` end discs; `opacity="0..1"` scales the stroke
   alpha (at 16bpp any non-zero alpha plots per the binary policy, so
-  ghost strokes stay visible).
+  ghost strokes stay visible, and the supersample coverage quantizes
+  to plot/skip at half — the fringe rows drop, the band narrows to its
+  solid core).
 - `text x y`: the element content drawn with the widget text seam
   (provider fallback chain included); `x/y` is the baseline start,
   `fill` defaults to the theme text, `text-anchor` selects

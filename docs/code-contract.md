@@ -739,7 +739,15 @@ system (standing non-goals):
   are set: radial > linear > solid. Radius clamps to half the smaller
   side; `50%` resolves at draw time. A background whose color carries
   alpha < 255 paints with alpha enabled around the fill (opaque path
-  unchanged). Wireframe degrades every form to an outline (S-1).
+  unchanged). An opaque border on a rounded box paints as a filled
+  frame with the face inside it — box inset by the border on every
+  side, radius minus the border, the border-box shape; translucent
+  borders keep the face out to the outer arc with the band stroked
+  over it, square corners stay stroked. Opacity is the depth's own
+  semantics (an 8-bit weight at 32bpp, the single alpha bit at 16bpp):
+  16bpp AA coverage quantizes to plot/skip at half (the `plot_aa`
+  rule), so blended fringes resolve to their solid core.
+  Wireframe degrades every form to an outline (S-1).
 - Extended gradients (P-2b/c): one heap sidecar (`Widget::ext_`,
   flagged sections for positioning, extended gradients, and text
   dressing — a bare widget keeps it null, so the zero-alloc ctor and
