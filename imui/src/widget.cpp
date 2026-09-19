@@ -778,19 +778,45 @@ namespace zb::ui
             area.enable_alpha(bak);
             return;
         }
+        // An opaque border on a rounded box paints as a filled frame
+        // with the face shrunk inside it (the browser border-box shape):
+        // the old path filled the face out to the outer arc and stroked
+        // the band with 1px AA outlines — the two fringes never tile the
+        // diagonal, so face pixels peeked through the ring as a dirty
+        // corner staircase. Translucent borders (the knob's rgba
+        // outline) keep the stroked path: the face must stay under them
+        // out to the outer arc, per the border-box rule. Square corners
+        // tile exactly, no frame fill needed.
+        const bool opaque_frame =
+            radius > 0 && dress_.border_w > 0 &&
+            !needs_blend(dress_.border_color) &&
+            (background.has_value() || dress_.bg_kind != 0 || grad() != nullptr ||
+             rep() != nullptr);
+        // the face paints inside the frame: the box inset by the border
+        // on every side, radius minus the border (browser border-box)
+        const int face_inset = opaque_frame ? dress_.border_w : 0;
+        const int face_radius =
+            opaque_frame ? std::max(0, radius - dress_.border_w) : radius;
+        const int fx2 = s.width - 1 - face_inset;
+        const int fy2 = s.height - 1 - face_inset;
+        if (opaque_frame)
+        {
+            area.fill_round_rect_aa(0, 0, s.width - 1, s.height - 1, radius,
+                                    dress_.border_color);
+        }
         if (background.has_value())
         {
             // S-1: through fill_rect (not fill) so a wireframe view
             // degrades the face to an outline; pixel-identical to fill()
             // in FULL mode. The dialog mask keeps fill() (immune).
-            if (radius > 0)
+            if (face_radius > 0)
             {
-                area.fill_round_rect_aa(0, 0, s.width - 1, s.height - 1, radius,
-                                        *background);
+                area.fill_round_rect_aa(face_inset, face_inset, fx2, fy2,
+                                        face_radius, *background);
             }
             else
             {
-                area.fill_rect(0, 0, s.width - 1, s.height - 1, *background);
+                area.fill_rect(face_inset, face_inset, fx2, fy2, *background);
             }
         }
         // extended forms override every paint_dress gradient
@@ -806,8 +832,8 @@ namespace zb::ui
                 {
                     pos[i] = g->pos[i];
                 }
-                area.fill_conic(0, 0, s.width - 1, s.height - 1, g->a, pos,
-                                g->col, n, radius);
+                area.fill_conic(face_inset, face_inset, fx2, fy2, g->a, pos,
+                                g->col, n, face_radius);
             }
             else if (g->kind == 6)
             {
@@ -817,29 +843,31 @@ namespace zb::ui
                 {
                     pos[i] = g->pos[i];
                 }
-                area.fill_linear_stops(0, 0, s.width - 1, s.height - 1, pos,
-                                       g->col, n, (g->flags & 1) != 0, radius);
+                area.fill_linear_stops(face_inset, face_inset, fx2, fy2, pos,
+                                       g->col, n, (g->flags & 1) != 0,
+                                       face_radius);
             }
             else
             {
-                area.fill_gradient3(0, 0, s.width - 1, s.height - 1,
+                area.fill_gradient3(face_inset, face_inset, fx2, fy2,
                                     g->col[0], g->col[1], g->a, g->col[2],
-                                    (g->flags & 1) != 0, radius);
+                                    (g->flags & 1) != 0, face_radius);
             }
         }
         // radial wins when both kinds are set (contract P-1; the
         // builder sets exactly one, this is direct-setter misuse)
         else if (dress_.bg_kind == 2)
         {
-            area.fill_radial(0, 0, s.width - 1, s.height - 1,
+            area.fill_radial(face_inset, face_inset, fx2, fy2,
                              s.width * dress_.bg_ax / 100,
                              s.height * dress_.bg_ay / 100, dress_.bg_from,
-                             dress_.bg_p0, dress_.bg_to, dress_.bg_p1, radius);
+                             dress_.bg_p0, dress_.bg_to, dress_.bg_p1,
+                             face_radius);
         }
         else if (dress_.bg_kind == 1)
         {
-            area.fill_gradient(0, 0, s.width - 1, s.height - 1, dress_.bg_from,
-                               dress_.bg_to, dress_.bg_ax != 0, radius);
+            area.fill_gradient(face_inset, face_inset, fx2, fy2, dress_.bg_from,
+                               dress_.bg_to, dress_.bg_ax != 0, face_radius);
         }
         // repeating texture overlays any base (P-2c); square mostly
         // (vubottom/brushed), the radius rides along when set
@@ -851,9 +879,9 @@ namespace zb::ui
             {
                 pos[i] = r->pos[i];
             }
-            area.fill_repeating(0, 0, s.width - 1, s.height - 1,
+            area.fill_repeating(face_inset, face_inset, fx2, fy2,
                                 (r->flags & 1) != 0, r->period, pos, r->col,
-                                n, radius);
+                                n, face_radius);
         }
         if (background_image.has_value())
         {
@@ -861,8 +889,11 @@ namespace zb::ui
         }
         // border-box outline over the background; a default (alpha-0)
         // color never reaches here through the builder (parse_color
-        // rejects transparent), the guard is for direct app misuse
-        for (int i = 0; i < dress_.border_w; ++i)
+        // rejects transparent), the guard is for direct app misuse.
+        // The opaque rounded frame already painted itself above
+        // (frame fill + shrunk face); stroking again would darken its
+        // own AA edge.
+        for (int i = 0; i < dress_.border_w && !opaque_frame; ++i)
         {
             if (dress_.border_color.a() == 0)
             {
