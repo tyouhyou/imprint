@@ -63,7 +63,9 @@ int test_svg()
         g.fill(core::colors::White);
         v.draw(g);
         // band spans 23.5..26.5: two solid rows, one blended fringe row
-        // on each side
+        // on each side (32bpp); binary alpha (16bpp) quantizes the
+        // half-covered fringe rows to skip (the plot_aa threshold), the
+        // stroke narrows to its solid core
         int solid = 0, ink = 0;
         for (int y = 0; y < 50; ++y)
         {
@@ -77,8 +79,13 @@ int test_svg()
                 ++solid;
             }
         }
+#if COLOR_DEPTH == 32
         EXPECT(ink == 4);
         EXPECT(solid == 2);
+#else
+        EXPECT(ink == 2);
+        EXPECT(solid == 2);
+#endif
         EXPECT(test::pixel_at(g, 50, 25) == core::colors::Black.pixel);
         // butt cap: nothing beyond the endpoint
         EXPECT(test::pixel_at(g, 9, 25) == core::colors::White.pixel);

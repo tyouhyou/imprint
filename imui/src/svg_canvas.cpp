@@ -245,9 +245,25 @@ namespace zb::ui
                                     c);
                     continue;
                 }
-                c.set_a(static_cast<uint8_t>(c.a() * in / 4));
-                area.draw_pixel(static_cast<int>(px), static_cast<int>(py), c);
-                c.set_a(l.color.a());
+                if constexpr (core::Color::per_channel_blend)
+                {
+                    c.set_a(static_cast<uint8_t>(c.a() * in / 4));
+                    area.draw_pixel(static_cast<int>(px), static_cast<int>(py),
+                                    c);
+                    c.set_a(l.color.a());
+                }
+                else
+                {
+                    // binary alpha (16bpp): coverage quantizes to
+                    // plot/skip at half, the plot_aa rule — c.a() reads
+                    // back the single bit, so scaling it would clear
+                    // every fringe pixel; the full color plots instead
+                    if (in * 0xFF / 4 >= 128)
+                    {
+                        area.draw_pixel(static_cast<int>(px),
+                                        static_cast<int>(py), c);
+                    }
+                }
             }
         }
         if (blend)

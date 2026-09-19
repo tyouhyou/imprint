@@ -787,9 +787,16 @@ namespace zb::ui
         // outline) keep the stroked path: the face must stay under them
         // out to the outer arc, per the border-box rule. Square corners
         // tile exactly, no frame fill needed.
+        // opacity is the depth's own semantics (graphics.cpp tint
+        // precedent): a real 8-bit weight at 32bpp, the single bit at
+        // 16bpp — needs_blend reads a() < 255, which on the bit depth
+        // flags even an opaque border, so the frame fill would never
+        // engage there
+        const bool frame_opaque = core::Color::per_channel_blend
+                                      ? dress_.border_color.a() >= 0xFF
+                                      : dress_.border_color.a() != 0;
         const bool opaque_frame =
-            radius > 0 && dress_.border_w > 0 &&
-            !needs_blend(dress_.border_color) &&
+            radius > 0 && dress_.border_w > 0 && frame_opaque &&
             (background.has_value() || dress_.bg_kind != 0 || grad() != nullptr ||
              rep() != nullptr);
         // the face paints inside the frame: the box inset by the border
