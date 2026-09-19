@@ -301,9 +301,13 @@ multi-size capability (`provider_for`) exposed per widget, so HTML
   `IMCORE_HAS_TTF_RUNTIME` ignore the declaration (5x7 has no sizes;
   the single-size build-time subset has exactly one) — same standing
   as the 16bpp AA-to-binary rule. `make_text_image` stays
-  bitmap-backed. Per-`svg_text` sizes stay deferred: an `svg` element's
-  own `font_size` sizes the whole canvas through this seam; item-level
-  `font-size` inside `svg` is accepted and ignored.
+  bitmap-backed. Per-`svg_text` sizes resolve at draw time: an `svg`
+  element's own `font_size` sizes the whole canvas through this seam,
+  and an item-level `font-size` on `svg <text>` (viewBox units,
+  fractional) scales with the viewBox stretch and resolves against the
+  process family per draw (the provider handle is call-scoped; absent
+  size or family keeps the seam default / bitmap fallback — the
+  bitmap's normalized glyphs render `dB` as `DB`).
 
 **Widget text dressing (P-2a)**: three additive, default-off properties
   on the widget text seam (`draw_text` / `draw_text_at` / `advance_of` /
@@ -975,7 +979,8 @@ dispatcher's raw pointers against dangling/UAF:
 
 - `layout_dirty_` is the layout invalidation flag: geometry/content
   setters (set_size, set_size_auto, set_text, set_glyph_provider, set_font_size; container add_child/remove_child,
-  set_orientation/set_spacing/set_padding) call `mark_layout_dirty()`
+  set_orientation/set_spacing/set_padding/set_padding_sides)
+  call `mark_layout_dirty()`
   which bubbles to the root along the parent chain (zero allocation). A
   fresh tree starts dirty (`layout_dirty_ = true`). Layout clears the
   flag when done, so a given state triggers at most one layout.
@@ -1005,7 +1010,8 @@ dispatcher's raw pointers against dangling/UAF:
   position, else the direct parent's content box (narrowing). A FlexPanel
   skips abs children in measure/packing/lines (zero demand, no spacing)
   and resolves them after normal layout against the anchor content box
-  (`max(0, size - 2*padding)`, the same base as L-4 percents): width =
+  (`max(0, size - padding sums per side)`, the same base as L-4
+  percents): width =
   left+right+auto → stretch, else declared (explicit/percent), else
   `measure()` fallback; x = left ?? right-computed ?? padding origin
   (y likewise); `translate` shifts after (percent of self). Resolve
@@ -1020,7 +1026,13 @@ dispatcher's raw pointers against dangling/UAF:
   zero-alloc): +8 bytes 64-bit / +4 NDS per Widget. Anchor lookup is
   `Widget::positioned_ancestor()` (nearest positioned ancestor or
   null); offset/translate readers serve the FlexPanel resolver, anchor
-  content boxes read through `content_inset()` (padding, else 0).
+  content boxes read through `content_inset()` (padding, else 0 — the
+  uniform value; FlexPanel per-side padding resolves its own abs box
+  from `pad_t/r/b/l` directly). FlexPanel padding is per-side
+  (`set_padding_sides(t, r, b, l)`; `set_padding` writes all four — the
+  `.ui`/programmatic uniform shape): measure, available space, packing
+  origin, and percent/abs containing boxes use the axis-appropriate
+  side sums.
 - **Convergent passes (H-9)**: one `FlexPanel::layout()` pass cannot fit
   an auto size to a child whose input only settles top-down during that
   same pass (an aspect-derived height whose cross width resolves in the

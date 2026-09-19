@@ -171,7 +171,8 @@ applies unchanged.
 | `align-items` | `flex-start`/`start`, `center`, `flex-end`/`end`, `stretch` | container cross default; **absent on an HTML container means `stretch`** (the CSS default — sections fill the chassis width); `.ui`/programmatic containers keep the `start` default; `baseline`/unknown warns once, keeps current |
 | `align-self` | `auto` plus the five above | per-item override (`auto` inherits); honored only under a flex parent |
 | `gap` | `Npx` (single value) | `spacing` |
-| `padding` | `Npx` (single value) | `padding` |
+| `padding` | 1–4 `Npx`/bare values (CSS side mapping) | one value keeps the uniform `padding` prop; more land `padding_t/r/b/l` node props (the FlexPanel content box shrinks per side) |
+| `padding-top` / `-right` / `-bottom` / `-left` | `Npx`/bare | wins over the shorthand share; negative/`auto`/malformed warns, keeps 0 |
 | `margin` | 1–4 `Npx`/bare values (CSS side mapping) | `margin_t/r/b/l` node props; margins add to gaps, never collapse, never shrink |
 | `margin-top` / `-right` / `-bottom` / `-left` | `Npx`/bare | wins over the shorthand; negative/`auto`/malformed warns, keeps 0 |
 | `flex-wrap` | `wrap` | `wrap=true` |
@@ -243,20 +244,28 @@ backlog H-6):
   still stretches). Coordinates accept decimals, rounded half away
   from zero (SVG authors write `2.5`); malformed numbers drop their
   line/text.
-- `line x1 y1 x2 y2`: drawn through `draw_line_aa`. `stroke` takes the
-  shared color forms (absent = no stroke = the line is dropped, per
-  SVG); `stroke-width` is parsed but rendered 1px (no thick-stroke
-  primitive yet — accepted for forward compatibility, `0` drops the
-  line); `stroke-linecap` accepted and ignored; `opacity="0..1"`
-  scales the stroke alpha (at 16bpp any non-zero alpha plots per the
-  binary policy, so ghost strokes stay visible).
+- `line x1 y1 x2 y2`: drawn as its device-space stroke geometry
+  (per-pixel capsule coverage, 2x2 supersampled — solid band, no
+  double-blend seams). `stroke` takes the shared color forms (absent =
+  no stroke = the line is dropped, per SVG); `stroke-width` stays in
+  viewBox units (fractional preserved) and scales with the viewBox
+  stretch at draw time, the geometric mean of the two axis scales;
+  strokes thinner than ~1.5px degrade to the 1px `draw_line_aa`
+  hairline (`0` drops the line); `stroke-linecap` selects `butt`
+  (default) or `round` end discs; `opacity="0..1"` scales the stroke
+  alpha (at 16bpp any non-zero alpha plots per the binary policy, so
+  ghost strokes stay visible).
 - `text x y`: the element content drawn with the widget text seam
   (provider fallback chain included); `x/y` is the baseline start,
   `fill` defaults to the theme text, `text-anchor` selects
-  start/middle/end, `font-family` is accepted and ignored; item-level
-  `font-size` inside `svg` is accepted and ignored (per-`svg_text`
-  sizes stay deferred — the `svg` element's own `font-size` sizes the
-  whole canvas, code-contract §2.4).
+  start/middle/end, `font-family` is accepted and ignored. An item-level
+  `font-size` (viewBox units, fractional) scales with the viewBox and
+  resolves against the process font family like every widget seam —
+  without a family (or without `IMCORE_HAS_TTF_RUNTIME`) it falls back
+  to the bitmap provider, whose normalized glyphs render `dB` as `DB`
+  (documented degradation); absent `font-size` keeps the seam default
+  (the `svg` element's own `font-size` sizes the whole canvas,
+  code-contract §2.4).
 - `g` never builds: inside `svg` it is transparent and folds
   `stroke`/`stroke-width`/`stroke-linecap`/`opacity`/`fill`/
   `text-anchor` onto its descendant `line`/`text` (nearest ancestor
