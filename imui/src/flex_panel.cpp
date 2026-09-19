@@ -258,12 +258,13 @@ namespace zb::ui
             cross = std::max(cross, cd + cross_margin_before(child, direction) +
                                          cross_margin_after(child, direction));
         }
-        const int pad = 2 * padding;
+        const int pad_main = is_row(direction) ? pad_l + pad_r : pad_t + pad_b;
+        const int pad_cross = is_row(direction) ? pad_t + pad_b : pad_l + pad_r;
         if (is_row(direction))
         {
-            return {main + pad, cross + pad};
+            return {main + pad_main, cross + pad_cross};
         }
-        return {cross + pad, main + pad};
+        return {cross + pad_cross, main + pad_main};
     }
 
     void FlexPanel::layout()
@@ -295,8 +296,12 @@ namespace zb::ui
     {
         bool changed = false;
         const auto &s = get_size();
-        const int avail_main = (is_row(direction) ? s.width : s.height) - 2 * padding;
-        const int avail_cross = (is_row(direction) ? s.height : s.width) - 2 * padding;
+        const int avail_main =
+            (is_row(direction) ? s.width : s.height) -
+            (is_row(direction) ? pad_l + pad_r : pad_t + pad_b);
+        const int avail_cross =
+            (is_row(direction) ? s.height : s.width) -
+            (is_row(direction) ? pad_t + pad_b : pad_l + pad_r);
 
         // cross-axis percent sizes resolve first, against the content-box
         // cross size: they have no sibling interaction and do not depend
@@ -398,7 +403,7 @@ namespace zb::ui
             return items[i].flex_grow > 0 && main_percent(*items[i].child, direction) == 0;
         };
 
-        int cross_pos = padding;
+        int cross_pos = is_row(direction) ? pad_t : pad_l;
         for (const auto &line : lines)
         {
             // resolve the percent children of the line first (batch L-4):
@@ -800,7 +805,8 @@ namespace zb::ui
                 // the main-axis pitch starts after the item's own
                 // leading margin (H-3); the slack shares above already
                 // count every margin, so justification needs no shift
-                int pos = padding + lead + before + k * spacing +
+                int pos = (is_row(direction) ? pad_l : pad_t) + lead +
+                          before + k * spacing +
                           main_margin_before(child, direction);                if (slack > 0)
                 {
                     if (justify_content == justify::space_between && n > 1)
@@ -874,10 +880,10 @@ namespace zb::ui
     {
         static constexpr int16_t kUnset = INT16_MIN;
         const auto &s = get_size();
-        int cbw = std::max(0, s.width - 2 * padding);
-        int cbh = std::max(0, s.height - 2 * padding);
-        int orgx = padding;
-        int orgy = padding;
+        int cbw = std::max(0, s.width - pad_l - pad_r);
+        int cbh = std::max(0, s.height - pad_t - pad_b);
+        int orgx = pad_l;
+        int orgy = pad_t;
         if (const Widget *anchor = child.positioned_ancestor();
             anchor != nullptr && anchor != this)
         {

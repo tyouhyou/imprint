@@ -108,6 +108,18 @@ namespace zb::ui
                 {
                     return as_int(v, fallback);
                 }
+                if constexpr (std::is_same_v<T, double>)
+                {
+                    if (const auto *d = std::get_if<double>(&v))
+                    {
+                        return *d;
+                    }
+                    if (const auto *i = std::get_if<long long>(&v))
+                    {
+                        return static_cast<double>(*i);
+                    }
+                    return fallback;
+                }
                 if constexpr (std::is_same_v<T, std::string>)
                 {
                     if (const auto *s = std::get_if<std::string>(&v))
@@ -1078,6 +1090,31 @@ namespace zb::ui
             {
                 f.set_padding(static_cast<int>(prop_of(n, "padding", 0LL)));
             }
+            // per-side padding (html shorthand/longhand fold): sides the
+            // node declares win over the uniform base; undeclared sides
+            // keep it. Only rewrites when at least one side is declared,
+            // so the uniform setter stays the sole path for .ui/page roots.
+            {
+                static const char *const side_keys[4] = {
+                    "padding_t", "padding_r", "padding_b", "padding_l"};
+                const int base = static_cast<int>(prop_of(n, "padding", 0LL));
+                int sides[4] = {base, base, base, base};
+                bool any = false;
+                for (int si = 0; si < 4; ++si)
+                {
+                    if (has_prop(n, side_keys[si]))
+                    {
+                        sides[si] = static_cast<int>(
+                            prop_of(n, side_keys[si], 0LL));
+                        any = true;
+                    }
+                }
+                if (any)
+                {
+                    f.set_padding_sides(sides[0], sides[1], sides[2],
+                                        sides[3]);
+                }
+            }
             if (gate("wrap"))
             {
                 f.set_wrap(prop_of(n, "wrap", false));
@@ -1192,6 +1229,8 @@ namespace zb::ui
                         l.x2 = static_cast<int>(prop_of(c, "x2", 0LL));
                         l.y2 = static_cast<int>(prop_of(c, "y2", 0LL));
                         l.color = stroke;
+                        l.width = prop_of(c, "stroke_w", 1.0);
+                        l.round_caps = prop_of(c, "stroke_round", false);
                         v.add_line(l);
                     }
                     else if (c.type == "svg_text")
@@ -1215,6 +1254,7 @@ namespace zb::ui
                             t.has_color = true;
                         }
                         t.anchor = static_cast<int>(prop_of(c, "anchor", 0LL));
+                        t.font_size = prop_of(c, "text_fs", 0.0);
                         v.add_text(t);
                     }
                 }

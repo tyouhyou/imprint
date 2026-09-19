@@ -87,7 +87,18 @@ namespace zb::ui
         }
         void set_padding(const int p)
         {
-            padding = p;
+            pad_t = pad_r = pad_b = pad_l = p;
+            mark_layout_dirty();
+        }
+        // per-side padding (html 2/3/4-value shorthands and longhands;
+        // the .ui grammar keeps the uniform setter): top/right/bottom/left
+        void set_padding_sides(const int t, const int r, const int b,
+                               const int l)
+        {
+            pad_t = t;
+            pad_r = r;
+            pad_b = b;
+            pad_l = l;
             mark_layout_dirty();
         }
         void set_wrap(const bool w)
@@ -165,8 +176,11 @@ namespace zb::ui
         [[nodiscard]] core::imsize_t measure() const override;
 
         // inset of the content box (P-3 anchor math for abs descendants
-        // nested under static intermediates)
-        [[nodiscard]] int content_inset() const override { return padding; }
+        // nested under static intermediates). Uniform-lossy under per-side
+        // padding: abs anchors resolve each side through pad_t/pad_l and
+        // the content extent (resolve_abs), this stays the legacy single
+        // value for the uniform case (pad_t == pad_l there).
+        [[nodiscard]] int content_inset() const override { return pad_t; }
 
         void layout() override;
 
@@ -192,7 +206,7 @@ namespace zb::ui
         justify justify_content = justify::start;
         align align_items = align::start;
         int spacing = 0;
-        int padding = 0;
+        int pad_t = 0, pad_r = 0, pad_b = 0, pad_l = 0;
         bool wrap = false;
 
         std::vector<flex_item> items;

@@ -814,6 +814,42 @@ int test_html()
         EXPECT(test::vget<long long>(node_prop_v(r2, "spacing")) == 6);
     }
 
+    // multi-value padding shorthand + longhands (CSS side mapping):
+    // one value keeps the uniform prop, more land per-side, longhands
+    // win over their shorthand share, malformed warns and drops
+    {
+        ui_node r = parse_html(
+            "<div style=\"padding: 2px 4px\"><label>x</label></div>\n",
+            nullptr);
+        EXPECT(find_prop(r, "padding") < 0);
+        EXPECT(test::vget<long long>(node_prop_v(r, "padding_t")) == 2);
+        EXPECT(test::vget<long long>(node_prop_v(r, "padding_r")) == 4);
+        EXPECT(test::vget<long long>(node_prop_v(r, "padding_b")) == 2);
+        EXPECT(test::vget<long long>(node_prop_v(r, "padding_l")) == 4);
+
+        ui_node r3 = parse_html(
+            "<div style=\"padding: 1px 2px 3px 4px\"><label>x</label></div>\n",
+            nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(r3, "padding_t")) == 1);
+        EXPECT(test::vget<long long>(node_prop_v(r3, "padding_r")) == 2);
+        EXPECT(test::vget<long long>(node_prop_v(r3, "padding_b")) == 3);
+        EXPECT(test::vget<long long>(node_prop_v(r3, "padding_l")) == 4);
+
+        ui_node r4 = parse_html(
+            "<div style=\"padding: 1px 2px 3px; padding-top: 9px\">"
+            "<label>x</label></div>\n",
+            nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(r4, "padding_t")) == 9);
+        EXPECT(test::vget<long long>(node_prop_v(r4, "padding_r")) == 2);
+        EXPECT(test::vget<long long>(node_prop_v(r4, "padding_b")) == 3);
+        EXPECT(test::vget<long long>(node_prop_v(r4, "padding_l")) == 2);
+
+        ui_node r5 = parse_html(
+            "<div style=\"padding: big\"><label>x</label></div>\n", nullptr);
+        EXPECT(find_prop(r5, "padding") < 0);
+        EXPECT(find_prop(r5, "padding_t") < 0);
+    }
+
     // C7: a styled br height stands alone (no shadowed duplicate);
     // a lone sign is malformed, not zero
     {
@@ -1098,6 +1134,27 @@ int test_html()
         EXPECT(test::vget<long long>(node_prop_v(s.children[2], "anchor")) == 1);
         EXPECT(test::vget<long long>(node_prop_v(s.children[2], "fill_alpha")) == 255);
 
+        // stroke widths stay fractional (they ride the viewBox scale at
+        // draw time) and round linecaps land as a flag
+        ui_node rw = parse_html(
+            "<div><svg viewBox=\"0 0 10 10\">"
+            "<line x1=\"0\" y1=\"0\" x2=\"10\" y2=\"10\" stroke=\"red\""
+            " stroke-width=\"2.5\" stroke-linecap=\"round\"/>"
+            "<text x=\"1\" y=\"1\" font-size=\"6\">dB</text></svg></div>\n",
+            nullptr);
+        EXPECT(test::vget<double>(node_prop_v(rw.children[0].children[0],
+                                              "stroke_w")) == 2.5);
+        EXPECT(test::vget<bool>(node_prop_v(rw.children[0].children[0],
+                                            "stroke_round")) == true);
+        EXPECT(test::vget<double>(node_prop_v(rw.children[0].children[1],
+                                              "text_fs")) == 6.0);
+        // malformed width drops the line like the zero case
+        ui_node rx = parse_html(
+            "<div><svg><line x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\""
+            " stroke=\"red\" stroke-width=\"oops\"/></svg></div>\n",
+            nullptr);
+        EXPECT(rx.children[0].children.empty());
+
         // decimals round half away from zero (single container div
         // keeps the svg one level down; a bare svg would stay wrapped
         // in the pseudo-root)
@@ -1143,7 +1200,10 @@ int test_html()
             "<body><div>\n"
             "  <svg id=\"vu\" viewBox=\"0 0 100 50\">\n"
             "    <line x1=\"0\" y1=\"25\" x2=\"100\" y2=\"25\" stroke=\"white\"/>\n"
-            "    <text x=\"50\" y=\"48\" fill=\"white\" text-anchor=\"middle\">dB</text>\n"
+            "    <line x1=\"0\" y1=\"5\" x2=\"100\" y2=\"5\" stroke=\"white\""
+            " stroke-width=\"3\" stroke-linecap=\"round\"/>\n"
+            "    <text x=\"50\" y=\"48\" fill=\"white\" text-anchor=\"middle\""
+            " font-size=\"6\">dB</text>\n"
             "  </svg>\n"
             "</div></body>\n",
             &ok);
@@ -1154,8 +1214,12 @@ int test_html()
         host.layout();
         auto *v = static_cast<SvgCanvas *>(host.find_by_id("vu"));
         EXPECT(v != nullptr);
-        EXPECT(v->lines().size() == 1 && v->texts().size() == 1);
+        EXPECT(v->lines().size() == 2 && v->texts().size() == 1);
         EXPECT(v->view_w() == 100 && v->view_h() == 50);
+        // viewBox-unit stroke geometry carries through the builder
+        EXPECT(v->lines()[1].width == 3.0);
+        EXPECT(v->lines()[1].round_caps);
+        EXPECT(v->texts()[0].font_size == 6.0);
     }
 
     // P-2a text dressing: tracking px, bold (700/600/bold on,

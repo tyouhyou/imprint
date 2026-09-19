@@ -50,6 +50,51 @@ int test_svg()
         EXPECT(test::pixel_at(g, 10, 10) == core::colors::Black.pixel);
     }
 
+    // thick strokes: stroke-width scales with the viewBox and fills a
+    // solid band (no double-blend seams); butt vs round caps at ends
+    {
+        SvgCanvas v;
+        v.set_view_box(0, 0, 100, 50);
+        v.set_size(100, 50);  // 1:1 scale, stroke 3 -> a 3px band
+        SvgCanvas::Line butt{10, 25, 90, 25, core::colors::Black};
+        butt.width = 3.0;
+        v.add_line(butt);
+        core::Graphics g(100, 50, nullptr);
+        g.fill(core::colors::White);
+        v.draw(g);
+        // band spans 23.5..26.5: two solid rows, one blended fringe row
+        // on each side
+        int solid = 0, ink = 0;
+        for (int y = 0; y < 50; ++y)
+        {
+            const uint32_t p = test::pixel_at(g, 50, y);
+            if (p != core::colors::White.pixel)
+            {
+                ++ink;
+            }
+            if (p == core::colors::Black.pixel)
+            {
+                ++solid;
+            }
+        }
+        EXPECT(ink == 4);
+        EXPECT(solid == 2);
+        EXPECT(test::pixel_at(g, 50, 25) == core::colors::Black.pixel);
+        // butt cap: nothing beyond the endpoint
+        EXPECT(test::pixel_at(g, 9, 25) == core::colors::White.pixel);
+
+        v.clear_vectors();
+        SvgCanvas::Line round{10, 25, 90, 25, core::colors::Black};
+        round.width = 3.0;
+        round.round_caps = true;
+        v.add_line(round);
+        core::Graphics g2(100, 50, nullptr);
+        g2.fill(core::colors::White);
+        v.draw(g2);
+        // round cap: the disc reaches one radius past the endpoint
+        EXPECT(test::pixel_at(g2, 9, 25) == core::colors::Black.pixel);
+    }
+
     // text draws through the seam with middle anchoring
     {
         SvgCanvas v;

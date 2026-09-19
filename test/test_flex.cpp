@@ -81,6 +81,27 @@ int test_flex()
         EXPECT(at(*p.get_items()[0].child, 5, 5));
     }
 
+    // per-side padding (html shorthand fold): the column content box
+    // shrinks by each side and children start below the top inset
+    {
+        FlexPanel p;
+        p.set_size(50, 100);
+        p.set_padding_sides(2, 4, 6, 8);
+        p.add_child(make_child(10, 10));
+        p.add_child(make_child(10, 10));
+        p.layout();
+        const auto &c = p.get_items();
+        // column: horizontal insets left 8 / right 4, vertical top 2 /
+        // bottom 6; children stack from the top inset
+        EXPECT(at(*c[0].child, 8, 2));
+        EXPECT(c[0].child->get_size().width == 10);
+        EXPECT(at(*c[1].child, 8, 12));
+        // measure includes the per-side sums: cross width 10 + 8 + 4,
+        // main height 10 + 10 + 2 + 6
+        EXPECT(p.measure().width == 22);
+        EXPECT(p.measure().height == 28);
+    }
+
     // flex grow: two flex children share the leftover space 1:1
     {
         FlexPanel p;

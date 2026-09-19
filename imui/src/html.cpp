@@ -2754,6 +2754,63 @@ namespace zb::ui
             return true;
         }
 
+        // the parse_svg_num grammar, kept fractional: stroke widths and
+        // svg font sizes scale with the viewBox, so rounding 2.5 to 3
+        // here would visibly thicken every stroke at draw time
+        bool parse_svg_double(const std::string &s, double &out)
+        {
+            std::size_t i = 0;
+            while (i < s.size() && (s[i] == ' ' || s[i] == '\t'))
+            {
+                ++i;
+            }
+            bool neg = false;
+            if (i < s.size() && (s[i] == '+' || s[i] == '-'))
+            {
+                neg = s[i] == '-';
+                ++i;
+            }
+            int64_t ip = 0;
+            bool any = false;
+            while (i < s.size() && s[i] >= '0' && s[i] <= '9')
+            {
+                any = true;
+                ip = ip * 10 + (s[i] - '0');
+                if (ip > 1000000000LL)
+                {
+                    return false;
+                }
+                ++i;
+            }
+            int64_t fp = 0, scale = 1;
+            if (i < s.size() && s[i] == '.')
+            {
+                ++i;
+                while (i < s.size() && s[i] >= '0' && s[i] <= '9' && scale < 1000000000LL)
+                {
+                    fp = fp * 10 + (s[i] - '0');
+                    scale *= 10;
+                    ++i;
+                }
+                while (i < s.size() && s[i] >= '0' && s[i] <= '9')
+                {
+                    ++i;
+                }
+                any = true;
+            }
+            while (i < s.size() && (s[i] == ' ' || s[i] == '\t'))
+            {
+                ++i;
+            }
+            if (!any || i != s.size())
+            {
+                return false;
+            }
+            out = static_cast<double>(ip) + static_cast<double>(fp) / scale;
+            out = neg ? -out : out;
+            return true;
+        }
+
         // opacity 0..1 (SVG-clamped) into an alpha byte; malformed rides
         // the tolerance default (fully opaque)
         int parse_svg_alpha(const std::string &s)
@@ -2896,24 +2953,28 @@ namespace zb::ui
             {
                 return;  // SVG default: no stroke = invisible
             }
-            long long width = 1;
-            bool has_width = false;
+            double width = 1.0;
             for (const auto &a : c.attrs)
             {
                 if (a.first == "stroke-width")
                 {
-                    has_width = true;
-                    if (!parse_svg_num(a.second, width) || width <= 0)
+                    // fractional on purpose: the width rides the
+                    // viewBox scale at draw time
+                    if (!parse_svg_double(a.second, width) || width <= 0)
                     {
                         return;  // width 0 = invisible; malformed = dropped
                     }
                 }
             }
-            (void)has_width;
             ui_node l;
             l.type = "svg_line";
             l.prop("x1", x1).prop("y1", y1).prop("x2", x2).prop("y2", y2);
             l.prop("stroke", stroke);
+            l.prop("stroke_w", width);
+            if (ascii_lower(c.attr("stroke-linecap")) == "round")
+            {
+                l.prop("stroke_round", true);
+            }
             const std::string &op = c.attr("opacity");
             l.prop("stroke_alpha", op.empty() ? 255LL
                                               : static_cast<long long>(parse_svg_alpha(op)));
@@ -2963,6 +3024,15 @@ namespace zb::ui
                 anchor = 2;
             }
             t.prop("anchor", static_cast<long long>(anchor));
+            // svg font-size in viewBox units, kept fractional (it scales
+            // with the viewBox at draw time; malformed drops to the
+            // seam default like the other tolerant attributes)
+            double fs = 0.0;
+            const std::string &fsv = c.attr("font-size");
+            if (!fsv.empty() && parse_svg_double(fsv, fs) && fs > 0)
+            {
+                t.prop("text_fs", fs);
+            }
             n.children.push_back(std::move(t));
         }
 
@@ -3470,10 +3540,100 @@ namespace zb::ui
                 }
                 if (const std::string *pv = fold_lookup(folded, "padding"))
                 {
-                    long long p = 0;
-                    if (parse_gap_value(*pv, p))
+                    // 1-4 bare/Npx values with the CSS side mapping
+                    // (H-3 margin precedent): one value keeps the legacy
+                    // uniform "padding" prop, more land per-side so the
+                    // FlexPanel content box follows the shorthand
+                    std::vector<std::string> toks;
+                    std::string cur;
+                    for (const char c : css_trim(*pv))
                     {
-                        n.prop("padding", p);
+                        if (c == ' ' || c == '\t')
+                        {
+                            if (!cur.empty())
+                            {
+                                toks.push_back(cur);
+                                cur.clear();
+                            }
+                        }
+                        else
+                        {
+                            cur.push_back(c);
+                        }
+                    }
+                    if (!cur.empty())
+                    {
+                        toks.push_back(cur);
+                    }
+                    long long v[4] = {0, 0, 0, 0};
+                    bool clean = !toks.empty() && toks.size() <= 4;
+                    for (std::size_t ti = 0; clean && ti < toks.size(); ++ti)
+                    {
+                        long long s = 0;
+                        clean = parse_gap_value(toks[ti], s);
+                        if (clean)
+                        {
+                            v[ti] = s;
+                        }
+                    }
+                    if (clean)
+                    {
+                        if (toks.size() == 1)
+                        {
+                            n.prop("padding", v[0]);
+                        }
+                        else
+                        {
+                            // [t|lr] / [t|h|b] / [t|r|b|l]; sides with a
+                            // longhand present are skipped there (the
+                            // margin shorthand precedent)
+                            const long long v0 = v[0];
+                            const long long v1 = v[1];
+                            const long long v2 = toks.size() >= 3 ? v[2] : v[0];
+                            const long long v3 = toks.size() >= 4 ? v[3] : v1;
+                            const long long sides[4] = {v0, v1, v2, v3};
+                            const char *const side_props[4] = {
+                                "padding_t", "padding_r", "padding_b",
+                                "padding_l"};
+                            const char *const side_long[4] = {
+                                "padding-top", "padding-right",
+                                "padding-bottom", "padding-left"};
+                            for (int si = 0; si < 4; ++si)
+                            {
+                                if (fold_lookup(folded, side_long[si]) ==
+                                    nullptr)
+                                {
+                                    n.prop(side_props[si], sides[si]);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        LW << "html: line " << e.line << ": unsupported padding '"
+                           << *pv << "'";
+                    }
+                }
+                const char *const padding_sides[4] = {
+                    "padding-top", "padding-right", "padding-bottom",
+                    "padding-left"};
+                const char *const padding_props[4] = {
+                    "padding_t", "padding_r", "padding_b", "padding_l"};
+                for (int pi = 0; pi < 4; ++pi)
+                {
+                    if (const std::string *pv2 =
+                            fold_lookup(folded, padding_sides[pi]))
+                    {
+                        long long s = 0;
+                        if (parse_gap_value(*pv2, s))
+                        {
+                            n.prop(padding_props[pi], s);
+                        }
+                        else
+                        {
+                            LW << "html: line " << e.line << ": unsupported '"
+                               << padding_sides[pi] << ": " << *pv2 << "'";
+                        }
                     }
                 }
                 if (const std::string *wv = fold_lookup(folded, "flex-wrap"))
