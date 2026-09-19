@@ -122,7 +122,7 @@ applies unchanged.
 | Element not in the whitelist | **LW warning + skipped**; its content is dropped. "Not in the table = not built" — the honest signal, so mistyped customs (`<metter>`) or unsupported HTML (`<table>`, `<input>`, `<form>`) never render a wrong structure |
 | `<br>` inside an inline element (`<span>`) | the parser warns (no line breaking until H-1) and degrades the break to a word space in the single-line label; the spacer child is dropped by leaf materialization with a warning (the same rule as `.ui` leaf children); place `br` as a child of a container |
 | Attribute not in the whitelist | silently tolerated (`class=` drives selector matching) |
-| Selector beyond tag/`.class`/`#id`/descendant/comma (child/sibling/attribute/pseudo) | silently inert, body consumed (pseudo-element selectors log one LW per rule — they usually carry visible content intent; `::before`/`::after` correspondence is backlog H-10, next up) |
+| Selector beyond tag/`.class`/`#id`/descendant/comma (child/sibling/attribute/other-pseudo) | silently inert, body consumed (non-`::before`/`::after` pseudo parts log one LW per rule — they usually carry visible content intent); a trailing `::before`/`::after` instead strips to its base selector and produces a paint-only box (see the `::before` / `::after` whitelist row) |
 | Unknown `var(--name)` without fallback | declaration dropped silently (malformed-value tolerance) |
 | Style declaration not in the whitelist | **LW warning + ignored** (the element keeps its default presentation) |
 | Malformed value (bad color, bad number, bad percent) | silently defaulted (the shared property table's tolerance) |
@@ -181,7 +181,7 @@ applies unchanged.
 | `border` | `Npx solid <color>` | `set_border`; any other style/grammar drops the border |
 | `border-top` | `Npx solid <color>` | full-width top band over the background; radius corners not cut; other sides are off-whitelist |
 | `opacity` | number `0..1`, `N%` | build-time fold into the widget's own paint alphas (bg/stops/border/text); descendants are not composited |
-| `box-shadow` | `[inset] OXpx OYpx [blur] [spread] <color>`, comma list | inset = inner depth bands (full effect); outer = silhouette under the box (invisible on opaque boxes — no overdraw yet); max 2 + 2, extras warn-and-drop |
+| `box-shadow` | `[inset] OXpx OYpx [blur] [spread] <color>`, comma list | inset = a Gaussian-blurred hole punched out of the face (exact-area rounded mask, σ = blur/2, spread contracts the hole); outer = a Gaussian spill bounded by the **surface** (escapes nested box clips via `clip_surface_safe` — visible on opaque boxes; damage reports the expanded offset+spread+1.5-blur bounds); max 2 + 2, extras warn-and-drop |
 | `border-radius` | `Npx` (single), `50%` | px, or half the smaller side at draw time; multi-value drops |
 | `position` | `relative`, `absolute` | `relative` = in-flow + containing block for abs descendants (its own offsets ignored); `absolute` = out of flow (code-contract P-3); anything else = static |
 | `top` / `left` / `right` / `bottom` | `Npx`, `N%`, bare `0`, `auto` | abs offsets against the containing-block content box (`auto` = unset; only read on absolutely positioned elements) |
@@ -191,6 +191,7 @@ applies unchanged.
 | `letter-spacing` | `Npx` | per-code-unit tracking in measure and draw (trailing unit included, per CSS); negative clamps to 0 |
 | `font-weight` | `bold`, or a number ≥ 600 → on; `normal` / < 600 → off | double-strike: second pass shifted +1px, no bold variant |
 | `text-shadow` | `DXpx DYpx [blur] <color>` | one solid offset copy drawn first; blur parsed-and-ignored; a comma list keeps the first shadow only |
+| `::before` / `::after` (selector tail) | rule body must declare `content: ""` (anything else drops the box); `position: absolute` required; one background layer (solid or 3-stop linear), `border-radius` (`Npx`/`50%`), bare `rotate()` | paint-only decoration box on the host widget (H-10): no layout, no hit-testing, not independently addressable — no id, no events, no handle; hit-testing belongs to the host widget. Use a real child element when you need an interactive target. Geometry/paint are re-specifiable at runtime via `Widget::set_pseudo` |
 
 ## `<style>` rule matching
 
@@ -202,10 +203,13 @@ applies unchanged.
   descendant order (`A B` = a B inside an A). A compound is an optional
   tag name plus `#id` and `.class` parts in any order (`div.model`,
   `.knob.a`, `#status`). Tags fold case (HTML), ids and classes keep
-  theirs. `*`, `>`, `+`, `~`, `[…]`, and anything with `:` or `::`
-  (pseudo-classes/elements) keep the whole rule inert — except exact
-  `:root`, which only collects `--*` variables (below) and never
-  matches an element. Structural tags (`html`, `head`) match
+  theirs. `*`, `>`, `+`, `~`, `[…]`, pseudo-classes, and any
+  pseudo-element other than a trailing `::before`/`::after` keep the
+  whole rule inert — except exact `:root`, which only collects `--*`
+  variables (below) and never matches an element. A trailing
+  `::before`/`::after` strips to its base compound and produces a
+  paint-only box on the matched element (see the `::before` /
+  `::after` whitelist row). Structural tags (`html`, `head`) match
   nothing: no widget is ever built for them. `body` matches its element
   (see the root rules above); it still never builds except as the kept
   document root.

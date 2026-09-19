@@ -1391,8 +1391,8 @@ int test_html()
     }
 
     // P-2e box-shadow: list parse (1 outer + 2 inset, cap, malformed
-    // entries drop alone), inset bands paint, outer leaves an opaque
-    // face alone (clip — contract)
+    // entries drop alone), inset shadows paint, the outer spill never
+    // tints the opaque face (face pixels keep the fill — contract)
     {
         ui_node r = parse_html(
             "<div style=\"box-shadow: 0 3px 6px rgba(0,0,0,0.5), "
@@ -1664,7 +1664,7 @@ int test_html()
                core::colors::White.pixel);
     }
 
-    // split-side inset bands AA their chord-cut ends (knob-rim
+    // inset shadow hole AA keeps its chord-cut ends sharp (knob-rim
     // staircase): 41x21 white face, radius 10, top-only inset
     {
         ui_node doc = parse_html(

@@ -494,9 +494,9 @@ namespace zb::ui::core
          */
         void draw_wireframe_grid(int spacing, const Color &colr);
 
-        // the AA primitives' single write path, public since the inset
-        // band AA (P-2e follow-up): widget paint is a second consumer
-        // beside the fills, through the same gate and blend policy.
+        // the AA primitives' single write path, public: widget paint
+        // (shadow masks, rim) is a second consumer beside the fills,
+        // through the same gate and blend policy.
         // One pixel with a 0..255 coverage weight (V-1); same
         // offset/bounds/damage gate as draw_pixel, then a
         // coverage-weighted source-over blend

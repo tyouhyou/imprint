@@ -240,7 +240,9 @@ namespace zb::ui
         // extended gradient (P-2b/c): forms the packed paint_dress
         // cannot hold. kind 3 = conic (a = from deg, b = nstops,
         // pos/col = stops); kind 5 = three-stop linear (col =
-        // from/mid/to, a = mid %, flags bit0 = horizontal)
+        // from/mid/to, a = mid %, flags bit0 = horizontal);
+        // kind 6 = N-stop linear (set_background_linearN). kind 4 was
+        // never allocated (P-2c jumped 3 -> 5; the number stays free)
         struct grad_ex
         {
             uint8_t kind = 0;

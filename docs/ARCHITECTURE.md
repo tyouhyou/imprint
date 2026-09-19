@@ -281,7 +281,7 @@ satisfies. Changing any of these is an architecture change.
   `plot_aa` — the coverage value IS the blend weight, applied regardless
   of the `alpha_enabled` switch; at 16bpp coverage quantizes to
   plot/skip at half and the stroke stays one pixel wide. `plot_aa`
-  itself is public: widget paint (inset-band fringe) is a second
+  itself is public: widget paint (shadow masks, rim) is a second
   consumer beside the fills, through the same gate and policy — the
   single-choke-point invariant is about the write path, not the
   caller. Angular work

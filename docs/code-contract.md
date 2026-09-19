@@ -840,7 +840,8 @@ system (standing non-goals):
   expanded bounds (the same offset+spread+1.5-blur margin) so partial
   repaints cover the shadow. Wireframe skips shadows.
   `Graphics::corner_chord` (the fill chord formula, integer-only) is
-  public for the band clip; `Graphics::clip_surface_safe` is the
+  public so the widget-level shadow span masks reuse it;
+  `Graphics::clip_surface_safe` is the
   surface-bounded clip the shadow pass escapes nested box clips
   through; `Graphics::inscribed_radius` is the single corner-radius
   clamp (pixel-count semantics: 50% of a 54px circle is 27) that every

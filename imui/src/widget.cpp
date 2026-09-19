@@ -272,7 +272,7 @@ namespace zb::ui
             // hole = padding box spread-contracted and offset. The blur
             // field may not cover the whole padding box (offset holes
             // push it away) — pixels past the field read hole 0, the
-            // full-strength inset band.
+            // hole at full strength.
             int fx0, fy0, fw, fh;
             const uint8_t *field = gaussian_field(
                 left + spread + ox, top + spread + oy,

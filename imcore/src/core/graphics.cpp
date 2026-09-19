@@ -304,9 +304,9 @@ namespace
     }
 }  // namespace
 
-// public chord alias for widget-level paint (P-2e): inset bands clip
-// band rows/columns to the same chords the fills use (same formula as
-// the file-local corner_chord above, restated: the member body cannot
+// public chord alias for widget-level paint (P-2e): the shadow span
+// masks reuse the same chords the fills use (same formula as the
+// file-local corner_chord above, restated: the member body cannot
 // name it — class scope would recurse into this very member)
 int Graphics::corner_chord(const int r, const int dy)
 {
