@@ -462,7 +462,7 @@ namespace zb::ui
     void Widget::set_text(const char *text)
     {
         mark_dirty();
-        advance_cache_ = -1;
+        reset_wrap_cache();
         mark_layout_dirty();
         text_.clear();
         if (nullptr == text)
@@ -980,14 +980,62 @@ namespace zb::ui
     const char16_t *const data = text_.data();
     const int len = static_cast<int>(text_.size());
 
-    // total advance: split into covered runs; uncovered units add 0
-    const int total = text_advance();
-
         // line metrics come from the primary provider, or the fallback;
         // line_metrics does not scan the string (no per-glyph loads)
         const text_metrics m = primary != nullptr
                                    ? primary->line_metrics()
                                    : fallback->line_metrics();
+
+        if (text_wrap() && s.width > 0)
+        {
+            // wrapped block (H-1): each span is one line aligned by the
+            // block's v_align and its own h_align inside the box; the
+            // pitch is the declared line height or the provider line
+            // metrics; text_offset rides the whole block
+            const int pitch = line_height() > 0 ? line_height() : m.height;
+            const auto &spans = wrap_spans(s.width);
+            const int lines = static_cast<int>(spans.size());
+            const int h = lines > 1 ? (lines - 1) * pitch + m.height : m.height;
+            int y = 0;
+            switch (valign)
+            {
+            case v_align::top:
+                y = m.ascent;
+                break;
+            case v_align::center:
+                y = (s.height - h) / 2 + m.ascent;
+                break;
+            case v_align::bottom:
+                y = s.height - h + m.ascent;
+                break;
+            }
+            y += text_offset_.y;
+            for (int i = 0; i < lines; ++i)
+            {
+                const int off = spans[i].first;
+                const int l = spans[i].second;
+                int x = 0;
+                const int w = advance_of(data + off, l);
+                switch (halign)
+                {
+                case h_align::left:
+                    x = 0;
+                    break;
+                case h_align::center:
+                    x = (s.width - w) / 2;
+                    break;
+                case h_align::right:
+                    x = s.width - w;
+                    break;
+                }
+                draw_text_at(area, data + off, l, x + text_offset_.x, y);
+                y += pitch;
+            }
+            return;
+        }
+
+    // total advance: split into covered runs; uncovered units add 0
+    const int total = text_advance();
 
         int x = 0;
         switch (halign)
@@ -1026,6 +1074,164 @@ namespace zb::ui
     bool Widget::hit(const int x, const int y) const
     {
         return visible && x >= 0 && y >= 0 && x < size.width && y < size.height;
+    }
+
+    // H-1 greedy word wrap (code-contract §2 "Wrapped text"): breaks only
+    // at U+0020 and '\n', a line trims its leading/trailing spaces, the
+    // break space drops at a wrap, a word wider than the whole width sits
+    // alone on its line (the draw clip keeps the edge), and consecutive
+    // hard breaks keep their empty lines. Per-unit advances match the
+    // draw pen exactly (letter-spacing rides every covered unit).
+    static void greedy_wrap(const std::u16string &text,
+                            const GlyphProvider *primary,
+                            const GlyphProvider *fallback, const int letter,
+                            const int width,
+                            std::vector<std::pair<int, int>> &out)
+    {
+        const auto pick = [&](const char16_t ch) -> const GlyphProvider *
+        {
+            if (primary != nullptr && primary->covers(ch))
+            {
+                return primary;
+            }
+            if (fallback->covers(ch))
+            {
+                return fallback;
+            }
+            return nullptr;
+        };
+        const int n = static_cast<int>(text.size());
+        const auto w_of = [&](const int i) -> int
+        {
+            const GlyphProvider *const p = pick(text[i]);
+            return p != nullptr
+                       ? p->measure(text.data() + i, 1).width + letter
+                       : 0;
+        };
+        const auto emit_line = [&](const int start, int end)
+        {
+            while (end > start && text[end - 1] == ' ')
+            {
+                --end;
+            }
+            out.emplace_back(start, end - start);
+        };
+
+        int line_top = 0;
+        int p = 0;
+        int acc = 0;
+        int break_before = -1;
+        while (p < n)
+        {
+            const char16_t ch = text[p];
+            if (p == line_top && ch == ' ')
+            {
+                // leading whitespace collapses off a fresh line
+                ++p;
+                line_top = p;
+                acc = 0;
+                break_before = -1;
+                continue;
+            }
+            if (ch == '\n')
+            {
+                emit_line(line_top, p);
+                ++p;
+                line_top = p;
+                acc = 0;
+                break_before = -1;
+                continue;
+            }
+            if (ch == ' ')
+            {
+                break_before = p;
+            }
+            acc += w_of(p);
+            ++p;
+            if (acc > width)
+            {
+                if (break_before != -1)
+                {
+                    out.emplace_back(line_top, break_before - line_top);
+                    p = break_before + 1;  // the break space drops
+                    line_top = p;
+                    acc = 0;
+                    break_before = -1;
+                }
+                else
+                {
+                    // an over-wide word: it sits alone on its own line
+                    int next = line_top;
+                    while (next < n && text[next] != ' ' && text[next] != '\n')
+                    {
+                        ++next;
+                    }
+                    out.emplace_back(line_top, next - line_top);
+                    p = next + (next < n ? 1 : 0);
+                    line_top = p;
+                    acc = 0;
+                    break_before = -1;
+                }
+            }
+        }
+        if (line_top < n || out.empty())
+        {
+            emit_line(line_top, n);
+        }
+    }
+
+    const std::vector<std::pair<int, int>> &
+    Widget::wrap_spans(const int width) const
+    {
+        if (ext_ == nullptr)
+        {
+            static const std::vector<std::pair<int, int>> kNone{};
+            return kNone;
+        }
+        widget_ext *const e = ext_.get();
+        if (e->wrap_enabled != 0 && e->spans_key_w == width &&
+            e->spans_key_gen == wrap_gen_)
+        {
+            return e->spans;
+        }
+        e->spans.clear();
+        const int len = static_cast<int>(text_.size());
+        if (e->wrap_enabled == 0 || width <= 0)
+        {
+            // single-line demand (also the non-wrapping defensive path)
+            e->spans.emplace_back(0, len);
+        }
+        else
+        {
+            const GlyphProvider *const primary = primary_provider();
+            const GlyphProvider *const fallback = bitmap_fallback_.get();
+            greedy_wrap(text_, primary, fallback, e->letter_px, width,
+                        e->spans);
+            if (e->spans.empty())
+            {
+                e->spans.emplace_back(0, 0);  // empty paragraph: one empty line
+            }
+        }
+        e->spans_key_w = width;
+        e->spans_key_gen = wrap_gen_;
+        return e->spans;
+    }
+
+    int Widget::wrapped_block_height(const int width) const
+    {
+        const auto &spans = wrap_spans(width);
+        if (spans.empty())
+        {
+            return 0;
+        }
+        const GlyphProvider *const primary = primary_provider();
+        const GlyphProvider *const fallback = bitmap_fallback_.get();
+        const text_metrics m = primary != nullptr
+                                   ? primary->line_metrics()
+                                   : fallback->line_metrics();
+        const int pitch = line_height() > 0 ? line_height() : m.height;
+        const int lines = static_cast<int>(spans.size());
+        return lines > 1 ? (lines - 1) * pitch + m.height : m.height;
     }
 
     Widget *Widget::find_by_id(const std::string &id)

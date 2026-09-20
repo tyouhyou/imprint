@@ -1025,7 +1025,17 @@ namespace zb::ui
                     }
                 }
             }
-        if(has_prop(n, "halign"))
+        // H-1 paragraph text (html `p`, code-contract §2): wrap at the
+        // assigned box width, optional line pitch from the sidecar
+        if (prop_of(n, "text_wrap", false))
+        {
+            w.set_text_wrap(true);
+        }
+        if (has_prop(n, "line_h"))
+        {
+            w.set_line_height(static_cast<int>(prop_of(n, "line_h", 0LL)));
+        }
+        if (has_prop(n, "halign"))
         {
             const std::string halign = prop_of(n, "halign", std::string{});
 

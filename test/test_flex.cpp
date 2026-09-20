@@ -3,12 +3,21 @@
 #include "button.hpp"
 #include "dispatcher.hpp"
 #include "flex_panel.hpp"
+#include "label.hpp"
 #include "widget.hpp"
 
 using namespace zb::ui;
 
 namespace
 {
+    // text metrics are protected on Widget; a probe lifts them so the
+    // H-1 stretch-down suite can assert the wrapped box geometry
+    struct ProbeLabel : Label
+    {
+        using Label::text_advance;
+        using Label::text_height;
+    };
+
     std::unique_ptr<Widget> make_child(const int w, const int h)
     {
         auto c = std::make_unique<Widget>();
@@ -724,6 +733,56 @@ int test_flex()
         // measure: 30 (px basis) + 0 (% basis) + 5 (spacing) + 5 (spacing) + 10 (padding*2) = 50
         // Wait, let's verify: main axis is row (width), so measure().width
         EXPECT(p.measure().width == 50); // 30 + 0 + 5 + 5 + 10 = 50
+    }
+
+    // H-1: a wrapping child under stretch is assigned the container's
+    // content box (the block fill) instead of its natural single-line
+    // width -- so a paragraph wraps at the box; convergence across the
+    // stepped relayouts reads the wrapped height on the next round
+    {
+        auto mkpara = []() {
+            auto l = std::make_unique<ProbeLabel>();
+            l->set_text("one two three four five six seven eight nine ten");
+            l->set_text_wrap(true);
+            return l;
+        };
+        FlexPanel p;
+        p.set_direction(FlexPanel::flex_direction::column);
+        p.set_padding(10);
+        p.set_size(110, 80);
+        p.set_align_items(FlexPanel::align::stretch);
+        ProbeLabel *para = mkpara().release();
+        p.add_child(std::unique_ptr<Widget>(para));
+        p.add_child(make_child(10, 10));
+        // stepped layout like the host loop (each round re-reads measure)
+        for (int i = 0; i < 4; ++i)
+        {
+            p.layout();
+        }
+        const auto &c = p.get_items();
+        // fill = 110 - 2*10 padding = 90 (< natural single-line width)
+        EXPECT(para->get_size().width == 90);
+        EXPECT(para->measure().height > para->text_height());
+        EXPECT(para->wrap_spans(para->get_size().width).size() > 1);
+        EXPECT(c[1].child->get_position().x == 10);
+
+        ProbeLabel *dmd = mkpara().release();        // identical, but no wrap
+        dmd->set_text_wrap(false);
+        ProbeLabel &demand = *dmd;
+        FlexPanel q;
+        q.set_direction(FlexPanel::flex_direction::column);
+        q.set_padding(10);
+        q.set_size(110, 80);
+        q.set_align_items(FlexPanel::align::stretch);
+        q.add_child(std::unique_ptr<Widget>(&demand));
+        q.add_child(make_child(10, 10));
+        for (int i = 0; i < 4; ++i)
+        {
+            q.layout();
+        }
+        // non-wrapping label keeps its natural single-line width
+        EXPECT(demand.get_size().width == demand.text_advance());
+        EXPECT(demand.measure().height == demand.text_height());
     }
 
     return test::report("flex");

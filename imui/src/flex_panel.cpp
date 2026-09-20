@@ -779,9 +779,24 @@ namespace zb::ui
                 }
                 // stretch fills the line extent minus the item's own
                 // cross margins (H-3); the content size floors at 0
-                const int fill = std::max(0, line_cross -
+                int fill = std::max(0, line_cross -
                                                  cross_margin_before(child, direction) -
                                                  cross_margin_after(child, direction));
+                if (child.text_wrap())
+                {
+                    // H-1: a wrapping child's assigned width is the
+                    // container's content box (the block fill), not its
+                    // natural single-line demand — otherwise the wrap
+                    // never has a real box to break against. A degenerate
+                    // zero-width container keeps the old fill instead.
+                    const int avail = std::max(0, avail_cross -
+                                                      cross_margin_before(child, direction) -
+                                                      cross_margin_after(child, direction));
+                    if (avail > 0)
+                    {
+                        fill = avail;
+                    }
+                }
                 changed |= (cross_now(child, direction) != fill);
                 set_cross_size(child, direction, fill);
             }

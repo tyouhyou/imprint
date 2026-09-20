@@ -5,6 +5,8 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <utility>
+#include <vector>
 
 #include "imcore.hpp"
 #include "input.hpp"
@@ -842,7 +844,7 @@ namespace zb::ui
         void set_text(const std::u16string &text)
         {
             text_ = text;
-            advance_cache_ = -1;
+            reset_wrap_cache();
             mark_dirty();
             mark_layout_dirty();
         }
@@ -881,7 +883,7 @@ namespace zb::ui
             widget_ext *const e = mut_text();
             const int c = px < 0 ? 0 : (px > 32767 ? 32767 : px);
             e->letter_px = static_cast<int16_t>(c);
-            advance_cache_ = -1;
+            reset_wrap_cache();
             mark_dirty();
             mark_layout_dirty();
         }
@@ -902,7 +904,7 @@ namespace zb::ui
             {
                 e->text_flags &= ~1;
             }
-            advance_cache_ = -1;
+            reset_wrap_cache();
             mark_dirty();
             mark_layout_dirty();
         }
@@ -926,6 +928,49 @@ namespace zb::ui
             return ext_ != nullptr && ext_->has_text != 0 &&
                     ext_->shadow_color.a() != 0;
         }
+        // multi-line text (H-1, code-contract §2 "Wrapped text"): greedy
+        // word wrapping at the assigned box width, '\n' a hard break,
+        // over-wide words clip on their own line. Wrap width = the current
+        // size.width (0 keeps the single-line demand). Both live in the
+        // sidecar so bare widgets stay allocation-free; the span cache is
+        // keyed by the width and the wrap generation, so a settled tree
+        // measures and draws without re-allocating until one of the keys
+        // changes.
+        void set_text_wrap(const bool on)
+        {
+            widget_ext *const e = mut_text();
+            e->wrap_enabled = on ? 1 : 0;
+            reset_wrap_cache();
+            mark_dirty();
+            mark_layout_dirty();
+        }
+        [[nodiscard]] bool text_wrap() const
+        {
+            return ext_ != nullptr && ext_->has_text != 0 &&
+                   ext_->wrap_enabled != 0;
+        }
+        // line pitch for a wrapped block; 0 = unset -> provider line
+        // metrics. Negatives clamp to 0.
+        void set_line_height(const int px)
+        {
+            widget_ext *const e = mut_text();
+            const int c = px < 0 ? 0 : (px > 32767 ? 32767 : px);
+            e->line_h = static_cast<int16_t>(c);
+            reset_wrap_cache();
+            mark_dirty();
+            mark_layout_dirty();
+        }
+        [[nodiscard]] int line_height() const
+        {
+            return (ext_ != nullptr && ext_->has_text != 0) ? ext_->line_h : 0;
+        }
+        // wrapped lines into text_ as (offset, length) pairs; when the
+        // box width is <= 0 this degrades to the single line
+        [[nodiscard]] const std::vector<std::pair<int, int>> &
+        wrap_spans(const int width) const;
+        // whole wrapped block height at `width` = (lines-1) x pitch +
+        // line height (single line = the plain line height)
+        [[nodiscard]] int wrapped_block_height(const int width) const;
 #if defined(IMCORE_HAS_TTF_RUNTIME)
         /*
          * Per-widget font size (code-contract §2.4): resolves
@@ -960,7 +1005,7 @@ namespace zb::ui
         void set_glyph_provider(const zb::SharedPtr<GlyphProvider> &provider)
         {
             primary_provider_ = provider;
-            advance_cache_ = -1;
+            reset_wrap_cache();
             mark_dirty();
             mark_layout_dirty();
         }
@@ -1309,6 +1354,11 @@ namespace zb::ui
             int16_t margin[4] = {0, 0, 0, 0};  // t/r/b/l in-flow margins (H-3)
             int16_t font_px = 0;  // per-widget size declaration (0 = unset)
             uint8_t text_flags = 0;  // bit0 = bold (double-strike)
+            uint8_t wrap_enabled = 0;  // H-1: wrap at the assigned width
+            int16_t line_h = 0;  // H-1: wrapped-line pitch (0 = provider)
+            mutable std::vector<std::pair<int, int>> spans{};  // H-1 wrap lines
+            mutable int spans_key_w = -1;
+            mutable int spans_key_gen = 0;
             core::Color shadow_color{};
             int8_t shadow_dx = 0;
             int8_t shadow_dy = 0;
@@ -1410,6 +1460,13 @@ namespace zb::ui
          * the cache. advance_of() (arbitrary runs) stays uncached.
          */
          mutable int advance_cache_ = -1;
+        // wrap span cache key (H-1): bumped by every setter that changes
+        // the wrapped line breakpoints (text, letter-spacing, bold,
+        // providers, wrap switch, line pitch); wrap_spans() rebuilds the
+        // sidecar spans only when width or this key changes. reset_wrap_cache
+        // also clears the text-advance cache, which the same setters depend on.
+        mutable int wrap_gen_ = 0;
+        void reset_wrap_cache() { advance_cache_ = -1; ++wrap_gen_; }
     };
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)

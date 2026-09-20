@@ -69,6 +69,7 @@ namespace zb::ui
                    p == "font-size" || p == "aspect-ratio" ||
                    p == "letter-spacing" || p == "font-weight" ||
                    p == "text-shadow" || p == "opacity" ||
+                   p == "line-height" ||
                    p == "border-top" || p == "box-shadow" ||
                    p == "margin" || p == "margin-top" ||
                    p == "margin-right" || p == "margin-bottom" ||
@@ -145,6 +146,48 @@ namespace zb::ui
                     continue;
                 }
                 if (pending_space && !out.empty())
+                {
+                    out += ' ';
+                }
+                pending_space = false;
+                if (c == '&' && append_entity(p, end, out))
+                {
+                    continue;  // p advanced past the entity
+                }
+                out += c;
+                ++p;
+            }
+            return out;
+        }
+
+        // H-1: the wrapping variant for paragraph text — same whitespace
+        // collapse as normalize_text, but a '\n' (emitted by <br> inside a
+        // paragraph, and by multi-line source text) survives as a real hard
+        // break and swallows the pending whitespace around it, so <br>
+        // never double-spaces (html-path §Text wrapping: consecutive breaks
+        // keep their empty lines).
+        std::string normalize_wrapped(const char *begin, const char *end)
+        {
+            std::string out;
+            bool pending_space = false;
+            const char *p = begin;
+            while (p != end)
+            {
+                const char c = *p;
+                if (c == '\n')
+                {
+                    out += '\n';
+                    pending_space = false;  // the break ends pending spaces
+                    ++p;
+                    continue;
+                }
+                if (c == ' ' || c == '\t' || c == '\r')
+                {
+                    pending_space = true;
+                    ++p;
+                    continue;
+                }
+                if (pending_space && !out.empty() && out.back() != '\n')
                 {
                     out += ' ';
                 }
@@ -4454,6 +4497,33 @@ namespace zb::ui
             {
                 n.prop("font_size", 12LL);
             }
+            // H-1: a paragraph wraps at its assigned width (html-path
+            // §Text wrapping); any other element stays single-line
+            if (e.tag == "p")
+            {
+                n.prop("text_wrap", true);
+            }
+            // line-height: Npx gives the wrapped-block pitch; 0/Neg/unitless
+            // /percent/malformed keeps the provider line metrics (Tolerance)
+            if (const std::string *lh = fold_lookup(folded, "line-height"))
+            {
+                std::string t = css_trim(ascii_lower(*lh));
+                if (t.size() > 2 && t.compare(t.size() - 2, 2, "px") == 0)
+                {
+                    t = t.substr(0, t.size() - 2);
+                }
+                long long px = 0;
+                if (parse_svg_num(css_trim(t), px) && px > 0)
+                {
+                    n.prop("line_h", px);
+                }
+                else
+                {
+                    LW << "html: line " << e.line << ": line-height '" << *lh
+                       << "' is not a positive pixel value; kept the "
+                          "provider line metrics";
+                }
+            }
 
             for (const Decl &d : folded)
             {
@@ -4698,15 +4768,25 @@ namespace zb::ui
                     {
                         if (tag == "br")
                         {
-                            // B1: no line breaking until H-1: the break
-                            // degrades to a word space in the single-line
-                            // label (the closer trims the edges, runs
-                            // collapse), while the spacer child is dropped
-                            // by the materializer
+                            if (p->tag == "p")
+                            {
+                                // H-1: a hard break inside a wrapping
+                                // paragraph (html-path §Text wrapping);
+                                // no spacer child is pushed (the break is
+                                // part of the paragraph text)
+                                p->text += '\n';
+                                out_elem = nullptr;
+                                out_pushed = true;
+                                return;
+                            }
+                            // B1: not wrapping — the break degrades to a
+                            // word space in the single-line label (the
+                            // closer trims the edges, runs collapse),
+                            // while the spacer child is dropped by the
+                            // materializer
                             LW << "html: line " << line
-                               << ": <br> inside a text element has no "
-                                  "line-break effect until H-1; degraded to "
-                                  "a space";
+                               << ": <br> outside a paragraph has no "
+                                  "line-break effect; degraded to a space";
                             p->text += ' ';
                         }
                         p->children.push_back(std::move(e));
@@ -4776,9 +4856,17 @@ namespace zb::ui
                 }
                 if (is_leaf(*f.elem))
                 {
-                    f.elem->text = normalize_text(
-                        f.elem->text.data(),
-                        f.elem->text.data() + f.elem->text.size());
+                    // H-1: a paragraph keeps its hard breaks; every other
+                    // leaf collapses like before
+                    f.elem->text = (f.elem->tag == "p"
+                                        ? normalize_wrapped(
+                                              f.elem->text.data(),
+                                              f.elem->text.data() +
+                                                  f.elem->text.size())
+                                        : normalize_text(
+                                              f.elem->text.data(),
+                                              f.elem->text.data() +
+                                                  f.elem->text.size()));
                 }
                 if (!f.pushed && frames.size() > 1)
                 {

@@ -458,9 +458,9 @@ int test_html()
                "MODEL 500 · STEREO");
     }
 
-    // B1: br inside a leaf warns (no line breaking until H-1) and
-    // degrades to a word space in the single-line label; edges trim
-    // clean and runs collapse
+    // B1: br inside a leaf outside a paragraph warns (no line breaking
+    // outside p) and degrades to a word space in the single-line label;
+    // edges trim clean and runs collapse
     {
         ui_node r = parse_html("<label>a<br/>b</label>\n", nullptr);
         EXPECT(r.children.size() == 1);
@@ -474,6 +474,52 @@ int test_html()
 
         ui_node r4 = parse_html("<label>a<br/><br/>b</label>\n", nullptr);
         EXPECT(test::vget<std::string>(node_prop_v(r4.children[0], "text")) == "a b");
+    }
+
+    // H-1: p is a blocking label -- it carries the text_wrap prop, and
+    // line-height: Npx rides along as line_h (the unit is mandatory, so
+    // malformed values stay a provider-pitch fallback)
+    {
+        ui_node r = parse_html("<p>one two</p>\n", nullptr);
+        EXPECT(r.type == "root");
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        EXPECT(test::vget<bool>(node_prop_v(r.children[0], "text_wrap")) == true);
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) == "one two");
+        EXPECT(find_prop(r.children[0], "line_h") < 0);
+
+        ui_node r2 = parse_html("<p style=\"line-height: 24px\">x</p>\n", nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(r2.children[0], "line_h")) == 24);
+        EXPECT(test::vget<bool>(node_prop_v(r2.children[0], "text_wrap")) == true);
+
+        const char *bad[] = {"line-height: 140%",
+                             "line-height: 2em",
+                             "line-height: -4px",
+                             "line-height: plain",
+                             "line-height: 0"};
+        for (const char *d : bad)
+        {
+            ui_node r3 = parse_html(
+                (std::string("<p style=\"") + d + "\">x</p>\n").c_str(), nullptr);
+            EXPECT(find_prop(r3.children[0], "line_h") < 0);
+            EXPECT(test::vget<bool>(node_prop_v(r3.children[0], "text_wrap")) == true);
+        }
+    }
+
+    // H-1: br inside a paragraph is a hard break (void, no spacer
+    // child); consecutive br keep their empty line (the pending space
+    // between them collapses), and the p stays a single wrapping leaf
+    {
+        ui_node r = parse_html("<p>a<br>b</p>\n", nullptr);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) == "a\nb");
+        EXPECT(test::vget<bool>(node_prop_v(r.children[0], "text_wrap")) == true);
+
+        ui_node r2 = parse_html("<p>a<br/> <br/>b</p>\n", nullptr);
+        EXPECT(r2.children.size() == 1);
+        EXPECT(test::vget<std::string>(node_prop_v(r2.children[0], "text")) ==
+               "a\n\nb");
     }
 
     // C1/C5: still-inert selectors are consumed with their bodies, so
