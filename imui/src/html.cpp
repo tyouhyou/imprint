@@ -69,7 +69,12 @@ namespace zb::ui
                    p == "font-size" || p == "aspect-ratio" ||
                    p == "letter-spacing" || p == "font-weight" ||
                    p == "text-shadow" || p == "opacity" ||
-                   p == "border-top" || p == "box-shadow";
+                   p == "border-top" || p == "box-shadow" ||
+                   p == "margin" || p == "margin-top" ||
+                   p == "margin-right" || p == "margin-bottom" ||
+                   p == "margin-left" || p == "padding-top" ||
+                   p == "padding-right" || p == "padding-bottom" ||
+                   p == "padding-left" || p == "transform-origin";
         }
 
         // --- text helpers --------------------------------------------------
