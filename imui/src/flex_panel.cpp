@@ -782,6 +782,17 @@ namespace zb::ui
                 int fill = std::max(0, line_cross -
                                                  cross_margin_before(child, direction) -
                                                  cross_margin_after(child, direction));
+                // the container's content box bounds an auto-axis stretch
+                // child (H-9e): a child whose natural cross demand
+                // exceeds the container fills (and is clipped by) the
+                // container, and never drags the line extent wider —
+                // otherwise one wide auto child (e.g. a wrapping
+                // paragraph's single-line demand) balloons the whole
+                // stack past the layout box. The text_wrap case below
+                // reads the same box via avail_cross.
+                const int avail = std::max(0, avail_cross -
+                                                  cross_margin_before(child, direction) -
+                                                  cross_margin_after(child, direction));
                 if (child.text_wrap())
                 {
                     // H-1: a wrapping child's assigned width is the
@@ -789,13 +800,14 @@ namespace zb::ui
                     // natural single-line demand — otherwise the wrap
                     // never has a real box to break against. A degenerate
                     // zero-width container keeps the old fill instead.
-                    const int avail = std::max(0, avail_cross -
-                                                      cross_margin_before(child, direction) -
-                                                      cross_margin_after(child, direction));
                     if (avail > 0)
                     {
                         fill = avail;
                     }
+                }
+                else if (avail > 0 && fill > avail)
+                {
+                    fill = avail;
                 }
                 changed |= (cross_now(child, direction) != fill);
                 set_cross_size(child, direction, fill);

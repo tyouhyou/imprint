@@ -780,9 +780,49 @@ int test_flex()
         {
             q.layout();
         }
-        // non-wrapping label keeps its natural single-line width
-        EXPECT(demand.get_size().width == demand.text_advance());
+        // a non-wrapping label is a stretch child too: its box caps at
+        // the container content box (the block fill, H-9e) instead of
+        // its natural single-line demand; wrap is off, so the text stays
+        // single-line and merely overflows the box
+        EXPECT(demand.get_size().width == 90);
+        EXPECT(demand.text_advance() > 90);
         EXPECT(demand.measure().height == demand.text_height());
+    }
+
+    // H-9e: an auto-axis stretch child whose natural cross demand exceeds
+    // the container is capped at the container's content box; it must not
+    // drag the line extent (or its stretch siblings) past the layout box.
+    // Regression: the demo's wrapping paragraph (1201px single-line demand)
+    // ballooned the whole 360px column -- the tube/power modules stretched
+    // to 1201 and overflowed, even though the column kept its width.
+    {
+        FlexPanel p;
+        p.set_direction(FlexPanel::flex_direction::column);
+        p.set_padding(10);
+        p.set_size(110, 80);
+        p.set_align_items(FlexPanel::align::stretch);
+        auto wide = std::make_unique<ProbeLabel>();
+        wide->set_text("one two three four five six seven eight nine ten");
+        wide->set_text_wrap(false);  // natural single-line demand > 90
+        ProbeLabel *widep = wide.get();
+        auto sib = std::make_unique<ProbeLabel>();
+        sib->set_text("hi");
+        ProbeLabel *sibp = sib.get();
+        p.add_child(std::move(wide));
+        p.add_child(std::move(sib));
+        for (int i = 0; i < 4; ++i)
+        {
+            p.layout();
+        }
+        const auto &c = p.get_items();
+        // the wide child caps at the content box, not its 6-digit demand
+        EXPECT(widep->get_size().width == 90);
+        EXPECT(widep->text_advance() > 90);
+        // the auto sibling stretch child never balloons to the wide
+        // demand: it fills the same content box (H-9e regression: the
+        // demo's tube/power modules stretched to 1201 and overflowed)
+        EXPECT(sibp->get_size().width == 90);
+        EXPECT(c[0].child->get_position().x == 10);
     }
 
     return test::report("flex");
