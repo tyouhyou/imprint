@@ -260,6 +260,20 @@ namespace zb::ui
         n.prop("fill_alpha", 255LL).prop("anchor", anchor);
         return n;
     }
+    // one flattened subpath ("x,y x,y ..." viewBox units, decimals;
+    // the html converter emits these from `d`, code-contract §3.3)
+    inline ui_node svg_path(std::string pts, std::string stroke = {},
+                            const bool closed = false,
+                            const long long alpha = 255)
+    {
+        ui_node n;
+        n.type = "svg_path";
+        n.prop("pts", std::move(pts));
+        n.prop("stroke", std::move(stroke));
+        n.prop("closed", closed);
+        n.prop("stroke_alpha", alpha);
+        return n;
+    }
     inline ui_node list_box(std::vector<std::string> items, const long long rows = 4)
     {
         ui_node n;

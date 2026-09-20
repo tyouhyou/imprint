@@ -1193,6 +1193,98 @@ int test_html()
         EXPECT(r7.children.size() == 1 && r7.children[0].type == "label");
     }
 
+    // svg path subset: commands, relative forms, implicit repeats,
+    // smooth reflections, subpaths, closing, unsupported grammar drops
+    {
+        // the demo's C/S chain: flattened into one polyline, stroke
+        // form folded from the enclosing g
+        bool ok = false;
+        ui_node root = parse_html(
+            "<div><svg viewBox=\"0 0 330 200\">"
+            "<g fill=\"none\" stroke-linecap=\"round\">"
+            "<path d=\"M 0 104 C 18 94, 34 90, 52 98 S 86 124, 106 116\""
+            " stroke=\"#57f5a0\" stroke-width=\"2.5\"/>"
+            "</g></svg></div>\n", &ok);
+        EXPECT(ok);
+        const ui_node &s = root.children[0];
+        EXPECT(s.children.size() == 1);
+        const ui_node &pn = s.children[0];
+        EXPECT(pn.type == "svg_path");
+        const std::string pts = test::vget<std::string>(node_prop_v(pn, "pts"));
+        // starts at the M point, ends at the S target, and flattening
+        // emitted the intermediate curve points between them
+        EXPECT(pts.compare(0, 6, "0,104 ") == 0);
+        EXPECT(pts.size() >= 14 &&
+               pts.compare(pts.size() - 7, 7, "106,116") == 0);
+        EXPECT(pts.find(' ') != std::string::npos &&
+               pts.find(' ', pts.find(' ') + 1) != std::string::npos);
+        EXPECT(test::vget<std::string>(node_prop_v(pn, "stroke")) == "#57f5a0");
+        EXPECT(test::vget<double>(node_prop_v(pn, "stroke_w")) == 2.5);
+        EXPECT(test::vget<bool>(node_prop_v(pn, "stroke_round")) == true);
+        EXPECT(test::vget<bool>(node_prop_v(pn, "closed")) == false);
+        EXPECT(test::vget<long long>(node_prop_v(pn, "stroke_alpha")) == 255);
+
+        // L/H/V, relative forms, implicit repeats after M
+        ui_node rl = parse_html(
+            "<div><svg><path d=\"M 10 10 L 20 10 H 30 V 40\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(test::vget<std::string>(node_prop_v(rl.children[0].children[0],
+                                                   "pts")) == "10,10 20,10 30,10 30,40");
+        ui_node rr = parse_html(
+            "<div><svg><path d=\"m 10 10 l 10 0 h 5\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(test::vget<std::string>(node_prop_v(rr.children[0].children[0],
+                                                   "pts")) == "10,10 20,10 25,10");
+        ui_node ri = parse_html(
+            "<div><svg><path d=\"M 0 0 10 10 20 0\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(test::vget<std::string>(node_prop_v(ri.children[0].children[0],
+                                                   "pts")) == "0,0 10,10 20,0");
+
+        // Z closes; multi-subpath data emits one node per subpath
+        ui_node rz = parse_html(
+            "<div><svg><path d=\"M 0 0 L 10 0 L 10 10 Z\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(test::vget<bool>(node_prop_v(rz.children[0].children[0],
+                                            "closed")) == true);
+        ui_node rm = parse_html(
+            "<div><svg><path d=\"M 0 0 L 5 5 M 10 10 L 15 15\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(rm.children[0].children.size() == 2);
+        EXPECT(test::vget<std::string>(node_prop_v(rm.children[0].children[1],
+                                                   "pts")) == "10,10 15,15");
+
+        // Q/T ride the same flattener through cubic elevation
+        ui_node rq = parse_html(
+            "<div><svg><path d=\"M 0 0 Q 5 10 10 0 T 20 0\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        const std::string qpts = test::vget<std::string>(
+            node_prop_v(rq.children[0].children[0], "pts"));
+        EXPECT(qpts.size() >= 5 &&
+               qpts.compare(qpts.size() - 4, 4, "20,0") == 0);
+
+        // arcs and malformed data drop the path (with one warning);
+        // strokeless paths are invisible like strokeless lines
+        ui_node ra = parse_html(
+            "<div><svg><path d=\"M 0 0 A 5 5 0 0 1 10 10\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(ra.children[0].children.empty());
+        ui_node rx = parse_html(
+            "<div><svg><path d=\"M 0 0 L\" stroke=\"red\"/></svg></div>\n",
+            nullptr);
+        EXPECT(rx.children[0].children.empty());
+        ui_node rs = parse_html(
+            "<div><svg><path d=\"M 0 0 L 10 10\"/></svg></div>\n",
+            nullptr);
+        EXPECT(rs.children[0].children.empty());
+
+        // path outside svg builds nothing (off-whitelist like line/text)
+        bool ok8 = true;
+        ui_node r8 = parse_html("<path d=\"M 0 0 L 1 1\"/>\n", &ok8);
+        EXPECT(!ok8);
+        EXPECT(r8.children.empty());
+    }
+
     // end-to-end: an svg document materializes into a live SvgCanvas
     {
         bool ok = false;

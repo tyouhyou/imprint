@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <memory>
 #include <string>
@@ -3036,6 +3037,437 @@ namespace zb::ui
             n.children.push_back(std::move(t));
         }
 
+        // --- svg path data (H-6 first cut) ---------------------------------
+        // Stroke-only `d` parsing plus adaptive flattening into
+        // per-subpath polylines (code-contract §3.3). Commands M m L l
+        // H h V v C c S s Q q T t Z z with the SVG grammar (implicit
+        // repeats, relative forms); arcs drop the whole path with one
+        // warning. Flattening is plain IEEE double with a fixed chord
+        // tolerance and depth cap, so every platform flattens alike.
+
+        constexpr double kPathTol = 0.1;      // viewBox-unit chord tolerance
+        constexpr int kPathMaxDepth = 12;     // <= 4096 emits per curve
+
+        void flatten_cubic(std::vector<std::pair<double, double>> &out,
+                           const double x0, const double y0,
+                           const double x1, const double y1,
+                           const double x2, const double y2,
+                           const double x3, const double y3,
+                           const int depth)
+        {
+            // flatness without sqrt: the control points' squared
+            // distance to the chord vs the tolerance (all doubles, no
+            // overflow below any real coordinate magnitude)
+            const double dx = x3 - x0;
+            const double dy = y3 - y0;
+            const double len2 = dx * dx + dy * dy;
+            const double tol2 = kPathTol * kPathTol;
+            bool flat = len2 <= tol2;
+            if (!flat)
+            {
+                const double c1 = (x1 - x0) * dy - (y1 - y0) * dx;
+                const double c2 = (x2 - x0) * dy - (y2 - y0) * dx;
+                flat = c1 * c1 <= tol2 * len2 && c2 * c2 <= tol2 * len2;
+            }
+            if (flat || depth >= kPathMaxDepth)
+            {
+                out.emplace_back(x3, y3);
+                return;
+            }
+            const double x01 = (x0 + x1) / 2, y01 = (y0 + y1) / 2;
+            const double x12 = (x1 + x2) / 2, y12 = (y1 + y2) / 2;
+            const double x23 = (x2 + x3) / 2, y23 = (y2 + y3) / 2;
+            const double xa = (x01 + x12) / 2, ya = (y01 + y12) / 2;
+            const double xb = (x12 + x23) / 2, yb = (y12 + y23) / 2;
+            const double xm = (xa + xb) / 2, ym = (ya + yb) / 2;
+            flatten_cubic(out, x0, y0, x01, y01, xa, ya, xm, ym, depth + 1);
+            flatten_cubic(out, xm, ym, xb, yb, x23, y23, x3, y3, depth + 1);
+        }
+
+        // one polyline per subpath, closed flag from `Z`
+        struct PathSub
+        {
+            std::vector<std::pair<double, double>> pts;
+            bool closed = false;
+        };
+
+        bool convert_path_d(const std::string &d, std::vector<PathSub> &out)
+        {
+            const char *p = d.c_str();
+            const char *const end = p + d.size();
+            const auto skip_sep = [&p, end] {
+                while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' ||
+                                   *p == '\r' || *p == ','))
+                {
+                    ++p;
+                }
+            };
+            const auto read_num = [&](double &v) {
+                skip_sep();
+                const char *b = p;
+                if (p < end && (*p == '+' || *p == '-'))
+                {
+                    ++p;
+                }
+                bool digits = false;
+                while (p < end && *p >= '0' && *p <= '9')
+                {
+                    ++p;
+                    digits = true;
+                }
+                if (p < end && *p == '.')
+                {
+                    ++p;
+                    while (p < end && *p >= '0' && *p <= '9')
+                    {
+                        ++p;
+                        digits = true;
+                    }
+                }
+                if (!digits)
+                {
+                    p = b;
+                    return false;
+                }
+                v = std::strtod(b, nullptr);
+                return true;
+            };
+            double cx = 0, cy = 0;       // current point
+            double sx = 0, sy = 0;       // subpath start
+            double lc_x = 0, lc_y = 0;   // last cubic control (S reflection)
+            double lq_x = 0, lq_y = 0;   // last quadratic control (T)
+            char cmd = 0;                // last command letter
+            char prev = 0;               // command before it (reflection rule)
+            PathSub *cur = nullptr;
+            const auto open_at = [&]() -> PathSub * {
+                out.emplace_back();
+                out.back().pts.emplace_back(cx, cy);
+                return &out.back();
+            };
+            while (true)
+            {
+                skip_sep();
+                if (p >= end)
+                {
+                    break;
+                }
+                if (*p == '+' || *p == '-' || *p == '.' ||
+                    (*p >= '0' && *p <= '9'))
+                {
+                    // implicit repeat: keep cmd (M already rerouted to L)
+                }
+                else if ((*p >= 'A' && *p <= 'Z') || (*p >= 'a' && *p <= 'z'))
+                {
+                    prev = cmd;
+                    cmd = *p++;
+                }
+                else
+                {
+                    return false;
+                }
+                const bool rel = cmd >= 'a' && cmd <= 'z' && cmd != 'z';
+                switch (cmd)
+                {
+                case 'M':
+                case 'm':
+                {
+                    double x, y;
+                    if (!read_num(x) || !read_num(y))
+                    {
+                        return false;
+                    }
+                    cur = nullptr;  // any open subpath ends here
+                    cx = rel ? cx + x : x;
+                    cy = rel ? cy + y : y;
+                    sx = cx;
+                    sy = cy;
+                    out.emplace_back();
+                    out.back().pts.emplace_back(cx, cy);
+                    cur = &out.back();
+                    // extra pairs are implicit line-tos (SVG rule)
+                    cmd = rel ? 'l' : 'L';
+                    break;
+                }
+                case 'L':
+                case 'l':
+                {
+                    double x, y;
+                    if (!read_num(x) || !read_num(y))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    cx = rel ? cx + x : x;
+                    cy = rel ? cy + y : y;
+                    cur->pts.emplace_back(cx, cy);
+                    break;
+                }
+                case 'H':
+                case 'h':
+                {
+                    double x;
+                    if (!read_num(x))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    cx = rel ? cx + x : x;
+                    cur->pts.emplace_back(cx, cy);
+                    break;
+                }
+                case 'V':
+                case 'v':
+                {
+                    double y;
+                    if (!read_num(y))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    cy = rel ? cy + y : y;
+                    cur->pts.emplace_back(cx, cy);
+                    break;
+                }
+                case 'C':
+                case 'c':
+                {
+                    double x1, y1, x2, y2, x, y;
+                    if (!read_num(x1) || !read_num(y1) ||
+                        !read_num(x2) || !read_num(y2) ||
+                        !read_num(x) || !read_num(y))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    if (rel)
+                    {
+                        x1 += cx; y1 += cy;
+                        x2 += cx; y2 += cy;
+                        x += cx; y += cy;
+                    }
+                    flatten_cubic(cur->pts, cx, cy, x1, y1, x2, y2, x, y, 0);
+                    lc_x = x2;
+                    lc_y = y2;
+                    cx = x;
+                    cy = y;
+                    break;
+                }
+                case 'S':
+                case 's':
+                {
+                    double x2, y2, x, y;
+                    if (!read_num(x2) || !read_num(y2) ||
+                        !read_num(x) || !read_num(y))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    double rx = cx, ry = cy;  // reflection of the last
+                    if (prev == 'C' || prev == 'S')  // cubic control
+                    {
+                        rx = 2 * cx - lc_x;
+                        ry = 2 * cy - lc_y;
+                    }
+                    if (rel)
+                    {
+                        x2 += cx; y2 += cy;
+                        x += cx; y += cy;
+                    }
+                    flatten_cubic(cur->pts, cx, cy, rx, ry, x2, y2, x, y, 0);
+                    lc_x = x2;
+                    lc_y = y2;
+                    cx = x;
+                    cy = y;
+                    break;
+                }
+                case 'Q':
+                case 'q':
+                {
+                    double x1, y1, x, y;
+                    if (!read_num(x1) || !read_num(y1) ||
+                        !read_num(x) || !read_num(y))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    if (rel)
+                    {
+                        x1 += cx; y1 += cy;
+                        x += cx; y += cy;
+                    }
+                    // quadratic -> cubic elevation, one flattener
+                    const double c1x = cx + 2.0 / 3 * (x1 - cx);
+                    const double c1y = cy + 2.0 / 3 * (y1 - cy);
+                    const double c2x = x + 2.0 / 3 * (x1 - x);
+                    const double c2y = y + 2.0 / 3 * (y1 - y);
+                    flatten_cubic(cur->pts, cx, cy, c1x, c1y, c2x, c2y,
+                                  x, y, 0);
+                    lq_x = x1;
+                    lq_y = y1;
+                    cx = x;
+                    cy = y;
+                    break;
+                }
+                case 'T':
+                case 't':
+                {
+                    double x, y;
+                    if (!read_num(x) || !read_num(y))
+                    {
+                        return false;
+                    }
+                    if (cur == nullptr)
+                    {
+                        cur = open_at();
+                    }
+                    double rx = cx, ry = cy;
+                    if (prev == 'Q' || prev == 'T')
+                    {
+                        rx = 2 * cx - lq_x;
+                        ry = 2 * cy - lq_y;
+                    }
+                    if (rel)
+                    {
+                        x += cx; y += cy;
+                    }
+                    const double c1x = cx + 2.0 / 3 * (rx - cx);
+                    const double c1y = cy + 2.0 / 3 * (ry - cy);
+                    const double c2x = x + 2.0 / 3 * (rx - x);
+                    const double c2y = y + 2.0 / 3 * (ry - y);
+                    flatten_cubic(cur->pts, cx, cy, c1x, c1y, c2x, c2y,
+                                  x, y, 0);
+                    lq_x = rx;
+                    lq_y = ry;
+                    cx = x;
+                    cy = y;
+                    break;
+                }
+                case 'Z':
+                case 'z':
+                {
+                    if (cur != nullptr)
+                    {
+                        cur->closed = true;
+                        cur = nullptr;
+                    }
+                    cx = sx;
+                    cy = sy;
+                    break;
+                }
+                default:
+                    return false;  // arcs and anything else: unsupported
+                }
+            }
+            return true;
+        }
+
+        // one svg path element into per-subpath svg_path nodes
+        // (silently dropped when strokeless, one warning when the data
+        // is outside the supported grammar — the shared tolerance)
+        void convert_svg_path(ui_node &n, const Elem &c)
+        {
+            const std::string &stroke = c.attr("stroke");
+            if (stroke.empty())
+            {
+                return;  // SVG default: no stroke = invisible
+            }
+            const std::string &d = c.attr("d");
+            std::vector<PathSub> subs;
+            if (d.empty() || !convert_path_d(d, subs))
+            {
+                LW << "html: line " << c.line << ": <path> d data is not in "
+                      "the supported subset (M L H V C S Q T Z); dropped";
+                return;
+            }
+            double width = 1.0;
+            for (const auto &a : c.attrs)
+            {
+                if (a.first == "stroke-width")
+                {
+                    if (!parse_svg_double(a.second, width) || width <= 0)
+                    {
+                        return;
+                    }
+                }
+            }
+            const bool round = ascii_lower(c.attr("stroke-linecap")) == "round";
+            const std::string &op = c.attr("opacity");
+            const long long alpha =
+                op.empty() ? 255LL
+                           : static_cast<long long>(parse_svg_alpha(op));
+            for (const PathSub &sub : subs)
+            {
+                if (sub.pts.empty())
+                {
+                    continue;
+                }
+                ui_node pn;
+                pn.type = "svg_path";
+                std::string pts;
+                const auto fmt = [](const double v) {
+                    char buf[40];
+                    std::snprintf(buf, sizeof buf, "%.3f", v);
+                    std::string tok = buf;
+                    // trim trailing zeros: "18.500" -> "18.5",
+                    // "104.000" -> "104" (round-trips through the
+                    // materialize parser either way)
+                    const auto dot = tok.find('.');
+                    if (dot != std::string::npos)
+                    {
+                        std::size_t last = tok.size();
+                        while (last > dot + 1 && tok[last - 1] == '0')
+                        {
+                            --last;
+                        }
+                        if (tok[last - 1] == '.')
+                        {
+                            --last;
+                        }
+                        tok.resize(last);
+                    }
+                    return tok;
+                };
+                for (const auto &pt : sub.pts)
+                {
+                    if (!pts.empty())
+                    {
+                        pts += ' ';
+                    }
+                    pts += fmt(pt.first);
+                    pts += ',';
+                    pts += fmt(pt.second);
+                }
+                pn.prop("pts", std::move(pts));
+                pn.prop("stroke", stroke);
+                pn.prop("stroke_w", width);
+                if (round)
+                {
+                    pn.prop("stroke_round", true);
+                }
+                pn.prop("closed", sub.closed);
+                pn.prop("stroke_alpha", alpha);
+                n.children.push_back(std::move(pn));
+            }
+        }
+
         // H-10 pseudo-element box (narrow subset): folds the ::before
         // (kind 1) or ::after (kind 2) rules for the element and lands
         // before_*/after_* paint props on its node (a paint-only box —
@@ -4062,6 +4494,10 @@ namespace zb::ui
                     {
                         convert_svg_line(n, *c);
                     }
+                    else if (c->tag == "path")
+                    {
+                        convert_svg_path(n, *c);
+                    }
                     else if (c->tag == "text")
                     {
                         convert_svg_text(n, *c);
@@ -4243,7 +4679,8 @@ namespace zb::ui
                 auto e = std::make_unique<Elem>();
                 e->tag = tag;
                 e->line = line;
-                const bool svg_child = (tag == "line" || tag == "text") &&
+                const bool svg_child = (tag == "line" || tag == "text" ||
+                                        tag == "path") &&
                     (p->tag == "svg" || p->tag == "vectordial");
                 if (is_leaf(*p))
                 {
@@ -4422,7 +4859,8 @@ namespace zb::ui
                     }
                     svg_stack.push_back(std::move(merged));
                 }
-                else if ((name == "line" || name == "text") && in_svg())
+                else if ((name == "line" || name == "text" ||
+                          name == "path") && in_svg())
                 {
                     mode = k_build;  // strokes of the canvas (attrs merged below)
                 }
@@ -4448,7 +4886,8 @@ namespace zb::ui
                 // else keeps the token attributes verbatim
                 std::vector<std::pair<std::string, std::string>> resolved;
                 const std::vector<std::pair<std::string, std::string>> *attr_src = &t.attrs;
-                if (mode == k_build && (name == "line" || name == "text") && in_svg() &&
+                if (mode == k_build && (name == "line" || name == "text" ||
+                                        name == "path") && in_svg() &&
                     !svg_stack.empty())
                 {
                     resolved = t.attrs;

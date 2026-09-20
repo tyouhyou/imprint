@@ -18,6 +18,7 @@
 #include "toggle_switch.hpp"
 #include "trend_line.hpp"
 #include "widget.hpp"
+#include <cstdlib>
 #include <string>
 namespace zb::ui
 {
@@ -1256,6 +1257,86 @@ namespace zb::ui
                         t.anchor = static_cast<int>(prop_of(c, "anchor", 0LL));
                         t.font_size = prop_of(c, "text_fs", 0.0);
                         v.add_text(t);
+                    }
+                    else if (c.type == "svg_path")
+                    {
+                        core::Color stroke;
+                        if (!parse_color(prop_of(c, "stroke", std::string{}), stroke))
+                        {
+                            continue;  // SVG default: no stroke = invisible
+                        }
+                        // the flattened polyline ("x,y x,y ..." viewBox
+                        // units, decimals — the converter's form);
+                        // malformed data drops the subpath silently
+                        // (the shared tolerance)
+                        const std::string pts =
+                            prop_of(c, "pts", std::string{});
+                        SvgCanvas::Path pth;
+                        pth.closed = prop_of(c, "closed", false);
+                        pth.width = prop_of(c, "stroke_w", 1.0);
+                        pth.round_caps = prop_of(c, "stroke_round", false);
+                        bool ok = !pts.empty();
+                        std::size_t i = 0;
+                        const auto num = [&](double &out) {
+                            while (i < pts.size() &&
+                                   (pts[i] == ' ' || pts[i] == ','))
+                            {
+                                ++i;
+                            }
+                            const std::size_t b = i;
+                            if (i < pts.size() &&
+                                (pts[i] == '-' || pts[i] == '+'))
+                            {
+                                ++i;
+                            }
+                            bool digits = false;
+                            while (i < pts.size() && pts[i] >= '0' &&
+                                   pts[i] <= '9')
+                            {
+                                ++i;
+                                digits = true;
+                            }
+                            if (i < pts.size() && pts[i] == '.')
+                            {
+                                ++i;
+                                while (i < pts.size() && pts[i] >= '0' &&
+                                       pts[i] <= '9')
+                                {
+                                    ++i;
+                                    digits = true;
+                                }
+                            }
+                            out = b < i ? std::atof(pts.c_str() + b) : 0.0;
+                            return digits;
+                        };
+                        while (ok)
+                        {
+                            double x = 0, y = 0;
+                            if (!num(x) || !num(y))
+                            {
+                                ok = false;
+                                break;
+                            }
+                            pth.pts.emplace_back(x, y);
+                            while (i < pts.size() &&
+                                   (pts[i] == ' ' || pts[i] == ','))
+                            {
+                                ++i;
+                            }
+                            if (i >= pts.size())
+                            {
+                                break;
+                            }
+                        }
+                        if (!ok)
+                        {
+                            continue;
+                        }
+                        const long long alpha =
+                            prop_of(c, "stroke_alpha", 255LL) * base_alpha / 255;
+                        stroke.set_a(static_cast<uint8_t>(alpha));
+                        pth.color = stroke;
+                        v.add_path(pth);
                     }
                 }
                 return;
