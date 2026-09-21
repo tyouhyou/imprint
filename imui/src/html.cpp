@@ -3788,12 +3788,6 @@ namespace zb::ui
                              const VarMap &vars,
                              const std::vector<Ancestor> &ancestors)
         {
-            LW << "showcase_html: DIAG V0 tag=" << e.tag;  // TEMP NDS bisect
-#if 1  // TEMP NDS bisect: stub body (frame probe)
-            ui_node n;
-            n.type = "stub";
-            return n;
-#else
             ui_node n;
             std::vector<Decl> folded;
             fold_style(e, rules, vars, ancestors, folded);
@@ -4603,14 +4597,11 @@ namespace zb::ui
             {
                 n.children.push_back(convert_elem(*c, rules, vars, below));
             }
-            LW << "showcase_html: DIAG V1 kids=" << (int)n.children.size();  // TEMP NDS bisect
             // H-10 generated boxes land on the originating node
             // (::before paints first, ::after last — see paint order)
             convert_pseudo(e.line, 1, e, rules, vars, ancestors, n);
             convert_pseudo(e.line, 2, e, rules, vars, ancestors, n);
-            LW << "showcase_html: DIAG V2";  // TEMP NDS bisect
             return n;
-#endif  // TEMP NDS bisect stub
         }
 
         // -------------------------------------------------------------------
