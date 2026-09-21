@@ -2,7 +2,7 @@
 # Build a story app as a wasm demo inside the emscripten/emsdk container.
 # Expected layout: the repo is mounted at /src (project root = /src).
 #
-# Usage: build.sh [tictactoe|showcase]   (default: tictactoe)
+# Usage: build.sh [tictactoe|showcase|showcase_html]   (default: tictactoe)
 set -e
 
 cd /src
@@ -78,8 +78,38 @@ showcase)
     /tmp/asset_gen /tmp/showcase_assets.gen.hpp
     EXTRA_INCLUDES="-I /tmp"
     ;;
+showcase_html)
+    # the HTML designer path: parse_html + the packed HTML document.
+    # html_embed needs parse_color out of ui_builder.cpp, so the native
+    # validator compiles the full imui/imcore closure (the ui_embed
+    # minimal-closure precedent does not apply: ui_file.cpp is standalone,
+    # html.cpp is not)
+    APP_SRCS="
+      imui/src/ui_builder.cpp
+      imui/src/html.cpp
+      apps/showcase_html/src/app_maker.cpp
+      apps/showcase_html/src/showcase_html.cpp
+    "
+    APP_INCLUDE="/src/apps/showcase_html/include"
+    EXPORT_NAME=createShowcaseHtml
+    g++ -std=c++17 -O1 \
+        -DCOLOR_DEPTH=32 -DRGB_MODEL=argb32 -DENDIAN=be \
+        -I /src/imui/include -I /src/imutil/include \
+        -I /src/imcore/include -I /src/imcore/include/core \
+        -I /src/imcore/include/text -I /src/imcore/include/codec \
+        -I /src/imevent/include -I /src/iminput/include \
+        /src/tools/html_embed.cpp /src/imui/src/*.cpp \
+        /src/imcore/src/core/graphics.cpp \
+        /src/imcore/src/text/utf8.cpp \
+        /src/imcore/src/text/bitmap_provider.cpp \
+        /src/imcore/src/text/text_image.cpp \
+        -o /tmp/html_embed
+    /tmp/html_embed /tmp/showcase_html.gen.hpp \
+        /src/apps/showcase_html/space.html
+    EXTRA_INCLUDES="-I /tmp"
+    ;;
 *)
-    echo "unknown app: $APP (expected tictactoe|showcase)" >&2
+    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html)" >&2
     exit 1
     ;;
 esac
