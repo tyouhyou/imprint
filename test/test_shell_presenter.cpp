@@ -63,6 +63,20 @@ int test_shell_presenter()
         EXPECT(none.w == 0 && none.h == 0);  // a frame that drew nothing
     }
 
+    // surface clamp: an edge widget's outer-glow spill reports expanded
+    // damage outside the buffer (e.g. (-45,-45,570,450) on 480x360);
+    // the blit region intersects the buffer so no shell ever blits a
+    // negative origin (XPutImage clips those server-side into a shift)
+    {
+        const present_rect r = region_to_present(true, -45, -45, 570, 450, 480, 360);
+        EXPECT(r.x == 0 && r.y == 0 && r.w == 480 && r.h == 360);
+        const present_rect r2 = region_to_present(true, 400, 300, 200, 200, 480, 360);
+        EXPECT(r2.x == 400 && r2.y == 300 && r2.w == 80 && r2.h == 60);
+        const present_rect outside =
+            region_to_present(true, 500, 400, 60, 60, 480, 360);
+        EXPECT(outside.w == 0 && outside.h == 0);  // wholly outside: nothing
+    }
+
     // coalescer: regions union, empty adds are no-ops, clear resets
     {
         dirty_coalescer c;

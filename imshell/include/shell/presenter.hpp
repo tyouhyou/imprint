@@ -37,6 +37,15 @@ namespace zb::shell
      * unspecified evaluation order -- the out-params can be read before
      * they are filled, the region reads 0x0 and nothing ever presents
      * (shipped in main_x.cpp and main_fb.cpp, fixed 2026-09-05).
+     *
+     * Surface clamp: widget damage legitimately exceeds the buffer
+     * (an edge widget's outer-glow spill reports the expanded
+     * offset+spread+1.5-blur bounds per the box-shadow contract, so a
+     * full-screen chassis glow reads (-45,-45,570,450) on a 480x360
+     * buffer). A blit source outside the buffer is meaningless, and
+     * negative XPutImage/SetDIBitsToDevice origins clip
+     * server-side into a visible shift -- so the reported region is
+     * intersected with the buffer here, once, for every shell.
      */
     inline present_rect region_to_present(const bool dirty_valid, const int x, const int y,
                                           const int w, const int h,
@@ -50,7 +59,23 @@ namespace zb::shell
         {
             return present_rect{};
         }
-        return present_rect{x, y, w, h};
+        const int x0 = x < 0 ? 0 : x;
+        const int y0 = y < 0 ? 0 : y;
+        int x1 = x + w;
+        int y1 = y + h;
+        if (x1 > buf_w)
+        {
+            x1 = buf_w;
+        }
+        if (y1 > buf_h)
+        {
+            y1 = buf_h;
+        }
+        if (x1 <= x0 || y1 <= y0)
+        {
+            return present_rect{};
+        }
+        return present_rect{x0, y0, x1 - x0, y1 - y0};
     }
 
     /*

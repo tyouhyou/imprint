@@ -918,7 +918,9 @@ boundary):
   glows/drop shadows on opaque boxes reach past their box anywhere
   within the surface (the model500 knob drop). Damage reports the
   expanded bounds (the same offset+spread+1.5-blur margin) so partial
-  repaints cover the shadow. Wireframe skips shadows.
+  repaints cover the shadow. The expanded bounds may exceed the surface
+  (an edge widget's glow spills past it); shells intersect the reported
+  region with the buffer before blitting. Wireframe skips shadows.
   `Graphics::corner_chord` (the fill chord formula, integer-only) is
   public so the widget-level shadow span masks reuse it;
   `Graphics::clip_surface_safe` is the
