@@ -105,6 +105,14 @@ if (NOT NDS_PLATFORM)
         ${CMAKE_SOURCE_DIR}/imui/include
         ${CMAKE_SOURCE_DIR}/imutil/include
     )
+    # HTML design file packer (the ui_embed precedent for parse_html):
+    # validates with the library parser, embeds documents as byte arrays
+    add_executable(html_embed tools/html_embed.cpp)
+    target_link_libraries(html_embed PRIVATE imui)
+    target_include_directories(html_embed PRIVATE
+        ${CMAKE_SOURCE_DIR}/imui/include
+        ${CMAKE_SOURCE_DIR}/imutil/include
+    )
     # procedural showcase asset generator (V-2): emits RGBA8 arrays at
     # build time — the ttf_subset precedent (build-time materialization
     # of a shipping asset), no runtime decode and no USE_PNG dependency
