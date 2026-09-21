@@ -17,7 +17,11 @@ namespace zb::app::showcase_html
 {
     namespace
     {
+#ifdef SHOWCASE_HTML_NAME
+        constexpr char kEmbeddedFile[] = SHOWCASE_HTML_NAME;
+#else
         constexpr char kEmbeddedFile[] = "space.html";
+#endif
         constexpr char kFileEnv[] = "SHOWCASE_HTML_FILE";
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)
