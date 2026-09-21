@@ -16,6 +16,22 @@ compiles for Windows, Linux, macOS, the browser (WebAssembly) and the
 Nintendo DS — develop and preview on your PC, then ship the very same code
 to the device.
 
+**Design-first.** The console below is *drawn in HTML* — no code — and rendered by Imprint's own software rasterizer:
+
+<p>
+  <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console: the vacuum-tube dashboard (tubes, VU bank, power meter, diagnostics paragraph), designed in HTML and rendered by Imprint">
+</p>
+
+Not a mockup — a live widget tree. Imprint's UI designer reads an external
+**HTML** design file, [`assets/designs/imprint_console.html`](assets/designs/imprint_console.html),
+and materializes it into the same widget tree your code builds, so the design
+renders pixel-for-pixel on every target. The designer accepts two source
+formats: **HTML** (this hero) and the **`.ui`** design file (the DSL example
+in the Quick Example section below) — both feed the identical tree and are
+previewed with the same interactive `ui_preview` workflow.
+`assets/designs/imprint_console_before.png` is the same console before its
+diagnostics paragraph was added.
+
 **One UI source tree. One pixel buffer. Many targets.**
 
 ![One UI source tree, four targets](assets/showcase/montage.png)
