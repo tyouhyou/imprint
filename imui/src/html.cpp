@@ -3788,6 +3788,12 @@ namespace zb::ui
                              const VarMap &vars,
                              const std::vector<Ancestor> &ancestors)
         {
+            LW << "showcase_html: DIAG V0 tag=" << e.tag;  // TEMP NDS bisect
+#if 1  // TEMP NDS bisect: stub body (frame probe)
+            ui_node n;
+            n.type = "stub";
+            return n;
+#else
             ui_node n;
             std::vector<Decl> folded;
             fold_style(e, rules, vars, ancestors, folded);
@@ -4197,7 +4203,8 @@ namespace zb::ui
                 }
                 else
                 {
-                    n.prop("align", 3);
+                    // TEMP NDS bisect: explicit long long (was int literal 3)
+                    n.prop("align", 3LL);
                 }
             }
             // align-self rides on the node itself (any element); the
@@ -4596,11 +4603,14 @@ namespace zb::ui
             {
                 n.children.push_back(convert_elem(*c, rules, vars, below));
             }
+            LW << "showcase_html: DIAG V1 kids=" << (int)n.children.size();  // TEMP NDS bisect
             // H-10 generated boxes land on the originating node
             // (::before paints first, ::after last — see paint order)
             convert_pseudo(e.line, 1, e, rules, vars, ancestors, n);
             convert_pseudo(e.line, 2, e, rules, vars, ancestors, n);
+            LW << "showcase_html: DIAG V2";  // TEMP NDS bisect
             return n;
+#endif  // TEMP NDS bisect stub
         }
 
         // -------------------------------------------------------------------
@@ -5237,6 +5247,10 @@ namespace zb::ui
         // parse the collected <style> text (rules are global)
         parse_css(ps.css, ps.rules);
 
+        // convert: the root's children are the top-level widgets
+        ui_node doc;
+        doc.type = "root";
+
         // the page box travels beside the tree (B2); the root Elem is
         // the body container, so its style is the page style
         if (page != nullptr)
@@ -5244,10 +5258,6 @@ namespace zb::ui
             *page = html_page{};
             extract_page(*ps.root, *page);
         }
-
-        // convert: the root's children are the top-level widgets
-        ui_node doc;
-        doc.type = "root";
         VarMap vars;
         collect_vars(ps.rules, vars);
         // the body joins every ancestor chain (html-path.md), so
@@ -5256,7 +5266,6 @@ namespace zb::ui
         const std::vector<Ancestor> top_chain{Ancestor{
             ps.root->tag, ps.root->attr("id"),
             class_list(ps.root->attr("class"))}};
-
         // a flex body is kept as the document root itself
         // (html-path.md): the build host takes its container
         // properties and box dress, so the page surround and the
