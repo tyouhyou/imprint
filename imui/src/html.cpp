@@ -3784,15 +3784,14 @@ namespace zb::ui
             return true;
         }
 
-        ui_node convert_elem(const Elem &e, const Rules &rules,
-                             const VarMap &vars,
-                             const std::vector<Ancestor> &ancestors)
-        {
-            ui_node n;
-            std::vector<Decl> folded;
-            fold_style(e, rules, vars, ancestors, folded);
-            n.type = widget_type(e, folded);
+        // convert_elem is split so the recursive path keeps a small
+        // stack frame: the NDS DTCM user stack is only ~16KB and a
+        // monolithic convert_elem (~11KB static frame) overflowed at
+        // depth >= 2. Each helper runs and returns before the child
+        // recursion, so only one helper frame is live at a time.
 
+        void convert_elem_attrs(ui_node &n, const Elem &e)
+        {
             // element attributes (the whitelist in docs/html-path.md)
             for (const auto &a : e.attrs)
             {
@@ -3845,6 +3844,12 @@ namespace zb::ui
                 }
             }
 
+        }
+
+        // returns styled_height (a styled height wins over the br spacer)
+        bool convert_elem_box(ui_node &n, const Elem &e,
+                              const std::vector<Decl> &folded)
+        {
             // the CSS subset (known properties from the whitelist)
             if (const std::string *d = fold_lookup(folded, "display"))
             {
@@ -4237,6 +4242,12 @@ namespace zb::ui
                        << *sv << "'";
                 }
             }
+            return styled_height;
+        }
+
+        void convert_elem_paint(ui_node &n, const Elem &e,
+                                const std::vector<Decl> &folded)
+        {
             // P-1 paint: background-color stands only when no
             // background shorthand won the fold (CSS: the shorthand
             // resets it; props append and prop_of reads the first, so
@@ -4427,6 +4438,12 @@ namespace zb::ui
                        << *tf << "' is not translate(); ignored";
                 }
             }
+        }
+
+        void convert_elem_text(ui_node &n, const Elem &e,
+                               const std::vector<Decl> &folded,
+                               const bool styled_height)
+        {
             if (const std::string *fg = fold_lookup(folded, "color"))
             {
                 n.prop("color", *fg);
@@ -4540,49 +4557,70 @@ namespace zb::ui
                 n.prop("height", 7LL);
             }
 
+        }
+
+        void convert_elem_svg(ui_node &n, const Elem &e)
+        {
+            // the vector-dial subset: viewBox mapping plus strokes;
+            // the generic child recursion below is skipped
+            // (svg_line/svg_text are consumed, not widgets)
+            long long vb[4] = {0, 0, 0, 0};
+            if (split_view_box(e.attr("viewbox"), vb))
+            {
+                n.prop("vb_x", vb[0]).prop("vb_y", vb[1]);
+                n.prop("vb_w", vb[2]).prop("vb_h", vb[3]);
+            }
+            const std::string par = ascii_lower(e.attr("preserveaspectratio"));
+            if (!par.empty() && par != "none")
+            {
+                LW << "html: line " << e.line << ": preserveAspectRatio '"
+                   << e.attr("preserveaspectratio")
+                   << "' is not honored; the viewBox stretches like none";
+            }
+            const std::string &sop = e.attr("opacity");
+            if (!sop.empty())
+            {
+                n.prop("opacity", static_cast<long long>(parse_svg_alpha(sop)));
+            }
+            for (const auto &c : e.children)
+            {
+                if (c->tag == "line")
+                {
+                    convert_svg_line(n, *c);
+                }
+                else if (c->tag == "path")
+                {
+                    convert_svg_path(n, *c);
+                }
+                else if (c->tag == "text")
+                {
+                    convert_svg_text(n, *c);
+                }
+                else
+                {
+                    LW << "html: line " << c->line << ": <" << c->tag
+                       << "> inside svg is not in the subset and was ignored";
+                }
+            }
+        }
+
+        ui_node convert_elem(const Elem &e, const Rules &rules,
+                             const VarMap &vars,
+                             const std::vector<Ancestor> &ancestors)
+        {
+            ui_node n;
+            std::vector<Decl> folded;
+            fold_style(e, rules, vars, ancestors, folded);
+            n.type = widget_type(e, folded);
+
+            convert_elem_attrs(n, e);
+            const bool styled_height = convert_elem_box(n, e, folded);
+            convert_elem_paint(n, e, folded);
+            convert_elem_text(n, e, folded, styled_height);
+
             if (n.type == "svg")
             {
-                // the vector-dial subset: viewBox mapping plus strokes;
-                // the generic child recursion below is skipped
-                // (svg_line/svg_text are consumed, not widgets)
-                long long vb[4] = {0, 0, 0, 0};
-                if (split_view_box(e.attr("viewbox"), vb))
-                {
-                    n.prop("vb_x", vb[0]).prop("vb_y", vb[1]);
-                    n.prop("vb_w", vb[2]).prop("vb_h", vb[3]);
-                }
-                const std::string par = ascii_lower(e.attr("preserveaspectratio"));
-                if (!par.empty() && par != "none")
-                {
-                    LW << "html: line " << e.line << ": preserveAspectRatio '"
-                       << e.attr("preserveaspectratio")
-                       << "' is not honored; the viewBox stretches like none";
-                }
-                const std::string &sop = e.attr("opacity");
-                if (!sop.empty())
-                {
-                    n.prop("opacity", static_cast<long long>(parse_svg_alpha(sop)));
-                }
-                for (const auto &c : e.children)
-                {
-                    if (c->tag == "line")
-                    {
-                        convert_svg_line(n, *c);
-                    }
-                    else if (c->tag == "path")
-                    {
-                        convert_svg_path(n, *c);
-                    }
-                    else if (c->tag == "text")
-                    {
-                        convert_svg_text(n, *c);
-                    }
-                    else
-                    {
-                        LW << "html: line " << c->line << ": <" << c->tag
-                           << "> inside svg is not in the subset and was ignored";
-                    }
-                }
+                convert_elem_svg(n, e);
                 return n;
             }
 
