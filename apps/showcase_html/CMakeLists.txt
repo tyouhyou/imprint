@@ -13,8 +13,13 @@ endif()
 
 # design document packed at build time (contract: build-time validation
 # with the same parser; NDS has no filesystem, so the embedded bytes are
-# the shipping form on every target)
-set(SHOWCASE_HTML_DOC ${CMAKE_CURRENT_SOURCE_DIR}/space.html)
+# the shipping form on every target). SHOWCASE_HTML_DOC overrides the
+# document (probe builds, alternate designs).
+set(SHOWCASE_HTML_DOC "${CMAKE_CURRENT_SOURCE_DIR}/space.html" CACHE FILEPATH
+    "HTML design document embedded into the showcase_html app")
+get_filename_component(SHOWCASE_HTML_NAME "${SHOWCASE_HTML_DOC}" NAME)
+target_compile_definitions(showcase_html_app PRIVATE
+    SHOWCASE_HTML_NAME="${SHOWCASE_HTML_NAME}")
 set(SHOWCASE_HTML_HEADER ${CMAKE_CURRENT_BINARY_DIR}/showcase_html.gen.hpp)
 if (NDS_PLATFORM)
     # the html_embed host tool does not build under the ARM toolchain; the

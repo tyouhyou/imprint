@@ -4197,8 +4197,7 @@ namespace zb::ui
                 }
                 else
                 {
-                    // TEMP NDS bisect: explicit long long (was int literal 3)
-                    n.prop("align", 3LL);
+                    n.prop("align", 3);
                 }
             }
             // align-self rides on the node itself (any element); the

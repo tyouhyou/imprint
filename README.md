@@ -29,8 +29,6 @@ renders pixel-for-pixel on every target. The designer accepts two source
 formats: **HTML** (this hero) and the **`.ui`** design file (the DSL example
 in the Quick Example section below) — both feed the identical tree and are
 previewed with the same interactive `ui_preview` workflow.
-`assets/designs/imprint_console_before.png` is the same console before its
-diagnostics paragraph was added.
 
 **One UI source tree. One pixel buffer. Many targets.**
 
