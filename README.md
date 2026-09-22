@@ -30,16 +30,10 @@ the `.ui` example below; either way, one tree, one buffer, many targets.
 
 **One UI source tree. One pixel buffer. Many targets.**
 
-![One UI source tree, four targets](assets/showcase/montage.png)
-
 The same design-file showcase — a warm terminal punched into the pixel
-buffer — on desktop, in the browser, and on the Nintendo DS:
+buffer — on desktop, on the Nintendo DS, and in the browser:
 
-<p>
-  <img src="assets/showcase_html/linux.png" width="280" alt="The showcase_html design on Linux (X11): the warm punch terminal in a desktop window">
-  <img src="assets/showcase_html/wasm.png" width="320" alt="The showcase_html design in the browser (WebAssembly): the same terminal on canvas">
-  <img src="assets/showcase_html/nds.png" width="200" alt="The showcase_html design on a Nintendo DS (melonDS): the same terminal at 16 bpp, portrait dual-screen capture">
-</p>
+![showcase_html on linux, nds, wasm](assets/showcase/montage.png)
 
 **[Try it live in your browser](https://tyouhyou.github.io/imprint/)** —
 the page runs the WebAssembly build of the widget showcase; the frame
@@ -205,7 +199,7 @@ shells present 1:1; WASM/Python hosts scale host-side.
 
 **Hello** (`-DSTORY=hello`) — the getting-started app: a label and a click-counting button; copy it to start your own app (see [`docs/getting-started.md`](docs/getting-started.md)).
 
-**Showcase** (`-DSTORY=showcase`) — the widget gallery behind the multi-target montage: boots dark, opens on an animated chart drawn with the framework's own rasterizer (anti-aliased curve over a gradient area on a rounded card, revealed step by step by an app-side tween), a device-status control panel (progress bars, START/STOP, dark/light theme), and an all-widgets page with alpha asset compositing (a 9-slice shadow card and an accent-tinted ball; the assets are generated at build time by `tools/asset_gen`), and a factory-console dashboard page (gauges, a live trend chart, a setpoint knob+slider pair, pump/coolant toggles) whose SELF-CHECK button drives the knob through real drag events and stamps PIXELS MATCH when two renders of the same state hash the framebuffer byte-identically — the deterministic-runtime proof. The frames in `assets/showcase/` come from these builds — the recorder is fully deterministic, producing byte-identical GIFs on Windows, macOS and Linux; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
+**Showcase** (`-DSTORY=showcase`) — the multi-target widget gallery: boots dark, opens on an animated chart drawn with the framework's own rasterizer (anti-aliased curve over a gradient area on a rounded card, revealed step by step by an app-side tween), a device-status control panel (progress bars, START/STOP, dark/light theme), and an all-widgets page with alpha asset compositing (a 9-slice shadow card and an accent-tinted ball; the assets are generated at build time by `tools/asset_gen`), and a factory-console dashboard page (gauges, a live trend chart, a setpoint knob+slider pair, pump/coolant toggles) whose SELF-CHECK button drives the knob through real drag events and stamps PIXELS MATCH when two renders of the same state hash the framebuffer byte-identically — the deterministic-runtime proof. The frames in `assets/showcase/` come from these builds — the recorder is fully deterministic, producing byte-identical GIFs on Windows, macOS and Linux; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
 
 **TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents) — pass `.ui` or HTML paths.
 

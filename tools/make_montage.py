@@ -1,13 +1,12 @@
 #!/usr/bin/env python3
 """
-make_montage -- assemble assets/showcase/montage.png from the per-platform
-showcase captures (Batch V-3).
+make_montage -- assemble assets/showcase/montage.png from the
+assets/showcase_html/{linux,nds,wasm}.png captures.
 
 Usage: python3 tools/make_montage.py   (run from the repository root)
 
-Tiles: assets/showcase/{win,mac,linux,nds}.png, center-cropped to 4:3 and
-scaled to a uniform tile, laid out 2x2 with captions. Pure stdlib + Pillow
-(the same dependency the GIF re-record verification already uses).
+Three tiles in one row, shared height, aspect preserved (no crop), platform
+label above each tile. Pure stdlib + Pillow.
 """
 import os
 
@@ -15,50 +14,41 @@ from PIL import Image, ImageDraw, ImageFont
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 OUT = os.path.join(ROOT, "assets", "showcase", "montage.png")
+SRC = os.path.join(ROOT, "assets", "showcase_html")
 
-TILE_W, TILE_H = 400, 300
-GAP = 8
-CAPTION_H = 22
-TITLE_H = 40
+TILE_H = 420
+GAP = 10
+LABEL_H = 26
+PAD = 12
 
 TILES = [
-    ("win.png", "Windows (Win32)"),
-    ("mac.png", "macOS (AppKit)"),
-    ("linux.png", "Linux (X11)"),
-    ("nds.png", "Nintendo DS (melonDS)"),
+    ("linux.png", "linux"),
+    ("nds.png", "nds"),
+    ("wasm.png", "wasm"),
 ]
-
-TITLE = "Imprint UI showcase -- one UI source tree, every target"
-
-
-def center_crop_43(img):
-    """center-crop to 4:3 (the tile aspect)"""
-    w, h = img.size
-    tw, th = (w, w * 3 // 4) if w * 3 <= h * 4 else (h * 4 // 3, h)
-    left, top = (w - tw) // 2, (h - th) // 2
-    return img.crop((left, top, left + tw, top + th))
 
 
 def main():
     font = ImageFont.load_default()
-    cols, rows = 2, 2
-    width = cols * TILE_W + (cols + 1) * GAP
-    height = TITLE_H + rows * (TILE_H + CAPTION_H) + (rows + 1) * GAP
-    board = Image.new("RGB", (width, height), (26, 26, 26))
-    draw = ImageDraw.Draw(board)
-    draw.text((GAP + 2, 12), TITLE, fill=(240, 240, 240), font=font)
+    images = []
+    for name, label in TILES:
+        img = Image.open(os.path.join(SRC, name)).convert("RGB")
+        w, h = img.size
+        tw = max(1, round(w * TILE_H / h))
+        images.append((label, img.resize((tw, TILE_H), Image.LANCZOS)))
 
-    for n, (name, caption) in enumerate(TILES):
-        col, row = n % cols, n // cols
-        x = GAP + col * (TILE_W + GAP)
-        y = TITLE_H + GAP + row * (TILE_H + CAPTION_H + GAP)
-        img = Image.open(os.path.join(ROOT, "assets", "showcase", name)).convert("RGB")
-        tile = center_crop_43(img).resize((TILE_W, TILE_H), Image.LANCZOS)
-        board.paste(tile, (x, y))
-        # center the caption under the tile
-        tw = draw.textlength(caption, font=font)
-        draw.text((x + (TILE_W - tw) // 2, y + TILE_H + 4),
-                  caption, fill=(200, 200, 200), font=font)
+    total_w = sum(im.size[0] for _, im in images) + GAP * (len(images) + 1)
+    board = Image.new("RGB", (total_w, PAD + LABEL_H + TILE_H + PAD), (26, 26, 26))
+    draw = ImageDraw.Draw(board)
+
+    x = GAP
+    y = PAD + LABEL_H
+    for label, im in images:
+        tw = draw.textlength(label, font=font)
+        draw.text((x + (im.size[0] - tw) // 2, PAD + 6),
+                  label, fill=(220, 220, 220), font=font)
+        board.paste(im, (x, y))
+        x += im.size[0] + GAP
 
     board.save(OUT)
     print(f"montage: {OUT} {board.size[0]}x{board.size[1]}")
