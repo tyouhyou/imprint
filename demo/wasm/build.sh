@@ -105,7 +105,7 @@ showcase_html)
         /src/imcore/src/text/text_image.cpp \
         -o /tmp/html_embed
     /tmp/html_embed /tmp/showcase_html.gen.hpp \
-        /src/apps/showcase_html/space.html
+        /src/assets/showcase_html/space.html
     EXTRA_INCLUDES="-I /tmp"
     ;;
 *)

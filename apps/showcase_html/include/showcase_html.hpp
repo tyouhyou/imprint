@@ -12,7 +12,7 @@ namespace zb::app::showcase_html
 {
     /*
      * HTML-design showcase: materializes one HTML document (the embedded
-     * space.html snapshot, or SHOWCASE_HTML_FILE at runtime on desktop)
+     * assets/showcase_html/space.html snapshot, or SHOWCASE_HTML_FILE at runtime on desktop)
      * through parse_html + build() — the same code path ui_preview uses
      * for external files, so the NDS target (no filesystem) renders the
      * identical tree from embedded bytes.

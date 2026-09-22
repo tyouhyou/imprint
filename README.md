@@ -6,46 +6,47 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**Build your UI once. Test it deterministically. Run it anywhere.**
+**Same input, same pixels — assertable in CI, with no display attached.**
 
-Imprint UI is a tiny, dependency-free, software-rendered C++17 GUI framework
-with an automation-first contract: the host drives everything, so the same
-input sequence always produces the same pixels — UI logic you can assert on
-pixel by pixel, in CI, with no display attached. The same UI source tree
-compiles for Windows, Linux, macOS, the browser (WebAssembly) and the
-Nintendo DS — develop and preview on your PC, then ship the very same code
-to the device.
+Imprint is a deterministic, embeddable UI runtime for C++17: one pixel
+buffer, software-rasterized — no GPU, no OS GUI toolkit. The host drives
+every frame, so an input sequence always yields the same frame bytes;
+asserting UI logic pixel-by-pixel in headless CI is a property of the
+contract, not a test-harness trick. One UI source tree — widgets in code,
+or a screen described in a design file — compiles unchanged for Windows,
+Linux, macOS, WebAssembly, the Nintendo DS, and any C host via `zbapi`.
 
-**Design-first.** The console below is *drawn in HTML* — no code — and rendered by Imprint's own software rasterizer:
+**Design-first.** The console below is *drawn in HTML* — no widget code —
+and rendered by Imprint's own software rasterizer into that same buffer:
 
 <p>
   <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console: the vacuum-tube dashboard (tubes, VU bank, power meter, diagnostics paragraph), designed in HTML and rendered by Imprint">
 </p>
 
-Not a mockup — a live widget tree. Imprint's UI designer reads an external
-**HTML** design file, [`assets/designs/imprint_console.html`](assets/designs/imprint_console.html),
-and materializes it into the same widget tree your code builds, so the design
-renders pixel-for-pixel on every target. The designer accepts two source
-formats: **HTML** (this hero) and the **`.ui`** design file (the DSL example
-in the Quick Example section below) — both feed the identical tree and are
-previewed with the same interactive `ui_preview` workflow.
+Not a mockup — a live widget tree. Designers hand over HTML or the compact
+`.ui` format; both materialize into the exact tree your C++ builds, so the
+design is what ships on every target. The HTML path is spelled out after
+the `.ui` example below; either way, one tree, one buffer, many targets.
 
 **One UI source tree. One pixel buffer. Many targets.**
 
 ![One UI source tree, four targets](assets/showcase/montage.png)
 
-**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** — the page above runs the WebAssembly build; the Nintendo DS frame comes from the same source compiled with devkitARM.
-
-<img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: boots dark while the chart reveals itself, START fills the progress bars, REPLAY replays the chart, the factory-console dashboard (gauges, live trend, setpoint knob, SELF-CHECK stamping PIXELS MATCH), the light widget gallery with its shadow-card assets, back to dark">
-
-The same showcase, unmodified, on four native shells — including a 690 KB ROM at 60 fps on the Nintendo DS:
+The same design-file showcase — a warm terminal punched into the pixel
+buffer — on desktop, in the browser, and on the Nintendo DS:
 
 <p>
-  <img src="assets/showcase/win.png" width="200" alt="The showcase on Windows (Win32): dark theme, the chart with its anti-aliased curve">
-  <img src="assets/showcase/mac.png" width="200" alt="The showcase on macOS (AppKit): the same dark hero">
-  <img src="assets/showcase/linux.png" width="200" alt="The showcase on Linux (X11): the same dark hero">
-  <img src="assets/showcase/nds.png" width="200" alt="The showcase on a Nintendo DS (melonDS): the same dark hero at 16 bpp">
+  <img src="assets/showcase_html/linux.png" width="280" alt="The showcase_html design on Linux (X11): the warm punch terminal in a desktop window">
+  <img src="assets/showcase_html/wasm.png" width="320" alt="The showcase_html design in the browser (WebAssembly): the same terminal on canvas">
+  <img src="assets/showcase_html/nds.png" width="200" alt="The showcase_html design on a Nintendo DS (melonDS): the same terminal at 16 bpp, portrait dual-screen capture">
 </p>
+
+**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** —
+the page runs the WebAssembly build of the widget showcase; the frame
+below is that app recorded end to end (desktop, browser, and DS ROMs are
+built from the same sources):
+
+<img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: boots dark while the chart reveals itself, START fills the progress bars, REPLAY replays the chart, the factory-console dashboard (gauges, live trend, setpoint knob, SELF-CHECK stamping PIXELS MATCH), the light widget gallery with its shadow-card assets, back to dark">
 
 No GPU required. No OS GUI toolkit required. No platform-specific UI code.
 
@@ -74,12 +75,12 @@ Measured footprints (Release builds of the `showcase` app above):
 
 ## Highlights
 
+- **Deterministic, host-driven runtime** — shell owns the loop; same input sequence → same pixels; repaint-on-demand with dirty tracking, no hidden redraws
+- **Automation by contract** — a script can replace the user: feed input, pump frames, assert on pixels; single-threaded and timer-free, so drivers never sleep — the test battery includes an end-to-end `automation` suite driven through the public API
+- **Design files** — describe a screen in `.ui` or external HTML, validate and pack at build time, load from a C array on any target; `ui_preview` renders files directly
 - **Retained-mode widget tree** — `Button`, `Label`, `Dialog`, `FlexPanel`, `GraphicsView` and more
-- **Design files** — describe a UI in a small text format (`.ui`), validate and pack it at build time, load it from a C array on any target; a preview app renders files directly
 - **Software rendering into a raw pixel buffer** — no GPU, no external rendering library; the buffer format is fixed at build time (`COLOR_DEPTH`)
-- **Deterministic repaint-on-demand** — dirty tracking, shell owns the loop, no hidden redraws
 - **C-ABI as a first-class citizen** — stable `zbapi` C interface with Python (ctypes), WebAssembly and C smoke-test hosts
-- **Automation-friendly by contract** — the host-drives-everything model means a script can replace the user: feed input, pump frames, assert on pixels; single-threaded and timer-free, so drivers never sleep — the test battery includes an end-to-end `automation` suite driven through the public API
 - **Embedded-grade** — no RTTI, 16-bit color (abgr1555), integer-only geometry option, non-atomic refcounting option (NDS has no libatomic)
 - **Zero-allocation hot paths** — RAII `ClipGuard`, event tombstoning, `Subscription`
 - **UTF-8 text throughout** — built-in 5x7 bitmap glyph fallback (auto-subsetted from source strings); optional runtime TTF text via vendored stb_truetype, vendored stb codecs (PNG/JPEG) and a hand-written GIF writer
@@ -89,7 +90,7 @@ Measured footprints (Release builds of the `showcase` app above):
 
 GPU-accelerated drawing (the render kernel stays CPU software rasterization) ·
 animation/transition system · runtime backend switching · multithreaded
-rendering · IME composition · RTL layout. Imprint UI deliberately stays small:
+rendering · IME composition · RTL layout. Imprint deliberately stays small:
 one widget tree, one pixel buffer, one input stream — everything else is the
 host's job.
 
@@ -135,6 +136,23 @@ platform. Preview interactively with the `ui_preview` app:
 ```
 UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
 ```
+
+### HTML as an external designer
+
+Prefer a real markup toolchain? The same materialization path accepts an
+external **HTML** design file. The hero at the top of this README is
+[`assets/designs/imprint_console.html`](assets/designs/imprint_console.html)
+— open it in a browser to edit, hand it to Imprint's designer, and it
+becomes the identical widget tree the C++ example builds above (an
+`html` / `vectordial` subset: layout, labels, controls, vector dials —
+not a web engine). Preview it the same way:
+
+```
+UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
+```
+
+Both formats — `.ui` and HTML — feed one tree, one pixel buffer, every
+target.
 
 ## Build
 
@@ -189,7 +207,7 @@ shells present 1:1; WASM/Python hosts scale host-side.
 
 **Showcase** (`-DSTORY=showcase`) — the widget gallery behind the multi-target montage: boots dark, opens on an animated chart drawn with the framework's own rasterizer (anti-aliased curve over a gradient area on a rounded card, revealed step by step by an app-side tween), a device-status control panel (progress bars, START/STOP, dark/light theme), and an all-widgets page with alpha asset compositing (a 9-slice shadow card and an accent-tinted ball; the assets are generated at build time by `tools/asset_gen`), and a factory-console dashboard page (gauges, a live trend chart, a setpoint knob+slider pair, pump/coolant toggles) whose SELF-CHECK button drives the knob through real drag events and stamps PIXELS MATCH when two renders of the same state hash the framebuffer byte-identically — the deterministic-runtime proof. The frames in `assets/showcase/` come from these builds — the recorder is fully deterministic, producing byte-identical GIFs on Windows, macOS and Linux; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
 
-**TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents).
+**TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents) — pass `.ui` or HTML paths.
 
 | Windows | macOS | Linux (X11) | WebAssembly | Nintendo DS | Python host |
 |:---:|:---:|:---:|:---:|:---:|:---:|

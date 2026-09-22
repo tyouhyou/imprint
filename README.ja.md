@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-09-06 時点）。
+> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-09-22 時点）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-blue)](README.ja.md)
 
@@ -8,26 +8,33 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**UI は一度だけ書く。テストは完全に決定論的。どこでも動く。**
+**同じ入力、同じピクセル——ディスプレイなしの CI でアサート可能。**
 
-Imprint UI は、極小・依存ゼロ・ソフトウェアレンダリングの C++17 UI フレームワークで、ホストがすべてを駆動する契約を持つため、**同じ入力シーケンスは常に同じピクセルを生みます**——UI ロジックは、ディスプレイなしで CI の中でピクセル単位にアサートできます。同じ UI ソースツリーが Windows、Linux、macOS、ブラウザ（WebAssembly）、ニンテンドーDS 向けにコンパイルできます——PC で開発・プレビューし、**まったく同じコード**をデバイスへ。
+Imprint は決定論的で埋め込み可能な C++17 UI ランタイムです：ピクセルバッファは 1 つ、ソフトウェアラスタライズ——GPU 不要、OS の GUI ツールキット不要。ホストがすべてのフレームを駆動するため、同じ入力シーケンスは常に同じフレームバイトを生みます。ヘッドレス CI で UI ロジックをピクセル単位にアサートできることは、テストハーネスの小技ではなく契約そのものの性質です。同じ UI ソースツリー——コード上のウィジェット、またはデザインファイルで記述した 1 画面——が、変更なしで Windows、Linux、macOS、WebAssembly、ニンテンドーDS、および `zbapi` 経由の任意の C ホストにコンパイルされます。
+
+**デザインファースト。** 下のコンソールは *HTML で描いています*——ウィジェットコードなし——Imprint 自身のソフトウェアラスタライザが同じバッファにレンダリングします：
+
+<p>
+  <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console：真空管ダッシュボード（ tubes、VU バンク、電力メーター、診断パラグラフ）。HTML でデザインし、Imprint がレンダリング">
+</p>
+
+モックアップではなく、生きたウィジェットツリーです。デザイナーは HTML かコンパクトな `.ui` 形式を渡します。どちらも、あなたの C++ が作るのとまったく同じツリーに実体化するため、デザインが各ターゲットで実際に同梱されるものになります。HTML のパスは下の `.ui` サンプルの後に明記——いずれにせよ、1 つのツリー、1 つのバッファ、複数のターゲット。
 
 **1 つの UI ソースツリー。1 つのピクセルバッファ。複数のターゲット。**
 
 ![1 つの UI ソースツリー、4 つのターゲット](assets/showcase/montage.png)
 
-**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— 上のページは WebAssembly ビルド。ニンテンドーDS のフレームは同じソースの devkitARM ビルドです。
-
-<img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：ダークで起動しチャートが描き出され、START でプログレスバーが充填、REPLAY でチャートを再生、ファクトリーコンソールのダッシュボード（ゲージ・ライブトレンド・セットポイントノブ・SELF-CHECK が PIXELS MATCH を刻印）、ライトの全ウィジェットページと影カード資産、ダークで締める">
-
-同じ showcase がそのまま 4 つのネイティブシェルで動作——Nintendo DS では 690 KB ROM・60 fps:
+同じデザインファイルの showcase——ピクセルバッファに打ち抜かれた暖色のターミナル——がデスクトップ、ブラウザ、ニンテンドーDS 上に：
 
 <p>
-  <img src="assets/showcase/win.png" width="200" alt="Windows (Win32) の showcase: ダークテーマ、アンチエイリアス曲線のチャート">
-  <img src="assets/showcase/mac.png" width="200" alt="macOS (AppKit) の showcase: 同じダークホーム">
-  <img src="assets/showcase/linux.png" width="200" alt="Linux (X11) の showcase: 同じダークホーム">
-  <img src="assets/showcase/nds.png" width="200" alt="Nintendo DS (melonDS) の showcase: 16bpp の同じダークホーム">
+  <img src="assets/showcase_html/linux.png" width="280" alt="Linux (X11) 上の showcase_html デザイン：デスクトップウィンドウ内の暖色ターミナル">
+  <img src="assets/showcase_html/wasm.png" width="320" alt="ブラウザ（WebAssembly）の showcase_html デザイン：canvas 上の同じターミナル">
+  <img src="assets/showcase_html/nds.png" width="200" alt="Nintendo DS (melonDS) 上の showcase_html デザイン：16 bpp の同じターミナル、縦持ちデュアルスクリーン取得">
 </p>
+
+**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— ページはウィジェット showcase の WebAssembly ビルドです。下のフレームはそのアプリのエンドツーエンド記録（デスクトップ・ブラウザ・DS ROM はいずれも同じソースからビルド）：
+
+<img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：ダークで起動しチャートが描き出され、START でプログレスバーが充填、REPLAY でチャートを再生、ファクトリーコンソールのダッシュボード（ゲージ・ライブトレンド・セットポイントノブ・SELF-CHECK が PIXELS MATCH を刻印）、ライトの全ウィジェットページと影カード資産、ダークで締める">
 
 GPU 不要。OS の GUI ツールキット不要。プラットフォーム固有の UI コードも不要。
 
@@ -42,7 +49,7 @@ GPU 不要。OS の GUI ツールキット不要。プラットフォーム固�
                     ↓
              WebAssembly  ←  ブラウザで試す
                     ↓
-              ニンテンドーDS
+               ニンテンドーDS
                     ↓
         あなたの組み込みボード（C-ABI）
 ```
@@ -56,12 +63,12 @@ GPU 不要。OS の GUI ツールキット不要。プラットフォーム固�
 
 ## 特徴
 
+- **決定論的・ホスト駆動のランタイム** — メインループはシェルが所有；同じ入力シーケンス → 同じピクセル；ダーティトラッキング付きオンデマンド再描画、隠れた再描画なし
+- **契約による自動化** — スクリプトがユーザーの代わりを務められる：入力を与え、フレームをポンプし、ピクセルにアサート。シングルスレッドでタイマーなしのためドライバに sleep 不要——テストバッテリーには公開 API のみで駆動するエンドツーエンドの `automation` スイートを含む
+- **デザインファイル** — `.ui` か外部 HTML で 1 画面を記述し、ビルド時に検証・パック。どのターゲットでも C 配列からロード。`ui_preview` がファイルを直接描画
 - **保持モードのウィジェットツリー** — `Button`、`Label`、`Dialog`、`FlexPanel`、`GraphicsView` など
-- **デザインファイル** — 極小テキスト形式（`.ui`）で UI を記述し、ビルド時に検証して C 配列にパック。どのターゲットでも配列からロード。プレビューアプリはファイルを直接描画
 - **生のピクセルバッファへのソフトウェア描画** — GPU 不要、外部レンダリングライブラリ不要。バッファ形式はビルド時に `COLOR_DEPTH` で固定
-- **決定的なオンデマンド再描画** — ダーティトラッキング、メインループはシェルが所有、隠れた再描画なし
 - **C-ABI を第一級市民として** — 安定した `zbapi` C インターフェースに、Python（ctypes）、WebAssembly、C スモークテストのホスト
-- **契約による自動化親和性** — 「ホストがすべてを駆動する」モデルにより、スクリプトがユーザーの代わりを務められる：入力を与え、フレームをポンプし、ピクセルにアサート。シングルスレッドでタイマーなしのためドライバに sleep 不要——テストバッテリーには公開 API のみで駆動するエンドツーエンドの `automation` スイートを含む
 - **組み込みグレード** — RTTI なし、16 ビットカラー（abgr1555）、整数専用ジオメトリオプション、非アトミック参照カウントオプション（NDS に libatomic なし）
 - **ゼロアロケーションのホットパス** — RAII の `ClipGuard`、イベントのトゥームストーン、`Subscription`
 - **テキストは全体で UTF-8** — 組み込みの 5x7 ビットマップグリフフォールバック（ソース文字列から自動サブセット化）。ランタイム TTF テキスト（vendored stb_truetype）、vendored stb コーデック（PNG/JPEG）、手書き GIF ライターはオプション
@@ -71,7 +78,7 @@ GPU 不要。OS の GUI ツールキット不要。プラットフォーム固�
 
 GPU 描画アクセラレーション（レンダリングカーネルは CPU ソフトウェアラスタライズのまま）·
 アニメーション/トランジションシステム · 実行時バックエンド切替 · マルチスレッド描画 ·
-IME 合成 · RTL レイアウト。Imprint UI は意図的に極小を保ちます：1 つのウィジェットツリー、
+IME 合成 · RTL レイアウト。Imprint は意図的に極小を保ちます：1 つのウィジェットツリー、
 1 つのピクセルバッファ、1 つの入力ストリーム——それ以外はホストの仕事です。
 
 ## クイックサンプル
@@ -116,6 +123,18 @@ column id="root" spacing=6 padding=10
 ```
 UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
 ```
+
+### HTML を外部デザイナーとして
+
+本物のマークアップツールチェーンが良い？同じ実体化パスは外部 **HTML** デザインファイルも受け付けます。この README 冒頭のヒーローは
+[`assets/designs/imprint_console.html`](assets/designs/imprint_console.html)
+—— ブラウザで開いて編集し、Imprint のデザイナーに渡すと、上の C++ サンプルが作るのと同一のウィジェットツリーになります（`html` / `vectordial` サブセット：レイアウト、ラベル、コントロール、ベクターダイアル——Web エンジンではありません）。プレビューも同じ：
+
+```
+UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
+```
+
+2 つの形式——`.ui` と HTML——は 1 つのツリー、1 つのピクセルバッファ、すべてのターゲットに供給します。
 
 ## ビルド
 
@@ -168,7 +187,7 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 
 **showcase**（`-DSTORY=showcase`）——マルチターゲット・モンタージュの元になるウィジェットギャラリー。ダークで起動し、フレームワーク自身のラスタライザで描いたアニメーションチャート（角丸カード上のアンチエイリアス曲線＋グラデーション領域、app 側 tween が少しずつ描き出す）で開始。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と、アルファ資産合成付きの全ウィジェットページ（9-slice 影カード、アクセント色にティントしたボール。資産は `tools/asset_gen` がビルド時に生成）、ファクトリーコンソールのダッシュボードページ（ゲージ、ライブトレンドチャート、セットポイントのノブ＋スライダー、ポンプ/クーラントトグル）と SELF-CHECK ボタン——実際のドラッグでノブを操作し、同じ状態の 2 回のレンダリングがバイト単位で一致したとき PIXELS MATCH を刻印（決定論ランタイムの証明）。`assets/showcase/` のフレームはこれらのビルドから生成。レコーダーは完全に決定論的で、Windows/macOS/Linux でバイト単位で同一の GIF を生成します。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
 
-**三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します。
+**三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します——`.ui` か HTML のパスを渡せます。
 
 | Windows | macOS | Linux (X11) | WebAssembly | ニンテンドーDS | Python ホスト |
 |:---:|:---:|:---:|:---:|:---:|:---:|

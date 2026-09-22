@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-09-06）。
+> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-09-22）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
@@ -8,26 +8,33 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**一套 UI 只写一次。测试完全确定。到处运行。**
+**相同的输入，相同的像素——可在无显示器的 CI 里断言。**
 
-Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，契约天生面向自动化：宿主驱动一切，因此**相同的输入序列永远得到相同的像素**——UI 逻辑可以在 CI 里、无显示器的环境下做像素级断言。同一份 UI 源码树可以编译到 Windows、Linux、macOS、浏览器（WebAssembly）和任天堂 DS——在 PC 上开发预览，然后把**完全相同的代码**发布到设备上。
+Imprint 是一个确定性、可嵌入的 C++17 UI 运行时：一个像素缓冲，纯软件光栅化——不需要 GPU，不需要操作系统 GUI 工具包。宿主驱动每一帧，因此同一输入序列永远得到同一帧字节；在无头 CI 里对 UI 逻辑做像素级断言，是契约本身的性质，不是测试脚手架的花招。同一份 UI 源码树——代码里的控件，或设计文件里描述的一屏——原样编译到 Windows、Linux、macOS、WebAssembly、任天堂 DS，以及经 `zbapi` 的任意 C 宿主。
+
+**设计优先。** 下面这台控制台是*用 HTML 画的*——没有一行控件代码——由 Imprint 自己的软件光栅化器渲进同一个缓冲：
+
+<p>
+  <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console：电子管仪表盘（电子管、VU 表组、功率表、诊断段落），用 HTML 设计、由 Imprint 渲染">
+</p>
+
+不是效果图——是活的控件树。设计师交付 HTML 或紧凑的 `.ui` 格式；两者都物化成你的 C++ 所构建的那棵完全相同的树，设计即各目标上真正发布的界面。HTML 路径写在下面 `.ui` 示例之后；无论如何，一棵树、一个缓冲、多个目标。
 
 **一份 UI 源码树。一个像素缓冲。多个目标。**
 
 ![一份 UI 源码树，四个目标](assets/showcase/montage.png)
 
-**[在浏览器里直接试](https://tyouhyou.github.io/imprint/)** —— 上面的页面是 WebAssembly 构建；任天堂 DS 画面来自同一份源码的 devkitARM 构建。
-
-<img src="assets/showcase/showcase.gif" width="480" alt="逐帧录制的 showcase：暗色启动、图表逐步生长、START 填充进度条、REPLAY 重放图表、工厂控制台仪表盘（仪表、实时趋势、设定点旋钮、SELF-CHECK 打出 PIXELS MATCH）、浅色全控件页与阴影卡资产、回到暗色收尾">
-
-同一份 showcase，原样跑在四个原生壳上——包括任天堂 DS 上的 690 KB ROM、60 fps：
+同一份设计文件 showcase——打进球缓冲里的暖色终端——在桌面、浏览器和任天堂 DS 上：
 
 <p>
-  <img src="assets/showcase/win.png" width="200" alt="Windows (Win32) 上的 showcase：暗色主题、抗锯齿曲线图表">
-  <img src="assets/showcase/mac.png" width="200" alt="macOS (AppKit) 上的 showcase：同一暗色主页">
-  <img src="assets/showcase/linux.png" width="200" alt="Linux (X11) 上的 showcase：同一暗色主页">
-  <img src="assets/showcase/nds.png" width="200" alt="任天堂 DS (melonDS) 上的 showcase：16bpp 的同一暗色主页">
+  <img src="assets/showcase_html/linux.png" width="280" alt="Linux (X11) 上的 showcase_html 设计：桌面窗口里的暖色打孔终端">
+  <img src="assets/showcase_html/wasm.png" width="320" alt="浏览器（WebAssembly）里的 showcase_html 设计：canvas 上的同一终端">
+  <img src="assets/showcase_html/nds.png" width="200" alt="任天堂 DS (melonDS) 上的 showcase_html 设计：16 bpp 下的同一终端，竖屏双屏截取">
 </p>
+
+**[在浏览器里直接试](https://tyouhyou.github.io/imprint/)** —— 页面跑的是 widget showcase 的 WebAssembly 构建；下面这段是该应用的端到端录制（桌面、浏览器和 DS ROM 都由同一份源码构建）：
+
+<img src="assets/showcase/showcase.gif" width="480" alt="逐帧录制的 showcase：暗色启动、图表逐步生长、START 填充进度条、REPLAY 重放图表、工厂控制台仪表盘（仪表、实时趋势、设定点旋钮、SELF-CHECK 打出 PIXELS MATCH）、浅色全控件页与阴影卡资产、回到暗色收尾">
 
 不需要 GPU。不需要操作系统 GUI 工具包。不需要平台专属 UI 代码。
 
@@ -56,12 +63,12 @@ Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，�
 
 ## 特性
 
+- **确定性、宿主驱动的运行时** — 主循环归壳层所有；相同输入序列 → 相同像素；脏标记追踪的按需重绘，没有隐藏的重绘
+- **契约即自动化** — 脚本可以直接替代用户：喂输入、泵帧、对像素断言；单线程、无定时器，驱动方无需 sleep——测试集包含端到端 `automation` 套件，全程走公开 API
+- **设计文件** — 用 `.ui` 或外部 HTML 描述一屏，构建期校验并打包，任何目标从 C 数组加载；`ui_preview` 直接渲染文件
 - **保留模式控件树** — `Button`、`Label`、`Dialog`、`FlexPanel`、`GraphicsView` 等
-- **设计文件** — 用极简文本格式（`.ui`）描述界面，构建期校验并打包成 C 数组，任何目标平台从数组加载；预览应用可直接渲染文件
 - **软件渲染到原始像素缓冲** — 不需要 GPU，不需要外部渲染库；缓冲格式在构建期由 `COLOR_DEPTH` 固定
-- **确定性的按需重绘** — 脏标记追踪，主循环归壳层所有，没有隐藏的重绘
 - **C-ABI 一等公民** — 稳定的 `zbapi` C 接口，配 Python（ctypes）、WebAssembly 和 C 冒烟测试宿主
-- **契约即自动化友好** — "宿主驱动一切"的模型意味着脚本可以直接替代用户：喂输入、泵帧、对像素断言；单线程、无定时器，驱动方无需 sleep——测试集包含端到端 `automation` 套件，全程走公开 API
 - **嵌入式级约束** — 无 RTTI、16 位色（abgr1555）、纯整数几何选项、非原子引用计数选项（NDS 没有 libatomic）
 - **零分配热路径** — RAII `ClipGuard`、事件墓碑删除、`Subscription`
 - **全链路 UTF-8 文本** — 内置 5x7 位图字形兜底（按源码字符串自动子集化）；可选运行时 TTF 文本（vendored stb_truetype）、vendored stb 编解码器（PNG/JPEG）与手写 GIF 编码器
@@ -70,7 +77,7 @@ Imprint UI 是一个极小的、零依赖、软件渲染的 C++17 GUI 框架，�
 ## 非目标
 
 GPU 加速绘制（渲染内核保持 CPU 软件光栅）· 动画/过渡系统 · 运行时后端切换 ·
-多线程渲染 · IME 组合 · RTL 排版。Imprint UI 刻意保持极小：一棵控件树、
+多线程渲染 · IME 组合 · RTL 排版。Imprint 刻意保持极小：一棵控件树、
 一个像素缓冲、一路输入流——其余都是宿主的事。
 
 ## 快速示例
@@ -114,6 +121,21 @@ column id="root" spacing=6 padding=10
 ```
 UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
 ```
+
+### HTML 作为外部设计器
+
+更想用真正的标记工具链？同一条物化路径也接受外部 **HTML** 设计文件。
+本 README 顶部的 Hero 就是
+[`assets/designs/imprint_console.html`](assets/designs/imprint_console.html)
+——浏览器里打开即可编辑，交给 Imprint 的设计器，它会变成与上面 C++ 示例
+完全相同的控件树（`html` / `vectordial` 子集：布局、标签、控件、矢量表盘——
+不是 web 引擎）。预览方式相同：
+
+```
+UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
+```
+
+两种格式——`.ui` 与 HTML——喂进同一棵树、同一个像素缓冲、每个目标。
 
 ## 构建
 
@@ -163,7 +185,7 @@ letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/P
 
 **showcase**（`-DSTORY=showcase`）——多目标蒙太奇背后的控件陈列馆：暗色启动，开场是一幅用框架自身光栅器绘制的动画图表（圆角卡片上的抗锯齿曲线 + 渐变面积，由 app 侧 tween 逐步揭示）；设备状态控制面板（进度条、START/STOP、深/浅主题切换）与全控件页面带 alpha 资产合成（9-slice 阴影卡、accent 染色球；资产由 `tools/asset_gen` 构建期生成），以及工厂控制台仪表盘页（仪表、实时趋势图、设定点旋钮+滑块对、泵/冷却 toggle），带 SELF-CHECK 按钮——用真实拖拽驱动旋钮，同一状态两次渲染的帧缓冲逐字节哈希一致时打出 PIXELS MATCH（确定性运行时的证明）。`assets/showcase/` 中的画面来自这些构建——录制器完全确定，Windows/macOS/Linux 上产出字节级一致的 GIF；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM。
 
-**井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件。
+**井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件——可传 `.ui` 或 HTML 路径。
 
 | Windows | macOS | Linux (X11) | WebAssembly | 任天堂 DS | Python 宿主 |
 |:---:|:---:|:---:|:---:|:---:|:---:|

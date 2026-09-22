@@ -14,8 +14,9 @@ endif()
 # design document packed at build time (contract: build-time validation
 # with the same parser; NDS has no filesystem, so the embedded bytes are
 # the shipping form on every target). SHOWCASE_HTML_DOC overrides the
-# document (probe builds, alternate designs).
-set(SHOWCASE_HTML_DOC "${CMAKE_CURRENT_SOURCE_DIR}/space.html" CACHE FILEPATH
+# document (probe builds, alternate designs). Canonical copy lives with
+# the README captures under assets/showcase_html/.
+set(SHOWCASE_HTML_DOC "${CMAKE_SOURCE_DIR}/assets/showcase_html/space.html" CACHE FILEPATH
     "HTML design document embedded into the showcase_html app")
 get_filename_component(SHOWCASE_HTML_NAME "${SHOWCASE_HTML_DOC}" NAME)
 target_compile_definitions(showcase_html_app PRIVATE
