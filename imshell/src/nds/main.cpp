@@ -5,6 +5,7 @@
 #include "app_maker.hpp"
 #include "input.hpp"
 #include "logging.hpp"
+#include "shell/presenter.hpp"
 
 using namespace zb::input;
 using namespace zb::app;
@@ -169,7 +170,32 @@ int main(void)
 
 		if (frame_owed)
 		{
-			dmaCopy(back_buffer, screen, 256 * 192 * sizeof(uint16_t));
+			// A-2: present the reported dirty region, not always the
+			// full frame; idle frames already skip via frame_owed, and a
+			// clamped region keeps the DMA source inside the buffer
+			int x = 0, y = 0, w = 0, h = 0;
+			const bool dirty = app->dirty_region(x, y, w, h);
+			const zb::shell::present_rect r =
+				zb::shell::region_to_present(dirty, x, y, w, h, 256, 192);
+			if (r.w > 0 && r.h > 0)
+			{
+				if (r.x == 0 && r.y == 0 && r.w == 256 && r.h == 192)
+				{
+					dmaCopy(back_buffer, screen, 256 * 192 * sizeof(uint16_t));
+				}
+				else
+				{
+					// row-at-a-time: DMA is contiguous, a sub-rect is not
+					const auto *src = static_cast<const uint16_t *>(back_buffer);
+					auto *dst = static_cast<uint16_t *>(screen);
+					for (int row = r.y; row < r.y + r.h; ++row)
+					{
+						dmaCopy(src + row * 256 + r.x,
+								dst + row * 256 + r.x,
+								static_cast<size_t>(r.w) * sizeof(uint16_t));
+					}
+				}
+			}
 			frame_owed = false;
 		}
 

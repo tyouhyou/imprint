@@ -81,14 +81,25 @@ namespace
             InvalidateRect(g_hwnd, nullptr, FALSE);
             return;
         }
+        // clamp the buffer region to the surface first (negative outer-
+        // shadow damage is legitimate input, a negative blit origin is
+        // not) — same rule as every other shell's region_to_present
+        const zb::shell::present_rect src =
+            zb::shell::region_to_present(true, x, y, w, h,
+                                         static_cast<int>(g_buffer_width),
+                                         static_cast<int>(g_buffer_height));
+        if (src.w <= 0 || src.h <= 0)
+        {
+            return;  // entirely outside the buffer: nothing to present
+        }
         // an empty frame adds nothing and must not drop pending regions
-        g_pending.add(x, y, w, h);
+        g_pending.add(src.x, src.y, src.w, src.h);
         // the buffer region invalidates the dest rect it stretches into
         // (I-2a); a resize invalidates the whole client anyway, so a
         // stale mapping between the two cannot lose pixels
         const zb::shell::presentation pres = current_presentation(g_hwnd);
         const zb::shell::present_rect d =
-            zb::shell::presentation_region(pres, zb::shell::present_rect{x, y, w, h});
+            zb::shell::presentation_region(pres, src);
         if (d.w <= 0)
         {
             return;
@@ -126,7 +137,22 @@ namespace
             (rc_paint.left <= 0 && rc_paint.top <= 0 &&
              rc_paint.right >= pres.x + pres.w && rc_paint.bottom >= pres.y + pres.h))
         {
-            r = zb::shell::present_rect{0, 0, g_buffer_width, g_buffer_height};
+            r = zb::shell::present_rect{0, 0, static_cast<int>(g_buffer_width),
+                                        static_cast<int>(g_buffer_height)};
+        }
+        else
+        {
+            // belt-and-suspenders: a coalesced union can still exceed
+            // the buffer (or start negative); never hand StretchDIBits
+            // a source rect outside the surface
+            r = zb::shell::region_to_present(true, r.x, r.y, r.w, r.h,
+                                             static_cast<int>(g_buffer_width),
+                                             static_cast<int>(g_buffer_height));
+            if (r.w <= 0 || r.h <= 0)
+            {
+                g_pending.clear();
+                return;
+            }
         }
         g_pending.clear();  // presented; the next painted callback accumulates afresh
 
