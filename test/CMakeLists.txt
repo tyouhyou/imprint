@@ -121,4 +121,9 @@ add_custom_target(ui_embed_test_gen DEPENDS ${UI_EMBED_TEST_HEADER})
 add_dependencies(test_imui ui_embed_test_gen)
 target_include_directories(test_imui PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
+# C8: register with CTest so desktop builds can `ctest -R test_imui`
+# (CI still invokes the binary directly; this wires the local path.
+# enable_testing() lives in the top-level CMakeLists)
+add_test(NAME test_imui COMMAND test_imui)
+
 endif()

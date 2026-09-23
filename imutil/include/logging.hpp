@@ -119,7 +119,9 @@ namespace zb
         Logging(Logging &&) = delete;
         Logging &operator=(Logging &&) = delete;
 
-        using log_handler_t = std::function<void(const Logging_Level &level, const std::string &message)>;
+        // enum + string by value / const-ref string: hot logging stays
+        // cheap, but the level enum is trivially copyable (contract 3)
+        using log_handler_t = std::function<void(Logging_Level level, const std::string &message)>;
 
         /*
          * Runtime verbosity: messages below the minimum level are dropped
@@ -152,7 +154,7 @@ namespace zb
             s_log_handler = func;
         }
 
-        static void log(const Logging_Level &level, const std::string &message)
+        static void log(const Logging_Level level, const std::string &message)
         {
             log_handler_t handler;
             {

@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(myapp)
+project(imprint)
 
 # imshell's AppKit backend hands main.mm to the ${STORY} executable
 # assembled in THIS directory (A-22 wiring), so OBJCXX must be enabled
@@ -50,6 +50,10 @@ endif()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+
+# CTest root: enable_testing() must run in the top-level file for
+# add_test() in subdirectories to register (C8)
+enable_testing()
 
 add_subdirectory(imutil)
 add_subdirectory(imcore)
