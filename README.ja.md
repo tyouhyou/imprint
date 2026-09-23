@@ -60,7 +60,7 @@ GPU 不要。OS の GUI ツールキット不要。プラットフォーム固�
 - **決定論的・ホスト駆動のランタイム** — メインループはシェルが所有；同じ入力シーケンス → 同じピクセル；ダーティトラッキング付きオンデマンド再描画、隠れた再描画なし
 - **契約による自動化** — スクリプトがユーザーの代わりを務められる：入力を与え、フレームをポンプし、ピクセルにアサート。シングルスレッドでタイマーなしのためドライバに sleep 不要——テストバッテリーには公開 API のみで駆動するエンドツーエンドの `automation` スイートを含む
 - **デザインファイル** — `.ui` か外部 HTML で 1 画面を記述し、ビルド時に検証・パック。どのターゲットでも C 配列からロード。`ui_preview` がファイルを直接描画
-- **保持モードのウィジェットツリー** — `Button`、`Label`、`Dialog`、`FlexPanel`、`GraphicsView` など
+- **保持モードのウィジェットツリー** — `Button`、`Label`、`Dialog`、`FlexPanel`、`ListBox` など
 - **生のピクセルバッファへのソフトウェア描画** — GPU 不要、外部レンダリングライブラリ不要。バッファ形式はビルド時に `COLOR_DEPTH` で固定
 - **C-ABI を第一級市民として** — 安定した `zbapi` C インターフェースに、Python（ctypes）、WebAssembly、C スモークテストのホスト
 - **組み込みグレード** — RTTI なし、16 ビットカラー（abgr1555）、整数専用ジオメトリオプション、非アトミック参照カウントオプション（NDS に libatomic なし）
@@ -143,7 +143,7 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | node スモークテスト付き |
 | Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 
-テスト：`test/test_imui`——素の assert、テストフレームワークなし。デスクトップビルドで自動実行、NDS ではスキップ。
+テスト：`test/test_imui`——素の assert、テストフレームワークなし。デスクトップは `ctest -R test_imui`（またはバイナリ直実行）、NDS ではスキップ。
 
 ## ウィンドウと表示
 

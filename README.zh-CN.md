@@ -60,7 +60,7 @@ Imprint 是一个确定性、可嵌入的 C++17 UI 运行时：一个像素缓�
 - **确定性、宿主驱动的运行时** — 主循环归壳层所有；相同输入序列 → 相同像素；脏标记追踪的按需重绘，没有隐藏的重绘
 - **契约即自动化** — 脚本可以直接替代用户：喂输入、泵帧、对像素断言；单线程、无定时器，驱动方无需 sleep——测试集包含端到端 `automation` 套件，全程走公开 API
 - **设计文件** — 用 `.ui` 或外部 HTML 描述一屏，构建期校验并打包，任何目标从 C 数组加载；`ui_preview` 直接渲染文件
-- **保留模式控件树** — `Button`、`Label`、`Dialog`、`FlexPanel`、`GraphicsView` 等
+- **保留模式控件树** — `Button`、`Label`、`Dialog`、`FlexPanel`、`ListBox` 等
 - **软件渲染到原始像素缓冲** — 不需要 GPU，不需要外部渲染库；缓冲格式在构建期由 `COLOR_DEPTH` 固定
 - **C-ABI 一等公民** — 稳定的 `zbapi` C 接口，配 Python（ctypes）、WebAssembly 和 C 冒烟测试宿主
 - **嵌入式级约束** — 无 RTTI、16 位色（abgr1555）、纯整数几何选项、非原子引用计数选项（NDS 没有 libatomic）
@@ -144,7 +144,7 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | 附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
-测试：`test/test_imui`——纯断言，无测试框架；桌面构建自动运行，NDS 跳过。
+测试：`test/test_imui`——纯断言，无测试框架；桌面用 `ctest -R test_imui`（或直接运行二进制），NDS 跳过。
 
 ## 窗口与呈现
 

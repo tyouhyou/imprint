@@ -1163,7 +1163,9 @@ dispatcher's raw pointers against dangling/UAF:
     the exact rebuild count is locked by `test_list_box`, steady-state
     drawing allocates 0; invalidation duty for dynamic ItemText content
     changes lies with the caller (call any setter).
-    Rebuild observability (batch S1): `rasterization_count()` is a
+    Rebuild observability (DLL-boundary observability, formerly "batch S1"
+    — do not confuse with Theme's "batch S1" or backlog's Batch S render
+    modes): `rasterization_count()` is a
     monotonic count of row rasterizations (cache misses); the
     invalidation gates assert its deltas because allocation deltas are
     not portable proof — on hosts where imcore is a shared library
@@ -1316,7 +1318,7 @@ obligations:
   `overflow: visible`) must re-audit `Widget::draw`'s pruning in the same
   change.
 
-## 10. Theme (batch S1 contract)
+## 10. Theme (batch S1 contract — the Theme workstream; not backlog Batch S / not the rebuild observability "batch S1")
 
 ### 10.1 Form
 

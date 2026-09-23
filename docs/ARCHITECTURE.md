@@ -76,7 +76,9 @@ knowledge and lives with the quick-start material.
 | Host languages | `binding` (`zbapi` shared library) | Python/ctypes demo and a C smoke test drive the C-ABI |
 
 Tests (`test/test_imui`) run on hosts only (embedded builds skip them)
-and cover 30+ suites with plain asserts; the platform input-mapping
+and cover the suites registered in `test/test_main.cpp` (see that file
+for the live count — platform/feature increments follow the same
+pattern); the platform input-mapping
 suites follow their platform (win32 suite on Windows, x11 suite where
 the X11 shell builds).
 
@@ -200,12 +202,16 @@ satisfies. Changing any of these is an architecture change.
   natural size; `FlexPanel` sizes non-explicit axes from it and writes back
   per-axis (`set_width_auto`/`set_height_auto`) so an explicit cross-axis
   size survives a main-axis grow.
-- Every state setter reports damage (`mark_dirty`) and layout change
-  (`mark_layout_dirty`); this is a per-widget authoring obligation.
+- Damage/layout invalidation follows code-contract §7: visual-only
+  setters call `mark_dirty()`; geometry/measure-affecting setters call
+  `mark_layout_dirty()` (which may also mark dirty when the change is
+  both). **Never claim both flags "always"** — layout-only setters must
+  not force a full re-render path, and render-only setters must not
+  re-layout (per-widget authoring obligation).
 - **`hit()` override pattern (A-24).** `hit(x, y)` is a widget-local point
   test — coordinates arrive already translated by the parent's `pick()`
   recursive descent. The default is `visible &&` point-in-rect
-  (`widget.cpp:179`). An override replaces that point test wholesale; it
+  (`Widget::hit` in widget.cpp). An override replaces that point test wholesale; it
   must reproduce the `visible` gate itself, keep the same widget-local
   coordinate space, and answer only the shape question (a knob's circle, a
   gauge's arc sector). The dispatcher calls `hit()` on the input hot path
@@ -218,7 +224,7 @@ satisfies. Changing any of these is an architecture change.
   directly; extract one only when collision detection becomes a real
   requirement.
 - **`on_input()` override pattern (A-24).** `on_input()` is the sole event
-  entry (`widget.hpp:453`): the dispatcher routes press / release / move /
+  entry (`Widget::on_input` in widget.hpp): the dispatcher routes press / release / move /
   wheel / key events to the picked widget. **`return true` = event consumed
   / state changed** (the dispatcher reports the change to the frame, and a
   press that returns true forms the pressed-target lock and grabs focus if

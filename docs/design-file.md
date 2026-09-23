@@ -71,12 +71,16 @@ The tag and property set is defined by the factory/property tables in
 `imui/src/ui_builder.cpp`: containers (`panel`, `column`, `row`) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
-`text_input`), with properties including
+`text_input`, `svg`), with properties including
 `id`, `text`, `size`, `pos`, `valign` (`top`, `center`, `bottom`),
 `halign` (`left`, `center`, `right`), `named`, `checked`, `group`, `step`,
 `min`, `max`, `value`, `rows`, `spacing`, `padding`, `wrap`, `flex`,
 `margin_t`, `margin_r`, `margin_b`, `margin_l`,
-`visible`, `background`, `color`, `font_size`. A `width`/`height` value of the form
+`visible`, `background`, `color`, `font_size`,
+`text_wrap` (bool: word-wrap the label/paragraph block),
+`line_h` (int: explicit line pitch, 0 = provider default),
+`justify` (0–4: FlexPanel main-axis justify code),
+`elem_opacity` (0–1000: fixed-point paint alpha fold). A `width`/`height` value of the form
 `N%` (1..100) declares
 that axis as a percentage of the FlexPanel parent's content box,
 resolved at layout time — it never becomes an explicit size, and outside

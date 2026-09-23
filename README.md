@@ -72,7 +72,7 @@ Measured footprints (Release builds of the `showcase` app above):
 - **Deterministic, host-driven runtime** — shell owns the loop; same input sequence → same pixels; repaint-on-demand with dirty tracking, no hidden redraws
 - **Automation by contract** — a script can replace the user: feed input, pump frames, assert on pixels; single-threaded and timer-free, so drivers never sleep — the test battery includes an end-to-end `automation` suite driven through the public API
 - **Design files** — describe a screen in `.ui` or external HTML, validate and pack at build time, load from a C array on any target; `ui_preview` renders files directly
-- **Retained-mode widget tree** — `Button`, `Label`, `Dialog`, `FlexPanel`, `GraphicsView` and more
+- **Retained-mode widget tree** — `Button`, `Label`, `Dialog`, `FlexPanel`, `ListBox` and more
 - **Software rendering into a raw pixel buffer** — no GPU, no external rendering library; the buffer format is fixed at build time (`COLOR_DEPTH`)
 - **C-ABI as a first-class citizen** — stable `zbapi` C interface with Python (ctypes), WebAssembly and C smoke-test hosts
 - **Embedded-grade** — no RTTI, 16-bit color (abgr1555), integer-only geometry option, non-atomic refcounting option (NDS has no libatomic)
@@ -161,7 +161,7 @@ target.
 | WebAssembly | `demo/wasm/build.sh` (docker emscripten) | includes a node smoke test |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
-Tests: `test/test_imui` — plain asserts, no framework; automatic on desktop builds, skipped on NDS.
+Tests: `test/test_imui` — plain asserts, no test framework; run via `ctest -R test_imui` (or the binary) on desktop; skipped on NDS.
 
 ## Window & presentation
 
