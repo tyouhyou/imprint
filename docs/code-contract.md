@@ -670,10 +670,11 @@ boundary):
   - **Drag semantics need `captures_pointer()` = true**: while a capture
     press is held, every move is delivered regardless of where the pointer
     is, with no drift cancel. A **non-capturing** pressed widget is never
-    fed moves; a move still on the widget just resets the drift counter,
-    one off it cancels the press after the slop (mouse 8 px immediate;
-    touch two consecutive off-target moves — one glitch sample must not
-    eat a click).
+    fed moves; a move that is still on the widget — or off it but within
+    the slop — resets the drift counter. A move off it and beyond the slop
+    cancels the press (mouse 8 px immediate; touch two **consecutive**
+    off-target strikes — any intervening on-target or within-slop sample
+    resets the count, so one glitch sample must not eat a click).
   - Release always reaches the held `pressed_target` even after the
     pointer leaves the widget (commit-on-release widgets rely on this);
     a new press while one is held cancels the old first (`on_cancel`).

@@ -319,9 +319,6 @@ Conclusions recorded so they are not re-derived:
 
 ### Deferred this round (recorded, not blocking)
 
-- **B6 NDS tictactoe dialog buttons**: evidence chain in `CONTEXT.md`
-  环境注意 — diagnose with `LOGGING_DEBUG=ON` before changing dispatcher
-  two-click/slop policy (contract-first if the policy changes).
 - **B10-style constant C-ABI exports** (`zb_buffer_bpp` etc.): optional
   `try/catch` for file-wide no-exception-crossing style consistency;
   low priority, no throw path today.
