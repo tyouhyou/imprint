@@ -46,9 +46,10 @@ extern "C" void zb_set_log_callback(zb_log_cb cb)
 
 extern "C" zb_app *zb_app_create(uint32_t width, uint32_t height)
 {
-    auto *self = new zb_app();
+    zb_app *self = nullptr;
     try
     {
+        self = new zb_app();
         self->app = zb::app::make_app();
         self->app->create_window(width, height);
         return self;
