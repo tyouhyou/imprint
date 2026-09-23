@@ -237,6 +237,7 @@ namespace zb::ui
         // through CanvasWindow::remove_from, which evicts first
         if (pressed_target != nullptr && !pressed_target->is_descendant_of(&root))
         {
+            LD << "press dropped: target left the tree";
             pressed_target = nullptr;
         }
         if (focus_target != nullptr && !focus_target->is_descendant_of(&root))
@@ -273,6 +274,7 @@ namespace zb::ui
         // the event flow on (a following press claims a fresh target)
         if (pressed_target != nullptr && !pressed_target->is_effectively_visible())
         {
+            LD << "press cancelled: target not effectively visible";
             pressed_target->on_cancel();
             pressed_target = nullptr;
         }
@@ -283,6 +285,7 @@ namespace zb::ui
             if (pressed_target != nullptr)
             {
                 // a previous press was never released; cancel it first
+                LD << "press cancelled: superseded by a new press";
                 pressed_target->on_cancel();
                 pressed_target = nullptr;
                 changed = true;
@@ -339,34 +342,34 @@ namespace zb::ui
                 // the pointer left the pressed widget: cancel the press,
                 // but tolerate a few pixels of drift (touch jitter) that
                 // must not eat a click
-                if (pick_target(root, ev.x, ev.y) != pressed_target)
+                const int dx = ev.x - press_x;
+                const int dy = ev.y - press_y;
+                const bool beyond_slop =
+                    dx * dx + dy * dy > press_slop * press_slop;
+                if (pick_target(root, ev.x, ev.y) != pressed_target &&
+                    beyond_slop)
                 {
-                    const int dx = ev.x - press_x;
-                    const int dy = ev.y - press_y;
-                    if (dx * dx + dy * dy > press_slop * press_slop)
+                    // touch panels occasionally report one glitch
+                    // sample far from the real position; a single
+                    // off-target touch move must not eat the press --
+                    // the cancel needs two consecutive off-target
+                    // moves (mouse moves are exact and cancel at once).
+                    // Any sample that is not a strike (back on the
+                    // widget, or still within the slop) resets the
+                    // counter so the strikes are truly consecutive.
+                    if (ev.type == input::input_type::touch_move &&
+                        ++touch_outside_count < 2)
                     {
-                        // touch panels occasionally report one glitch
-                        // sample far from the real position; a single
-                        // off-target touch move must not eat the press --
-                        // the cancel needs two consecutive off-target
-                        // moves (mouse moves are exact and cancel at once)
-                        if (ev.type == input::input_type::touch_move &&
-                            ++touch_outside_count < 2)
-                        {
-                            LD << "off-target touch move tolerated at " << ev.x << "," << ev.y;
-                            return false;
-                        }
-                        LD << "press cancelled by move to " << ev.x << "," << ev.y;
-                        pressed_target->on_cancel();
-                        pressed_target = nullptr;
-                        touch_outside_count = 0;
-                        return true;
+                        LD << "off-target touch move tolerated at " << ev.x << "," << ev.y;
+                        return false;
                     }
-                }
-                else
-                {
+                    LD << "press cancelled by move to " << ev.x << "," << ev.y;
+                    pressed_target->on_cancel();
+                    pressed_target = nullptr;
                     touch_outside_count = 0;
+                    return true;
                 }
+                touch_outside_count = 0;
             }
             return false;
         }

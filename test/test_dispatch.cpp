@@ -328,6 +328,26 @@ int test_dispatch()
         EXPECT(clicks == 1);
     }
 
+    // a sample off the widget but still within the slop of the press
+    // origin also resets the strike count (the strikes must be truly
+    // consecutive -- noisy panels interleave near and far readings)
+    {
+        Tree t;
+        InputDispatcher d;
+        int clicks = 0;
+        t.button->clicked += [&clicks]() { ++clicks; };
+
+        d.dispatch(t.root, touch_press_at(15, 15, 0));
+        d.dispatch(t.root, touch_move_to(80, 80, 0));   // strike 1 (tolerated)
+        // off the 20px button at (10,10) but only 6px from press origin
+        d.dispatch(t.root, touch_move_to(9, 16, 0));
+        EXPECT(t.button->get_state() == Button::state::pressed);
+        d.dispatch(t.root, touch_move_to(80, 80, 0));   // strike 1 again
+        EXPECT(t.button->get_state() == Button::state::pressed);
+        d.dispatch(t.root, touch_release_at(15, 15, 0));
+        EXPECT(clicks == 1);
+    }
+
     // right button does not press the button
     {
         Tree t;

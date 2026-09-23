@@ -233,6 +233,47 @@ int test_app_flow()
             const auto w3 = app3->window();
             EXPECT(pixel_at_window(w3, 20, 100) == core::Color::from(28, 148, 64).pixel);
         }
+
+        // B6 shape: modal dialog button + paint frames while held +
+        // interleaved near/far touch readings (noise, not a drag-away).
+        // The strike count must reset on the near sample so the two far
+        // samples are not consecutive -- the click still lands.
+        {
+            auto app4 = zb::make_shared<Tictactoe>();
+            app4->create_window(256, 192);
+            app4->paint();
+            zb::input::input_event ev{};
+            ev.type = zb::input::input_type::touch_down;
+            ev.x = normal_cx;
+            ev.y = btn_cy;
+            ev.touch_id = 0;
+            app4->input(ev);
+            if (app4->is_dirty())
+            {
+                app4->paint();  // shell idle frame while held
+            }
+            ev.type = zb::input::input_type::touch_move;
+            ev.x = normal_cx - 40;
+            ev.y = btn_cy - 40;  // far strike 1
+            app4->input(ev);
+            ev.x = normal_cx - 6;
+            ev.y = btn_cy - 6;  // near sample (beyond button, within slop)
+            app4->input(ev);
+            if (app4->is_dirty())
+            {
+                app4->paint();
+            }
+            ev.x = normal_cx - 40;
+            ev.y = btn_cy - 40;  // far strike (reset by the near sample)
+            app4->input(ev);
+            ev.type = zb::input::input_type::touch_up;
+            ev.x = normal_cx;
+            ev.y = btn_cy;
+            app4->input(ev);
+            plain_touch(app4, first_cx, btn_cy);
+            const auto w4 = app4->window();
+            EXPECT(pixel_at_window(w4, 20, 100) == core::Color::from(28, 148, 64).pixel);
+        }
     }
 
     return test::report("app_flow");

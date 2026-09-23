@@ -13,8 +13,9 @@ namespace zb::ui
      * the pressed target (if it accepts the event). While held, the target
      * is tracked by the widget, not by the pointer: releasing anywhere
      * still delivers the release to it, and leaving its area cancels it
-     * (a touch move cancels only after two consecutive off-target moves:
-     * touch panels report single glitch samples, mouse moves are exact).
+     * (a touch move cancels only after two consecutive off-target strikes:
+     * touch panels report single glitch samples, mouse moves are exact;
+     * an on-target or within-slop sample resets the strike count).
      *
      * Modal dialogs can be enforced with set_modal(): while set, events
      * only reach widgets inside the modal widget (see Dialog).
@@ -99,10 +100,12 @@ namespace zb::ui
         int press_x = 0;
         int press_y = 0;
 
-        // consecutive off-target touch moves beyond slop; the press is
+        // consecutive off-target touch strikes beyond slop; the press is
         // cancelled at 2 -- a single glitch sample (touch panels report
         // occasional readings far from the real position) must not eat
-        // the click. Reset when a move re-picks the pressed target
+        // the click. Reset when a move re-picks the pressed target or
+        // lands within the slop of the press origin (strikes must be
+        // truly consecutive)
         int touch_outside_count = 0;
 
         // the touch pointer that owns the active press; moves/ups from a
