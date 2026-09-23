@@ -988,6 +988,33 @@ int test_graphics()
 #endif
     }
 
+    // fill_repeating with first stop > 0: the wrap segment (seg < 0)
+    // must lerp from the previous period's tail without shifting m
+    // (a second m += period made the weight pass 1 into garbage colors)
+    {
+        auto g = core::Graphics::make_ptr(8, 1);
+        // period 8, stops at 4 (red) and 6 (blue): m in [0,4) wraps
+        // from the previous period's last stop (blue at 6-8=-2) to red at 4
+        const int pos[4] = {4, 4, 6, 6};
+        const core::Color cols[4] = {core::colors::Red, core::colors::Red,
+                                     core::colors::Blue, core::colors::Blue};
+        g->fill(core::colors::Black);
+        g->fill_repeating(0, 0, 7, 0, true, 8, pos, cols, 4);
+        // m=0..3: seg < 0, lerp(blue_tail, red, m-(-2), 4-(-2))
+        // m=0 → weight 2/6; m=4..5 solid red; m=6..7 solid blue
+        EXPECT(test::pixel_at(*g, 4, 0) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 6, 0) == core::colors::Blue.pixel);
+        // wrap head is a blend of blue and red, not pure black / pure red
+        const uint32_t wrap = test::pixel_at(*g, 0, 0);
+        EXPECT(wrap != core::colors::Black.pixel);
+        EXPECT(wrap != core::colors::Red.pixel);
+        EXPECT(wrap != core::colors::Blue.pixel);
+#if COLOR_DEPTH == 32
+        // weight 2/6 from blue toward red: r = 255*2/6 ≈ 85, b = 255*4/6 ≈ 170
+        EXPECT(wrap == core::Color::from(85, 0, 170).pixel);
+#endif
+    }
+
     // fill_gradient with corner radius: middle rows interpolate
     // full-width, corner rows shrink by the chord
     {

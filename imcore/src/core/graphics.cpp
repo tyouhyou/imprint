@@ -1886,9 +1886,11 @@ void Graphics::fill_repeating(int x1, int y1, int x2, int y2, const bool horizon
         const Color *c1 = &stop_col[0];
         if (seg < 0)
         {
+            // m is already in [0, period); wrap into the previous
+            // period's tail without shifting m (shifting would push the
+            // lerp weight past 1 into garbage colors)
             lo = stop_pos[nstops - 1] - period;
             hi = stop_pos[0];
-            m += period;
         }
         else if (seg >= nstops - 1)
         {
