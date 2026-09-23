@@ -435,10 +435,6 @@ namespace zb::ui::core
          */
         void draw_arc_aa(int cx, int cy, int radius, int start_deg, int sweep_deg, const Color &colr);
 
-        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const Color &colr, float accuracy = 0.01);
-        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const Color &colr, float accuracy = 0.01);
-        void draw_bezier_curve(const impoint_t &p1, const impoint_t &p2, const impoint_t &p3, const impoint_t &p4, const Color &colr, float accuracy = 0.01);
-
         /* *
          * Draw an image, a Color pixels array, into graphics.
          * */

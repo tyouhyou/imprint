@@ -325,10 +325,6 @@ Conclusions recorded so they are not re-derived:
 - **B10-style constant C-ABI exports** (`zb_buffer_bpp` etc.): optional
   `try/catch` for file-wide no-exception-crossing style consistency;
   low priority, no throw path today.
-- **`Graphics::draw_bezier_curve` API**: retained intentionally —
-  imcore Graphics is a public toolkit surface for external callers,
-  not only in-tree consumers (2026-09-23 ruling). Dead in-tree callers
-  are fine; do not delete the export.
 
 ### Unscheduled Design Debt (Batch K Triage)
 
