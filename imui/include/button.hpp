@@ -46,11 +46,31 @@ namespace zb::ui
 
         // per-widget overrides of theme tokens; unset follows the active
         // theme (contract 10.3)
-        void set_pressed_color(const core::Color &c) { pressed_color = c; }
-        void set_pressed_image(const core::image_t &img) { pressed_image = img; }
-        void set_border_color(const core::Color &c) { border = c; }
-        void set_focus_border_color(const core::Color &c) { focus_border = c; }
-        void set_show_border(const bool b) { show_border = b; }
+        void set_pressed_color(const core::Color &c)
+        {
+            pressed_color = c;
+            mark_dirty();
+        }
+        void set_pressed_image(const core::image_t &img)
+        {
+            pressed_image = img;
+            mark_dirty();
+        }
+        void set_border_color(const core::Color &c)
+        {
+            border = c;
+            mark_dirty();
+        }
+        void set_focus_border_color(const core::Color &c)
+        {
+            focus_border = c;
+            mark_dirty();
+        }
+        void set_show_border(const bool b)
+        {
+            show_border = b;
+            mark_dirty();
+        }
 
         // emitted when the button is released while pressed
         zb::event::Event<> clicked;

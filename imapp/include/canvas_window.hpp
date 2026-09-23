@@ -221,7 +221,15 @@ namespace zb::app
         // (linux-fb, NDS) skip paint() entirely while false
         [[nodiscard]] bool is_dirty() const noexcept override
         {
-            return dirty_ || (root_ != nullptr && root_->is_subtree_dirty()) ||
+            // layout_dirty_ starts true (first auto-layout paint) and is
+            // only cleared by layout(); without auto_layout the flag stays
+            // set forever, so it must not gate idle frames in that mode.
+            // With auto_layout, a layout-only setter must owe a frame.
+            const bool layout_owed =
+                auto_layout_ && root_ != nullptr && root_->is_layout_dirty();
+            return dirty_ ||
+                   (root_ != nullptr && root_->is_subtree_dirty()) ||
+                   layout_owed ||
                    zb::ui::theme_generation() != theme_gen_;
         }
 

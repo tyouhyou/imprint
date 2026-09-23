@@ -1354,7 +1354,16 @@ namespace zb::ui
             if (t == "list_box")
             {
                 ListBox &l = *as_list(w);
-                l.set_visible_rows(static_cast<size_t>(prop_of(n, "rows", 4LL)));
+                const long long rows = prop_of(n, "rows", 4LL);
+                if (rows < 1 || rows > 100000)
+                {
+                    LW << "list_box: rows=" << rows << " out of range; clamping";
+                    l.set_visible_rows(rows < 1 ? 1u : 100000u);
+                }
+                else
+                {
+                    l.set_visible_rows(static_cast<size_t>(rows));
+                }
                 if (!n.items.empty())
                 {
                     l.set_items(n.items);

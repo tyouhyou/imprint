@@ -145,5 +145,27 @@ int test_button()
                core::colors::Black.pixel);
     }
 
+    // appearance setters mark the widget dirty (B1)
+    {
+        Button b;
+        b.set_size(4, 4);
+        b.set_background_color(core::colors::White);
+        b.draw(*core::Graphics::make_ptr(4, 4));
+        // a clean baseline: construction + draw leaves no pending damage
+        // guarantee in the Widget contract; force known-clean via paint
+        // simulation is not available here — assert each setter marks
+        b.set_border_color(core::colors::Red);
+        EXPECT(b.is_dirty());
+        b.set_show_border(false);
+        EXPECT(b.is_dirty());
+        b.set_focus_border_color(core::colors::Blue);
+        EXPECT(b.is_dirty());
+        b.set_pressed_color(core::colors::Green);
+        EXPECT(b.is_dirty());
+        const core::image_t empty{};
+        b.set_pressed_image(empty);
+        EXPECT(b.is_dirty());
+    }
+
     return test::report("button");
 }

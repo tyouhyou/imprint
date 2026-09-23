@@ -48,10 +48,17 @@ namespace zb::ui
 
     void ListBox::set_visible_rows(const size_t rows)
     {
+        // guard the height math: visible * row_height must fit int
+        constexpr size_t k_max_rows = 100000;
         if (rows == 0)
         {
             LW << "list: zero visible rows; clamping to 1";
             visible = 1;
+        }
+        else if (rows > k_max_rows)
+        {
+            LW << "list: " << rows << " visible rows exceeds cap; clamping";
+            visible = k_max_rows;
         }
         else
         {

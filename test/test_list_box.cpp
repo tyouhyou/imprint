@@ -440,5 +440,15 @@ int test_list_box()
             EXPECT(l.get_size().height == 60);  // 3 rows * 20
         }
 
+        // F7: rows/visible clamp — zero and absurd sizes never stick
+        {
+            ListBox l;
+            l.set_visible_rows(0);
+            EXPECT(l.get_size().height >= 1);  // clamped to 1 row
+            l.set_visible_rows(1000000);
+            EXPECT(l.get_size().height > 0);
+            EXPECT(l.get_size().height <= 100000 * 16);
+        }
+
         return test::report("list_box");
 }

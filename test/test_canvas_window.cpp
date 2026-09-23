@@ -147,6 +147,29 @@ int test_canvas_window()
         EXPECT(!w.is_dirty());
     }
 
+    // layout-only setters also owe a frame (F2): mark_layout_dirty
+    // bubbles to the root, but is_dirty must observe it or idle shells
+    // never re-layout
+    {
+        CanvasWindow w;
+        w.create(100, 100);
+        w.set_auto_layout(true);
+        auto panel = std::make_unique<Panel>();
+        panel->set_size(50, 50);
+        panel->set_position(5, 5);
+        auto *pp = panel.get();
+        w.root().add_child(std::move(panel));
+
+        w.paint();
+        EXPECT(!w.is_dirty());
+
+        pp->set_padding(4);  // layout-only path
+        EXPECT(w.is_dirty());
+
+        w.paint();
+        EXPECT(!w.is_dirty());
+    }
+
     // a setter firing during the draw survives into the next frame
     // (walk_damage consumes at read time; the late damage stays pending)
     {

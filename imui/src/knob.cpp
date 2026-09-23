@@ -24,20 +24,21 @@ namespace zb::ui
 
     void Knob::set_value(const int v)
     {
-        if (v == value)
+        int n = v;
+        if (n < min)
+        {
+            n = min;
+        }
+        if (n > max)
+        {
+            n = max;
+        }
+        if (n == value)
         {
             return;
         }
         mark_dirty();
-        value = v;
-        if (value < min)
-        {
-            value = min;
-        }
-        if (value > max)
-        {
-            value = max;
-        }
+        value = n;
     }
 
     int Knob::value_deg() const
