@@ -4760,6 +4760,14 @@ namespace zb::ui
         // about characters, quotes, or comments anymore.
         // -------------------------------------------------------------------
 
+        // element-depth cap: convert_elem / inherit_text_props / the Elem
+        // destructor chain recurse once per built element level, and the
+        // NDS DTCM user stack is only ~16KB (see the convert_elem split
+        // note). Authored pages stay far below this; a deeper subtree is
+        // dropped exactly like an off-whitelist one (warn + skip, the
+        // warning fires on the first occurrence per parse_html call).
+        constexpr std::size_t k_max_elem_depth = 32;
+
         enum frame_mode : int
         {
             k_build = 0,  // children construct widgets (body/whitelisted)
@@ -4786,6 +4794,7 @@ namespace zb::ui
             int text_line = 1;  // source line of the buffered text (B6)
             std::unique_ptr<Elem> root;  // the body/document container
             std::vector<Frame> frames;
+            bool depth_warned = false;  // the depth-cap warning: once per parse
             // transparent <g> presentation maps inside svg, innermost last;
             // each level already merges its ancestors (nearest wins by
             // overwrite), so resolution reads the back only
@@ -5011,6 +5020,26 @@ namespace zb::ui
                 // decide the frame mode before creating anything (whitelist
                 // knowledge lives in the contract doc)
                 const std::string &name = t.name;
+                // depth cap first: past it the subtree is dropped without
+                // touching the frames the recursions walk
+                if (frames.size() >= k_max_elem_depth)
+                {
+                    if (!depth_warned)
+                    {
+                        depth_warned = true;
+                        LW << "html: line " << t.line << ": element nesting "
+                           << "deeper than " << k_max_elem_depth - 1
+                           << "; the deeper subtree was dropped";
+                    }
+                    if (!(t.self_closing || name == "br"))
+                    {
+                        // an open frame that swallows its subtree (text
+                        // included) until its close or EOF
+                        frames.push_back(
+                            {name, k_skip, false, nullptr, nullptr});
+                    }
+                    return;
+                }
                 int mode = k_build;
                 if (is_structural(name) || name == "body")
                 {

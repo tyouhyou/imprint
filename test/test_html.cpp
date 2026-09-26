@@ -692,6 +692,56 @@ int test_html()
         EXPECT(warns.empty());
     }
 
+    // element nesting is capped: a deeper subtree drops like an
+    // off-whitelist one (first-occurrence warning) instead of recursing
+    // unbounded (the convert/inherit/destructor chains walk this depth)
+    {
+        std::string src;
+        for (int i = 0; i < 64; ++i)
+        {
+            src += "<div>";
+        }
+        src += "<label>deep</label>";
+        for (int i = 0; i < 64; ++i)
+        {
+            src += "</div>";
+        }
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { warns.push_back(m); });
+        bool ok = false;
+        ui_node r = parse_html(src.c_str(), &ok);
+        zb::Logging::set_log_handle();
+        EXPECT(ok);  // the tree above the cap is still there
+        int max_depth = 0;
+        std::function<void(const ui_node &, int)> walk =
+            [&](const ui_node &n, int d)
+            {
+                if (d > max_depth)
+                {
+                    max_depth = d;
+                }
+                for (const ui_node &c : n.children)
+                {
+                    walk(c, d + 1);
+                }
+            };
+        walk(r, 0);
+        EXPECT(max_depth <= 32);
+        // the label below the cap is gone, and the warning fired once
+        bool depth_warned = false;
+        for (const std::string &w : warns)
+        {
+            if (w.find("nesting") != std::string::npos)
+            {
+                EXPECT(!depth_warned);  // first occurrence only
+                depth_warned = true;
+            }
+        }
+        EXPECT(depth_warned);
+    }
+
     // P-1 paint: background shorthand (solid/linear/radial layers),
     // border, radius
     {
