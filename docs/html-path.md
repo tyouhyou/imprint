@@ -126,7 +126,9 @@ applies unchanged.
 | Unknown `var(--name)` without fallback | declaration dropped silently (malformed-value tolerance) |
 | Style declaration not in the whitelist | **LW warning + ignored** (the element keeps its default presentation) |
 | Malformed value (bad color, bad number, bad percent) | silently defaulted (the shared property table's tolerance) |
-| Stray/mismatched closing tag | closes open ancestors up to the match (unbalanced intermediates are finalized along the way); ignored when no open frame matches. HTML5 would ignore the stray tag instead — tolerated deviation, silent |
+| Stray/mismatched closing tag | closes open ancestors up to the match (unbalanced intermediates are finalized along the way); ignored when no open frame matches (HTML5 semantics), silent |
+| Element nesting deeper than 32 | **LW warning (first occurrence per parse) + the deeper subtree dropped**, exactly like an off-whitelist element — the converter/text-inheritance/destructor recursions walk the built depth, and the embedded stack is small |
+| `<body>` not at the document top (inside a dropped subtree, a built container, or a repeated occurrence) | **LW warning + skipped**; only a top-level `<body>` (directly or through the `html`/`head` boilerplate chain) re-roots, and only the first one feeds the page box |
 
 ## Whitelist — elements
 
