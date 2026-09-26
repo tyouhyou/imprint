@@ -154,7 +154,7 @@ applies unchanged.
 |---|---|---|
 | `id` | any element | `find_by_id` handle (unquoted digits accepted, stored as decimal — the `.ui` rule) |
 | `style` | any element | inline declaration list, wins over every rule |
-| `class` | any element | accepted, inert (no selectors) |
+| `class` | any element | drives `.class` selector matching (§`<style>` rule matching); multi-class lists split on whitespace |
 | `min` / `max` / `step` / `value` | gauge / knob / meter | range/value properties (full integers, negatives accepted; the widget clamps `value` into [`min`, `max`] and collapses a reversed range to a point; `step` stays a non-negative magnitude) |
 | `checked` | checkbox / radio / toggle | boolean, by presence |
 | `group` | radio | radio group id (integer, any sign — equality-matched, never indexed) |
@@ -192,12 +192,12 @@ applies unchanged.
 | `top` / `left` / `right` / `bottom` | `Npx`, `N%`, bare `0`, `auto` | abs offsets against the containing-block content box (`auto` = unset; only read on absolutely positioned elements) |
 | `transform` | `translate(X[, Y])` (`%` of self or px) | shift after abs placement; any other function drops the declaration |
 | `color` | same color forms | the shared `color` property (text color) |
-| `font-size` | `Npx` | per-widget pixel size (`set_font_size`, code-contract §2.4): `N` clamps to 1..128, out-of-range/missing-family warns once and keeps the current provider; explicit per element, never inherited; ignored without `IMCORE_HAS_TTF_RUNTIME` (documented degradation) |
+| `font-size` | `Npx` or bare `N` | per-widget pixel size (`set_font_size`, code-contract §2.4): `N` clamps to 1..128, out-of-range/missing-family warns once and keeps the current provider; explicit per element on top of the text-axis inheritance pass (below); ignored without `IMCORE_HAS_TTF_RUNTIME` (documented degradation) |
 | `letter-spacing` | `Npx` | per-code-unit tracking in measure and draw (trailing unit included, per CSS); negative clamps to 0 |
 | `font-weight` | `bold`, or a number ≥ 600 → on; `normal` / < 600 → off | double-strike: second pass shifted +1px, no bold variant |
 | `text-shadow` | `DXpx DYpx [blur] <color>` | one solid offset copy drawn first; blur parsed-and-ignored; a comma list keeps the first shadow only |
-| `line-height` | `Npx` | multi-line line pitch (`set_line_height`); 0/unset keeps the provider's line metrics; unitless/percent/malformed warns and keeps current |
-| `::before` / `::after` (selector tail) | rule body must declare `content: ""` (anything else drops the box); `position: absolute` required; one background layer (solid or 3-stop linear), `border-radius` (`Npx`/`50%`), bare `rotate()` | paint-only decoration box on the host widget (H-10): no layout, no hit-testing, not independently addressable — no id, no events, no handle; hit-testing belongs to the host widget. Use a real child element when you need an interactive target. Geometry/paint are re-specifiable at runtime via `Widget::set_pseudo` |
+| `line-height` | `Npx` or bare `N` | multi-line line pitch (`set_line_height`); 0/unset keeps the provider's line metrics; percent/malformed warns and keeps current |
+| `::before` / `::after` (selector tail) | rule body must declare `content: ""` (anything else drops the box); `position: absolute` required; one background layer (solid or 3-stop linear), `border-radius` (`Npx`/`50%`), bare `rotate()`, `transform-origin` (1–2 tokens of `N%`/`Npx`/bare/keyword, default `50%` — the rotate origin; outside a pseudo body `transform-origin` is off the whitelist and warns) | paint-only decoration box on the host widget (H-10): no layout, no hit-testing, not independently addressable — no id, no events, no handle; hit-testing belongs to the host widget. Use a real child element when you need an interactive target. Geometry/paint are re-specifiable at runtime via `Widget::set_pseudo` |
 
 ## `<style>` rule matching
 
@@ -222,9 +222,15 @@ applies unchanged.
 - Application is a real cascade, then inline: every matching rule
   contributes its declarations ordered by specificity `(ids, classes,
   tags)` and then document order (later wins ties); the inline
-  `style=` attribute crowns everything. No inheritance — a child never
-  inherits a parent's `color` (a descendant selector still has to match
-  it explicitly).
+  `style=` attribute crowns everything. The cascade itself has no
+  descendant inheritance — a descendant selector still has to match a
+  child explicitly. On top of it, the parse-time **text-axis
+  inheritance pass** (code-contract §2) propagates `color`,
+  `font-size`, `letter-spacing` and `font-weight` from the declaring
+  element down to the text labels the converter synthesizes: own
+  declarations win, and the inherited value stamps text-bearing nodes
+  only (containers stay unstamped, so no phantom per-size providers
+  are created).
 - `!important` (ASCII case-insensitive, whitespace tolerated:
   `color: red !important`) lifts a declaration above every normal one;
   among important declarations the same specificity-then-order applies.

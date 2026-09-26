@@ -796,6 +796,51 @@ int test_html()
         EXPECT(body_warns == 3);
     }
 
+    // transform-origin is whitelisted only inside ::before/::after rule
+    // bodies (the pseudo rotate origin); on a real element it is off the
+    // whitelist and warns honestly (tolerance row)
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { warns.push_back(m); });
+        ui_node r = parse_html(
+            "<style>div::after { content: \"\"; position: absolute; "
+            "left: 0px; top: 0px; width: 4px; height: 4px; "
+            "transform: rotate(45deg); transform-origin: 0% 0%; }</style>"
+            "<div></div>",
+            nullptr);
+        // the pseudo box picked up the rotate origin (the empty div is
+        // hoisted to the returned root, so the props sit on r itself)
+        EXPECT(test::vget<long long>(node_prop_v(r, "after_rot_ox")) == 0);
+        EXPECT(test::vget<bool>(node_prop_v(r, "after_rot_ox_pct")) == true);
+
+        ui_node r2 = parse_html(
+            "<div style=\"transform-origin: 0 0\"></div>", nullptr);
+        zb::Logging::set_log_handle();
+        EXPECT(r2.children.empty());  // nothing built, nothing crashed
+        bool origin_warned = false;
+        for (const std::string &w : warns)
+        {
+            if (w.find("transform-origin") != std::string::npos &&
+                w.find("not in the whitelist") != std::string::npos)
+            {
+                origin_warned = true;
+            }
+        }
+        EXPECT(origin_warned);
+    }
+
+    // line-height accepts the bare-N form like font-size (doc §Whitelist
+    // — CSS properties); percent/malformed warns and keeps the provider
+    // metrics
+    {
+        ui_node r = parse_html(
+            "<p style=\"line-height: 24\">x</p>", nullptr);
+        EXPECT(test::vget<long long>(node_prop_v(r.children[0], "line_h")) ==
+               24);
+    }
+
     // P-1 paint: background shorthand (solid/linear/radial layers),
     // border, radius
     {

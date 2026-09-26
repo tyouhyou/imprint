@@ -77,7 +77,7 @@ namespace zb::ui
                    p == "margin-right" || p == "margin-bottom" ||
                    p == "margin-left" || p == "padding-top" ||
                    p == "padding-right" || p == "padding-bottom" ||
-                   p == "padding-left" || p == "transform-origin";
+                   p == "padding-left";
         }
 
         // --- text helpers --------------------------------------------------
@@ -4576,8 +4576,9 @@ namespace zb::ui
             {
                 n.prop("text_wrap", true);
             }
-            // line-height: Npx gives the wrapped-block pitch; 0/Neg/unitless
-            // /percent/malformed keeps the provider line metrics (Tolerance)
+            // line-height: Npx or bare N gives the wrapped-block pitch
+            // (doc §Whitelist — CSS properties); 0/Neg/percent/malformed
+            // keeps the provider line metrics (Tolerance)
             if (const std::string *lh = fold_lookup(folded, "line-height"))
             {
                 std::string t = css_trim(ascii_lower(*lh));
