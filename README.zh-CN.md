@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-09-22）。
+> 本文件是英文版 README 的翻译，内容以 [README.md](README.md) 为准（更新至 2026-09-26）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-blue)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-lightgrey)](README.ja.md)
 
@@ -131,6 +131,38 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 
 两种格式——`.ui` 与 HTML——喂进同一棵树、同一个像素缓冲、每个目标。
 
+### 以库的方式使用——你的工程、你的 `main`
+
+以上示例组装的是仓库内 demo（`apps/` story + 顶层可执行文件）。你的应用
+不必住进这棵树：把 Imprint 作为子工程加入，从你自己的 `main` 经
+`zb::shell::run` 驱动——与平台 shell 跑的是同一个宿主循环：
+
+```cpp
+// 你的 main.cpp —— MyWindow : zb::app::CanvasWindow，或任意 zb::app::IApp
+#include "shell/run.hpp"
+
+#include "my_window.hpp"
+
+int main()
+{
+    return zb::shell::run(std::make_shared<MyWindow>());
+}
+```
+
+```cmake
+# 你的 CMakeLists.txt
+add_subdirectory(imprint)          # 或 FetchContent
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
+```
+
+作为子工程时 Imprint 只配置**库**——不含 demo 应用、binding、宿主工具；
+`IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` / `IMPRINT_WITH_DEMOS` 逐项
+开启（仓库内默认构建全部保留）。无头路径——CI 断言像素用的那条——完全
+不需要 shell：`CanvasWindow::create()` + `paint()`（见
+`test/external_smoke/`，已接入测试电池）。shell 循环契约见
+`docs/code-contract.md` §11。
+
 ## 构建
 
 | 目标 | 命令 | 说明 |
@@ -140,7 +172,7 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 | macOS（AppKit） | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | 不钉 deployment target（工具链默认），无需额外选项 |
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
 | Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |
-| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 showcase ROM（还需传入宿主构建的 `ui_embed` 与 `asset_gen`：`-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=`） |
+| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 showcase ROM（还需传入宿主构建的 `ui_embed` 与 `asset_gen`：`-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=`），或 `-DSTORY=showcase_html` 构建 HTML showcase（同上，另需宿主构建的 `html_embed`：`-DHTML_EMBED_EXECUTABLE=`） |
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | 附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 

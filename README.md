@@ -148,6 +148,40 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 Both formats — `.ui` and HTML — feed one tree, one pixel buffer, every
 target.
 
+### Use as a library — your project, your `main`
+
+Everything above composes an in-repo demo (an `apps/` story plus the
+top-level executable). Your application does not have to live in this
+tree: add Imprint as a subproject and drive it from your own `main`
+through `zb::shell::run` — the same host loop the platform shells run:
+
+```cpp
+// your main.cpp — MyWindow : zb::app::CanvasWindow, or any zb::app::IApp
+#include "shell/run.hpp"
+
+#include "my_window.hpp"
+
+int main()
+{
+    return zb::shell::run(std::make_shared<MyWindow>());
+}
+```
+
+```cmake
+# your CMakeLists.txt
+add_subdirectory(imprint)          # or FetchContent
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
+```
+
+As a subproject Imprint configures **libraries only** — no demo apps, no
+binding, no host tools; the `IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` /
+`IMPRINT_WITH_DEMOS` switches re-enable each piece (the default in-tree
+build keeps them all). The headless path — the one CI asserts pixels
+with — needs no shell at all: `CanvasWindow::create()` + `paint()` (see
+`test/external_smoke/`, wired into the test battery). The shell-loop
+contract is `docs/code-contract.md` §11.
+
 ## Build
 
 | Target | Command | Notes |

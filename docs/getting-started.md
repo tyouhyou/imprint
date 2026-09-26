@@ -107,6 +107,11 @@ That's the whole loop. From here it is a matter of adding widgets, wiring
 signals, and — when you want an embedded target — configuring the same
 source tree for it.
 
+The steps above keep your app *inside this tree* (framework mode). To
+keep your app in **your own project** and link Imprint as a library
+instead — your own `main`, `zb::shell::run`, the `imprint::` CMake
+targets — see "Use as a library" in `README.md`.
+
 ## Describe UIs as text (optional)
 
 Layouts can also be written as `.ui` design files — a tiny text format

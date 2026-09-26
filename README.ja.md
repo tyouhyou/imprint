@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-09-22 時点）。
+> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-09-26 時点）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-blue)](README.ja.md)
 
@@ -130,6 +130,31 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 
 2 つの形式——`.ui` と HTML——は 1 つのツリー、1 つのピクセルバッファ、すべてのターゲットに供給します。
 
+### ライブラリとして使う——あなたのプロジェクト、あなたの `main`
+
+上の例はリポジトリ内デモ（`apps/` の story + トップレベル実行ファイル）の構成です。あなたのアプリケーションがこのツリーに住む必要はありません。Imprint をサブプロジェクトとして追加し、自分の `main` から `zb::shell::run` で駆動してください——プラットフォームシェルが走らせるのと同じホストループです：
+
+```cpp
+// あなたの main.cpp —— MyWindow : zb::app::CanvasWindow、または任意の zb::app::IApp
+#include "shell/run.hpp"
+
+#include "my_window.hpp"
+
+int main()
+{
+    return zb::shell::run(std::make_shared<MyWindow>());
+}
+```
+
+```cmake
+# あなたの CMakeLists.txt
+add_subdirectory(imprint)          # または FetchContent
+add_executable(my_app main.cpp)
+target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
+```
+
+サブプロジェクトのとき Imprint は**ライブラリのみ**を構成します——デモアプリ・バインディング・ホストツールは含みません。`IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` / `IMPRINT_WITH_DEMOS` スイッチで個別に有効化できます（リポジトリ内の既定ビルドはすべて保持）。ヘッドレスパス——CI がピクセルをアサートするのに使うもの——にはシェルまったく不要：`CanvasWindow::create()` + `paint()`（`test/external_smoke/` 参照、テストバッテリーに組み込み済み）。シェルループ契約は `docs/code-contract.md` §11。
+
 ## ビルド
 
 | ターゲット | コマンド | 備考 |
@@ -139,7 +164,7 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 | macOS（AppKit） | `cmake -S . -B build/build_mac && cmake --build build/build_mac` | deployment target の固定なし（ツールチェーン既定）、追加オプション不要 |
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 入力対応バックエンド |
 | Linux（フレームバッファ） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 表示のみ。操作は X11 で |
-| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` でショーケース ROM をビルド（ホスト製の `ui_embed` と `asset_gen` を `-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=` で渡す必要あり） |
+| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` でショーケース ROM をビルド（ホスト製の `ui_embed` と `asset_gen` を `-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=` で渡す必要あり）、または `-DSTORY=showcase_html` で HTML ショーケース（同様に、ホスト製の `html_embed` を `-DHTML_EMBED_EXECUTABLE=` で追加） |
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | node スモークテスト付き |
 | Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 

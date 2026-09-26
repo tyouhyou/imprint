@@ -127,3 +127,19 @@ target_include_directories(test_imui PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 add_test(NAME test_imui COMMAND test_imui)
 
 endif()
+
+# external-consumption smoke (Batch G P1): a foreign mini project that
+# add_subdirectory's the repo (libraries-only gates) and drives a
+# headless frame through the imprint:: aliases. CI (linux-desktop) runs
+# the three commands directly; this registration covers the local
+# `ctest -R external_smoke` path (single-config generators).
+if (NOT WIN32 AND NOT NDS_PLATFORM)
+add_test(NAME external_smoke
+    COMMAND ${CMAKE_CTEST_COMMAND}
+        --build-and-test
+            ${PROJECT_SOURCE_DIR}/test/external_smoke
+            ${CMAKE_CURRENT_BINARY_DIR}/external_smoke
+        --build-generator ${CMAKE_GENERATOR}
+        --build-noclean
+        --test-command ${CMAKE_CURRENT_BINARY_DIR}/external_smoke/bin/external_smoke)
+endif()
