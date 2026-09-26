@@ -17,27 +17,10 @@ One UI source tree — widgets in code, or a screen described in a design
 file — compiles unchanged for Windows, Linux, macOS, SIXEL terminals,
 WebAssembly, the Nintendo DS, and any C host via `zbapi`.
 
-## The showcase, live
-
-**SIGNAL-ONE** is a working task console, not a mockup — and everything
-you see is drawn by Imprint's own rasterizer. Below, it is recorded end
-to end: the recorder drives the app through its public API with a fixed
-input script, so the GIF is byte-identical on every platform.
-
-<p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE recorded end to end: boots into live telemetry with the trend line advancing, a drag across the GAIN knob pulls the dB readout, the load gauge and the temp meter, MODE cycles three accent themes (cyan, amber, green), the module toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
-</p>
-
-**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** —
-the same console compiled to WebAssembly, presented on a `<canvas>`
-through the same C-ABI a desktop shell uses. Drag the gain knob, cycle
-the MODE themes, open the ABOUT overlay. No server, no install: the
-wasm is embedded in the page.
-
-**Design-first.** That console *is designed in HTML* — ids, tags,
-styles; zero widget code — and materialized into a widget tree at build
-time. The same path accepts full designer-grade documents: the hero
-below is one HTML file rendered by Imprint into the pixel buffer:
+**Design-first.** A screen *is designed in HTML* — ids, tags, styles;
+zero widget code — and materialized into a widget tree at build time.
+The hero below is one HTML file rendered by Imprint's own rasterizer
+into the pixel buffer:
 
 <p>
   <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console: the vacuum-tube dashboard (tubes, VU bank, power meter, diagnostics paragraph), designed in HTML and rendered by Imprint">
@@ -75,7 +58,7 @@ The terminal is a first-class target: on any sixel-capable terminal
 (WezTerm, foot, iTerm2) the same widget tree renders as SIXEL graphics
 with SGR mouse and keyboard input — no windowing system at all.
 
-Measured footprints (Release builds of the SIGNAL-ONE showcase above):
+Measured footprints (Release builds of the showcase demo):
 
 | Target | Shipped footprint |
 |---|---|
@@ -83,6 +66,24 @@ Measured footprints (Release builds of the SIGNAL-ONE showcase above):
 | Nintendo DS | 256×192 16-bpp framebuffer (96 KB VRAM); integer-only geometry and non-atomic refcounting options for libatomic-less toolchains |
 
 No GPU required. No OS GUI toolkit required. No platform-specific UI code.
+
+## The showcase, live
+
+**SIGNAL-ONE** is a working task console — the demo behind the
+footprints above — and everything on its screen is drawn by Imprint's
+own rasterizer. Below, it is recorded end to end: the recorder drives
+the app through its public API with a fixed input script, so the GIF
+is byte-identical on every platform.
+
+<p>
+  <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE recorded end to end: boots into live telemetry with the trend line advancing, a drag across the GAIN knob pulls the dB readout, the load gauge and the temp meter, MODE cycles three accent themes (cyan, amber, green), the module toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
+</p>
+
+**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** —
+the same console compiled to WebAssembly, presented on a `<canvas>`
+through the same C-ABI a desktop shell uses. Drag the gain knob, cycle
+the MODE themes, open the ABOUT overlay. No server, no install: the
+wasm is embedded in the page.
 
 ## Highlights
 
@@ -327,7 +328,7 @@ shells present 1:1; WASM/Python hosts scale host-side.
 
 **Hello** (`-DSTORY=hello`) — the getting-started app: a label and a click-counting button; copy it to start your own app (see [`docs/getting-started.md`](docs/getting-started.md)).
 
-**Showcase** (`-DSTORY=showcase`) — SIGNAL-ONE, the console at the top of this README: an 85-line HTML design file (`apps/showcase/signal.html`) materialized into a widget tree at build time, behavior in 266 lines of C++. The live telemetry feed advances one deterministic step per frame (the trend line is pure in the frame counter); the GAIN knob drives the dB readout, the load gauge and the temp meter; MODE cycles three accent themes (cyan / amber / green); ABOUT opens a declarative modal overlay; RESET restores the boot state. Text renders through the runtime-TTF path (Inter, packed by `bytes_embed`) — configure `-DUSE_TTF_RUNTIME=ON` for the intended proportional look; the 5x7 bitmap fallback keeps non-TTF builds green. The GIF at the top comes out of `showcase_gif`, the deterministic recorder; the browser demo and the DS cross-build (see Build) run the same sources.
+**Showcase** (`-DSTORY=showcase`) — SIGNAL-ONE, the console demoed live above: an 85-line HTML design file (`apps/showcase/signal.html`) materialized into a widget tree at build time, behavior in 266 lines of C++. The live telemetry feed advances one deterministic step per frame (the trend line is pure in the frame counter); the GAIN knob drives the dB readout, the load gauge and the temp meter; MODE cycles three accent themes (cyan / amber / green); ABOUT opens a declarative modal overlay; RESET restores the boot state. Text renders through the runtime-TTF path (Inter, packed by `bytes_embed`) — configure `-DUSE_TTF_RUNTIME=ON` for the intended proportional look; the 5x7 bitmap fallback keeps non-TTF builds green. The GIF in *The showcase, live* comes out of `showcase_gif`, the deterministic recorder; the browser demo and the DS cross-build (see Build) run the same sources.
 
 **TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents) — pass `.ui` or HTML paths.
 
