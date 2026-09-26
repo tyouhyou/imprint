@@ -2,40 +2,248 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Imprint Showcase — WASM Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imprint — a deterministic UI runtime for C++</title>
 <style>
+  :root {
+    --bg: #0a0e16;
+    --panel: #101724;
+    --line: #1e2938;
+    --text: #c9d3e0;
+    --muted: #7d89a0;
+    --accent: #4fd6e0;
+    --amber: #f0b243;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: #1e1e28;
-    color: #ddd;
-    font-family: sans-serif;
-    text-align: center;
-    padding: 16px;
+    background:
+      radial-gradient(1100px 500px at 50% -120px, #12203a 0%, rgba(18,32,58,0) 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
   }
-  h1 { font-size: 20px; margin: 8px 0 12px; }
-  #screen {
-    width: 512px;
-    height: 384px;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    border: 2px solid #555;
-    background: #000;
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 20px; }
+
+  /* ---- header ---- */
+  header {
+    border-bottom: 1px solid var(--line);
+    padding: 18px 0;
+  }
+  header .wrap {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .mark {
+    font-family: var(--mono);
+    font-size: 15px; font-weight: 700;
+    letter-spacing: 0.32em; color: var(--text);
+    display: flex; align-items: center; gap: 12px;
+    text-decoration: none;
+  }
+  .mark::before {
+    content: ""; width: 11px; height: 11px;
+    background: var(--accent);
+    box-shadow: 0 0 10px rgba(79,214,224,0.55);
+  }
+  .nav a {
+    font-family: var(--mono); font-size: 12px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); text-decoration: none;
+    margin-left: 22px;
+  }
+  .nav a:hover { color: var(--accent); }
+
+  /* ---- hero ---- */
+  .hero { padding: 58px 0 34px; text-align: center; }
+  .hero h1 {
+    margin: 0 0 14px;
+    font-size: clamp(26px, 5vw, 38px);
+    font-weight: 650; letter-spacing: -0.01em; color: #e8eef7;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p {
+    margin: 0 auto; max-width: 620px;
+    color: var(--muted); font-size: 16px;
+  }
+
+  /* ---- demo ---- */
+  .demo { padding: 18px 0 10px; }
+  .demo-label {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.28em; text-transform: uppercase;
+    color: var(--amber); text-align: center; margin-bottom: 14px;
+  }
+  .bezel {
+    display: inline-block;
+    padding: 10px; border-radius: 12px;
+    background: linear-gradient(180deg, #131b2a, #0d1420);
+    border: 1px solid #263450;
+    box-shadow:
+      0 24px 60px rgba(0,0,0,0.55),
+      0 0 42px rgba(79,214,224,0.10),
+      inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+  .bezel-inner {
+    border-radius: 5px; overflow: hidden;
+    border: 1px solid #060a12;
+    line-height: 0;
+  }
+  canvas#screen {
+    width: 640px; max-width: calc(100vw - 72px);
+    aspect-ratio: 4 / 3; height: auto;
+    image-rendering: pixelated; image-rendering: crisp-edges;
+    background: #060a12;
     touch-action: none;
-    cursor: pointer;
+    cursor: crosshair;
   }
-  p.hint { font-size: 13px; color: #999; margin-top: 12px; }
-  #status { font-size: 12px; color: #7c7; margin-top: 6px; min-height: 1em; }
+  #status {
+    font-family: var(--mono); font-size: 12px;
+    color: #6fe08a; text-align: center; margin-top: 10px;
+    min-height: 1.2em;
+  }
+  .chips {
+    display: flex; flex-wrap: wrap; justify-content: center;
+    gap: 8px; margin-top: 14px;
+  }
+  .chip {
+    font-family: var(--mono); font-size: 11px;
+    letter-spacing: 0.06em; text-transform: uppercase;
+    color: var(--muted);
+    border: 1px solid var(--line); border-radius: 999px;
+    padding: 5px 12px; background: rgba(16,23,36,0.6);
+  }
+  .chip b { color: var(--accent); font-weight: 600; }
+  .demo-note {
+    margin: 26px auto 0; max-width: 640px;
+    text-align: center; color: var(--muted); font-size: 14px;
+  }
+  .demo-note code {
+    font-family: var(--mono); font-size: 12.5px; color: var(--accent);
+  }
+
+  /* ---- cards ---- */
+  .cards {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px; margin: 46px 0 10px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 16px;
+  }
+  .card h3 {
+    margin: 0 0 8px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .card p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+
+  /* ---- footer ---- */
+  footer {
+    margin-top: 52px; border-top: 1px solid var(--line);
+    padding: 22px 0 34px;
+    font-size: 13px; color: var(--muted);
+  }
+  footer .wrap {
+    display: flex; flex-wrap: wrap; gap: 10px 26px;
+    align-items: baseline; justify-content: space-between;
+  }
+  footer a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted #33415a; }
+  footer a:hover { color: var(--accent); }
+  footer .fine { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; }
 </style>
 </head>
 <body>
-<h1>Imprint Showcase — WASM</h1>
-<canvas id="screen" width="256" height="192"></canvas>
-<p class="hint">
-  可直接双击打开（wasm 已内嵌进 showcase.js，无需 HTTP 服务器）<br>
-  操作：鼠标点击按钮（256×192 帧缓冲，CSS 放大 2 倍，pixelated 显示）<br>
-  键盘：方向键 / Enter / Tab / Space 操作
-</p>
-<div id="status">loading…</div>
+
+<header>
+  <div class="wrap">
+    <a class="mark" href="#">IMPRINT</a>
+    <nav class="nav">
+      <a href="https://github.com/tyouhyou/imprint">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <h1>A <em>deterministic</em> UI runtime for C++</h1>
+  <p>
+    Imprint is a retained-mode GUI framework that software-rasterizes its own
+    pixels. No timers, no threads, no hidden state: the same input sequence
+    draws the same frame, every time — on a desktop window, a hand-held
+    console, a terminal, or this browser tab.
+  </p>
+</div>
+
+<div class="demo wrap">
+  <div class="demo-label">Live demo · Signal-One console</div>
+  <div style="text-align:center">
+    <div class="bezel"><div class="bezel-inner">
+      <canvas id="screen" width="320" height="240"></canvas>
+    </div></div>
+    <div id="status">loading module…</div>
+  </div>
+  <div class="chips">
+    <span class="chip"><b>DRAG</b> the gain knob</span>
+    <span class="chip"><b>MODE</b> cycles three themes</span>
+    <span class="chip"><b>ABOUT</b> opens the overlay</span>
+    <span class="chip"><b>RESET</b> restores defaults</span>
+  </div>
+  <p class="demo-note">
+    There is no HTML engine in this page. The console is a 320×240 framebuffer
+    drawn by the same C++ renderer that ships on desktop and embedded targets,
+    compiled to WebAssembly and presented on a <code>&lt;canvas&gt;</code>.
+    The console itself <em>is designed in</em> an HTML file — ids, tags,
+    styles — which Imprint compiles into a widget tree at build time; at
+    runtime only C++ and pixels remain.
+  </p>
+</div>
+
+<div class="wrap">
+  <div class="cards">
+    <div class="card">
+      <h3>Deterministic to the pixel</h3>
+      <p>
+        No timers, no threads, no background state. Tests record input,
+        replay it, and compare framebuffers byte-for-byte — a UI regression
+        is just an ordinary failing assert in CI.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Designed in HTML, rendered in C++</h3>
+      <p>
+        Screens are authored as plain HTML design files. At build time they
+        materialize into retained-mode widget trees; the shipped binary
+        speaks only C++.
+      </p>
+    </div>
+    <div class="card">
+      <h3>Embeddable by contract</h3>
+      <p>
+        One small C ABI, <code style="font-family:var(--mono);font-size:12px">zbapi.h</code>,
+        is the whole host surface: Python, a browser, a sixel terminal, a
+        hand-held. Bring your own event loop or use the built-in shell.
+      </p>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>
+      The console above is the <a href="https://github.com/tyouhyou/imprint/tree/main/apps/showcase">apps/showcase</a>
+      story — C++ plus one HTML design file — running unmodified.
+    </span>
+    <span class="fine">
+      <a href="https://github.com/tyouhyou/imprint">github.com/tyouhyou/imprint</a>
+    </span>
+  </div>
+</footer>
+
 <script src="main.js"></script>
 <script src="showcase.js"></script>
 </body>

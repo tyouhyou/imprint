@@ -1,15 +1,19 @@
 /*
- * JS shell for the WASM TicTacToe build.
+ * JS shell for the Imprint WASM demos (gh-pages).
  *
  * The host owns the frame loop (requestAnimationFrame), samples input
  * and presents the framebuffer. The C-ABI (zbapi.h) is exposed on the
  * Module via EXPORTED_FUNCTIONS / EXPORTED_RUNTIME_METHODS.
+ *
+ * The page declares the app's design size on the canvas element
+ * (width/height attributes); the shell follows it.
  */
 (function () {
   "use strict";
 
-  var W = 256; // framebuffer width  (COLOR_DEPTH=32, bgra32, 4 B/px)
-  var H = 192; // framebuffer height
+  var canvas = document.getElementById("screen");
+  var W = parseInt(canvas.getAttribute("width"), 10) || 320; // framebuffer width  (COLOR_DEPTH=32, bgra32, 4 B/px)
+  var H = parseInt(canvas.getAttribute("height"), 10) || 240; // framebuffer height
   var PIXELS = W * H * 4;
 
   // input types, must match ZB_INPUT_* in zbapi.h
@@ -38,7 +42,6 @@
     Escape: ZB_KEY_ESCAPE
   };
 
-  var canvas = document.getElementById("screen");
   canvas.width = W;
   canvas.height = H;
   var ctx = canvas.getContext("2d");
@@ -52,7 +55,7 @@
   var zbInput = null, zbPaint = null, zbBuffer = null;
   var wPtr = 0, hPtr = 0; // out params for zb_buffer
 
-  /* translate a client coordinate into framebuffer space (256x192) */
+  /* translate a client coordinate into framebuffer space (W x H) */
   function scale(e) {
     var rect = canvas.getBoundingClientRect();
     var x = Math.floor((e.clientX - rect.left) * W / rect.width);
@@ -182,10 +185,10 @@
       Module.HEAPU32[wPtr >> 2] = 0;
       Module.HEAPU32[hPtr >> 2] = 0;
 
-      // app-requested shutdown (e.g. the tictactoe QUIT button): stop the
-      // frame loop. The app is NOT destroyed here -- the callback fires from
-      // inside zb_paint, destroying it reentrantly would be use-after-free;
-      // wasm memory is reclaimed with the page.
+      // app-requested shutdown: stop the frame loop. The app is NOT
+      // destroyed here -- the callback fires from inside zb_paint,
+      // destroying it reentrantly would be use-after-free; wasm memory
+      // is reclaimed with the page.
       var closedCb = Module.addFunction(function () {
         closed = true;
         status.textContent = "app closed";
@@ -193,7 +196,7 @@
       }, "vi");
       Module.ccall("zb_set_closed_callback", null, ["number", "number", "number"], [app, closedCb, 0]);
 
-      status.textContent = "ready — 256x192 @ " + PIXELS + " B/frame";
+      status.textContent = "ready — " + W + "×" + H + " @ " + PIXELS + " B/frame";
       requestAnimationFrame(frame);
     }
   };
