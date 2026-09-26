@@ -189,6 +189,29 @@ CI レシピ——ブラウザ不要、ディスプレイ不要（Tier-1 ジョ�
     cmp menu1.png menu2.png   # 2 回の実行でバイト単位一致
 ```
 
+### スクリプト言語の GUI——デザインファイル + コールバック
+
+宣言的パスなら、ユーザー側に C++ はまったく要りません：`zb_app_create_from_ui` がデザインファイル（`.ui` 文法、または `is_html=1` で HTML サブセット——デザイナーと同じ 2 つのフロントエンド）からウィジェットツリーを組み立て、アクションは id で返ってきます。Python デモが丸ごとのストーリーです（`demo/python/ui_app.py`）：
+
+```python
+UI = """
+column id="root" spacing=8 padding=12
+  label id="count" text="Clicks: 0"
+  button id="inc" text="Count up"
+"""
+
+def on_action(widget_id, userdata):
+    if widget_id == b"inc":
+        clicks[0] += 1
+        lib.zb_widget_set_text(app, b"count", ("Clicks: %d" % clicks[0]).encode())
+
+app = lib.zb_app_create_from_ui(UI.encode(), 0, 320, 240)
+lib.zb_set_event_callback(app, b"inc", action_cb, None)
+# 自分のループで zb_input / zb_paint を駆動——ホストがシェルです
+```
+
+C ABI を呼べる言語ならどれも同じプロトコルを得ます。静的構造はファイルに、振る舞いはホストに住む——宣言的境界は変わりません。
+
 ## ビルド
 
 | ターゲット | コマンド | 備考 |

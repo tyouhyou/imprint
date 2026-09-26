@@ -226,6 +226,35 @@ this):
     cmp menu1.png menu2.png   # two runs, byte-identical frames
 ```
 
+### Script-language GUIs — a design file + callbacks
+
+The declarative path needs no C++ on the user side at all:
+`zb_app_create_from_ui` builds the widget tree from a design file
+(`.ui` grammar, or the HTML subset with `is_html=1` — the same two
+front-ends the designer uses), and actions come back by id. The Python
+demo is the whole story (`demo/python/ui_app.py`):
+
+```python
+UI = """
+column id="root" spacing=8 padding=12
+  label id="count" text="Clicks: 0"
+  button id="inc" text="Count up"
+"""
+
+def on_action(widget_id, userdata):
+    if widget_id == b"inc":
+        clicks[0] += 1
+        lib.zb_widget_set_text(app, b"count", ("Clicks: %d" % clicks[0]).encode())
+
+app = lib.zb_app_create_from_ui(UI.encode(), 0, 320, 240)
+lib.zb_set_event_callback(app, b"inc", action_cb, None)
+# drive zb_input / zb_paint in your own loop -- the host is the shell
+```
+
+Any language that can call a C ABI gets the same protocol. Static
+structure lives in the file; behavior lives in the host — the
+declarative boundary is unchanged.
+
 ## Build
 
 | Target | Command | Notes |

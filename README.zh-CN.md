@@ -203,6 +203,33 @@ CI recipe——无浏览器、无显示器（我们的 Tier-1 job 跑的就是�
     cmp menu1.png menu2.png   # 两次运行，帧字节级一致
 ```
 
+### 脚本语言的 GUI——设计文件 + 回调
+
+声明式路径让用户侧完全不需要 C++：`zb_app_create_from_ui` 从设计文件
+（`.ui` 语法，或 `is_html=1` 走 HTML 子集——与设计器相同的两个前端）
+构建控件树，动作按 id 回来。Python demo 就是完整故事
+（`demo/python/ui_app.py`）：
+
+```python
+UI = """
+column id="root" spacing=8 padding=12
+  label id="count" text="Clicks: 0"
+  button id="inc" text="Count up"
+"""
+
+def on_action(widget_id, userdata):
+    if widget_id == b"inc":
+        clicks[0] += 1
+        lib.zb_widget_set_text(app, b"count", ("Clicks: %d" % clicks[0]).encode())
+
+app = lib.zb_app_create_from_ui(UI.encode(), 0, 320, 240)
+lib.zb_set_event_callback(app, b"inc", action_cb, None)
+# 在你自己的循环里驱动 zb_input / zb_paint —— 宿主就是 shell
+```
+
+任何能调 C ABI 的语言拿到的是同一套协议。静态结构住在文件里，行为住在
+宿主里——声明式边界不变。
+
 ## 构建
 
 | 目标 | 命令 | 说明 |
