@@ -73,7 +73,7 @@ target_link_libraries(
     shell_common
 )
 
-target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/include)
+target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/include)
 
 # A-2 dummy-driven platform input mapping tests: the win32 translation
 # compiles only on Windows, the x11 translation only where the X11 shell
@@ -81,16 +81,16 @@ target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/include
 if (WIN32)
     target_sources(test_imui PRIVATE
         test_win_input.cpp
-        ${CMAKE_SOURCE_DIR}/imshell/src/win/win_input.cpp
+        ${PROJECT_SOURCE_DIR}/imshell/src/win/win_input.cpp
     )
-    target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/src/win)
+    target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/src/win)
 elseif (UNIX AND IM_SHELL_BACKEND STREQUAL "X11")
     target_sources(test_imui PRIVATE
         test_x11_input.cpp
-        ${CMAKE_SOURCE_DIR}/imshell/src/linux/x11_input.cpp
+        ${PROJECT_SOURCE_DIR}/imshell/src/linux/x11_input.cpp
     )
     target_compile_definitions(test_imui PRIVATE IM_TEST_X11_INPUT=1)
-    target_include_directories(test_imui PRIVATE ${CMAKE_SOURCE_DIR}/imshell/src/linux)
+    target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/src/linux)
     target_link_libraries(test_imui PRIVATE X11)
 endif()
 
@@ -105,7 +105,7 @@ endif()
 if (USE_TTF_RUNTIME)
     target_sources(test_imui PRIVATE test_runtime_ttf.cpp)
     target_compile_definitions(test_imui PRIVATE
-        IM_TEST_RUNTIME_TTF_FONT="${CMAKE_SOURCE_DIR}/assets/fonts/Inter-Regular.ttf")
+        IM_TEST_RUNTIME_TTF_FONT="${PROJECT_SOURCE_DIR}/assets/fonts/Inter-Regular.ttf")
 endif()
 
 # build-time packing smoke: ui_embed validates and embeds the example
@@ -113,8 +113,8 @@ endif()
 set(UI_EMBED_TEST_HEADER ${CMAKE_CURRENT_BINARY_DIR}/ui_embed_test.gen.hpp)
 add_custom_command(
     OUTPUT ${UI_EMBED_TEST_HEADER}
-    COMMAND ui_embed ${UI_EMBED_TEST_HEADER} ${CMAKE_SOURCE_DIR}/tools/examples/menu.ui
-    DEPENDS ui_embed ${CMAKE_SOURCE_DIR}/tools/examples/menu.ui
+    COMMAND ui_embed ${UI_EMBED_TEST_HEADER} ${PROJECT_SOURCE_DIR}/tools/examples/menu.ui
+    DEPENDS ui_embed ${PROJECT_SOURCE_DIR}/tools/examples/menu.ui
     VERBATIM
 )
 add_custom_target(ui_embed_test_gen DEPENDS ${UI_EMBED_TEST_HEADER})

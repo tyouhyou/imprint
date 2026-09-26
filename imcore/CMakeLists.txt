@@ -70,11 +70,11 @@ if (FONT_SUBSET OR NOT TTF_FONT STREQUAL "")
     find_package(Python3 COMPONENTS Interpreter QUIET)
     if (Python3_Interpreter_FOUND)
         file(GLOB_RECURSE FONT_SUBSET_INPUTS CONFIGURE_DEPENDS
-            ${CMAKE_SOURCE_DIR}/apps/*/src/*.cpp
-            ${CMAKE_SOURCE_DIR}/apps/*/include/*.hpp
-            ${CMAKE_SOURCE_DIR}/test/*.cpp
-            ${CMAKE_SOURCE_DIR}/tools/examples/*.ui
-            ${CMAKE_SOURCE_DIR}/apps/*/*.ui)
+            ${PROJECT_SOURCE_DIR}/apps/*/src/*.cpp
+            ${PROJECT_SOURCE_DIR}/apps/*/include/*.hpp
+            ${PROJECT_SOURCE_DIR}/test/*.cpp
+            ${PROJECT_SOURCE_DIR}/tools/examples/*.ui
+            ${PROJECT_SOURCE_DIR}/apps/*/*.ui)
         file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/include/text)
     endif()
 endif()
@@ -100,9 +100,9 @@ endif()
 
 if (NOT TTF_FONT STREQUAL "" AND NOT NDS_PLATFORM)
     if (Python3_Interpreter_FOUND)
-        add_executable(ttf_subset ${CMAKE_SOURCE_DIR}/tools/ttf_subset.cpp)
+        add_executable(ttf_subset ${PROJECT_SOURCE_DIR}/tools/ttf_subset.cpp)
         target_include_directories(ttf_subset PRIVATE
-            ${CMAKE_SOURCE_DIR}/third_party/stb)
+            ${PROJECT_SOURCE_DIR}/third_party/stb)
         set(TTF_CODEPOINTS ${CMAKE_CURRENT_BINARY_DIR}/ttf_codepoints.txt)
         set(TTF_GLYPHS ${CMAKE_CURRENT_BINARY_DIR}/include/text/ttf_glyphs.hpp)
         # the rasterizer writes into this directory; a fresh build tree

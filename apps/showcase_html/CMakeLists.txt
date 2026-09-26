@@ -8,7 +8,7 @@ target_include_directories(showcase_html_app
 # the 5x7 bitmap stays the default and font-size stays ignored
 if (USE_TTF_RUNTIME)
     target_compile_definitions(showcase_html_app PRIVATE
-        IM_HTML_TTF_FONT="${CMAKE_SOURCE_DIR}/assets/fonts/Inter-Regular.ttf")
+        IM_HTML_TTF_FONT="${PROJECT_SOURCE_DIR}/assets/fonts/Inter-Regular.ttf")
 endif()
 
 # design document packed at build time (contract: build-time validation
@@ -16,7 +16,7 @@ endif()
 # the shipping form on every target). SHOWCASE_HTML_DOC overrides the
 # document (probe builds, alternate designs). Canonical copy lives with
 # the README captures under assets/showcase_html/.
-set(SHOWCASE_HTML_DOC "${CMAKE_SOURCE_DIR}/assets/showcase_html/space.html" CACHE FILEPATH
+set(SHOWCASE_HTML_DOC "${PROJECT_SOURCE_DIR}/assets/showcase_html/space.html" CACHE FILEPATH
     "HTML design document embedded into the showcase_html app")
 get_filename_component(SHOWCASE_HTML_NAME "${SHOWCASE_HTML_DOC}" NAME)
 target_compile_definitions(showcase_html_app PRIVATE
