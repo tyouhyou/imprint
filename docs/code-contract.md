@@ -1419,3 +1419,71 @@ Per-window themes, `.ui` design-file theme attributes, hover/disabled
 state tokens (widgets have no such states today), and spacing/radius
 tokens are explicitly out of scope; introducing any of them amends
 this section first.
+
+---
+
+## 11. Shell host loop (`zb::shell::run`)
+
+Library-mode consumption (2026-09-26, Batch G P1): a native C++ user owns
+`main` and delegates the platform loop instead of composing a `${STORY}`
+executable. The architecture facts — the shell owns the main loop
+(ARCHITECTURE §4.1), the consumption story and target surface
+(ARCHITECTURE §3.2) — live in ARCHITECTURE.md; this section is the
+API-level contract.
+
+### 11.1 Shape
+
+```cpp
+#include "shell/run.hpp"            // imshell; link imprint::shell_backend
+
+namespace zb::shell {
+
+struct run_options {
+    std::string title;              // empty = keep the window's own title
+    uint32_t    width  = 0;         // nonzero pair = constrained
+    uint32_t    height = 0;         //   create_window(width, height)
+};
+
+// Drives the platform event loop until the app closes (the window is
+// closed or the app fires the closed signal). Returns 0 on a normal
+// close.
+int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
+}
+```
+
+- `run` performs exactly the shell sequence a platform `main` performed
+  before the extraction: `create_window` (only when the app has no
+  window yet; the constrained overload when `width`/`height` are
+  nonzero), platform window/surface creation sized from
+  `window()->width()/height()/title()`, event pump → `feed_input`
+  (§4.1), `region_to_present` presentation, teardown.
+- `run_options` is creation-time only. The buffer never resizes after
+  `create_window` (I-2a); there is no runtime resize/reshape API.
+- `title` overrides the OS window title only; the app-visible
+  `IWindow::title()` is untouched.
+
+### 11.2 Path classification and failure
+
+- `run` is an **init path** call: platform/window/surface creation
+  failures throw `zb::ui::error` (§1). After the loop starts, the
+  framework's hot-path rules apply; `run` never throws mid-loop.
+- App callbacks keep the §1.5 contract (a handler must not throw); the
+  shell treats a throwing handler exactly as the shells did before the
+  extraction.
+
+### 11.3 Platform surface
+
+- Provided on Windows, Linux (X11 and FB), and macOS. **NDS does not
+  provide `run`** — its firmware entry remains the framework-mode
+  `main` (A-22 composition unchanged); the headless drive
+  (`IApp::create_window(w, h, buffer)` + manual `input`/`paint`, the
+  gif-record/test pattern) is the embeddable path on every target,
+  including NDS.
+- The Windows subsystem is the consumer executable's link-time choice
+  (`WIN32_EXECUTABLE`); `run` works from `main` or `WinMain`.
+- On macOS the implementation is ObjC++; a consumer linking
+  `shell_backend` on Apple must have OBJCXX enabled (the imprint
+  top-level CMake does this when consumed via `add_subdirectory`).
+- Single thread, always: `run` owns the thread it is called on. The
+  §4.11 automation contract is unchanged — a test drives the app
+  headlessly instead of calling `run`; `run` is for interactive hosts.

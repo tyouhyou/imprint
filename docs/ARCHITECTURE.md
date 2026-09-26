@@ -38,7 +38,7 @@ other target uses the desktop defaults.
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
 | `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
 | `apps/<story>_app` | Demo app implementing `make_app()` (the only place app code lives)                 | STATIC       | `imapp_canvas`                      |
-| `imshell` | Platform shells (win / linux-x11 / linux-fb / mac / nds), each owning its main loop. Shared A-2 seams in `shell/`: `region_to_present` + `dirty_coalescer` (what to present), `feed_input` (input tail), per-platform translators (`win_input`, `x11_input`). Pure provider: no story code, no executable | `shell_common` (STATIC) + `shell_backend` (INTERFACE usage requirements; backend main sources exported to the top level) | `imapp`, `iminput`, `<platform libs>` |
+| `imshell` | Platform shells (win / linux-x11 / linux-fb / mac / nds), each owning its main loop. Shared A-2 seams in `shell/`: `region_to_present` + `dirty_coalescer` (what to present), `feed_input` (input tail), per-platform translators (`win_input`, `x11_input`). Library-mode host loop: `shell/run.hpp` + the `shell_hostloop` library expose `zb::shell::run(app, options)` — the platform loop, callable from a user's own `main` (every target except NDS; §3.2). Pure provider: no story code, no executable of its own | `shell_common` (STATIC) + `shell_hostloop` (STATIC, non-NDS) + `shell_backend` (INTERFACE usage requirements; backend main sources exported to the top level) | `imapp`, `iminput`, `<platform libs>` |
 | `binding` | `zbapi` C-ABI shared library + C smoke test                                                | SHARED       | `imapp`, `<story>_app`              |
 
 Dependency rule (enforced by review): framework libraries never depend on
@@ -46,7 +46,11 @@ apps; apps never become framework code; only the shell and the binding
 instantiate an app. The executable is composed in exactly one place — the
 top level `CMakeLists.txt` links `${STORY}` from `shell_backend` (usage
 requirements + backend main sources) and `<story>_app` — so no framework
-module names story code. Library-type policy: `INTERFACE` for pure-header
+module names story code. This is **framework mode**, gated by
+`IMPRINT_WITH_DEMOS` (§3.2); library consumers configure the same targets
+without it. Every public target carries an `imprint::` alias
+(`imprint::imui`, `imprint::shell_backend`, …) for out-of-tree
+consumption. Library-type policy: `INTERFACE` for pure-header
 modules, `STATIC` for everything else, `SHARED` only at foreign-host
 boundaries (`imcore`, so the Linux host `zbapi` can load it as a sibling
 `.so`, and `zbapi` itself); module boundaries are logical.
@@ -92,7 +96,7 @@ stays target-agnostic.
 |---|---|
 | Toolchain file (`cmake/*.toolchain.cmake`) | Cross-compilation (compiler, sysroot, ABI/CPU) and FORCE of the §4.9 options an embedded target needs (NDS: `COLOR_DEPTH=16`, `USE_INTEGER_GEOMETRY`, `USE_NON_ATOMIC_PTR`) |
 | Shell (`imshell/src/<platform>`) | The event loop, window/surface creation including screen geometry (`create_window(256, 192)` on NDS, `(320, 240)` on the FB shell), the platform blit, input translation, platform link libraries and backend main sources (exported via `IMPRINT_SHELL_*`). Shared present/input decisions come from the `shell/` seams (§4.1, §4.2), so a new target lands as ~100–200 lines of glue, not a new event loop |
-| Composition & packaging (top-level `CMakeLists.txt`) | The `${STORY}` executable — the only composition point (§2) — and target packaging: the NDS `ndstool` POST_BUILD step, ELF rpath, framework linking |
+| Composition & packaging (top-level `CMakeLists.txt`) | The `${STORY}` executable — the only composition point (§2), framework mode only (`IMPRINT_WITH_DEMOS`) — and target packaging: the NDS `ndstool` POST_BUILD step, ELF rpath, framework linking |
 | Binding (`zbapi`) | The foreign-host boundary only; hosts introspect the linked build at runtime (`zb_buffer_format()`, `zb_buffer_bpp()`, `zb_version()`, §4.8) instead of pinning build configurations |
 
 Consequences:
@@ -106,6 +110,37 @@ Consequences:
   toolchain), never runtime backend switching.
 - Shared shell code never grows per-target branches; a target's facts
   live in that target's own shell main and toolchain file.
+
+### 3.2 External consumption (library mode)
+
+A foreign CMake project consumes Imprint with `add_subdirectory` or
+FetchContent (install/export packaging is condition-triggered work, not
+built yet — the out-of-tree `add_subdirectory` path is the supported
+consumption story):
+
+```cmake
+add_subdirectory(imprint)   # or FetchContent_MakeAvailable(imprint)
+target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
+```
+
+- As a subproject the tree configures **libraries only** (`imutil` …
+  `imui`, `imapp` / `imapp_canvas`, `shell_common` + `shell_hostloop` +
+  `shell_backend`); the demo app libraries, the binding, the host
+  tools, and the test battery are gated off by the `IMPRINT_WITH_*`
+  switches (§4.9).
+- **Library mode**: the user owns `main` and calls
+  `zb::shell::run(app, options)` (API contract: code-contract.md §11).
+  **Framework mode**: the in-tree `${STORY}` composition. Both build
+  from one source tree; `IMPRINT_WITH_DEMOS=ON` (the top-level
+  default) restores the exact in-tree build, so in-tree development
+  and CI are unchanged.
+- Build-time tooling resolves repository files through
+  `PROJECT_SOURCE_DIR`, never `CMAKE_SOURCE_DIR` — a superproject's
+  `CMAKE_SOURCE_DIR` points at the outer project.
+- The library surface assumes the default build options; pixel format
+  and other §4.9 compile-time selections are chosen by the consumer's
+  cache variables exactly as the toolchain files do for embedded
+  targets.
 
 ## 4. Architecture contract (as implemented)
 
@@ -412,11 +447,17 @@ satisfies. Changing any of these is an architecture change.
 | `USE_TTF_RUNTIME`         | OFF     | OFF           | L-5: runtime TTF rasterization via vendored stb_truetype — `TtfFamily`, per-size providers, bounded glyph cache |
 | `LOGGING_DEBUG`           | OFF     | OFF           | defines `DEBUG` so the debug-level logs (LD) print; without it (or a Debug configuration) no debug logs are emitted in any build |
 | `STORY`                   | tictactoe | —          | selects which demo app the shell links    |
+| `IMPRINT_WITH_TOOLS`      | ON (top level) / OFF (subproject) | — | configure-time gate: host tools (`ui_embed`, `html_embed`, `asset_gen`) |
+| `IMPRINT_WITH_TESTS`      | ON (top level) / OFF (subproject) | — | configure-time gate: the test battery (implies the demo app libraries) |
+| `IMPRINT_WITH_DEMOS`      | ON (top level) / OFF (subproject) | — | configure-time gate: demo app libraries + `binding` + the `${STORY}` executable (framework mode, §3.2); implies tools when ON |
 
 `USE_INTEGER_GEOMETRY` and `USE_NON_ATOMIC_PTR` are examples of the
 framework's philosophy: **compile-time configuration per target list is a
 positive asset for embedded**, not a wart — each target pays only for what
-it needs, and there is no runtime backend switching.
+it needs, and there is no runtime backend switching. The `IMPRINT_WITH_*`
+switches are configure-scope packaging gates for out-of-tree consumption
+(§3.2), not backend switches: at top level the tree configures and builds
+exactly what it always did.
 
 ### 4.10 Design-file layer
 
