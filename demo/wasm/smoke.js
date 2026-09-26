@@ -15,7 +15,10 @@ createModule({
   onRuntimeInitialized: function () {
     const Module = this;
     try {
-      const app = Module._zb_app_create(256, 192);
+      // the SIGNAL-ONE showcase designs at 320x240; tictactoe stays 256x192
+      const W = IS_SHOWCASE ? 320 : 256;
+      const H = IS_SHOWCASE ? 240 : 192;
+      const app = Module._zb_app_create(W, H);
       if (!app) throw new Error("zb_app_create failed");
 
       Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
@@ -43,28 +46,53 @@ createModule({
       const first = [Module.HEAPU8[ptr], Module.HEAPU8[ptr + 1], Module.HEAPU8[ptr + 2], Module.HEAPU8[ptr + 3]];
       console.log("non-zero pixels:", nonzero, "first px (bgra):", first.join(","));
 
-      if (ww !== 256 || hh !== 192 || nonzero === 0) {
+      // paints one frame and returns a copy of the framebuffer bytes
+      const paintAndSnap = function () {
+        Module.ccall("zb_paint", null, ["number"], [app]);
+        const buf = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app, w, h]);
+        return Module.HEAPU8.slice(buf, buf + W * H * 4);
+      };
+
+      if (ww !== W || hh !== H || nonzero === 0) {
         console.error("SMOKE TEST FAILED");
         process.exit(1);
       }
 
       if (IS_SHOWCASE) {
-        // page-switch round trip on the same app: GALLERY (86,164)
-        // mounts the gallery page, BACK (122,18) returns — geometry
-        // matches the desktop smoke suite (content-height layout)
-        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
-          [app, 9, 86, 164, 0, 0, 0]);
-        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
-          [app, 10, 86, 164, 0, 0, 0]);
-        Module.ccall("zb_paint", null, ["number"], [app]);
-        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
-          [app, 9, 122, 18, 0, 0, 0]);
-        Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
-          [app, 10, 122, 18, 0, 0, 0]);
-        Module.ccall("zb_paint", null, ["number"], [app]);
+        // SIGNAL-ONE: the ABOUT overlay round trip. Click ABOUT (bottom
+        // bar) -- the declarative overlay dims the console; click CLOSE
+        // -- the frame returns. Pixel (10,120) sits in the left panel
+        // margin: static across frames (the desktop battery probes the
+        // same pixel), so the live-feed telemetry cannot confound the
+        // comparison, and it dims with the overlay.
+        const click = function (x, y) {
+          Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+            [app, 9, x, y, 0, 0, 0]);
+          Module.ccall("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"],
+            [app, 10, x, y, 0, 0, 0]);
+          Module.ccall("zb_paint", null, ["number"], [app]);
+        };
+        // paintAndSnap returns a copied Uint8Array (the wasm framebuffer is
+        // a single buffer that later paints overwrite), so pxAt indexes the
+        // copy directly -- not Module.HEAPU8 at the stale pointer.
+        const pxAt = function (buf, x, y) {
+          const o = (y * W + x) * 4;
+          return buf[o] + buf[o + 1] + buf[o + 2];
+        };
+        const before = paintAndSnap();
+        click(128, 226);  // ABOUT
+        const dimmed = paintAndSnap();
+        if (pxAt(before, 10, 120) === pxAt(dimmed, 10, 120)) {
+          throw new Error("ABOUT overlay did not dim the console");
+        }
+        click(103, 156);  // CLOSE
+        const restored = paintAndSnap();
+        if (pxAt(restored, 10, 120) !== pxAt(before, 10, 120)) {
+          throw new Error("CLOSE did not restore the console");
+        }
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
-        console.log("showcase page switch: ok");
+        console.log("showcase about overlay: ok");
         console.log("SMOKE TEST OK");
         process.exit(0);
       }
