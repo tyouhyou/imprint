@@ -155,6 +155,40 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 
 サブプロジェクトのとき Imprint は**ライブラリのみ**を構成します——デモアプリ・バインディング・ホストツールは含みません。`IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` / `IMPRINT_WITH_DEMOS` スイッチで個別に有効化できます（リポジトリ内の既定ビルドはすべて保持）。ヘッドレスパス——CI がピクセルをアサートするのに使うもの——にはシェルまったく不要：`CanvasWindow::create()` + `paint()`（`test/external_smoke/` 参照、テストバッテリーに組み込み済み）。シェルループ契約は `docs/code-contract.md` §11。
 
+### CI での決定論的テスト
+
+同じ入力シーケンスは常に同じフレームバイトを生みます——つまり UI ロジックはディスプレイなしでピクセル単位にアサートできます。`zb::snap` ヘルパー（`imprint::snapshot` をリンク）がワークフロー全体です：
+
+```cpp
+#include "snapshot.hpp"
+
+// サーフェスをヘッドレスで駆動（input/paint）してから：
+auto r = zb::snap::check(*app.window(), "main_view", "tests/baselines");
+if (r.status == zb::snap::check_result::status::missing)
+{
+    zb::snap::record(*app.window(), "main_view", "tests/baselines");  // 初回
+}
+// status::mismatch では tests/baselines/main_view.actual.gif も生成され差分確認に使えます
+```
+
+`.zbsnap` ベースラインをコミットしてください。CI はどんなピクセルドリフトでも失敗し、ミスマッチ成果物が何が変わったかを見せます。ベースラインはビルド構成ごとに有効（code-contract §12.2）；同一ピクセルクラス内なら hash は Windows / macOS / Linux でバイト単位で一致します。リポジトリ内の参照：`test/test_snapshot.cpp`（ワークフロー）と、同じヘルパーに乗っている showcase の SELF-CHECK。
+
+アプリコードなしで出図？デザインファイルを直接ピクセルへ——この README 冒頭のヒーローはこの 1 行の産物です（フレーム hash も表示）：
+
+```
+imprint-render assets/designs/imprint_console.html --out hero.png
+```
+
+CI レシピ——ブラウザ不要、ディスプレイ不要（Tier-1 ジョブがまさにこれを実行）：
+
+```yaml
+- run: |
+    cmake --build build_ci --target imprint-render
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu1.png
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu2.png
+    cmp menu1.png menu2.png   # 2 回の実行でバイト単位一致
+```
+
 ## ビルド
 
 | ターゲット | コマンド | 備考 |

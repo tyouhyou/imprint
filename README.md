@@ -182,6 +182,50 @@ with — needs no shell at all: `CanvasWindow::create()` + `paint()` (see
 `test/external_smoke/`, wired into the test battery). The shell-loop
 contract is `docs/code-contract.md` §11.
 
+### Deterministic testing in CI
+
+One input sequence always yields the same frame bytes — so UI logic is
+assertable pixel-by-pixel with no display attached. The `zb::snap`
+helper (link `imprint::snapshot`) is the whole workflow:
+
+```cpp
+#include "snapshot.hpp"
+
+// drive your surface headlessly (input/paint), then:
+auto r = zb::snap::check(*app.window(), "main_view", "tests/baselines");
+if (r.status == zb::snap::check_result::status::missing)
+{
+    zb::snap::record(*app.window(), "main_view", "tests/baselines");  // first run
+}
+// status::mismatch also ships tests/baselines/main_view.actual.gif for diffing
+```
+
+Commit the `.zbsnap` baselines; CI fails on any pixel drift and the
+mismatch artifact shows what changed. Baselines are valid per build
+configuration (code-contract §12.2); within one pixel class the hash is
+byte-identical across Windows / macOS / Linux. The in-tree references:
+`test/test_snapshot.cpp` (workflow) and the showcase SELF-CHECK, which
+rides the same helper.
+
+No app code at all? Render a design file straight to pixels — the hero
+at the top of this README comes out of this one line (it prints the
+frame hash too):
+
+```
+imprint-render assets/designs/imprint_console.html --out hero.png
+```
+
+The CI recipe — no browser, no display (our Tier-1 job runs exactly
+this):
+
+```yaml
+- run: |
+    cmake --build build_ci --target imprint-render
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu1.png
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu2.png
+    cmp menu1.png menu2.png   # two runs, byte-identical frames
+```
+
 ## Build
 
 | Target | Command | Notes |

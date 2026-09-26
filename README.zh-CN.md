@@ -163,6 +163,46 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 `test/external_smoke/`，已接入测试电池）。shell 循环契约见
 `docs/code-contract.md` §11。
 
+### 在 CI 里做确定性测试
+
+同一输入序列永远产生相同的帧字节——所以 UI 逻辑可以逐像素断言，全程
+无显示器。`zb::snap` 辅助库（链 `imprint::snapshot`）就是完整工作流：
+
+```cpp
+#include "snapshot.hpp"
+
+// 无头驱动你的界面（input/paint），然后：
+auto r = zb::snap::check(*app.window(), "main_view", "tests/baselines");
+if (r.status == zb::snap::check_result::status::missing)
+{
+    zb::snap::record(*app.window(), "main_view", "tests/baselines");  // 首次运行
+}
+// status::mismatch 时还会生成 tests/baselines/main_view.actual.gif 供人工比对
+```
+
+把 `.zbsnap` 基线提交进仓库；CI 在任何像素漂移上失败，失配产物告诉
+你改了什么。基线按构建配置生效（code-contract §12.2）；同一像素档内
+hash 在 Windows / macOS / Linux 上字节级一致。仓库内参照：
+`test/test_snapshot.cpp`（工作流）和 showcase 的 SELF-CHECK——它用的
+就是同一个辅助库。
+
+一行代码都没有也想出图？直接把设计文件渲染成像素——本 README 顶部的
+Hero 就是这一行的产物（它同时打印帧 hash）：
+
+```
+imprint-render assets/designs/imprint_console.html --out hero.png
+```
+
+CI recipe——无浏览器、无显示器（我们的 Tier-1 job 跑的就是这段）：
+
+```yaml
+- run: |
+    cmake --build build_ci --target imprint-render
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu1.png
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu2.png
+    cmp menu1.png menu2.png   # 两次运行，帧字节级一致
+```
+
 ## 构建
 
 | 目标 | 命令 | 说明 |

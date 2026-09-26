@@ -45,6 +45,13 @@ jobs:
           cmake -S test/external_smoke -B build_ci/external_smoke
           cmake --build build_ci/external_smoke -j"$(nproc)"
           ./build_ci/external_smoke/bin/external_smoke
+      - name: imprint-render determinism smoke (Batch G P2)
+        run: |
+          cmake --build build_ci --target imprint-render
+          ./build_ci/bin/imprint-render tools/examples/menu.ui --out build_ci/menu1.png
+          ./build_ci/bin/imprint-render tools/examples/menu.ui --out build_ci/menu2.png
+          cmp build_ci/menu1.png build_ci/menu2.png
+          ./build_ci/bin/imprint-render assets/designs/imprint_console.html --out build_ci/hero.png
 
   windows-desktop:
     runs-on: windows-latest

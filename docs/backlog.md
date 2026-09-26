@@ -247,28 +247,28 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   compile-time pixel model. Do not enter the widget-armament race
   (the LVGL / Slint / Qt dimensions: more widgets, faster, prettier).
 - Roadmap (ratified order; each phase unlocks the next):
-  - **P1. External consumability** — CMake packaging gates
-    (`IMPRINT_WITH_*`), `imprint::` aliases, library mode
-    `zb::shell::run(IApp, options)`. The A-23 trigger fires here and
-    A-23 closes with it. *P1.5 (condition-triggered): install/export
-    `imprintConfig.cmake` when the first real external consumer
-    appears.*
-  - **P2. Deterministic-test story** — `imprint::snapshot` test helper
-    (render an `IApp` → hash / PNG / GIF + baseline compare) +
-    `imprint-render` design-file CLI (`.ui`/`.html` → PNG, the
-    ui_preview core re-shelled; no app code needed) + a CI recipe.
-    Closes the 09-06 "deterministic-test as a feature with CI recipe"
-    cheapest-move. A standalone drives-your-app CLI is explicitly NOT
-    the form (apps are link-time); a WASM-app CLI variant is a later
-    option.
-  - **P3. Declarative plugin protocol** — `zb_app_create_from_ui(ui_text)`
+  - **P1. External consumability** — **landed 2026-09-26**: `IMPRINT_WITH_*`
+    gates (A-23 closed), `imprint::` aliases, library mode
+    `zb::shell::run(IApp, options)` (code-contract §11), the
+    external-consumption smoke in the battery + CI. *P1.5
+    (condition-triggered): install/export `imprintConfig.cmake` when
+    the first real external consumer appears.*
+  - **P2. Deterministic-test story** — **landed 2026-09-26**: `zb::snap`
+    snapshot helper (code-contract §12: frame hash, record/check with
+    mismatch artifact, GIF/PNG dumps; showcase SELF-CHECK rides it) +
+    the `imprint-render` design-file CLI (`.ui`/`.html` → PNG/GIF,
+    frame hash on stdout) + the CI recipe (README, three languages;
+    Tier-1 runs the two-render byte-compare). A standalone
+    drives-your-app CLI remains explicitly NOT the form; a WASM-app CLI
+    variant is a later option.
+  - **P3. Declarative plugin protocol** — open: `zb_app_create_from_ui(ui_text)`
     + per-id event callbacks (additive C ABI, `ZB_API_VERSION` stays 1,
     contract-first). Unlocks script-language GUIs (declarative file +
     host-language callbacks) and the plugin story. Not a re-run of the
     rejected "AI wedge": this is a technical capability inside the
     static-structure-in-file boundary ruling; the *marketing* wedge
     remains the determinism story.
-  - **P4. Terminal graphics demo target** — sixel/Kitty presenter +
+  - **P4. Terminal graphics demo target** — open: sixel/Kitty presenter +
     stdin InputSource (~200 lines of glue, A-2 doctrine) as a
     propagation demo, not a mainline target.
 - Business stance reconfirmed: port engagements first; external
