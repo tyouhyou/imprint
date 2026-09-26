@@ -147,6 +147,21 @@ jobs:
           cmake -S . -B build_ci -DIM_SHELL_BACKEND=FB
           cmake --build build_ci -j"$(nproc)"
 
+  # P4 demo target: compile-only like linux-fb; the sixel/term_input
+  # logic itself is unit-tested from the battery (pure TUs)
+  linux-sixel:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+      - name: Configure and build (SIXEL backend)
+        run: |
+          cmake -S . -B build_ci -DIM_SHELL_BACKEND=SIXEL
+          cmake --build build_ci -j"$(nproc)"
+
   # A-20: the AppKit shell compiles on every push; the desktop core
   # battery runs too (it needs no display). Behavior of the shell itself
   # is verified on the maintainer's macOS 13 machine, not in CI
