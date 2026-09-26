@@ -39,6 +39,8 @@ target_link_libraries(
     zbapi
     PUBLIC
     imapp
+    imapp_canvas
+    imui
     ${STORY}_app
 )
 

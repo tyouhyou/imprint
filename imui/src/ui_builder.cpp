@@ -1430,6 +1430,26 @@ namespace zb::ui
                 }
             }
         }
+
+        // materialization probe (code-contract §4): does any node carry
+        // a tag the tag table knows? Init-path validation only — a
+        // throwaway widget per probed node, parse-time scale.
+        bool probe_materializes(const ui_node &n)
+        {
+            bool is_flex = false;
+            if (make_widget(n, &is_flex) != nullptr)
+            {
+                return true;
+            }
+            for (const ui_node &c : n.children)
+            {
+                if (probe_materializes(c))
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
     }  // namespace
 
     // --- shared color value parsing (B2 export) -----------------------
@@ -1743,5 +1763,72 @@ namespace zb::ui
             materialize(host, host.is_flex_container(), c);
         }
         return host;
+    }
+
+    // --- action binding (code-contract §4, P3) -------------------------
+    //
+    // the concrete event per tag lives here, beside make_widget's tag
+    // table: this file is the single home of the tag knowledge, so the
+    // static_casts below run only on widgets build() created from the
+    // same node (the §4.3 no-RTTI discipline). The sink receives the id
+    // only; typed payloads stay on the native events.
+
+    int bind_actions(Widget &root, const ui_node &node, const action_fn &sink)
+    {
+        int bound = 0;
+        if (!node.id.empty())
+        {
+            Widget *w = root.find_by_id(node.id);
+            if (w != nullptr)
+            {
+                const std::string &t = node.type;
+                const std::string id = node.id;
+                if (t == "button")
+                {
+                    static_cast<Button *>(w)->clicked += [sink, id]() { sink(id); };
+                    ++bound;
+                }
+                else if (t == "checkbox")
+                {
+                    static_cast<Checkbox *>(w)->changed += [sink, id](const bool) { sink(id); };
+                    ++bound;
+                }
+                else if (t == "radio")
+                {
+                    static_cast<RadioButton *>(w)->changed += [sink, id]() { sink(id); };
+                    ++bound;
+                }
+                else if (t == "toggle")
+                {
+                    static_cast<ToggleSwitch *>(w)->changed += [sink, id](const bool) { sink(id); };
+                    ++bound;
+                }
+                else if (t == "slider")
+                {
+                    static_cast<Slider *>(w)->changed += [sink, id](const int) { sink(id); };
+                    ++bound;
+                }
+                else if (t == "text_input")
+                {
+                    static_cast<TextInput *>(w)->submitted += [sink, id](const std::string &) { sink(id); };
+                    ++bound;
+                }
+                else if (t == "list_box")
+                {
+                    static_cast<ListBox *>(w)->changed += [sink, id](const std::size_t) { sink(id); };
+                    ++bound;
+                }
+            }
+        }
+        for (const ui_node &c : node.children)
+        {
+            bound += bind_actions(root, c, sink);
+        }
+        return bound;
+    }
+
+    bool materializes_widget(const ui_node &node)
+    {
+        return probe_materializes(node);
     }
 }  // namespace zb::ui

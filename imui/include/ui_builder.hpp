@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <memory>
 #include <string>
 #include <utility>
@@ -298,4 +299,25 @@ namespace zb::ui
      * Returns host for chaining.
      */
     Widget &build(Widget &host, const ui_node &root);
+
+    /*
+     * Action binding (code-contract §4, P3): walks the same ui_node IR
+     * build() materialized and, for every node carrying a non-empty id,
+     * subscribes that widget's primary action event to `sink(id)` — the
+     * concrete event per tag is chosen in ui_builder.cpp beside the tag
+     * table (button click, checkbox/toggle/radio/slider/list_box change,
+     * text_input submit). A binder, not a registry: the framework holds
+     * no id→handler map, the host maps ids on its side. Handlers live as
+     * long as the widget does. Returns the number of bound actions.
+     */
+    using action_fn = std::function<void(const std::string &id)>;
+    int bind_actions(Widget &root, const ui_node &node, const action_fn &sink);
+
+    /*
+     * Whether the node tree materializes at least one widget (any known
+     * tag): the create-time validation for design files — unknown tags
+     * parse ok but produce nothing, so "yields no widget" is decided
+     * here, beside the same tag table. No live tree needed.
+     */
+    bool materializes_widget(const ui_node &node);
 }  // namespace zb::ui

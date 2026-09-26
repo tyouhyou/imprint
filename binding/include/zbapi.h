@@ -152,6 +152,47 @@ void zb_set_closed_callback(zb_app_t *app, zb_closed_cb cb, void *userdata);
 /* optional log hook receiving framework log messages */
 void zb_set_log_callback(zb_log_cb cb);
 
+/* ---------- declarative apps (P3, 2026-09-26; ARCHITECTURE 4.8) ------- */
+
+/* action callback: fires when a widget's primary action triggers (click /
+ * change / submit — the tag table decides, code-contract 4). Fires inside
+ * the driving zb_* call; must not destroy the app reentrantly. */
+typedef void (*zb_action_cb)(const char *widget_id, void *userdata);
+
+/*
+ * Creates the app from a design file text instead of the linked-in story
+ * app: parse_ui_text, or parse_html when is_html != 0 (ARCHITECTURE 4.10;
+ * static structure + ids only — behavior is wired on this side).
+ *
+ * Screen size: nonzero width/height win; otherwise the HTML page box
+ * (is_html), else the 800x600 default. Returns NULL on parse or creation
+ * failure (logged). The widget text is UTF-8.
+ */
+zb_app_t *zb_app_create_from_ui(const char *ui_text, int is_html,
+                                uint32_t width, uint32_t height);
+
+/*
+ * Binds cb(widget_id, userdata) to the widget's action (see zb_action_cb).
+ * cb == NULL unregisters. Registering before or after
+ * zb_app_create_from_ui is equivalent: the binding consults the
+ * registration at fire time. Only declarative apps dispatch actions.
+ */
+void zb_set_event_callback(zb_app_t *app, const char *widget_id,
+                           zb_action_cb cb, void *userdata);
+
+/*
+ * Reads the widget's text as UTF-8 into out (at most cap bytes including
+ * the terminator, always NUL-terminated when cap > 0). Returns the number
+ * of bytes written excluding the terminator, or -1 when the app is not a
+ * declarative app or the widget is missing.
+ */
+int zb_widget_text(zb_app_t *app, const char *widget_id, char *out, int cap);
+
+/* sets the widget's text (UTF-8); the next zb_paint presents it. Only
+ * declarative apps resolve widget ids. */
+void zb_widget_set_text(zb_app_t *app, const char *widget_id,
+                        const char *utf8_text);
+
 #ifdef __cplusplus
 }
 #endif

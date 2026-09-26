@@ -6,10 +6,15 @@
  * dialogs, two rounds; no screen coordinates are involved, so a layout
  * change cannot rot this test. The pixel scan is sized by
  * zb_buffer_bpp (a 16bpp build has half the bytes).
+ *
+ * The second half drives a declarative app (P3): a design file instead
+ * of the story app, actions by id, widget text read/write -- the same
+ * keyboard-only discipline.
  */
 #include <assert.h>
 #include <stdint.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "zbapi.h"
 
@@ -19,6 +24,12 @@ static void on_painted(void *userdata)
 {
     (void)userdata;
     painted_calls++;
+}
+
+static void on_action_count(const char *widget_id, void *userdata)
+{
+    (void)widget_id;
+    ++*(int *)userdata;
 }
 
 static void on_log(int level, const char *message)
@@ -86,6 +97,71 @@ int main(void)
     assert(painted_calls == base);
 
     zb_app_destroy(app);
+
+    /* ---------- declarative apps (P3, ARCHITECTURE 4.8) ---------- *
+     * a design file instead of the story app: one button, one label.
+     * The drive is keyboard-only like above -- the button takes focus
+     * (first focusable), Enter activates it, the by-id callback fires,
+     * and the host writes the label through the widget-text exports. */
+    static const char *UI_TEXT =
+        "column id=\"root\" spacing=6 padding=10\n"
+        "  label id=\"count\" text=\"Clicks: 0\"\n"
+        "  button id=\"ok\" text=\"OK\"\n";
+
+    zb_app_t *ui = zb_app_create_from_ui(UI_TEXT, 0, 320, 240);
+    assert(ui != NULL);
+
+    int clicks = 0;
+    zb_set_event_callback(ui, "ok", on_action_count, &clicks);
+    /* a second registration replaces, NULL unregisters: exercise both */
+    zb_set_event_callback(ui, "missing_widget", on_action_count, &clicks);
+
+    zb_paint(ui);
+    const uint8_t *ubuf = zb_buffer(ui, &w, &h);
+    assert(ubuf != NULL && w == 320 && h == 240);
+
+    /* the label reads back what the design file declared */
+    char text[64];
+    assert(zb_widget_text(ui, "count", text, sizeof(text)) > 0);
+    assert(strcmp(text, "Clicks: 0") == 0);
+
+    /* missing widget: -1, no crash */
+    assert(zb_widget_text(ui, "nope", text, sizeof(text)) == -1);
+
+    /* Tab focuses the button, Enter activates it: the action callback
+     * fires with the id, and the host writes through zb_widget_set_text */
+    assert(clicks == 0);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
+    assert(clicks == 1);
+
+    zb_widget_set_text(ui, "count", "Clicks: 1");
+    assert(zb_widget_text(ui, "count", text, sizeof(text)) > 0);
+    assert(strcmp(text, "Clicks: 1") == 0);
+
+    /* unregister stops the firing; the frame still paints */
+    zb_set_event_callback(ui, "ok", NULL, NULL);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
+    assert(clicks == 1);
+
+    /* a malformed design fails the create (exit code 2 semantics) */
+    assert(zb_app_create_from_ui("garbage ?? no tags", 0, 100, 100) == NULL);
+    assert(zb_app_create_from_ui(NULL, 0, 100, 100) == NULL);
+
+    /* the HTML front-end drives the same path (page box sizes it) */
+    zb_app_t *html_app = zb_app_create_from_ui(
+        "<body style=\"width:200px;height:100px\">"
+        "<button id=\"b\" text=\"hi\"></button></body>", 1, 0, 0);
+    assert(html_app != NULL);
+    {
+        uint32_t hw = 0, hh = 0;
+        assert(zb_buffer(html_app, &hw, &hh) != NULL);
+        assert(hw == 200 && hh == 100);
+    }
+    zb_app_destroy(html_app);
+
+    zb_app_destroy(ui);
 
     printf("zbapi smoke test passed\n");
     return 0;
