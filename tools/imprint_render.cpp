@@ -28,8 +28,13 @@
 #include "html.hpp"
 #include "logging.hpp"
 #include "snapshot.hpp"
+#include "theme.hpp"
 #include "ui_builder.hpp"
 #include "ui_file.hpp"
+
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+#include "text/runtime_ttf_provider.hpp"
+#endif
 
 namespace
 {
@@ -69,6 +74,32 @@ namespace
         return true;
     }
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    // proportional-text path (the ui_preview install_font_family
+    // precedent): without it text renders in the 5x7 bitmap, which is
+    // the honest zero-option default but not a design preview
+    void install_font_family(const std::string &path)
+    {
+        if (path.empty() || zb::ui::has_font_family())
+        {
+            return;
+        }
+        try
+        {
+            // function-static anchor: the family state holds a copy,
+            // the handle stays alive for static-lifetime widgets
+            static zb::ui::TtfFamily family = zb::ui::TtfFamily::from_file(path.c_str());
+            zb::ui::set_font_family(family);
+            LD << "imprint-render: font family installed from '" << path << "'";
+        }
+        catch (const zb::ui::error &e)
+        {
+            LW << "imprint-render: cannot load font '" << path << "': "
+               << e.what();
+        }
+    }
+#endif
+
     // writes the RGB888 rows stb expects from the buffer's channel
     // accessors — layout- and depth-independent (A-19)
     bool write_png_rgb(const zb::app::IWindow &win, const std::string &path)
@@ -97,6 +128,8 @@ int main(int argc, char *argv[])
 {
     std::string in_path;
     std::string out_path;
+    std::string font_path;
+    std::string theme_name;
     int size_w = 0;
     int size_h = 0;
 
@@ -116,6 +149,14 @@ int main(int argc, char *argv[])
                 return 1;
             }
         }
+        else if (arg == "--font" && i + 1 < argc)
+        {
+            font_path = argv[++i];
+        }
+        else if (arg == "--theme" && i + 1 < argc)
+        {
+            theme_name = argv[++i];
+        }
         else if (!arg.empty() && arg[0] == '-')
         {
             LE << "imprint-render: unknown option '" << arg << "'";
@@ -134,12 +175,31 @@ int main(int argc, char *argv[])
     if (in_path.empty())
     {
         LE << "usage: imprint-render <design.ui|design.html> "
-              "[--out path.png|gif] [--size WxH]";
+              "[--out path.png|gif] [--size WxH] [--font ttf-path] [--theme dark|light]";
         return 1;
     }
     if (out_path.empty())
     {
         out_path = default_out_path(in_path);
+    }
+
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    if (font_path.empty())
+    {
+        if (const char *env = std::getenv("IM_RENDER_FONT"))
+        {
+            font_path = env;
+        }
+    }
+    install_font_family(font_path);
+#endif
+    if (theme_name == "dark")
+    {
+        zb::ui::set_theme(zb::ui::dark_theme());
+    }
+    else if (theme_name == "light")
+    {
+        zb::ui::set_theme(zb::ui::light_theme());
     }
 
     std::string text;

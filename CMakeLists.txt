@@ -165,6 +165,9 @@ if (IMPRINT_USE_TOOLS AND NOT NDS_PLATFORM)
     # build time — the ttf_subset precedent (build-time materialization
     # of a shipping asset), no runtime decode and no USE_PNG dependency
     add_executable(asset_gen tools/asset_gen.cpp)
+    # generic binary embedder (the html_embed convention): today the
+    # showcase's packed Inter TTF blob (runtime TTF text in the demo)
+    add_executable(bytes_embed tools/bytes_embed.cpp)
     # design-file renderer CLI (Batch G P2): .ui/.html in, PNG/GIF out,
     # the frame hash on stdout. PNG rides its own vendored stb writer TU
     # so the default zero-option build renders PNG (USE_PNG stays a

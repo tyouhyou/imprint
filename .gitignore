@@ -68,4 +68,4 @@ Thumbs.db
 reports/
 design/
 .zcode/
-run.bat
+docker/

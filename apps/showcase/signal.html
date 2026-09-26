@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+  body { background: #0d1017; }
+  .panel {
+    background: #141926;
+    border: 1px solid #26304a;
+    border-radius: 6px;
+  }
+  .cap { font-size: 8px; color: #5c6a80; letter-spacing: 2px; margin: 0; }
+  .btn {
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: #aeb9cb;
+    background: #1c2333;
+    border: 1px solid #303c58;
+    border-radius: 4px;
+    padding: 3px 9px;
+  }
+</style>
+</head>
+<body style="display:flex; flex-direction:column; width:320px; height:240px; background:#0d1017; font-size:11px; color:#c9d2df; margin:0">
+
+  <div style="display:flex; height:26px; padding:0 12px; align-items:center; background:linear-gradient(180deg,#1b2230,#141926); border-bottom:1px solid #2a3345">
+    <p style="color:#4fd6e0; font-weight:bold; font-size:11px; letter-spacing:2px; margin:0">SIGNAL-ONE</p>
+    <p class="cap" style="margin:0 0 0 10px">MISSION CONSOLE</p>
+    <div style="flex:1"></div>
+    <span id="fps" style="color:#79e08a; font-size:9px; letter-spacing:1px; margin:0">FRAME 000000</span>
+  </div>
+
+  <div style="display:flex; flex:1; padding:8px; gap:8px">
+
+    <div class="panel" style="width:132px; padding:8px; display:flex; flex-direction:column; align-items:center; gap:2px">
+      <p class="cap">SYSTEM LOAD</p>
+      <gauge id="load" min="0" max="100" value="62" style="width:100px; height:100px"></gauge>
+      <p id="loadval" style="font-size:11px; color:#4fd6e0; font-weight:bold; margin:0">62%</p>
+      <div style="width:100%; margin-top:4px">
+        <p class="cap">CORE TEMP</p>
+        <meter id="temp" min="0" max="100" value="41" style="width:100%; height:8px"></meter>
+        <p id="tempval" style="font-size:9px; color:#8a93a5; margin:0">41Â°C · nominal</p>
+      </div>
+    </div>
+
+    <div style="flex:1; display:flex; flex-direction:column; gap:8px">
+      <div class="panel" style="padding:8px 10px; display:flex; flex-direction:column; gap:2px">
+        <p class="cap">TELEMETRY</p>
+        <trend id="trend" style="width:144px; height:48px"></trend>
+      </div>
+      <div style="display:flex; gap:8px; flex:1">
+        <div class="panel" style="width:72px; padding:8px; display:flex; flex-direction:column; align-items:center; gap:2px">
+          <p class="cap">GAIN</p>
+          <knob id="gain" min="0" max="100" step="1" value="35" style="width:52px; height:52px"></knob>
+          <span id="gainval" style="font-size:10px; color:#f0b243; font-weight:bold; margin:0">-12.0dB</span>
+        </div>
+        <div class="panel" style="flex:1; padding:8px 10px; display:flex; flex-direction:column; gap:5px">
+          <p class="cap">MODULES</p>
+          <toggle id="modA" checked style="font-size:10px">DOWNLINK</toggle>
+          <toggle id="modB" style="font-size:10px">BACKUP</toggle>
+          <checkbox id="log" checked style="font-size:10px">TELEMETRY LOG</checkbox>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div style="display:flex; height:26px; padding:0 10px; gap:6px; align-items:center; background:#10141f; border-top:1px solid #2a3345">
+    <button id="reset" class="btn">RESET</button>
+    <button id="mode" class="btn">MODE</button>
+    <button id="about" class="btn">ABOUT</button>
+    <div style="flex:1"></div>
+    <span id="status" style="font-size:9px; color:#79e08a; letter-spacing:1px; margin:0">FNV · MATCH</span>
+  </div>
+
+
+  <div id="about_overlay" style="position:absolute; top:0; left:0; width:320px; height:240px; background:rgba(6,9,14,0.72); display:none; flex-direction:column; align-items:center; justify-content:center; gap:10px">
+    <div class="panel" style="width:224px; padding:14px; display:flex; flex-direction:column; gap:8px">
+      <p style="font-size:12px; font-weight:bold; color:#4fd6e0; letter-spacing:2px; margin:0">SIGNAL-ONE</p>
+      <p style="font-size:10px; color:#c9d2df; margin:0; line-height:15px">Designed in HTML. Rendered by imprint — one deterministic pixel buffer, no GPU, no DOM. Same input, same pixels.</p>
+      <button id="close_btn" class="btn" style="align-self:flex-start">CLOSE</button>
+    </div>
+  </div>
+
+</body>
+</html>

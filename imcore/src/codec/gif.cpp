@@ -10,6 +10,7 @@
 
 #include "codec/gif.hpp"
 
+#include <algorithm>
 #include <array>
 #include <cstring>
 #include <unordered_map>
@@ -23,6 +24,38 @@ namespace zb::ui
         {
             out.put(static_cast<char>(v & 0xFF));
             out.put(static_cast<char>((v >> 8) & 0xFF));
+        }
+
+        /* nearest entry of a custom palette: exact hash first, then a
+         * deterministic linear scan (minimum distance, lowest index wins
+         * ties); memoized per writer */
+        uint8_t palette_index_of(
+            std::unordered_map<std::uint32_t, uint8_t> &memo, const GifPalette &pal,
+            const uint8_t r, const uint8_t g, const uint8_t b)
+        {
+            const std::uint32_t key = (static_cast<std::uint32_t>(r) << 16) |
+                                      (static_cast<std::uint32_t>(g) << 8) | b;
+            auto it = memo.find(key);
+            if (it != memo.end())
+            {
+                return it->second;
+            }
+            std::size_t best = 0;
+            long best_d = -1;
+            for (std::size_t i = 0; i < pal.count; ++i)
+            {
+                const long dr = static_cast<long>(r) - pal.rgb[i * 3 + 0];
+                const long dg = static_cast<long>(g) - pal.rgb[i * 3 + 1];
+                const long db = static_cast<long>(b) - pal.rgb[i * 3 + 2];
+                const long d = dr * dr + dg * dg + db * db;
+                if (best_d < 0 || d < best_d)
+                {
+                    best_d = d;
+                    best = i;
+                }
+            }
+            memo.emplace(key, static_cast<uint8_t>(best));
+            return static_cast<uint8_t>(best);
         }
 
         /* nearest entry of the 6x6x6 cube (values are multiples of 51) */
@@ -131,9 +164,197 @@ namespace zb::ui
         }
     }
 
+    // --- GifPaletteBuilder (median cut, deterministic) -----------------
+
+    void GifPaletteBuilder::add_frame(const core::Color *pixels, const std::size_t n)
+    {
+        if (colors_.empty())
+        {
+            colors_.reserve(4096);
+            counts_.reserve(4096);
+        }
+        for (std::size_t i = 0; i < n; ++i)
+        {
+            const core::Color &c = pixels[i];
+            // 8-bit-normalized channels (A-19); the alpha byte is ignored
+            const std::uint32_t key = (static_cast<std::uint32_t>(c.r()) << 16) |
+                                      (static_cast<std::uint32_t>(c.g()) << 8) |
+                                      c.b();
+            // colors_ stays sorted (binary-search insert); the first
+            // occurrence carries the weight
+            auto it = std::lower_bound(colors_.begin(), colors_.end(), key);
+            if (it != colors_.end() && *it == key)
+            {
+                ++counts_[static_cast<std::size_t>(it - colors_.begin())];
+            }
+            else
+            {
+                colors_.insert(it, key);
+                counts_.insert(counts_.begin() +
+                                   static_cast<std::size_t>(it - colors_.begin()),
+                               1);
+            }
+        }
+    }
+
+    GifPalette GifPaletteBuilder::palette(const std::size_t max_colors) const
+    {
+        GifPalette out;
+        if (colors_.empty())
+        {
+            return out;
+        }
+        // one bucket per distinct color; a bucket = [begin, end) over the
+        // (sorted) color index range
+        struct bucket
+        {
+            std::size_t begin;
+            std::size_t end;
+        };
+        std::vector<bucket> buckets{{0, colors_.size()}};
+
+        auto channel = [&](const std::uint32_t packed, const int ch) -> uint8_t
+        {
+            return static_cast<uint8_t>((packed >> ((2 - ch) * 8)) & 0xFF);
+        };
+        auto channel_range = [&](const bucket &b, const int ch)
+        {
+            uint8_t lo = 255;
+            uint8_t hi = 0;
+            for (std::size_t i = b.begin; i < b.end; ++i)
+            {
+                const uint8_t v = channel(colors_[i], ch);
+                lo = (v < lo) ? v : lo;
+                hi = (v > hi) ? v : hi;
+            }
+            return hi - lo;
+        };
+        auto bucket_weight = [&](const bucket &b)
+        {
+            std::size_t s = 0;
+            for (std::size_t i = b.begin; i < b.end; ++i)
+            {
+                s += counts_[i];
+            }
+            return s;
+        };
+
+        const std::size_t target = max_colors < 1 ? 1 : (max_colors > 256 ? 256 : max_colors);
+        while (buckets.size() < target)
+        {
+            // split the bucket with the widest channel range (ties: the
+            // heavier, then the earliest) along its widest channel at the
+            // weight median; unsplittable buckets stop the loop
+            std::size_t best = buckets.size();
+            int best_range = 0;
+            std::size_t best_weight = 0;
+            int best_ch = 0;
+            for (std::size_t i = 0; i < buckets.size(); ++i)
+            {
+                const std::size_t n = buckets[i].end - buckets[i].begin;
+                if (n < 2)
+                {
+                    continue;
+                }
+                for (int ch = 0; ch < 3; ++ch)
+                {
+                    const int r = channel_range(buckets[i], ch);
+                    if (r == 0)
+                    {
+                        continue;
+                    }
+                    const std::size_t wgt = bucket_weight(buckets[i]);
+                    if (r > best_range ||
+                        (r == best_range && (wgt > best_weight ||
+                                             (wgt == best_weight && best == buckets.size()))))
+                    {
+                        best = i;
+                        best_range = r;
+                        best_weight = wgt;
+                        best_ch = ch;
+                    }
+                }
+            }
+            if (best == buckets.size())
+            {
+                break;
+            }
+            bucket &b = buckets[best];
+            // weight median index within the bucket (channel-sorted
+            // because colors_ is packed R>>G>>B: any channel prefix is
+            // sorted within a fixed higher-prefix block)
+            std::size_t acc = 0;
+            const std::size_t half = bucket_weight(b) / 2 + (bucket_weight(b) & 1);
+            std::size_t split = b.begin + 1;
+            for (std::size_t i = b.begin; i < b.end; ++i)
+            {
+                acc += counts_[i];
+                if (acc >= half)
+                {
+                    split = i + 1;
+                    break;
+                }
+            }
+            if (split <= b.begin || split >= b.end)
+            {
+                split = b.begin + (b.end - b.begin) / 2;
+                if (split >= b.end)
+                {
+                    break;  // cannot split further
+                }
+            }
+            bucket right{split, b.end};
+            b.end = split;
+            buckets.push_back(right);
+            (void)best_ch;
+        }
+
+        // palette entry = the bucket's weighted average, buckets kept in
+        // index order (deterministic; no re-sort needed)
+        std::size_t count = 0;
+        for (const bucket &b : buckets)
+        {
+            if (b.begin == b.end || count >= 256)
+            {
+                continue;
+            }
+            std::uint32_t sr = 0, sg = 0, sb = 0, w = 0;
+            for (std::size_t i = b.begin; i < b.end; ++i)
+            {
+                const std::uint32_t c = colors_[i];
+                const std::uint32_t k = counts_[i];
+                sr += ((c >> 16) & 0xFF) * k;
+                sg += ((c >> 8) & 0xFF) * k;
+                sb += (c & 0xFF) * k;
+                w += k;
+            }
+            out.rgb[count * 3 + 0] = static_cast<uint8_t>(sr / w);
+            out.rgb[count * 3 + 1] = static_cast<uint8_t>(sg / w);
+            out.rgb[count * 3 + 2] = static_cast<uint8_t>(sb / w);
+            ++count;
+        }
+        out.count = count;
+        return out;
+    }
+
     GifWriter::GifWriter(const char *path, const std::size_t width,
                          const std::size_t height, const std::size_t delay_cs)
-        : out_(path, std::ios::binary), width_(width), height_(height), delay_cs_(delay_cs)
+        : palette_(nullptr), out_(path, std::ios::binary), width_(width),
+          height_(height), delay_cs_(delay_cs)
+    {
+        write_header(nullptr);
+    }
+
+    GifWriter::GifWriter(const char *path, const std::size_t width,
+                         const std::size_t height, const std::size_t delay_cs,
+                         const GifPalette &palette)
+        : palette_(&palette), out_(path, std::ios::binary), width_(width),
+          height_(height), delay_cs_(delay_cs)
+    {
+        write_header(&palette);
+    }
+
+    void GifWriter::write_header(const GifPalette *pal)
     {
         out_.write("GIF89a", 6);
         u16(out_, width_);
@@ -141,12 +362,32 @@ namespace zb::ui
         out_.put(static_cast<char>(0xF7));  // GCT present, 8 bits/primary, 256 entries
         out_.put('\0');                     // background color index
         out_.put('\0');                     // aspect ratio
-        for (std::size_t i = 0; i < 256; ++i)
+        if (pal == nullptr)
         {
-            const std::size_t r = i / 36, g = (i / 6) % 6, b = i % 6;
-            out_.put(static_cast<char>(r * 51));
-            out_.put(static_cast<char>(g * 51));
-            out_.put(static_cast<char>(b * 51));
+            for (std::size_t i = 0; i < 256; ++i)
+            {
+                const std::size_t r = i / 36, g = (i / 6) % 6, b = i % 6;
+                out_.put(static_cast<char>(r * 51));
+                out_.put(static_cast<char>(g * 51));
+                out_.put(static_cast<char>(b * 51));
+            }
+        }
+        else
+        {
+            std::size_t i = 0;
+            for (; i < pal->count; ++i)
+            {
+                out_.put(static_cast<char>(pal->rgb[i * 3 + 0]));
+                out_.put(static_cast<char>(pal->rgb[i * 3 + 1]));
+                out_.put(static_cast<char>(pal->rgb[i * 3 + 2]));
+            }
+            // the GCT is padded to 256 (black)
+            for (; i < 256; ++i)
+            {
+                out_.put('\0');
+                out_.put('\0');
+                out_.put('\0');
+            }
         }
 
         // NETSCAPE2.0: loop forever
@@ -168,7 +409,9 @@ namespace zb::ui
             // 8-bit-normalized accessors (A-19): correct at 32bpp and a
             // documented quantize at 16bpp; the alpha byte is ignored
             const core::Color &c = pixels[i];
-            indexed[i] = palette_index(c.r(), c.g(), c.b());
+            indexed[i] = palette_ != nullptr
+                             ? palette_index_of(nearest_, *palette_, c.r(), c.g(), c.b())
+                             : palette_index(c.r(), c.g(), c.b());
         }
 
         // graphic control extension: delay, no transparency, disposal keep

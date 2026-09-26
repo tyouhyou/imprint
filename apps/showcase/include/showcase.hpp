@@ -1,54 +1,25 @@
 #pragma once
 
-#include <chrono>
 #include <cstdint>
 #include <memory>
-#include <string>
-#include <vector>
 
 #include "canvas_window.hpp"
-#include "event.hpp"
 #include "iapp.hpp"
-#include "tween.hpp"
-
-namespace zb::ui
-{
-    class Button;
-    class FlexPanel;
-    class GaugeDial;
-    class Knob;
-    class Label;
-    class ListBox;
-    class Panel;
-    class ProgressBar;
-    class Slider;
-    class ToggleSwitch;
-    class TrendLine;
-}
+#include "trend_line.hpp"
 
 namespace zb::app::showcase
 {
-    class HeroChart;
-    class ShadowCard;
-    class AlphaImage;
-/*
-     * S3 showcase: three embedded .ui pages behind one window.
+    /*
+     * SIGNAL-ONE mission console (the redesigned showcase, 2026-09-26):
+     * the UI is one HTML design file (signal.html, packed by html_embed)
+     * materialized through the declarative layer; the behavior lives in
+     * this C++ class -- knob->readout linkage, RESET / MODE / ABOUT
+     * buttons, module toggles, a live telemetry feed, and a frame-hash
+     * readout in the status line (the determinism story, on screen).
      *
-     * Page 0 "hero" is a device control panel: three progress bars
-     * advanced deterministically by input events while running (START /
-     * STOP), a status label updated only on discrete transitions, and a
-     * dark/light theme toggle. Page 1 "gallery" shows every widget and
-     * wires the demo slider to the demo bar. Page 2 "dashboard" (V-5
-     * step 3) is the factory-console face of the framework: live
-     * GaugeDials, a scrolling TrendLine, a setpoint Knob synced to a
-     * slider, pump/coolant ToggleSwitches feeding an alarm list, and a
-     * self-check panel that drives the knobs with real input events and
-     * stamps the result "PIXELS MATCH" when two renders of the same
-     * state hash byte-identically.
-     *
-     * All pages are packed at build time by ui_embed and parsed back
-     * with the library parser -- the same code path shipped embedded
-     * apps use (no filesystem needed, NDS included).
+     * Text renders through the runtime TTF family when the build carries
+     * IMCORE_HAS_TTF_RUNTIME (the packed Inter blob); otherwise the 5x7
+     * bitmap fallback applies (documented degradation, contract 2.4).
      */
     class Showcase : public IApp
     {
@@ -56,115 +27,76 @@ namespace zb::app::showcase
         Showcase() = default;
         ~Showcase() override = default;
 
-        void create_window() override { create_window(_width, _height); }
+        void create_window() override { create_window(320, 240); }
         void create_window(uint32_t max_client_width,
-                           uint32_t max_client_height) override;
-        void create_window(uint32_t max_client_width,
-                           uint32_t max_client_height, void *buffer) override;
+                           uint32_t max_client_height) override
+        {
+            create_window(max_client_width, max_client_height, nullptr);
+        }
+        void create_window(uint32_t max_client_width, uint32_t max_client_height,
+                           void *buffer) override;
 
-        zb::SharedPtr<IWindow> window() noexcept override;
-        void input(const zb::input::input_event &ev) noexcept override;
+        zb::SharedPtr<IWindow> window() noexcept override { return window_; }
+        void input(const zb::input::input_event &ev) noexcept override
+        {
+            window_->input(ev);
+        }
+
+        // one frame: advance the live feed first (the F-2 app-side
+        // pattern -- pure function of the frame counter, no timers),
+        // then render
         void paint() noexcept override;
-        bool is_dirty() const noexcept override;
-        bool dirty_region(int &, int &, int &, int &) const noexcept override;
-        void on_painting(event::PAINT_EVENT::EventHandler) noexcept override;
-        void on_painted(event::PAINT_EVENT::EventHandler) noexcept override;
-        void on_closing(event::CLOSE_EVENT::EventHandler) noexcept override;
-        void on_closed(event::CLOSE_EVENT::EventHandler) noexcept override;
+
+        [[nodiscard]] bool is_dirty() const noexcept override
+        {
+            return window_->is_dirty();
+        }
+        [[nodiscard]] bool dirty_region(int &x, int &y, int &w, int &h) const noexcept override
+        {
+            return window_->dirty_region(x, y, w, h);
+        }
+
+        void on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        {
+            window_->painting += h;
+        }
+        void on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        {
+            window_->painted += h;
+        }
+        void on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        {
+            window_->closing += h;
+        }
+        void on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        {
+            window_->closed += h;
+        }
 
     private:
-        void make_window(uint32_t max_client_width,
-                         uint32_t max_client_height, void *buffer);
-        void load_pages();
-        void install_chart();
-        void install_assets();
-        void install_dashboard();
-        void wire_controls();
-        void show_page(int index);
-        void set_state(const char *text);
-        void start();
-        void stop();
-        void replay();
-        void toggle_theme();
-        void advance();
-        void advance_dashboard();
-        void run_bench();
-        void bench_check_hash(int half);
-        [[nodiscard]] uint64_t buffer_hash() const;
+        void build_ui(uint32_t width, uint32_t height);
+        void install_font();
+        void apply_mode(int index);
+        void update_gain(int value);
+        void show_about();
 
-        // default desktop size (4:3, like FB 320x240 and NDS/WASM
-        // 256x192 — the pages scale to whatever the shell passes)
-        int32_t _width{640};
-        int32_t _height{480};
+        zb::SharedPtr<zb::app::CanvasWindow> window_;
+        zb::ui::Widget *about_overlay_ = nullptr;
 
-        bool dark_ = false;
-        bool running_ = false;
-
-        // F-2 preview glue: the chart reveal, one step per paint request
-        Tween reveal_{};
-
-        zb::SharedPtr<CanvasWindow> window_;
-        // Panel layout stacks children unconditionally, so exactly one
-        // page is mounted under the root at a time; parked pages live in
-        // the array, mounted_ points at the one in the tree (owned by it)
-        std::unique_ptr<zb::ui::FlexPanel> pages_[3];
-        zb::ui::FlexPanel *mounted_ = nullptr;
-        int current_ = 0;
-
-        HeroChart *chart_ = nullptr;
-
-        // V-2 asset materialization: the RGBA8 arrays from asset_gen
-        // converted once into the build's pixel layout (the buffers the
-        // gallery's image views point at must outlive the widgets)
-        std::vector<zb::ui::core::Color> asset_pixels_;
-        zb::ui::core::image_t ball_img_{};
-        zb::ui::core::image_t shadow_img_{};
-
-        zb::ui::ProgressBar *cpu_bar_ = nullptr;
-        zb::ui::ProgressBar *mem_bar_ = nullptr;
-        zb::ui::ProgressBar *temp_bar_ = nullptr;
-        zb::ui::Label *state_label_ = nullptr;
-        zb::ui::Button *theme_btn_ = nullptr;
-        zb::ui::Slider *demo_slider_ = nullptr;
-        zb::ui::ProgressBar *demo_bar_ = nullptr;
-
-        // V-5 step 3: the factory-console page
-        zb::ui::GaugeDial *temp_gauge_ = nullptr;
-        zb::ui::GaugeDial *press_gauge_ = nullptr;
-        zb::ui::GaugeDial *flow_gauge_ = nullptr;
+        // handles into the materialized tree (the design file declares
+        // the tags; this class reads them back through find_by_id)
+        zb::ui::GaugeDial *load_ = nullptr;
+        zb::ui::ProgressBar *temp_ = nullptr;
         zb::ui::TrendLine *trend_ = nullptr;
-        zb::ui::Knob *setpoint_knob_ = nullptr;
-        zb::ui::Slider *setpoint_slider_ = nullptr;
-        zb::ui::Label *setpoint_readout_ = nullptr;
-        zb::ui::Label *console_ppm_ = nullptr;
-        zb::ui::ToggleSwitch *pump_toggle_ = nullptr;
-        zb::ui::ToggleSwitch *coolant_toggle_ = nullptr;
-        zb::ui::Button *bench_btn_ = nullptr;
-        zb::ui::Label *bench_out_ = nullptr;
-        int sample_ = 0;
+        zb::ui::Knob *gain_ = nullptr;
+        zb::ui::Widget *loadval_ = nullptr;
+        zb::ui::Widget *tempval_ = nullptr;
+        zb::ui::Widget *gainval_ = nullptr;
+        zb::ui::Widget *status_ = nullptr;
+        zb::ui::Widget *fps_ = nullptr;
 
-        // self-check runtime
-        bool bench_active_ = false;
-        bool bench_matched_ = true;
-        int bench_half_ = 0;
-        int bench_paints_ = 0;
-        long long bench_px_ = 0;
-        uint64_t bench_hash_[2]{0, 0};  // up-state / returned-state hashes
-        std::chrono::steady_clock::time_point bench_t0_{};
-        std::chrono::steady_clock::duration bench_dur_{};
-
-        zb::event::Subscription<> sub_theme_;
-        zb::event::Subscription<> sub_start_;
-        zb::event::Subscription<> sub_stop_;
-        zb::event::Subscription<> sub_replay_;
-        zb::event::Subscription<> sub_gallery_;
-        zb::event::Subscription<> sub_dashboard_;
-        zb::event::Subscription<> sub_dash_back_;
-        zb::event::Subscription<> sub_bench_;
-        zb::event::Subscription<int> sub_setpoint_slider_;
-        zb::event::Subscription<int> sub_setpoint_knob_;
-        zb::event::Subscription<const void *> sub_painted_;
-        zb::event::Subscription<> sub_back_;
-        zb::event::Subscription<int> sub_slider_;
+        int frame_ = 0;
+        int mode_ = 0;
+        bool ui_ready_ = false;
     };
-}  // namespace zb::app::showcase
+}
