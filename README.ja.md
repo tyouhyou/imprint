@@ -10,9 +10,9 @@
 
 **同じ入力、同じピクセル——ディスプレイなしの CI でアサート可能。**
 
-Imprint は決定論的で埋め込み可能な C++17 UI ランタイムです：ピクセルバッファは 1 つ、ソフトウェアラスタライズ——GPU 不要、OS の GUI ツールキット不要。ホストがすべてのフレームを駆動するため、同じ入力シーケンスは常に同じフレームバイトを生みます。ヘッドレス CI で UI ロジックをピクセル単位にアサートできることは、テストハーネスの小技ではなく契約そのものの性質です。同じ UI ソースツリー——コード上のウィジェット、またはデザインファイルで記述した 1 画面——が、変更なしで Windows、Linux、macOS、WebAssembly、ニンテンドーDS、および `zbapi` 経由の任意の C ホストにコンパイルされます。
+Imprint は決定論的で埋め込み可能な C++17 UI ランタイムです：ピクセルバッファは 1 つ、ソフトウェアラスタライズ——GPU 不要、OS の GUI ツールキット不要、タイマーなし、スレッドなし。ホストがすべてのフレームを駆動します：固定のビルドとバッファサイズの下では、同じ入力シーケンスは常に同じフレームバッファバイトを生みます。ヘッドレス CI で UI ロジックをピクセル単位にアサートできることは、テストハーネスの小技ではなく契約そのものの性質です。同じ UI ソースツリー——コード上のウィジェット、またはデザインファイルで記述した 1 画面——が、変更なしで Windows、Linux、macOS、SIXEL ターミナル、WebAssembly、ニンテンドーDS、および `zbapi` 経由の任意の C ホストにコンパイルされます。
 
-**デザインファースト。** 下のコンソールは *HTML で描いています*——ウィジェットコードなし——Imprint 自身のソフトウェアラスタライザが同じバッファにレンダリングします：
+**デザインファースト。** 画面は *HTML でデザインします*——id、タグ、スタイルで、ウィジェットコードはゼロ——ビルド時にウィジェットツリーへ実体化します。下のヒーローは 1 枚の HTML ファイルを、Imprint 自身のラスタライザがピクセルバッファに描いたものです：
 
 <p>
   <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console：真空管ダッシュボード（ tubes、VU バンク、電力メーター、診断パラグラフ）。HTML でデザインし、Imprint がレンダリング">
@@ -26,34 +26,42 @@ Imprint は決定論的で埋め込み可能な C++17 UI ランタイムです�
 
 ![showcase_html は linux、nds、wasm 上に](assets/showcase/montage.png)
 
-**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— ページはウィジェット showcase の WebAssembly ビルドです。下のフレームはそのアプリのエンドツーエンド記録（デスクトップ・ブラウザ・DS ROM はいずれも同じソースからビルド）：
+```
+                同じ UI ソース
+                      │
+      ┌───────────┬───┴───────┬───────────┐
+      ↓           ↓           ↓           ↓
+   Windows      Linux       macOS     ターミナル
+      │        (X11/FB)               (SIXEL)
+      └───────────┼───────────┘
+                  ↓
+           WebAssembly  ←  ブラウザで試す
+                  ↓
+             ニンテンドーDS
+                  ↓
+      あなたの組み込みボード（C-ABI）
+```
 
-<img src="assets/showcase/showcase.gif" width="480" alt="フレームごとに記録した showcase：ダークで起動しチャートが描き出され、START でプログレスバーが充填、REPLAY でチャートを再生、ファクトリーコンソールのダッシュボード（ゲージ・ライブトレンド・セットポイントノブ・SELF-CHECK が PIXELS MATCH を刻印）、ライトの全ウィジェットページと影カード資産、ダークで締める">
+ターミナルも第一級ターゲットです：sixel 対応ターミナル（WezTerm、foot、iTerm2）なら、同じウィジェットツリーが SIXEL グラフィックスとして描画され、入力は SGR マウス + キーボード——ウィンドウシステムはまったく要りません。
+
+showcase デモの実測フットプリント（Release ビルド）：
+
+| ターゲット | 配置フットプリント |
+|---|---|
+| WebAssembly | 583 KB の単一 `.js`——wasm も Inter TTF も埋め込み済み、`file://` で直接動作 |
+| ニンテンドーDS | 256×192 16bpp フレームバッファ（96 KB VRAM）；libatomic のないツールチェーン向けに整数専用ジオメトリと非アトミック参照カウントのオプションを用意 |
 
 GPU 不要。OS の GUI ツールキット不要。プラットフォーム固有の UI コードも不要。
 
-```
-              同じ UI ソース
-                    │
-        ┌───────────┼───────────┐
-        ↓           ↓           ↓
-     Windows      Linux       macOS
-        │        (X11/FB)       │
-        └───────────┼───────────┘
-                    ↓
-             WebAssembly  ←  ブラウザで試す
-                    ↓
-               ニンテンドーDS
-                    ↓
-        あなたの組み込みボード（C-ABI）
-```
+## Showcase 実機デモ
 
-上記 `showcase` アプリの実測フットプリント（Release ビルド）：
+**SIGNAL-ONE** は実際に動くタスクコンソール——上のフットプリントはこのデモのものです——画面のすべてを Imprint 自身のラスタライザが描きます。以下はそのエンドツーエンド記録：レコーダーが公開 API 経由で固定の入力スクリプトによりアプリを駆動するため、GIF はすべてのプラットフォームでバイト単位で同一です。
 
-| ターゲット | UI コード+データ | RAM（静的） | フレームバッファ | 配置サイズ |
-|---|---|---|---|---|
-| ニンテンドーDS | 543 KB text + 11 KB data | 7.7 KB BSS | 96 KB（256×192×2 B） | 646 KB `.nds` |
-| WebAssembly | — | — | 256×192×4 B | 250 KB の単一 `.js`、`file://` で直接動作 |
+<p>
+  <img src="assets/showcase/showcase.gif" width="480" alt="エンドツーエンドで記録した SIGNAL-ONE：ライブテレメトリで起動しトレンドラインが進み、GAIN ノブのドラッグで dB 読み取り・負荷ゲージ・温度メーターが追従、MODE が 3 つのアクセントテーマ（シアン、アンバー、グリーン）を循環、モジュールトグルが反転、ABOUT でモーダルオーバーレイを開いて CLOSE で閉じ、RESET で起動状態に戻る">
+</p>
+
+**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— 同じコンソールを WebAssembly にコンパイルしたもので、デスクトップシェルと同じ C-ABI 経由で `<canvas>` に表示されます。GAIN ノブをドラッグ、MODE でテーマ切替、ABOUT オーバーレイを開く。サーバーもインストールも不要：wasm はページに埋め込み済みです。
 
 ## 特徴
 
@@ -128,11 +136,15 @@ UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_
 UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
 ```
 
-2 つの形式——`.ui` と HTML——は 1 つのツリー、1 つのピクセルバッファ、すべてのターゲットに供給します。
+2 つの形式——`.ui` と HTML——は 1 つのツリー、1 つのピクセルバッファ、すべてのターゲットに供給します。冒頭の SIGNAL-ONE もまさにこの経路です：85 行の HTML デザインファイル + 266 行の C++ 振る舞いコード。
 
-### ライブラリとして使う——あなたのプロジェクト、あなたの `main`
+## ライブラリとして使う——あなたのプロジェクト、あなたの main
 
-上の例はリポジトリ内デモ（`apps/` の story + トップレベル実行ファイル）の構成です。あなたのアプリケーションがこのツリーに住む必要はありません。Imprint をサブプロジェクトとして追加し、自分の `main` から `zb::shell::run` で駆動してください——プラットフォームシェルが走らせるのと同じホストループです：
+Imprint の利用形態は 3 つ：リポジトリ内のデモ story（上記）、自分の `main` で
+駆動する**ライブラリサブプロジェクト**（本節）、任意の言語の純 **C-ABI ホスト**
+（下記）。あなたのアプリケーションがこのツリーに住む必要はありません。Imprint を
+サブプロジェクトとして追加し、`zb::shell::run` で駆動してください——プラットフォーム
+シェルが走らせるのと同じホストループです：
 
 ```cpp
 // あなたの main.cpp —— MyWindow : zb::app::CanvasWindow、または任意の zb::app::IApp
@@ -155,9 +167,9 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 
 サブプロジェクトのとき Imprint は**ライブラリのみ**を構成します——デモアプリ・バインディング・ホストツールは含みません。`IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` / `IMPRINT_WITH_DEMOS` スイッチで個別に有効化できます（リポジトリ内の既定ビルドはすべて保持）。ヘッドレスパス——CI がピクセルをアサートするのに使うもの——にはシェルまったく不要：`CanvasWindow::create()` + `paint()`（`test/external_smoke/` 参照、テストバッテリーに組み込み済み）。シェルループ契約は `docs/code-contract.md` §11。
 
-### CI での決定論的テスト
+## CI での決定論的テスト
 
-同じ入力シーケンスは常に同じフレームバイトを生みます——つまり UI ロジックはディスプレイなしでピクセル単位にアサートできます。`zb::snap` ヘルパー（`imprint::snapshot` をリンク）がワークフロー全体です：
+固定のビルドとバッファサイズの下では、同じ入力シーケンスは常に同じフレームバッファバイトを生みます——つまり UI ロジックはディスプレイなしでピクセル単位にアサートできます。バッファサイズは `create_window(w, h)` で一度宣言します——パーセント指定のレイアウトはそれに対して解決されます。サイズが違えばそれは別のサーフェスであって、別の結果ではありません。`zb::snap` ヘルパー（`imprint::snapshot` をリンク）がワークフロー全体です：
 
 ```cpp
 #include "snapshot.hpp"
@@ -171,7 +183,7 @@ if (r.status == zb::snap::check_result::status::missing)
 // status::mismatch では tests/baselines/main_view.actual.gif も生成され差分確認に使えます
 ```
 
-`.zbsnap` ベースラインをコミットしてください。CI はどんなピクセルドリフトでも失敗し、ミスマッチ成果物が何が変わったかを見せます。ベースラインはビルド構成ごとに有効（code-contract §12.2）；同一ピクセルクラス内なら hash は Windows / macOS / Linux でバイト単位で一致します。リポジトリ内の参照：`test/test_snapshot.cpp`（ワークフロー）と、同じヘルパーに乗っている showcase の SELF-CHECK。
+`.zbsnap` ベースラインをコミットしてください。CI はどんなピクセルドリフトでも失敗し、ミスマッチ成果物が何が変わったかを見せます。ベースラインはビルド構成ごとに有効（code-contract §12.2）；同一ピクセルクラス内なら hash は Windows / macOS / Linux でバイト単位で一致します。リポジトリ内の参照：`test/test_snapshot.cpp`（ワークフロー）と、同じ決定論に乗っている showcase レコーダー。
 
 アプリコードなしで出図？デザインファイルを直接ピクセルへ——この README 冒頭のヒーローはこの 1 行の産物です（フレーム hash も表示）：
 
@@ -189,7 +201,7 @@ CI レシピ——ブラウザ不要、ディスプレイ不要（Tier-1 ジョ�
     cmp menu1.png menu2.png   # 2 回の実行でバイト単位一致
 ```
 
-### スクリプト言語の GUI——デザインファイル + コールバック
+## スクリプト言語の GUI——デザインファイル + コールバック
 
 宣言的パスなら、ユーザー側に C++ はまったく要りません：`zb_app_create_from_ui` がデザインファイル（`.ui` 文法、または `is_html=1` で HTML サブセット——デザイナーと同じ 2 つのフロントエンド）からウィジェットツリーを組み立て、アクションは id で返ってきます。Python デモが丸ごとのストーリーです（`demo/python/ui_app.py`）：
 
@@ -222,8 +234,8 @@ C ABI を呼べる言語ならどれも同じプロトコルを得ます。静�
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 入力対応バックエンド |
 | Linux（フレームバッファ） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 表示のみ。操作は X11 で |
 | ターミナル（SIXEL） | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | デモターゲット：同じ UI が sixel ターミナルで動く（WezTerm/foot/iTerm2）。SGR マウス + キーボード入力。`IM_TERM_SIZE=WxH` でサイズ変更 |
-| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` でショーケース ROM をビルド（ホスト製の `ui_embed` と `asset_gen` を `-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=` で渡す必要あり）、または `-DSTORY=showcase_html` で HTML ショーケース（同様に、ホスト製の `html_embed` を `-DHTML_EMBED_EXECUTABLE=` で追加） |
-| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | node スモークテスト付き |
+| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` で SIGNAL-ONE ROM をビルド（ホスト製の `html_embed` と `bytes_embed` を `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=` で渡す必要あり）、または `-DSTORY=showcase_html` で HTML ショーケース（同様に、ホスト製の `html_embed` を `-DHTML_EMBED_EXECUTABLE=` で追加） |
+| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` が SIGNAL-ONE ページを自己完結する単一 `.js` として生成（wasm 埋め込み済み）。node スモークテスト付き |
 | Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 
 テスト：`test/test_imui`——素の assert、テストフレームワークなし。デスクトップは `ctest -R test_imui`（またはバイナリ直実行）、NDS ではスキップ。
@@ -256,13 +268,14 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 - [`docs/backlog.md`](docs/backlog.md)——生きたバックログ：アーキテクチャ項目、製品機能バッチ（L/I/F）、条件トリガー項目
 - [`docs/code-contract.md`](docs/code-contract.md)——API レベルのインターフェース契約：エラーパス、UTF-8/テキスト、glyph provider、ツリー変更、レイアウト無効化、アロケーション予算、プレゼンテーションシームのコンバータ
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` デザインファイル形式：文法、パッケージングパイプライン、実体化セマンティクス
+- [`docs/html-path.md`](docs/html-path.md)——HTML デザインファイルのパス：要素/属性/CSS ホワイトリスト
 - [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI ホストインターフェース。ホストルールは ARCHITECTURE §4.8
 
 ## デモ
 
 **Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
 
-**showcase**（`-DSTORY=showcase`）——マルチターゲットのウィジェットギャラリー。ダークで起動し、フレームワーク自身のラスタライザで描いたアニメーションチャート（角丸カード上のアンチエイリアス曲線＋グラデーション領域、app 側 tween が少しずつ描き出す）で開始。デバイス状態のコントロールパネル（プログレスバー、START/STOP、ダーク/ライトテーマ切替）と、アルファ資産合成付きの全ウィジェットページ（9-slice 影カード、アクセント色にティントしたボール。資産は `tools/asset_gen` がビルド時に生成）、ファクトリーコンソールのダッシュボードページ（ゲージ、ライブトレンドチャート、セットポイントのノブ＋スライダー、ポンプ/クーラントトグル）と SELF-CHECK ボタン——実際のドラッグでノブを操作し、同じ状態の 2 回のレンダリングがバイト単位で一致したとき PIXELS MATCH を刻印（決定論ランタイムの証明）。`assets/showcase/` のフレームはこれらのビルドから生成。レコーダーは完全に決定論的で、Windows/macOS/Linux でバイト単位で同一の GIF を生成します。WASM 版はオンラインで遊べます（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)、ローカルでは `demo/wasm/build.sh showcase`）。同じソースが NDS ROM もビルドします。
+**showcase**（`-DSTORY=showcase`）——SIGNAL-ONE。上の「Showcase 実機デモ」のコンソールです：85 行の HTML デザインファイル（`apps/showcase/signal.html`）がビルド時にウィジェットツリーへ実体化し、振る舞いは 266 行の C++。ライブテレメトリはフレームごとに 1 つの決定論的ステップで進み（トレンドラインはフレームカウンタの純関数）、GAIN ノブは dB 読み取り・負荷ゲージ・温度メーターを駆動し、MODE は 3 つのアクセントテーマ（シアン/アンバー/グリーン）を循環し、ABOUT は宣言的モーダルオーバーレイを開き、RESET が起動状態に戻します。テキストはランタイム TTF パス（Inter、`bytes_embed` でパック）——意図したプロポーショナルフォントの見た目には `-DUSE_TTF_RUNTIME=ON` を設定。5x7 ビットマップフォールバックが非 TTF ビルドもグリーンのまま保ちます。「Showcase 実機デモ」の GIF は決定論的レコーダー `showcase_gif` の産物で、ブラウザデモと DS クロスビルド（ビルド参照）は同じソースで動きます。
 
 **三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します——`.ui` か HTML のパスを渡せます。
 

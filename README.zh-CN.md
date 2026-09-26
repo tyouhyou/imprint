@@ -10,9 +10,9 @@
 
 **相同的输入，相同的像素——可在无显示器的 CI 里断言。**
 
-Imprint 是一个确定性、可嵌入的 C++17 UI 运行时：一个像素缓冲，纯软件光栅化——不需要 GPU，不需要操作系统 GUI 工具包。宿主驱动每一帧，因此同一输入序列永远得到同一帧字节；在无头 CI 里对 UI 逻辑做像素级断言，是契约本身的性质，不是测试脚手架的花招。同一份 UI 源码树——代码里的控件，或设计文件里描述的一屏——原样编译到 Windows、Linux、macOS、WebAssembly、任天堂 DS，以及经 `zbapi` 的任意 C 宿主。
+Imprint 是一个确定性、可嵌入的 C++17 UI 运行时：一个像素缓冲，纯软件光栅化——不需要 GPU，不需要操作系统 GUI 工具包，没有定时器，没有线程。宿主驱动每一帧：在固定的构建与缓冲尺寸下，同一输入序列永远得到同一份帧缓冲字节——在无头 CI 里对 UI 逻辑做像素级断言，是契约本身的性质，不是测试脚手架的花招。同一份 UI 源码树——代码里的控件，或设计文件里描述的一屏——原样编译到 Windows、Linux、macOS、SIXEL 终端、WebAssembly、任天堂 DS，以及经 `zbapi` 的任意 C 宿主。
 
-**设计优先。** 下面这台控制台是*用 HTML 画的*——没有一行控件代码——由 Imprint 自己的软件光栅化器渲进同一个缓冲：
+**设计优先。** 一块屏幕是*用 HTML 设计出来的*——id、标签、样式，零控件代码——并在构建期物化为控件树。下面的 Hero 就是一个 HTML 文件，由 Imprint 自己的光栅化器渲进像素缓冲：
 
 <p>
   <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console：电子管仪表盘（电子管、VU 表组、功率表、诊断段落），用 HTML 设计、由 Imprint 渲染">
@@ -26,34 +26,42 @@ Imprint 是一个确定性、可嵌入的 C++17 UI 运行时：一个像素缓�
 
 ![showcase_html 在 linux、nds、wasm 上](assets/showcase/montage.png)
 
-**[在浏览器里直接试](https://tyouhyou.github.io/imprint/)** —— 页面跑的是 widget showcase 的 WebAssembly 构建；下面这段是该应用的端到端录制（桌面、浏览器和 DS ROM 都由同一份源码构建）：
+```
+                同一份 UI 源码
+                      │
+      ┌───────────┬───┴───────┬───────────┐
+      ↓           ↓           ↓           ↓
+   Windows      Linux       macOS       终端
+      │        (X11/FB)               (SIXEL)
+      └───────────┼───────────┘
+                  ↓
+           WebAssembly  ←  浏览器直接试
+                  ↓
+             任天堂 DS
+                  ↓
+        你的嵌入式板子（C-ABI）
+```
 
-<img src="assets/showcase/showcase.gif" width="480" alt="逐帧录制的 showcase：暗色启动、图表逐步生长、START 填充进度条、REPLAY 重放图表、工厂控制台仪表盘（仪表、实时趋势、设定点旋钮、SELF-CHECK 打出 PIXELS MATCH）、浅色全控件页与阴影卡资产、回到暗色收尾">
+终端是一等目标：在任何支持 sixel 的终端（WezTerm、foot、iTerm2）里，同一棵控件树渲染成 SIXEL 图形，输入走 SGR 鼠标 + 键盘——完全不需要窗口系统。
+
+showcase demo 的实测足迹（Release 构建）：
+
+| 目标 | 交付足迹 |
+|---|---|
+| WebAssembly | 583 KB 单 `.js` 文件——wasm 与 Inter TTF 一并内嵌，`file://` 直开 |
+| 任天堂 DS | 256×192 16bpp 帧缓冲（96 KB VRAM）；纯整数几何与非原子引用计数选项，适配没有 libatomic 的工具链 |
 
 不需要 GPU。不需要操作系统 GUI 工具包。不需要平台专属 UI 代码。
 
-```
-              同一份 UI 源码
-                    │
-        ┌───────────┼───────────┐
-        ↓           ↓           ↓
-     Windows      Linux       macOS
-        │        (X11/FB)       │
-        └───────────┼───────────┘
-                    ↓
-             WebAssembly  ←  浏览器直接试
-                    ↓
-               任天堂 DS
-                    ↓
-          你的嵌入式板子（C-ABI）
-```
+## Showcase 实机演示
 
-上例 `showcase` 应用的实测体积（Release 构建）：
+**SIGNAL-ONE** 是一台真正能用的任务控制台——上面的足迹就来自它——屏幕上的一切都由 Imprint 自己的光栅化器绘制。下面是它的端到端实录：录制器经公开 API 以固定输入脚本驱动应用，所以 GIF 在所有平台上字节级一致。
 
-| 目标 | UI 代码+数据 | RAM（静态） | 帧缓冲 | 交付体积 |
-|---|---|---|---|---|
-| 任天堂 DS | 543 KB text + 11 KB data | 7.7 KB BSS | 96 KB（256×192×2 B） | 646 KB `.nds` |
-| WebAssembly | — | — | 256×192×4 B | 250 KB 单 `.js` 文件，`file://` 直开 |
+<p>
+  <img src="assets/showcase/showcase.gif" width="480" alt="端到端实录的 SIGNAL-ONE：启动进入实时遥测（趋势线推进）、横拖 GAIN 旋钮带动 dB 读数、负载仪表与温度表、MODE 循环三种强调主题（青、琥珀、绿）、模块开关翻转、ABOUT 打开模态遮罩并由 CLOSE 关闭、RESET 恢复启动状态">
+</p>
+
+**[在浏览器里直接试](https://tyouhyou.github.io/imprint/)** —— 同一台控制台编译成 WebAssembly，经与桌面 shell 相同的 C-ABI 呈现在 `<canvas>` 上。拖 GAIN 旋钮、切 MODE 主题、开 ABOUT 遮罩。无需服务器、无需安装：wasm 直接内嵌在页面里。
 
 ## 特性
 
@@ -130,12 +138,14 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 ```
 
 两种格式——`.ui` 与 HTML——喂进同一棵树、同一个像素缓冲、每个目标。
+开篇的 SIGNAL-ONE 正是这条路径：85 行 HTML 设计文件 + 266 行 C++ 行为代码。
 
-### 以库的方式使用——你的工程、你的 `main`
+## 以库的方式使用——你的工程、你的 main
 
-以上示例组装的是仓库内 demo（`apps/` story + 顶层可执行文件）。你的应用
-不必住进这棵树：把 Imprint 作为子工程加入，从你自己的 `main` 经
-`zb::shell::run` 驱动——与平台 shell 跑的是同一个宿主循环：
+Imprint 有三种消费方式：仓库内的 demo story（上文）、由你自己的 `main`
+驱动的**库子工程**（本节）、以及任意语言里的纯 **C-ABI 宿主**（下文）。
+你的应用不必住进这棵树：把 Imprint 作为子工程加入，经 `zb::shell::run`
+驱动——与平台 shell 跑的是同一个宿主循环：
 
 ```cpp
 // 你的 main.cpp —— MyWindow : zb::app::CanvasWindow，或任意 zb::app::IApp
@@ -163,10 +173,12 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 `test/external_smoke/`，已接入测试电池）。shell 循环契约见
 `docs/code-contract.md` §11。
 
-### 在 CI 里做确定性测试
+## 在 CI 里做确定性测试
 
-同一输入序列永远产生相同的帧字节——所以 UI 逻辑可以逐像素断言，全程
-无显示器。`zb::snap` 辅助库（链 `imprint::snapshot`）就是完整工作流：
+在固定的构建与缓冲尺寸下，同一输入序列永远产生相同的帧缓冲字节——所以
+UI 逻辑可以逐像素断言，全程无显示器。缓冲尺寸由 `create_window(w, h)`
+一次性声明——百分比布局相对它求解；尺寸不同是不同的表面，不是不同的
+结果。`zb::snap` 辅助库（链 `imprint::snapshot`）就是完整工作流：
 
 ```cpp
 #include "snapshot.hpp"
@@ -183,8 +195,8 @@ if (r.status == zb::snap::check_result::status::missing)
 把 `.zbsnap` 基线提交进仓库；CI 在任何像素漂移上失败，失配产物告诉
 你改了什么。基线按构建配置生效（code-contract §12.2）；同一像素档内
 hash 在 Windows / macOS / Linux 上字节级一致。仓库内参照：
-`test/test_snapshot.cpp`（工作流）和 showcase 的 SELF-CHECK——它用的
-就是同一个辅助库。
+`test/test_snapshot.cpp`（工作流）和 showcase 录制器——它骑的正是
+同一个确定性。
 
 一行代码都没有也想出图？直接把设计文件渲染成像素——本 README 顶部的
 Hero 就是这一行的产物（它同时打印帧 hash）：
@@ -203,7 +215,7 @@ CI recipe——无浏览器、无显示器（我们的 Tier-1 job 跑的就是�
     cmp menu1.png menu2.png   # 两次运行，帧字节级一致
 ```
 
-### 脚本语言的 GUI——设计文件 + 回调
+## 脚本语言的 GUI——设计文件 + 回调
 
 声明式路径让用户侧完全不需要 C++：`zb_app_create_from_ui` 从设计文件
 （`.ui` 语法，或 `is_html=1` 走 HTML 子集——与设计器相同的两个前端）
@@ -240,8 +252,8 @@ lib.zb_set_event_callback(app, b"inc", action_cb, None)
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
 | Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |
 | 终端（SIXEL） | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | demo 目标：同一个 UI 跑在 sixel 终端里（WezTerm/foot/iTerm2），SGR 鼠标 + 键盘输入；`IM_TERM_SIZE=WxH` 调整尺寸 |
-| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 showcase ROM（还需传入宿主构建的 `ui_embed` 与 `asset_gen`：`-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=`），或 `-DSTORY=showcase_html` 构建 HTML showcase（同上，另需宿主构建的 `html_embed`：`-DHTML_EMBED_EXECUTABLE=`） |
-| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | 附带 node 冒烟测试 |
+| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 SIGNAL-ONE ROM（还需传入宿主构建的 `html_embed` 与 `bytes_embed`：`-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`），或 `-DSTORY=showcase_html` 构建 HTML showcase（同上，另需宿主构建的 `html_embed`：`-DHTML_EMBED_EXECUTABLE=`） |
+| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` 产出 SIGNAL-ONE 页面为单个自包含 `.js`（wasm 内嵌）；附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
 测试：`test/test_imui`——纯断言，无测试框架；桌面用 `ctest -R test_imui`（或直接运行二进制），NDS 跳过。
@@ -271,13 +283,14 @@ letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/P
 - [`docs/backlog.md`](docs/backlog.md)——活跃 Backlog：架构项、产品特性批次（L/I/F）、条件触发项
 - [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约：错误路径、UTF-8/文本、glyph provider、树变更、布局失效、分配预算、呈现接缝转换器
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` 设计文件格式：语法、打包管线、物化语义
+- [`docs/html-path.md`](docs/html-path.md)——HTML 设计文件路径：元素/属性/CSS 白名单
 - [`binding/include/zbapi.h`](binding/include/zbapi.h)——C-ABI 宿主接口；宿主规则见 ARCHITECTURE §4.8
 
 ## 示例
 
 **Hello**（`-DSTORY=hello`）——入门应用：一个标签加一个点击计数的按钮；复制它即可开始写自己的应用（见 [`docs/getting-started.md`](docs/getting-started.md)）。
 
-**showcase**（`-DSTORY=showcase`）——多目标控件陈列馆：暗色启动，开场是一幅用框架自身光栅器绘制的动画图表（圆角卡片上的抗锯齿曲线 + 渐变面积，由 app 侧 tween 逐步揭示）；设备状态控制面板（进度条、START/STOP、深/浅主题切换）与全控件页面带 alpha 资产合成（9-slice 阴影卡、accent 染色球；资产由 `tools/asset_gen` 构建期生成），以及工厂控制台仪表盘页（仪表、实时趋势图、设定点旋钮+滑块对、泵/冷却 toggle），带 SELF-CHECK 按钮——用真实拖拽驱动旋钮，同一状态两次渲染的帧缓冲逐字节哈希一致时打出 PIXELS MATCH（确定性运行时的证明）。`assets/showcase/` 中的画面来自这些构建——录制器完全确定，Windows/macOS/Linux 上产出字节级一致的 GIF；WASM 变体可在线游玩（[tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/)，本地用 `demo/wasm/build.sh showcase` 构建），同一份源码也构建 NDS ROM。
+**showcase**（`-DSTORY=showcase`）——SIGNAL-ONE，即上文实机演示的那台控制台：85 行 HTML 设计文件（`apps/showcase/signal.html`）在构建期物化为控件树，行为只有 266 行 C++。实时遥测每帧前进一个确定步（趋势线是帧计数器的纯函数）；GAIN 旋钮驱动 dB 读数、负载仪表与温度表；MODE 在三种强调主题间循环（青/琥珀/绿）；ABOUT 打开声明式模态遮罩；RESET 恢复启动状态。文本走运行时 TTF 路径（Inter，由 `bytes_embed` 打包）——配置 `-DUSE_TTF_RUNTIME=ON` 以获得设计所见的比例字体观感；5x7 位图兜底让非 TTF 构建保持全绿。「Showcase 实机演示」里的 GIF 出自确定性录制器 `showcase_gif`；浏览器 demo 与 DS 交叉构建（见构建）跑的是同一份源码。
 
 **井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件——可传 `.ui` 或 HTML 路径。
 
