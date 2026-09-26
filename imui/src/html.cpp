@@ -4978,7 +4978,18 @@ namespace zb::ui
                 // pop to the matching frame; unbalanced intermediates
                 // are finalized along the way (tolerant). A popped svg
                 // group marker also pops its presentation map, keeping
-                // the stack in sync with the frames.
+                // the stack in sync with the frames. A closing tag with
+                // no open frame match is IGNORED -- it must not unwind
+                // unrelated containers (a typo'd </span> keeps the div).
+                std::size_t depth = frames.size();
+                while (depth > 1 && frames[depth - 1].tag != name)
+                {
+                    --depth;
+                }
+                if (depth == 1)
+                {
+                    return;  // no open frame matches
+                }
                 const auto pop_one = [this] {
                     if (frames.back().mode == k_svg_group &&
                         !svg_stack.empty())
@@ -4988,15 +4999,11 @@ namespace zb::ui
                     finalize(frames.back());
                     frames.pop_back();
                 };
-                while (frames.size() > 1 && frames.back().tag != name)
+                while (frames.size() > depth)
                 {
                     pop_one();
                 }
-                if (frames.size() > 1)
-                {
-                    pop_one();
-                }
-                // a closing tag without an open frame is ignored
+                pop_one();  // the matching frame itself
             }
 
             void handle_open(const Token &t)

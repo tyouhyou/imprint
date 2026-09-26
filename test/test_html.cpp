@@ -1051,9 +1051,10 @@ int test_html()
         EXPECT(find_prop(plain.children[0], "font_size") < 0);
     }
 
-    // E: lexical doc-claims -- unclosed frames finalize at EOF, a
-    // general stray close pops to the match, single-quoted entities
-    // decode, a lone '<' consumes through the next '>'
+    // E: lexical doc-claims -- unclosed frames finalize at EOF, a stray
+    // close with no open-frame match is ignored (it must not unwind
+    // unrelated containers), single-quoted entities decode, a lone '<'
+    // consumes through the next '>'
     {
         ui_node r = parse_html("<div><label>x", nullptr);
         EXPECT(r.type == "column");
@@ -1061,11 +1062,12 @@ int test_html()
         EXPECT(test::vget<std::string>(
                    node_prop_v(r.children[0], "text")) == "x");
 
+        // </span> matches nothing: ignored, the div keeps both children
         ui_node r2 = parse_html(
             "<div><label>a</label></span><button>b</button></div>\n", nullptr);
-        EXPECT(r2.type == "root");
+        EXPECT(r2.type == "column");
         EXPECT(r2.children.size() == 2);
-        EXPECT(r2.children[0].type == "column");
+        EXPECT(r2.children[0].type == "label");
         EXPECT(r2.children[1].type == "button");
 
         ui_node r3 = parse_html("<label id='a&amp;b'>x</label>\n", nullptr);
