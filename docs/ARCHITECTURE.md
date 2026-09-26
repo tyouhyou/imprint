@@ -107,7 +107,7 @@ Consequences:
 - Shared shell code never grows per-target branches; a target's facts
   live in that target's own shell main and toolchain file.
 
-## 4. Architecture contract (as implemented, 2026-08-23)
+## 4. Architecture contract (as implemented)
 
 This section states the contracts the current implementation actually
 satisfies. Changing any of these is an architecture change.
