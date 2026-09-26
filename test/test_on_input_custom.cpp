@@ -241,5 +241,47 @@ int test_on_input_custom()
         EXPECT(t.probe->releases == 1);
     }
 
+    // a consuming CONTAINER owns its subtree: a move onto its own child
+    // is still on target -- the deepest pick returns the child, but the
+    // press cancels only when the pointer left the TARGET (contract 3.1)
+    {
+        struct ConsumingPanel : public Panel
+        {
+            int presses = 0;
+            int cancels = 0;
+            void on_cancel() override { ++cancels; }
+            bool on_input(const zb::input::input_event &ev) override
+            {
+                if (ev.type == zb::input::input_type::mouse_left_down)
+                {
+                    ++presses;
+                    return true;  // claimed
+                }
+                return false;
+            }
+        };
+        Panel root;
+        root.set_size(100, 100);
+        auto p = std::make_unique<ConsumingPanel>();
+        p->set_size(80, 80);
+        p->set_position(10, 10);
+        auto *panel = p.get();
+        auto b = std::make_unique<Button>();
+        b->set_size(20, 20);
+        b->set_position(40, 40);  // panel-local -> global (50,50)
+        p->add_child(std::move(b));
+        root.add_child(std::move(p));
+        InputDispatcher d;
+
+        EXPECT(d.dispatch(root, press_at(20, 20)));  // panel, not the button
+        EXPECT(panel->presses == 1);
+        // beyond slop over the panel's own child: still on target
+        EXPECT(!d.dispatch(root, move_to(55, 55)));
+        EXPECT(panel->cancels == 0);
+        // beyond slop off the panel entirely: the press cancels
+        EXPECT(d.dispatch(root, move_to(97, 97)));
+        EXPECT(panel->cancels == 1);
+    }
+
     return test::report("on_input_custom");
 }

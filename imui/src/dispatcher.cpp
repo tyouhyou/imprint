@@ -341,13 +341,19 @@ namespace zb::ui
                 }
                 // the pointer left the pressed widget: cancel the press,
                 // but tolerate a few pixels of drift (touch jitter) that
-                // must not eat a click
+                // must not eat a click. A move over the pressed widget's
+                // own subtree is still ON target: the deepest pick returns
+                // the child, but a container that consumed the press owns
+                // its children's area (contract: cancel when the pointer
+                // left the target, not when it entered a descendant)
                 const int dx = ev.x - press_x;
                 const int dy = ev.y - press_y;
                 const bool beyond_slop =
                     dx * dx + dy * dy > press_slop * press_slop;
-                if (pick_target(root, ev.x, ev.y) != pressed_target &&
-                    beyond_slop)
+                Widget *picked = pick_target(root, ev.x, ev.y);
+                const bool on_target = picked == pressed_target ||
+                                       picked->is_descendant_of(pressed_target);
+                if (!on_target && beyond_slop)
                 {
                     // touch panels occasionally report one glitch
                     // sample far from the real position; a single
