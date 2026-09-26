@@ -1489,3 +1489,80 @@ int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
 - Single thread, always: `run` owns the thread it is called on. The
   §4.11 automation contract is unchanged — a test drives the app
   headlessly instead of calling `run`; `run` is for interactive hosts.
+
+---
+
+## 12. Snapshot helper (`zb::snap`)
+
+The deterministic-test story (Batch G P2): the capability the showcase
+SELF-CHECK demonstrates, packaged as a linkable helper beside
+`imapp_canvas` — target `imapp_snapshot`, alias `imprint::snapshot`,
+header `imapp/include/snapshot.hpp` (header-only). Consumers drive
+their own surface headlessly — the §4.11 pattern — and persist or
+compare frame hashes; no test-framework dependency enters the tree.
+
+### 12.1 API
+
+```cpp
+namespace zb::snap {
+
+// FNV-1a (64-bit) over the per-pixel 8-bit-normalized r/g/b values
+// (the A-19 accessors). Alpha is excluded: the 4th byte of a 32bpp
+// pixel is non-contract (§4.8 of ARCHITECTURE.md). Zero when the
+// window has no buffer yet.
+uint64_t framebuffer_hash(zb::app::IWindow &win);
+
+// Writes <dir>/<name>.zbsnap and returns the hash. Format: first line
+// "imprint-snapshot v1", second line the hash in 16-hex. The caller
+// owns the directory; the helper never creates one. Init path:
+// unwritable path throws zb::ui::error with the path.
+uint64_t record(zb::app::IWindow &win, const std::string &name,
+                const std::string &dir);
+
+struct check_result {
+    enum class status { ok, mismatch, missing } status = status::missing;
+    uint64_t expected = 0;
+    uint64_t actual = 0;
+};
+
+// Compares the current frame hash against the recorded baseline.
+// No baseline file → status::missing; corrupt baseline → throws
+// (init path, carries the path); hash difference → status::mismatch
+// and the artifact <dir>/<name>.actual.gif is written beside the
+// baseline for human diffing; otherwise status::ok. expected/actual
+// are always filled when the baseline could be read.
+check_result check(zb::app::IWindow &win, const std::string &name,
+                   const std::string &dir);
+
+// Single-frame dumps. save_gif rides the always-compiled GIF writer;
+// an unwritable path throws (init path). save_png exists only in
+// USE_PNG builds and returns the codec error code (0 = OK, §1.3).
+void save_gif(zb::app::IWindow &win, const std::string &path);
+int  save_png(zb::app::IWindow &win, const std::string &path);
+}
+```
+
+### 12.2 Determinism scope
+
+A baseline is valid **per build configuration and pixel class**:
+`COLOR_DEPTH` (32bpp and 16bpp hash differently — 5-bit channels
+expand deterministically but differ from 8-bit), the font options
+(`FONT_SUBSET`, `TTF_FONT`, `USE_FONT_SIZE`, `USE_TTF_RUNTIME`), and
+any widget-set change legitimately shift the hash. Within one pixel
+class the hash is layout- and endian-independent (channel accessors,
+not memory bytes), so 32bpp baselines compare equal across the desktop
+platforms the same way the recorder's GIFs are byte-identical. Hashes
+are opaque values; the version line in the file format lets the
+encoding evolve without silently re-baselining.
+
+### 12.3 Classification
+
+- `record`, `save_gif`, the mismatch-artifact write inside `check`,
+  and baseline parsing are init path: failures throw `zb::ui::error`
+  carrying the path (§1). `check` never throws for a *missing*
+  baseline — that is an expected outcome (status::missing), the
+  record-before-verify workflow.
+- `framebuffer_hash` is hot path: zero allocation, never throws.
+- The helper performs no driving: the caller feeds `input`/`paint` and
+  calls it at a frame boundary (after `paint`, before the next
+  `input`) — the §4.11 contract stays with the driver.
