@@ -250,6 +250,11 @@ namespace zb::ui
 
             Token next()
             {
+                if (has_pending_)
+                {
+                    has_pending_ = false;
+                    return std::move(pending_);
+                }
                 for (;;)
                 {
                     if (p_ >= end_)
@@ -270,6 +275,17 @@ namespace zb::ui
                     Token t;
                     if (read_tag(t))
                     {
+                        if (t.kind == Token::Kind::open && t.name == "style" &&
+                            !t.self_closing)
+                        {
+                            // raw-text element: the body never tokenizes
+                            // (a '<' inside CSS stays CSS, tags inside a
+                            // style block never build). The body text is
+                            // queued behind the open token; the </style>
+                            // close re-enters normal tokenizing.
+                            pending_ = read_style_body();
+                            has_pending_ = true;
+                        }
                         return t;
                     }
                     // a lone '<' or malformed token: consumed, move on
@@ -280,6 +296,8 @@ namespace zb::ui
             const char *p_;
             const char *end_;
             int line_ = 1;
+            Token pending_;
+            bool has_pending_ = false;
 
             void count_lines(const char *from, const char *to)
             {
@@ -302,6 +320,42 @@ namespace zb::ui
                 {
                     ++p_;
                 }
+                t.text.assign(start, p_);
+                count_lines(start, p_);
+                return t;
+            }
+
+            // <style> body as one raw text span: scanned case-insensitively
+            // to the matching '</style' (whitespace, '/', or '>' must follow,
+            // so </stylish> does not end the block); unterminated runs to EOF.
+            // No entity decoding and no quoting: CSS is consumed verbatim by
+            // the rule parser.
+            Token read_style_body()
+            {
+                Token t;
+                t.kind = Token::Kind::text;
+                t.line = line_;
+                const char *start = p_;
+                const char *z = p_;
+                for (;;)
+                {
+                    if (z + 7 > end_)
+                    {
+                        z = end_;  // unterminated: the body runs to EOF
+                        break;
+                    }
+                    if (z[0] == '<' && z[1] == '/' &&
+                        (z[2] | 0x20) == 's' && (z[3] | 0x20) == 't' &&
+                        (z[4] | 0x20) == 'y' && (z[5] | 0x20) == 'l' &&
+                        (z[6] | 0x20) == 'e' &&
+                        (z + 7 == end_ || z[7] == '>' || z[7] == '/' ||
+                         is_space(z[7])))
+                    {
+                        break;
+                    }
+                    ++z;
+                }
+                p_ = z;  // the close tag re-enters the normal tokenizer
                 t.text.assign(start, p_);
                 count_lines(start, p_);
                 return t;

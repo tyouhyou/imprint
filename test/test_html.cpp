@@ -662,6 +662,36 @@ int test_html()
                "#112233");
     }
 
+    // <style> is a raw-text element: its body never tokenizes, so tags
+    // inside a style block build nothing and warn nothing, and a '<'
+    // inside a CSS value stays CSS
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { warns.push_back(m); });
+        ui_node r = parse_html(
+            "<style><div>x</div> <table>y</table></style><label>ok</label>",
+            nullptr);
+        bool ok = false;
+        r = parse_html(
+            "<style>label { letter-spacing: 2px } "
+            "z { content: \"<div>\" }</style>"
+            "<label>hi</label>",
+            &ok);
+        zb::Logging::set_log_handle();
+        EXPECT(ok);
+        // the tags inside the style block built nothing: the label is the
+        // only widget
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        // the rule after the <div>-in-a-value still parsed
+        EXPECT(test::vget<long long>(node_prop_v(r.children[0], "letter_px")) ==
+               2);
+        // and nothing warned: the style body is CSS text, not markup
+        EXPECT(warns.empty());
+    }
+
     // P-1 paint: background shorthand (solid/linear/radial layers),
     // border, radius
     {
