@@ -1454,7 +1454,9 @@ int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
 - `run` performs exactly the shell sequence a platform `main` performed
   before the extraction: `create_window` (only when the app has no
   window yet; the constrained overload when `width`/`height` are
-  nonzero), platform window/surface creation sized from
+  nonzero — the FB shell substitutes its own panel size for the
+  default, screen geometry is shell-owned per ARCHITECTURE §3.1),
+  platform window/surface creation sized from
   `window()->width()/height()/title()`, event pump → `feed_input`
   (§4.1), `region_to_present` presentation, teardown.
 - `run_options` is creation-time only. The buffer never resizes after
