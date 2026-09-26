@@ -47,8 +47,8 @@ elseif(APPLE)
     set(build_lib "-framework Cocoa")
     set(IMPRINT_SHELL_OBJC_ARC ON PARENT_SCOPE)
 elseif(UNIX)
-    set(IM_SHELL_BACKEND "X11" CACHE STRING "Linux shell backend to build: X11 or FB")
-    set_property(CACHE IM_SHELL_BACKEND PROPERTY STRINGS X11 FB)
+    set(IM_SHELL_BACKEND "X11" CACHE STRING "Linux shell backend to build: X11, FB or SIXEL")
+    set_property(CACHE IM_SHELL_BACKEND PROPERTY STRINGS X11 FB SIXEL)
 
     if(${IM_SHELL_BACKEND} STREQUAL "X11")
         set(build_src main_x.cpp)
@@ -59,6 +59,12 @@ elseif(UNIX)
     elseif(${IM_SHELL_BACKEND} STREQUAL "FB")
         set(build_src main_fb.cpp)
         set(hostloop_src src/linux/run_fb.cpp src/linux/fb.cpp)
+        set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/linux)
+    elseif(${IM_SHELL_BACKEND} STREQUAL "SIXEL")
+        # P4 demo target: the presenter (sixel) and the input translator
+        # (term_input) are pure TUs unit-tested from the battery; this
+        # main is fd glue. Framework-mode only — no run() (§11.3).
+        set(build_src main_term.cpp)
         set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/linux)
     else()
         message(FATAL_ERROR "Unknown IM_SHELL_BACKEND: ${IM_SHELL_BACKEND}")
@@ -75,12 +81,16 @@ endforeach()
 
 # A-2 shell seams (input_source.cpp feeds the app; presenter.hpp /
 # presentation.hpp are header-only, presentation.cpp carries the shared
-# nearest-neighbor resample): one static lib shared by every desktop
+# nearest-neighbor resample; sixel.cpp / term_input.cpp are the P4
+# terminal target's pure presenter + InputSource, portable and
+# unit-tested from the battery): one static lib shared by every desktop
 # shell and the test battery. Embedded targets keep their minimal build.
 if (NOT NDS_PLATFORM)
     add_library(shell_common STATIC
         src/shell/input_source.cpp
         src/shell/presentation.cpp
+        src/linux/sixel.cpp
+        src/linux/term_input.cpp
     )
     target_include_directories(shell_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
     target_link_libraries(shell_common PUBLIC ${IMAPPLIB} ${IMINPUTLIB})
@@ -110,9 +120,9 @@ endif()
 
 # library-mode host loop (code-contract §11): the extracted platform
 # main bodies, callable as zb::shell::run(app, options) from a
-# user-owned main. Non-NDS only; the selection above sets hostloop_src
-# per backend, exactly like build_src for the thin mains.
-if (NOT NDS_PLATFORM)
+# user-owned main. Non-NDS and only where the backend has one (the
+# SIXEL demo target keeps its framework-mode main, §11.3).
+if (NOT NDS_PLATFORM AND hostloop_src)
     add_library(shell_hostloop STATIC ${hostloop_src})
     target_include_directories(shell_hostloop PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include)

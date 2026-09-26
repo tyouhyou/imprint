@@ -48,6 +48,8 @@ int test_pixel_convert();
 int test_pixel_traits();
 int test_shell_presenter();
 int test_snapshot();
+int test_sixel();
+int test_term_input();
 int test_theme();
 int test_showcase();
 int test_toggle_switch();
@@ -120,6 +122,8 @@ int main()
     total += test_pixel_traits();
     total += test_shell_presenter();
     total += test_snapshot();
+    total += test_sixel();
+    total += test_term_input();
     total += test_theme();
     total += test_showcase();
     total += test_toggle_switch();

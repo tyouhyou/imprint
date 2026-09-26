@@ -52,6 +52,8 @@ add_executable(
     test_pixel_traits.cpp
     test_shell_presenter.cpp
     test_snapshot.cpp
+    test_sixel.cpp
+    test_term_input.cpp
     test_theme.cpp
     test_showcase.cpp
     test_toggle_switch.cpp
@@ -76,6 +78,9 @@ target_link_libraries(
 )
 
 target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/include)
+
+# P4 terminal target: sixel/term_input ride shell_common (pure TUs, see
+# imshell/CMakeLists.txt); their suites below only need the headers
 
 # A-2 dummy-driven platform input mapping tests: the win32 translation
 # compiles only on Windows, the x11 translation only where the X11 shell
