@@ -165,6 +165,14 @@ if (IMPRINT_USE_TOOLS AND NOT NDS_PLATFORM)
     # build time — the ttf_subset precedent (build-time materialization
     # of a shipping asset), no runtime decode and no USE_PNG dependency
     add_executable(asset_gen tools/asset_gen.cpp)
+    # design-file renderer CLI (Batch G P2): .ui/.html in, PNG/GIF out,
+    # the frame hash on stdout. PNG rides its own vendored stb writer TU
+    # so the default zero-option build renders PNG (USE_PNG stays a
+    # library-codec option)
+    add_executable(imprint-render tools/imprint_render.cpp)
+    target_link_libraries(imprint-render PRIVATE imui imapp_snapshot)
+    target_include_directories(imprint-render PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/stb)
 endif()
 
 if (IMPRINT_WITH_TESTS)
