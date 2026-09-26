@@ -7,8 +7,11 @@
 # backend + <story>_app. imshell never names story code.
 
 if(WIN32)
-    set(build_src main.cpp win_input.cpp)
-    set(hostloop_src src/win/run_win.cpp)
+    # the host loop carries the whole backend implementation (run +
+    # the input translator): a library consumer links shell_backend and
+    # gets everything, the exe compiles only its thin main
+    set(build_src main.cpp)
+    set(hostloop_src src/win/run_win.cpp src/win/win_input.cpp)
     set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/win)
     set(IMPRINT_EXE_WIN32 ON PARENT_SCOPE)
 elseif(NDS_PLATFORM)
@@ -48,14 +51,14 @@ elseif(UNIX)
     set_property(CACHE IM_SHELL_BACKEND PROPERTY STRINGS X11 FB)
 
     if(${IM_SHELL_BACKEND} STREQUAL "X11")
-        set(build_src main_x.cpp x11_input.cpp)
-        set(hostloop_src src/linux/run_x11.cpp)
+        set(build_src main_x.cpp)
+        set(hostloop_src src/linux/run_x11.cpp src/linux/x11_input.cpp)
         set(build_inc /usr/include)
         set(build_lib X11)
         set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/linux)
     elseif(${IM_SHELL_BACKEND} STREQUAL "FB")
-        set(build_src fb.cpp main_fb.cpp)
-        set(hostloop_src src/linux/run_fb.cpp)
+        set(build_src main_fb.cpp)
+        set(hostloop_src src/linux/run_fb.cpp src/linux/fb.cpp)
         set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/linux)
     else()
         message(FATAL_ERROR "Unknown IM_SHELL_BACKEND: ${IM_SHELL_BACKEND}")
