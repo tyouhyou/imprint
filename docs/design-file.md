@@ -16,11 +16,9 @@ menu.ui ──► tools/ui_embed ──► C byte array (embedded_ui_file / find
         parse_ui_text(bytes) ──► ui_node ──► build(host, root) ──► widget tree
 ```
 
-Desktop preview without writing an app:
-
-```
-UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
-```
+Desktop preview without writing an app: the `ui_preview` story with
+`UI_PREVIEW_FILES="<paths>"` — exact commands live in README "Build"
+(the single home for build/run commands).
 
 `UI_PREVIEW_FILES` takes space-separated paths; left/right keys switch
 documents.
@@ -72,15 +70,28 @@ The tag and property set is defined by the factory/property tables in
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
 `text_input`, `svg`), with properties including
-`id`, `text`, `size`, `pos`, `valign` (`top`, `center`, `bottom`),
-`halign` (`left`, `center`, `right`), `named`, `checked`, `group`, `step`,
-`min`, `max`, `value`, `rows`, `spacing`, `padding`, `wrap`, `flex`,
+`id`, `text`, `items`, `width`, `height` (px, or `N%` — see below),
+`pos_x` / `pos_y` (pixel position), `valign` (`top`, `center`, `bottom`),
+`halign` (`left`, `center`, `right`), `checked`, `group`, `step`,
+`min`, `max`, `value`, `rows`, `spacing`, `padding`,
+`padding_t` / `padding_r` / `padding_b` / `padding_l` (per-side wins
+over the uniform share), `wrap`, `flex` (integer grow weight),
 `margin_t`, `margin_r`, `margin_b`, `margin_l`,
 `visible`, `background`, `color`, `font_size`,
 `text_wrap` (bool: word-wrap the label/paragraph block),
 `line_h` (int: explicit line pitch, 0 = provider default),
 `justify` (0–4: FlexPanel main-axis justify code),
-`elem_opacity` (0–1000: fixed-point paint alpha fold). A `width`/`height` value of the form
+`align` (0–3: FlexPanel cross-axis align code — start/center/end/stretch),
+`letter_px` (int: per-code-unit tracking px), `bold` (bool: double-strike),
+`shadow_color` + `shadow_dx` + `shadow_dy` (one solid text-shadow copy),
+`aspect_w` + `aspect_h` (H-5 aspect ratio pair),
+`position` (`relative` / `absolute`) with `abs_l` / `abs_t` / `abs_r` /
+`abs_b` / `translate_x` / `translate_y` offsets (P-3),
+`elem_opacity` (0–1000: fixed-point paint alpha fold). Unknown
+properties are silently tolerated (only unknown tags warn) — the
+fluent builder's `size()`/`pos()`/`named()` methods are **not** text
+keys (`size`/`pos` emit `width`/`height`/`pos_x`/`pos_y` props;
+`named` sets `id`). A `width`/`height` value of the form
 `N%` (1..100) declares
 that axis as a percentage of the FlexPanel parent's content box,
 resolved at layout time — it never becomes an explicit size, and outside
