@@ -261,16 +261,26 @@ fragments + a full-code re-read); the rulings below supersede/extend the
     Tier-1 runs the two-render byte-compare). A standalone
     drives-your-app CLI remains explicitly NOT the form; a WASM-app CLI
     variant is a later option.
-  - **P3. Declarative plugin protocol** — open: `zb_app_create_from_ui(ui_text)`
-    + per-id event callbacks (additive C ABI, `ZB_API_VERSION` stays 1,
-    contract-first). Unlocks script-language GUIs (declarative file +
-    host-language callbacks) and the plugin story. Not a re-run of the
-    rejected "AI wedge": this is a technical capability inside the
-    static-structure-in-file boundary ruling; the *marketing* wedge
-    remains the determinism story.
-  - **P4. Terminal graphics demo target** — open: sixel/Kitty presenter +
-    stdin InputSource (~200 lines of glue, A-2 doctrine) as a
-    propagation demo, not a mainline target.
+  - **P3. Declarative plugin protocol** — **landed 2026-09-26**:
+    `zb_app_create_from_ui` + `zb_set_event_callback` (per-id) +
+    `zb_widget_text` / `zb_widget_set_text` (additive C ABI,
+    `ZB_API_VERSION` stays 1; ARCHITECTURE §4.8/§4.10); `bind_actions`
+    in the builder (code-contract §4) keeps the tag knowledge
+    single-homed; the C smoke test and the Python demo
+    (`demo/python/ui_app.py`) drive it end to end. *P3.1
+    (condition-triggered): typed state read/write through the ABI
+    (checkbox checked, slider value) when a real host needs it — the
+    native per-widget events already carry the payloads for C++
+    consumers.* Not a re-run of the rejected "AI wedge": this is a
+    technical capability inside the static-structure-in-file boundary
+    ruling; the *marketing* wedge remains the determinism story.
+  - **P4. Terminal graphics demo target** — **landed 2026-09-26**: the
+    SIXEL backend (`IM_SHELL_BACKEND=SIXEL`) — sixel presenter +
+    `term_input` parser as pure unit-tested TUs in shell_common, an
+    fd-glue main (framework-mode only, §11.3), a Tier-2 compile job,
+    and a pty smoke (two deterministic full frames + RLE verified).
+    *Extension (unscheduled): the Kitty graphics protocol as a second
+    presenter for the same input source.*
 - Business stance reconfirmed: port engagements first; external
   consumability is itself the revenue enabler (before P1 an external
   project cannot even `add_subdirectory`).
