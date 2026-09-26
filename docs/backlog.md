@@ -14,14 +14,13 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **Batch H core / HTML path** — whitelist landed (`docs/html-path.md`);
-   remaining open sub-items below (H-2 border wrapper, H-4 ScrollPanel,
-   H-10 pseudo-elements, font follow-ups).
-2. **Quick wins** (<1 day each, opportunistic): **L-1** widget-level
-   margin/padding API (general model; Button measure padding already fixed
-   in `65087b8`), **S-2 SKETCH** (recorded, unscheduled), **I-2b per-shell
-   adoption** (device_overlay math + tests landed; shells paint natively —
-   per-shell adoption needs maintainer eyes).
+1. **Batch H core / HTML path** — landed (whitelist + parser + preview
+   consumer + three-platform showcase); remaining open sub-items below
+   (H-4 ScrollPanel, H-6 SVG remainder, H-9 dial-visibility tail).
+2. **Quick wins** (<1 day each, opportunistic): **S-2 SKETCH** (recorded,
+   unscheduled), **I-2b per-shell adoption** (device_overlay math + tests
+   landed; shells paint natively — per-shell adoption needs maintainer
+   eyes).
 3. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21/A-23, D-*,
    Batch G. Condition-triggered items stay trigger-gated.
 
@@ -40,12 +39,7 @@ frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
 
 ### Batch L — Layout & Text Enhancements (Unscheduled)
 
-- **L-1. Widget-level margin/padding API** (quick win later):
-  - Context: Button `measure()` vs draw padding discrepancy fixed in `65087b8`. A general margin/padding model across widgets and containers remains unscheduled.
-- **L-2. `.ui` alignment attributes (`halign` / `valign`)** — **externally claimed** (GitHub issue #2 assigned to @tecnolgd, 2026-09-05; do not implement here — review their PR against `docs/design-file.md` grammar when it lands):
-  - Context: Declarative `.ui` alignment syntax. Currently apps use explicit `set_v_align` / `set_h_align` in application code (`f74ab48`). Good-first-issue #2 opened.
-  - Review default framework alignment strategy (e.g. text centering vs top-left default).
-- **L-3. `list_box rows=` declaration width trap** (execution order step 5):
+- **L-3. `list_box rows=` declaration width trap**:
   - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
 
 ### Batch H — HTML/CSS Rendering Path (Medium-high priority)
@@ -86,101 +80,59 @@ parser scope:
   `flex-basis`, `flex-shrink`, and `flex` min/max constraints map to
   FlexPanel enhancements — see H-7 (partially landed).
 
-**Status (2026-09-12):** core work in progress, contract landed first:
-`docs/html-path.md` (the whitelist single source) added; shared
-`background`/`color` properties added to `docs/design-file.md` /
-`docs/code-contract.md` §4; `parse_html` recorded in ARCHITECTURE
-§2/§4.10. Work steps: (1) contract docs — (2) property tables — (3)
-parser + tests — (4) preview consumer + NDS cross-compile.
+**Status:** the batch's core is landed end to end — whitelist contract
+(`docs/html-path.md`, the single source), property tables, `parse_html`
+parser + battery, preview consumer, and the `showcase_html` story on
+desktop / NDS / wasm. Completed sub-items are removed from this file
+(H-1 wrapping, H-2 border, H-8 page box, H-10 pseudo-elements, P-1
+paint, P-3 positioning; L-2 alignment attributes via external PR #4).
+What remains is listed below.
 
 **Open / condition-triggered sub-items:**
-- H-1. Text wrapping: certifies paragraph reflow. **Prerequisite for any real
-  `<p>` page.** The `GlyphProvider` seam currently measures/draws a whole run
-  at once (`measure`/`write`); a wrapping engine needs per-word/per-char
-  measurement + greedy line breaking (~250 lines). This is the single
-  architecture-relevant gap in the initial core.
-- H-2. `BorderWidget` wrapper (~100 lines) + `border` shorthand.
 - H-4. `ScrollPanel` + `overflow` (moderate — needs a scroll container).
-- H-6. `SvgWidget` — SVG as a widget subclass (recorded 2026-09-10,
-  **unscheduled — note only, no priority**):
-  - `SvgWidget : Widget` (imui, beside Button/Label). Parses an SVG text
-    into a compact `DrawCommand[]` byte array once at construction
-    (`.ui`-embed / `asset_gen` precedent); `draw_at()` executes the
-    sequence on the existing Graphics primitives at runtime (zero parse
-    cost). Default: display-only (rect `hit()`, no `on_input()`), like
-    Label. Subclasses may override `hit()`/`on_input()`/`set_value()`
-    for interactive or value-driven SVG.
-  - Alignment with Batch H: HTML parser's tag-mapping table gains
-    `<svg>` → `SvgWidget` — same mechanism as `<gauge>` → GaugeDial.
-  - Phased internally: (a) static geometry subset — `rect`, `circle`,
-    `ellipse`, `line`, `polyline`, `polygon` + `fill`/`stroke`/
-    `stroke-width` + `viewBox` (~400 lines, maps to existing Graphics
-    primitives). **Landed first cut (2026-09-12, demo-driven, narrower
-    than planned): `SvgCanvas` with `viewBox` + `line`/`text` + `g`
-    folding only, 1px strokes, stretch mapping; HTML tags `svg` and
-    `vectordial` (alias, shared implementation). Remainder of (a)
-    (`rect`/`circle`/`ellipse`/`polyline`/`polygon`/`fill`/widths) and
-    all of (b) stay unscheduled;** (b) `path` (Bezier M/L/C/Q/A) + `transform`
-    translate/rotate/scale (~600 lines, parse-time flattening already
-    covers path for the HTML path — see `docs/html-path.md`; widget
-    DrawCommand form may still want its own flattener); (c) out-of-scope:
-    filters, gradient defs, clipPath, symbol/use, animation.
+- H-6. `SvgCanvas` remainder (recorded 2026-09-10, **unscheduled — note
+  only, no priority**). Landed so far: first cut 2026-09-12 (`viewBox` +
+  `line`/`text` + `g` folding, 1px strokes, stretch mapping; HTML tags
+  `svg`/`vectordial`) and the path `d` stroke grammar for the HTML path
+  (parse-time flattening, code-contract §3.2). Remaining, all
+  widget-class work:
+  - static geometry subset — `rect`, `circle`, `ellipse`, `polyline`,
+    `polygon` + `fill`/`stroke`/`stroke-width` (~400 lines, maps to
+    existing Graphics primitives);
+  - widget `DrawCommand[]` form of `path` (its own flattener) +
+    `transform` translate/rotate/scale (~600 lines);
+  - out of scope: filters, gradient defs, clipPath, symbol/use,
+    animation.
   - Embedded caution: Bezier rasterization at runtime may cost more than
     pre-rendered pixel assets (asset_gen precedent) — SVG suits reusable
     UI-drawing widgets (icons, gauge faces, decoration), not
     pixel-dense assets.
-- H-7. Layout alignment & flex fill (FlexPanel enhancements, not parser
-  work): `justify-content` (main-axis end/center/space-between/
-  space-around — around added for the knob-row; H-7a),
-  `align-items`/`align-self` (cross-axis alignment), `flex-basis`/`flex-shrink`,
-  and `flex` min/max constraints. Each is an additive FlexPanel parameter with a default
-  preserving current behavior (left-aligned main axis, unwrapped
-  cross-axis), so existing tests and `.ui` files stay green when a
-  parameter lands. Sized individually; gated by a real page that needs
-  them.
-  H-7a landed 2026-09-13: `justify-content` start/center/end/
-  space-between/space-around.
-  H-7b landed 2026-09-13: `align-items` (container default, start keeps
-  history) + `align-self` (auto inherits).
-  H-7 A+B landed 2026-09-14: flex `body` root + HTML container default
-  `stretch`. `min-height:100vh` itself stays unsupported (no viewport units).
+- H-7. Layout alignment & flex fill — H-7a/b/c and the flex-body root
+  landed 2026-09-13/14 (contracts in code-contract §3.1). Sole
+  remainder: `flex` min/max constraints → **D-1**.
 - H-9. Convergent layout passes — **landed 2026-09-13**: `layout()`
   re-runs its pass while a child size/position/measure changed (bound 3;
   contract §7). Dial *visibility* still needs paint + positioning follow-ups.
-- P-1. Paint dressing — **landed 2026-09-13**: `background` shorthand
-  (solid/`rgb()/rgba()` + linear 2-end + radial circle), `border: Npx solid`,
-  `border-radius: Npx|50%`, Widget `paint_dress`. Remainder → P-2.
 - P-2. Paint remainder (gated by a real page): follow-ups that still
   matter: document-width roots are not centered by UiPreview (amp runs
   full-bleed); body gradient backgrounds have no `html_page` carrier
   (H-8 holds colors only); GIF review captures band smooth ramps (216-cube) —
-  review from the raw framebuffer. Outer box-shadow paints under the box
-  but stays invisible on opaque boxes (no overdraw — bulb/LED glow + amp
-  drop recorded as follow-up).
-- P-3. Absolute positioning — **landed 2026-09-13**: `position:
-  relative/absolute` + `top/left/right/bottom` + `transform: translate()`.
-- H-8. Page-level box (landed 2026-09-12): the `<body>` style
-  feeds an `html_page`; `parse_html(text, ok, page)` fills it.
-- H-10. Pseudo-element correspondence (raised 2026-09-16): `::before` /
-  `::after` (model500 `.knob` pointer tick is the driving case — currently
-  inert per the `docs/html-path.md` tolerance table). Narrow subset only:
-  static box/line content on the originating element, no dynamic behavior;
-  contract change grows the whitelist when it lands.
+  review from the raw framebuffer. (Outer box-shadow on opaque boxes was
+  fixed with `clip_surface_safe` — removed from this list 2026-09-26.)
 
-**Cost estimate (discussion):** core version ≈ 1500–2000 lines C++ total, of
-which the text-wrapping engine (H-1) is the prerequisite piece; a minimal
-flex-only core without H-1 is ~800 lines and covers display-only pages. Main
-risk is not code volume but **semantic drift** — users hit "why isn't this CSS
-attribute supported", so the whitelist in `docs/html-path.md` is the released
-boundary (off-table constructs warn and render nothing, never a wrong
-structure).
+**Cost estimate (discussion, 2026-09-10):** the core version ≈ 1500–2000
+lines C++ estimate predates the landings and is historical; the shipped
+parser is the reference. Main risk remains **semantic drift** — users hit
+"why isn't this CSS attribute supported", so the whitelist in
+`docs/html-path.md` is the released boundary (off-table constructs warn
+and render nothing, never a wrong structure).
 
 **Placement note (decided 2026-09-12):** no `IMPRINT_WITH_*` switch needed —
 per the A-23 precedent the `html` translation unit stays in imui (STATIC);
 unreferenced on targets that don't use it, dropped by the static linker at
 image build. Consumer-side, not a new C-ABI surface at this stage.
 
-### Batch S — Render Modes: Sketch & Wireframe (S-2 still unscheduled; S-1 landed as execution order step 5)
+### Batch S — Render Modes: Sketch & Wireframe (S-2 still unscheduled; S-1 landed)
 
 Alternative rendering modes for the same widget tree. Not new widget
 classes — these are `Graphics`-layer `RenderMode` switches (~150 lines
@@ -189,7 +141,7 @@ rendered in WIREFRAME mode shows only structural bones; in SKETCH mode
 it looks hand-drawn. The widget tree, dispatcher, damage tracking, and
 Widget hit-testing are all unchanged.
 
-- **S-1. WIREFRAME mode** (landed, execution order step 5):跳过填充，只画 1px 边框和文字骨架；
+- **S-1. WIREFRAME mode** (landed):跳过填充，只画 1px 边框和文字骨架；
   grid/spacing 可选显示。Render-mode switch on `Graphics`
   (`set_render_mode`, default FULL); shape fills degrade to 1px
   outlines, `fill()` stays the immune clear primitive, `ListBox` row
@@ -220,7 +172,7 @@ Orthogonal to Widget hit-test/shape (A-24) and to theme (colors/tokens)
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
   - Watch `.ui` file changes on disk and reload in-place without restarting the previewer.
-- **I-2b. Device overlay** (landed, execution order step 5): bezel/chrome around the presented buffer
+- **I-2b. Device overlay** (landed): bezel/chrome around the presented buffer
   matching target screen constraints (dual NDS 256x192 screens,
   framebuffer 320x240) — pure layout math in
   `shell/device_overlay.hpp` (chrome bars, hinge bar via the region
@@ -295,7 +247,7 @@ Conclusions recorded so they are not re-derived:
   count for embedded adopters; the first external committer matters
   more than stars.
 
-## 2. Architecture Backlog
+## 1. Architecture Backlog
 
 ### A-4. Smaller Items
 
