@@ -1,5 +1,7 @@
 #include "showcase.hpp"
 
+#include "snapshot.hpp"
+
 #include "button.hpp"
 #include "flex_panel.hpp"
 #include "gauge_dial.hpp"
@@ -57,20 +59,6 @@ namespace zb::app::showcase
             return ev;
         }
 
-// FNV-1a over the framebuffer bytes: two renders of the same widget
-// state must hash identically (the PIXELS MATCH self-check). Hashed as
-// raw bytes -- the per-pixel Color is 4 bytes at 32bpp and 2 at 16bpp,
-// so a word-wise read would stride past the buffer on embedded builds
-uint32_t fnv1a(const uint8_t *data, const std::size_t n)
-        {
-            uint32_t h = 2166136261u;
-            for (std::size_t i = 0; i < n; ++i)
-            {
-                h ^= data[i];
-                h *= 16777619u;
-            }
-            return h;
-        }
     }
 
     void Showcase::create_window(uint32_t max_client_width,
@@ -591,7 +579,7 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
 
     void Showcase::bench_check_hash(const int half)
     {
-        const uint32_t h = buffer_hash();
+        const uint64_t h = buffer_hash();
         if (bench_hash_[half] == 0)
         {
             bench_hash_[half] = h;
@@ -602,16 +590,12 @@ uint32_t fnv1a(const uint8_t *data, const std::size_t n)
         }
     }
 
-    uint32_t Showcase::buffer_hash() const
+    uint64_t Showcase::buffer_hash() const
     {
-        const auto *data = static_cast<const uint8_t *>(window_->data());
-        if (data == nullptr)
-        {
-            return 0;
-        }
-        const std::size_t pixels = static_cast<std::size_t>(window_->width()) *
-                                   static_cast<std::size_t>(window_->height());
-        return fnv1a(data, pixels * sizeof(zb::ui::core::Color));
+        // the snapshot helper's channel-value hash (code-contract 12):
+        // the PIXELS MATCH self-check rides the same code a CI test
+        // would link (imprint::snapshot)
+        return zb::snap::framebuffer_hash(*window_);
     }
 
     void Showcase::paint() noexcept

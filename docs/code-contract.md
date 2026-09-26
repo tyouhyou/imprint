@@ -1526,11 +1526,12 @@ struct check_result {
 };
 
 // Compares the current frame hash against the recorded baseline.
-// No baseline file → status::missing; corrupt baseline → throws
-// (init path, carries the path); hash difference → status::mismatch
-// and the artifact <dir>/<name>.actual.gif is written beside the
-// baseline for human diffing; otherwise status::ok. expected/actual
-// are always filled when the baseline could be read.
+// actual is always filled; no baseline file → status::missing;
+// corrupt baseline → throws (init path, carries the path); hash
+// difference → status::mismatch and the artifact
+// <dir>/<name>.actual.gif is written beside the baseline for human
+// diffing; otherwise status::ok. expected is filled when the baseline
+// could be read.
 check_result check(zb::app::IWindow &win, const std::string &name,
                    const std::string &dir);
 

@@ -51,6 +51,7 @@ add_executable(
     test_pixel_convert.cpp
     test_pixel_traits.cpp
     test_shell_presenter.cpp
+    test_snapshot.cpp
     test_theme.cpp
     test_showcase.cpp
     test_toggle_switch.cpp
@@ -66,6 +67,7 @@ target_link_libraries(
     imui
     imapp
     imapp_canvas
+    imapp_snapshot
     imutil
     tictactoe_app
     showcase_app

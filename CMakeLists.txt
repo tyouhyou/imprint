@@ -97,11 +97,15 @@ add_subdirectory(imshell)
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree; install/export is
 # condition-triggered later work.
-foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas shell_common shell_hostloop shell_backend)
+foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend)
     if (TARGET ${_imprint_target})
         add_library(imprint::${_imprint_target} ALIAS ${_imprint_target})
     endif()
 endforeach()
+# the snapshot helper's consumption name (code-contract §12)
+if (TARGET imapp_snapshot)
+    add_library(imprint::snapshot ALIAS imapp_snapshot)
+endif()
 
 # A-22: the one composition point (framework mode, IMPRINT_WITH_DEMOS).
 # imshell provides shell_backend (the selected backend's usage

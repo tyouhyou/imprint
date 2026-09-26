@@ -47,6 +47,7 @@ int test_raster_damage();
 int test_pixel_convert();
 int test_pixel_traits();
 int test_shell_presenter();
+int test_snapshot();
 int test_theme();
 int test_showcase();
 int test_toggle_switch();
@@ -118,6 +119,7 @@ int main()
     total += test_pixel_convert();
     total += test_pixel_traits();
     total += test_shell_presenter();
+    total += test_snapshot();
     total += test_theme();
     total += test_showcase();
     total += test_toggle_switch();

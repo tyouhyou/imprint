@@ -90,7 +90,7 @@ namespace zb::app::showcase
         void advance_dashboard();
         void run_bench();
         void bench_check_hash(int half);
-        [[nodiscard]] uint32_t buffer_hash() const;
+        [[nodiscard]] uint64_t buffer_hash() const;
 
         // default desktop size (4:3, like FB 320x240 and NDS/WASM
         // 256x192 — the pages scale to whatever the shell passes)
@@ -149,7 +149,7 @@ namespace zb::app::showcase
         int bench_half_ = 0;
         int bench_paints_ = 0;
         long long bench_px_ = 0;
-        uint32_t bench_hash_[2]{0, 0};  // up-state / returned-state hashes
+        uint64_t bench_hash_[2]{0, 0};  // up-state / returned-state hashes
         std::chrono::steady_clock::time_point bench_t0_{};
         std::chrono::steady_clock::duration bench_dur_{};
 

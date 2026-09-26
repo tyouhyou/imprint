@@ -45,3 +45,22 @@ target_link_libraries(
     ${IMAPPLIB}
     ${IMUILIB}
 )
+
+# snapshot helper (code-contract §12): header-only, needs only the
+# imapp include chain (IWindow + imcore's GIF writer / PNG codec)
+add_library(
+    imapp_snapshot INTERFACE
+    include/snapshot.hpp
+)
+
+target_include_directories(
+    imapp_snapshot
+    INTERFACE
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+)
+
+target_link_libraries(
+    imapp_snapshot
+    INTERFACE
+    ${IMAPPLIB}
+)
