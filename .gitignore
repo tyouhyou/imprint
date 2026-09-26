@@ -69,3 +69,4 @@ reports/
 design/
 .zcode/
 docker/
+snapshot_test_out/

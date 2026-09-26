@@ -10,9 +10,10 @@
 
 Imprint is a deterministic, embeddable UI runtime for C++17. One pixel
 buffer, software-rasterized: no GPU, no OS GUI toolkit, no timers, no
-threads. The host drives every frame, so a given input sequence always
-yields the same frame bytes — asserting UI logic pixel-by-pixel in
-headless CI is a property of the contract, not a test-harness trick.
+threads. The host drives every frame: for a fixed build and buffer
+size, the same input sequence always yields the same framebuffer
+bytes — asserting UI logic pixel-by-pixel in headless CI is a property
+of the contract, not a test-harness trick.
 One UI source tree — widgets in code, or a screen described in a design
 file — compiles unchanged for Windows, Linux, macOS, SIXEL terminals,
 WebAssembly, the Nintendo DS, and any C host via `zbapi`.
@@ -204,9 +205,12 @@ contract is `docs/code-contract.md` §11.
 
 ## Deterministic testing in CI
 
-One input sequence always yields the same frame bytes — so UI logic is
-assertable pixel-by-pixel with no display attached. The `zb::snap`
-helper (link `imprint::snapshot`) is the whole workflow:
+For a fixed build and buffer size, one input sequence always yields
+the same framebuffer bytes — so UI logic is assertable pixel-by-pixel
+with no display attached. The buffer size is declared once by
+`create_window(w, h)` — percentage layouts resolve against it; a
+different size is a different surface, not a different result. The
+`zb::snap` helper (link `imprint::snapshot`) is the whole workflow:
 
 ```cpp
 #include "snapshot.hpp"
