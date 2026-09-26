@@ -8,6 +8,8 @@ set -e
 cd /src
 
 APP="${1:-tictactoe}"
+EXTRA_DEFS=""
+EXTRA_SRCS=""
 
 # framework sources shared by every story
 FRAMEWORK_SRCS="
@@ -54,29 +56,42 @@ tictactoe)
     EXTRA_INCLUDES=""
     ;;
 showcase)
-    # the declarative layer + the packed design documents; ui_embed is
-    # the same-parser build-time validator (contract 5.3), compiled
-    # natively with the image's g++ (the wasm node runtime does not
-    # expose the host filesystem to stdio)
+    # SIGNAL-ONE (2026-09-26): the UI is one HTML design file; html_embed
+    # packs and validates it natively (the same-parser validator, the
+    # showcase_html precedent -- html.cpp is not standalone, so the
+    # native validator compiles the full imui/imcore closure), and
+    # bytes_embed packs the Inter TTF blob: the showcase speaks runtime
+    # TTF (proportional text), which pulls the vendored stb_truetype TUs
+    # into the framework sources
     APP_SRCS="
       imui/src/ui_builder.cpp
+      imui/src/html.cpp
+      imcore/src/text/stb_truetype_impl.cpp
+      imcore/src/text/runtime_ttf_provider.cpp
       apps/showcase/src/app_maker.cpp
       apps/showcase/src/showcase.cpp
     "
     APP_INCLUDE="/src/apps/showcase/include"
     EXPORT_NAME=createShowcase
     g++ -std=c++17 -O2 \
+        -DCOLOR_DEPTH=32 -DRGB_MODEL=argb32 -DENDIAN=be \
         -I /src/imui/include -I /src/imutil/include \
-        /src/tools/ui_embed.cpp /src/imui/src/ui_file.cpp \
-        -o /tmp/ui_embed
-    /tmp/ui_embed /tmp/showcase_ui.gen.hpp \
-        /src/apps/showcase/hero.ui /src/apps/showcase/gallery.ui
-    # V-2 procedural assets: the same build-time materialization the
-    # CMake showcase target runs (asset_gen is standalone -- std headers
-    # only, so the image's g++ builds it unchanged)
-    g++ -std=c++17 -O2 /src/tools/asset_gen.cpp -o /tmp/asset_gen
-    /tmp/asset_gen /tmp/showcase_assets.gen.hpp
+        -I /src/imcore/include -I /src/imcore/include/core \
+        -I /src/imcore/include/text -I /src/imcore/include/codec \
+        -I /src/imevent/include -I /src/iminput/include \
+        /src/tools/html_embed.cpp /src/imui/src/*.cpp \
+        /src/imcore/src/core/graphics.cpp \
+        /src/imcore/src/text/utf8.cpp \
+        /src/imcore/src/text/bitmap_provider.cpp \
+        /src/imcore/src/text/text_image.cpp \
+        -o /tmp/html_embed
+    /tmp/html_embed /tmp/showcase_signal.gen.hpp /src/apps/showcase/signal.html
+    g++ -std=c++17 -O2 /src/tools/bytes_embed.cpp -o /tmp/bytes_embed
+    /tmp/bytes_embed /tmp/showcase_font.gen.hpp showcase_font \
+        /src/assets/fonts/Inter-Regular.ttf
     EXTRA_INCLUDES="-I /tmp"
+    EXTRA_DEFS="-DUSE_TTF_RUNTIME"
+    EXTRA_SRCS=""
     ;;
 showcase_html)
     # the HTML designer path: parse_html + the packed HTML document.
@@ -114,7 +129,7 @@ showcase_html)
     ;;
 esac
 
-SRCS="$FRAMEWORK_SRCS $APP_SRCS"
+SRCS="$FRAMEWORK_SRCS $APP_SRCS $EXTRA_SRCS"
 
 OUT="/src/demo/wasm/$APP.js"
 
@@ -128,7 +143,7 @@ fi
 
 em++ -std=c++17 -O2 \
   -DCOLOR_DEPTH=32 -DRGB_MODEL=bgra32 -DENDIAN=le \
-  $SUBSET_FLAGS \
+  $SUBSET_FLAGS $EXTRA_DEFS \
   -I /src/imcore/include \
   -I /src/imcore/include/core \
   -I /src/imcore/include/text \
@@ -140,6 +155,7 @@ em++ -std=c++17 -O2 \
   -I /src/imapp/include \
   -I "$APP_INCLUDE" \
   -I /src/binding/include \
+  -I /src/third_party/stb \
   $EXTRA_INCLUDES \
   -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32","addFunction"]' \
@@ -163,7 +179,7 @@ ls -l "$OUT"
 SMOKE_OUT="/src/demo/wasm/${APP}_mod.js"
 em++ -std=c++17 -O2 \
   -DCOLOR_DEPTH=32 -DRGB_MODEL=bgra32 -DENDIAN=le \
-  $SUBSET_FLAGS \
+  $SUBSET_FLAGS $EXTRA_DEFS \
   -I /src/imcore/include \
   -I /src/imcore/include/core \
   -I /src/imcore/include/text \
@@ -175,6 +191,7 @@ em++ -std=c++17 -O2 \
   -I /src/imapp/include \
   -I "$APP_INCLUDE" \
   -I /src/binding/include \
+  -I /src/third_party/stb \
   $EXTRA_INCLUDES \
   -s MODULARIZE=1 -s EXPORT_NAME="$EXPORT_NAME" \
   -s ENVIRONMENT=node \
