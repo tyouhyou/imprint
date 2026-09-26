@@ -8,16 +8,36 @@
 
 **Same input, same pixels — assertable in CI, with no display attached.**
 
-Imprint is a deterministic, embeddable UI runtime for C++17: one pixel
-buffer, software-rasterized — no GPU, no OS GUI toolkit. The host drives
-every frame, so an input sequence always yields the same frame bytes;
-asserting UI logic pixel-by-pixel in headless CI is a property of the
-contract, not a test-harness trick. One UI source tree — widgets in code,
-or a screen described in a design file — compiles unchanged for Windows,
-Linux, macOS, WebAssembly, the Nintendo DS, and any C host via `zbapi`.
+Imprint is a deterministic, embeddable UI runtime for C++17. One pixel
+buffer, software-rasterized: no GPU, no OS GUI toolkit, no timers, no
+threads. The host drives every frame, so a given input sequence always
+yields the same frame bytes — asserting UI logic pixel-by-pixel in
+headless CI is a property of the contract, not a test-harness trick.
+One UI source tree — widgets in code, or a screen described in a design
+file — compiles unchanged for Windows, Linux, macOS, SIXEL terminals,
+WebAssembly, the Nintendo DS, and any C host via `zbapi`.
 
-**Design-first.** The console below is *drawn in HTML* — no widget code —
-and rendered by Imprint's own software rasterizer into that same buffer:
+## The showcase, live
+
+**SIGNAL-ONE** is a working task console, not a mockup — and everything
+you see is drawn by Imprint's own rasterizer. Below, it is recorded end
+to end: the recorder drives the app through its public API with a fixed
+input script, so the GIF is byte-identical on every platform.
+
+<p>
+  <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE recorded end to end: boots into live telemetry with the trend line advancing, a drag across the GAIN knob pulls the dB readout, the load gauge and the temp meter, MODE cycles three accent themes (cyan, amber, green), the module toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
+</p>
+
+**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** —
+the same console compiled to WebAssembly, presented on a `<canvas>`
+through the same C-ABI a desktop shell uses. Drag the gain knob, cycle
+the MODE themes, open the ABOUT overlay. No server, no install: the
+wasm is embedded in the page.
+
+**Design-first.** That console *is designed in HTML* — ids, tags,
+styles; zero widget code — and materialized into a widget tree at build
+time. The same path accepts full designer-grade documents: the hero
+below is one HTML file rendered by Imprint into the pixel buffer:
 
 <p>
   <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console: the vacuum-tube dashboard (tubes, VU bank, power meter, diagnostics paragraph), designed in HTML and rendered by Imprint">
@@ -35,41 +55,38 @@ buffer — on desktop, on the Nintendo DS, and in the browser:
 
 ![showcase_html on linux, nds, wasm](assets/showcase/montage.png)
 
-**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** —
-the page runs the WebAssembly build of the widget showcase; the frame
-below is that app recorded end to end (desktop, browser, and DS ROMs are
-built from the same sources):
+```
+                same UI source
+                      │
+      ┌───────────┬───┴───────┬───────────┐
+      ↓           ↓           ↓           ↓
+   Windows       Linux       macOS     terminal
+      │        (X11/FB)                (SIXEL)
+      └───────────┼───────────┘
+                  ↓
+           WebAssembly  ←  try it in your browser
+                  ↓
+            Nintendo DS
+                  ↓
+       your embedded board (C-ABI)
+```
 
-<img src="assets/showcase/showcase.gif" width="480" alt="The showcase app recorded frame by frame: boots dark while the chart reveals itself, START fills the progress bars, REPLAY replays the chart, the factory-console dashboard (gauges, live trend, setpoint knob, SELF-CHECK stamping PIXELS MATCH), the light widget gallery with its shadow-card assets, back to dark">
+The terminal is a first-class target: on any sixel-capable terminal
+(WezTerm, foot, iTerm2) the same widget tree renders as SIXEL graphics
+with SGR mouse and keyboard input — no windowing system at all.
+
+Measured footprints (Release builds of the SIGNAL-ONE showcase above):
+
+| Target | Shipped footprint |
+|---|---|
+| WebAssembly | 583 KB single `.js` file — wasm and the Inter TTF embedded, runs from `file://` |
+| Nintendo DS | 256×192 16-bpp framebuffer (96 KB VRAM); integer-only geometry and non-atomic refcounting options for libatomic-less toolchains |
 
 No GPU required. No OS GUI toolkit required. No platform-specific UI code.
 
-```
-              same UI source
-                    │
-        ┌───────────┼───────────┐
-        ↓           ↓           ↓
-     Windows       Linux      macOS
-        │        (X11/FB)       │
-        └───────────┼───────────┘
-                    ↓
-             WebAssembly  ←  try it in your browser
-                    ↓
-              Nintendo DS
-                    ↓
-         your embedded board (C-ABI)
-```
-
-Measured footprints (Release builds of the `showcase` app above):
-
-| Target | UI code+data | RAM (statics) | Framebuffer | Shipped size |
-|---|---|---|---|---|
-| Nintendo DS | 543 KB text + 11 KB data | 7.7 KB BSS | 96 KB (256×192×2 B) | 646 KB `.nds` |
-| WebAssembly | — | — | 256×192×4 B | 250 KB single `.js` file, runs from `file://` |
-
 ## Highlights
 
-- **Deterministic, host-driven runtime** — shell owns the loop; same input sequence → same pixels; repaint-on-demand with dirty tracking, no hidden redraws
+- **Deterministic, host-driven runtime** — the shell owns the loop; same input sequence → same pixels; repaint-on-demand with dirty tracking, no hidden redraws
 - **Automation by contract** — a script can replace the user: feed input, pump frames, assert on pixels; single-threaded and timer-free, so drivers never sleep — the test battery includes an end-to-end `automation` suite driven through the public API
 - **Design files** — describe a screen in `.ui` or external HTML, validate and pack at build time, load from a C array on any target; `ui_preview` renders files directly
 - **Retained-mode widget tree** — `Button`, `Label`, `Dialog`, `FlexPanel`, `ListBox` and more
@@ -146,14 +163,16 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 ```
 
 Both formats — `.ui` and HTML — feed one tree, one pixel buffer, every
-target.
+target. SIGNAL-ONE, the showcase at the top, is exactly this: an
+85-line HTML design file plus 266 lines of C++ behavior.
 
-### Use as a library — your project, your `main`
+## Your project, your main — use as a library
 
-Everything above composes an in-repo demo (an `apps/` story plus the
-top-level executable). Your application does not have to live in this
-tree: add Imprint as a subproject and drive it from your own `main`
-through `zb::shell::run` — the same host loop the platform shells run:
+Imprint consumes three ways: an in-repo demo story (above), a **library
+subproject** driven by your own `main` (this section), or a pure **C-ABI
+host** in any language (further below). Nothing forces your application
+to live in this tree: add Imprint as a subproject and drive it through
+`zb::shell::run` — the same host loop the platform shells run:
 
 ```cpp
 // your main.cpp — MyWindow : zb::app::CanvasWindow, or any zb::app::IApp
@@ -182,7 +201,7 @@ with — needs no shell at all: `CanvasWindow::create()` + `paint()` (see
 `test/external_smoke/`, wired into the test battery). The shell-loop
 contract is `docs/code-contract.md` §11.
 
-### Deterministic testing in CI
+## Deterministic testing in CI
 
 One input sequence always yields the same frame bytes — so UI logic is
 assertable pixel-by-pixel with no display attached. The `zb::snap`
@@ -204,8 +223,8 @@ Commit the `.zbsnap` baselines; CI fails on any pixel drift and the
 mismatch artifact shows what changed. Baselines are valid per build
 configuration (code-contract §12.2); within one pixel class the hash is
 byte-identical across Windows / macOS / Linux. The in-tree references:
-`test/test_snapshot.cpp` (workflow) and the showcase SELF-CHECK, which
-rides the same helper.
+`test/test_snapshot.cpp` (workflow) and the showcase recorder, which
+rides the same determinism.
 
 No app code at all? Render a design file straight to pixels — the hero
 at the top of this README comes out of this one line (it prints the
@@ -226,7 +245,7 @@ this):
     cmp menu1.png menu2.png   # two runs, byte-identical frames
 ```
 
-### Script-language GUIs — a design file + callbacks
+## Script-language GUIs — a design file + callbacks
 
 The declarative path needs no C++ on the user side at all:
 `zb_app_create_from_ui` builds the widget tree from a design file
@@ -265,8 +284,8 @@ declarative boundary is unchanged.
 | Linux (X11) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | input-capable backend |
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
 | Terminal (SIXEL) | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | demo target: the same UI in a sixel terminal (WezTerm/foot/iTerm2), input via SGR mouse + keys; `IM_TERM_SIZE=WxH` resizes |
-| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the showcase ROM (it additionally needs the host-built `ui_embed` and `asset_gen` passed as `-DUI_EMBED_EXECUTABLE=` / `-DASSET_GEN_EXECUTABLE=`), or `-DSTORY=showcase_html` for the HTML showcase (same, plus the host-built `html_embed` as `-DHTML_EMBED_EXECUTABLE=`) |
-| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | includes a node smoke test |
+| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the SIGNAL-ONE ROM (it additionally needs the host-built `html_embed` and `bytes_embed`, passed as `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`), or `-DSTORY=showcase_html` for the HTML showcase (same, plus the host-built `html_embed` as `-DHTML_EMBED_EXECUTABLE=`) |
+| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh showcase` produces the SIGNAL-ONE page as one self-contained `.js` (wasm embedded); includes a node smoke test |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
 Tests: `test/test_imui` — plain asserts, no test framework; run via `ctest -R test_imui` (or the binary) on desktop; skipped on NDS.
@@ -301,13 +320,14 @@ shells present 1:1; WASM/Python hosts scale host-side.
 - [`docs/backlog.md`](docs/backlog.md) — the living backlog: architecture items, product feature batches (L/I/F), and condition-triggered items
 - [`docs/code-contract.md`](docs/code-contract.md) — the API-level interface contract: error paths, UTF-8/text, glyph provider, tree mutation, layout invalidation, alloc budget, the presentation-seam converter
 - [`docs/design-file.md`](docs/design-file.md) — the `.ui` design-file format: grammar, packaging pipeline, materialization semantics
+- [`docs/html-path.md`](docs/html-path.md) — the HTML design-file path: element/attribute/CSS whitelist
 - [`binding/include/zbapi.h`](binding/include/zbapi.h) — the C-ABI surface for hosts (Python, WASM, C); host rules in ARCHITECTURE §4.8
 
 ## Demo
 
 **Hello** (`-DSTORY=hello`) — the getting-started app: a label and a click-counting button; copy it to start your own app (see [`docs/getting-started.md`](docs/getting-started.md)).
 
-**Showcase** (`-DSTORY=showcase`) — the multi-target widget gallery: boots dark, opens on an animated chart drawn with the framework's own rasterizer (anti-aliased curve over a gradient area on a rounded card, revealed step by step by an app-side tween), a device-status control panel (progress bars, START/STOP, dark/light theme), and an all-widgets page with alpha asset compositing (a 9-slice shadow card and an accent-tinted ball; the assets are generated at build time by `tools/asset_gen`), and a factory-console dashboard page (gauges, a live trend chart, a setpoint knob+slider pair, pump/coolant toggles) whose SELF-CHECK button drives the knob through real drag events and stamps PIXELS MATCH when two renders of the same state hash the framebuffer byte-identically — the deterministic-runtime proof. The frames in `assets/showcase/` come from these builds — the recorder is fully deterministic, producing byte-identical GIFs on Windows, macOS and Linux; the WASM variant is playable online ([tyouhyou.github.io/imprint](https://tyouhyou.github.io/imprint/), built with `demo/wasm/build.sh showcase`), and the same sources build the NDS ROM.
+**Showcase** (`-DSTORY=showcase`) — SIGNAL-ONE, the console at the top of this README: an 85-line HTML design file (`apps/showcase/signal.html`) materialized into a widget tree at build time, behavior in 266 lines of C++. The live telemetry feed advances one deterministic step per frame (the trend line is pure in the frame counter); the GAIN knob drives the dB readout, the load gauge and the temp meter; MODE cycles three accent themes (cyan / amber / green); ABOUT opens a declarative modal overlay; RESET restores the boot state. Text renders through the runtime-TTF path (Inter, packed by `bytes_embed`) — configure `-DUSE_TTF_RUNTIME=ON` for the intended proportional look; the 5x7 bitmap fallback keeps non-TTF builds green. The GIF at the top comes out of `showcase_gif`, the deterministic recorder; the browser demo and the DS cross-build (see Build) run the same sources.
 
 **TicTacToe** (default story) — a human-vs-computer game exercising dialogs, buttons, layout and repaint-on-demand; the NDS build produces `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview` (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES` (space-separated paths; left/right keys switch documents) — pass `.ui` or HTML paths.
 
