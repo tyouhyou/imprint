@@ -1494,7 +1494,8 @@ int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
   `main` (A-22 composition unchanged); the headless drive
   (`IApp::create_window(w, h, buffer)` + manual `input`/`paint`, the
   gif-record/test pattern) is the embeddable path on every target,
-  including NDS.
+  including NDS. The terminal (SIXEL) demo target is likewise
+  framework-mode only (a `main`, no `run`).
 - The Windows subsystem is the consumer executable's link-time choice
   (`WIN32_EXECUTABLE`); `run` works from `main` or `WinMain`.
 - On macOS the implementation is ObjC++; a consumer linking

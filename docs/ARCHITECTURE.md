@@ -77,6 +77,7 @@ knowledge and lives with the quick-start material.
 | macOS | `imshell/mac` (AppKit) | 32bpp ARGB presentation through a zero-copy CGImage, scaled-to-fit (I-2a); behavior verified on the maintainer's macOS 13 machine, CI compiles the shell and runs the host battery |
 | Linux | `imshell/fb`, `imshell/x11` | X11 is the input-capable backend and presents scaled-to-fit (I-2a); the framebuffer backend presents only (no input source) at 1:1 |
 | Nintendo DS | `imshell/nds` + `cmake/nds.toolchain.cmake` | ARM9, 4 MB RAM, no FPU/RTTI/libatomic; 16bpp abgr1555; ROM packaged by ndstool (POST_BUILD) |
+| Terminal (SIXEL) | `imshell/src/linux` (`IM_SHELL_BACKEND=SIXEL`) | Propagation demo target: presents the buffer as a sixel DCS stream into the host terminal; input from stdin (SGR mouse + keys, `CSI 16 t` cell-size reply for the pointer map). Framework-mode main only |
 | WebAssembly | `demo/wasm` (Emscripten) | JS host wraps the pixel buffer as canvas; node smoke test in-tree |
 | Host languages | `binding` (`zbapi` shared library) | Python/ctypes demo and a C smoke test drive the C-ABI |
 
@@ -535,6 +536,12 @@ contract, not an add-on:
   assume 32bpp; a desktop `COLOR_DEPTH=16` build is compile/test-only.
 - The Linux framebuffer shell has **no input source** (no keyboard/pointer);
   use the X11 backend for interactive desktop use.
+- The terminal (SIXEL) shell is a demo target: every paint writes a full
+  sixel frame at the cursor home (no dirty-region presents, the terminal
+  scrolls if it is shorter than the buffer), and the pointer map depends
+  on the terminal's cell-size reply (`CSI 16 t`; fallback 10x20 cells).
+  It needs a sixel-capable terminal (WezTerm, foot, mlterm, xterm -ti
+  vt340, iTerm2); run it over SSH and it still shows the same UI.
 - Input tracks a single active press even though the data model is
   multi-touch; key-up is not dispatched yet.
 - By design: no GPU acceleration (rendering stays CPU; future "GPU support"
