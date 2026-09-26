@@ -5174,14 +5174,14 @@ namespace zb::ui
     void inherit_text_props(ui_node &n, const std::string *color,
                             const long long *font_px,
                             const long long *letter_px,
-                            const long long *bold)
+                            const bool *bold)
     {
         // effective values: the node's own declaration beats the
         // inherited one
         const std::string *own_color = nullptr;
         const long long *own_font = nullptr;
         const long long *own_letter = nullptr;
-        const long long *own_bold = nullptr;
+        const bool *own_bold = nullptr;
         bool has_text = false;
         for (const auto &p : n.props)
         {
@@ -5203,14 +5203,14 @@ namespace zb::ui
             }
             else if (p.first == "bold")
             {
-                own_bold = std::get_if<long long>(&p.second);
+                own_bold = std::get_if<bool>(&p.second);
             }
         }
         const std::string *eff_color = own_color != nullptr ? own_color : color;
         const long long *eff_font = own_font != nullptr ? own_font : font_px;
         const long long *eff_letter =
             own_letter != nullptr ? own_letter : letter_px;
-        const long long *eff_bold = own_bold != nullptr ? own_bold : bold;
+        const bool *eff_bold = own_bold != nullptr ? own_bold : bold;
 
         if (has_text)
         {

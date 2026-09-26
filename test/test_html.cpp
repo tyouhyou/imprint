@@ -1420,6 +1420,28 @@ int test_html()
         EXPECT(ink > 0 && red > 0);
     }
 
+    // text-axis inheritance: font-weight (a bool prop) propagates from a
+    // styled container to its text-bearing descendants (code-contract
+    // §2 text contract); own declarations win over the inherited value
+    {
+        ui_node r = parse_html(
+            "<div style=\"font-weight:bold\">"
+            "<label>a</label>"
+            "<div><label style=\"font-weight:400\">b</label></div>"
+            "</div>\n",
+            nullptr);
+        // the converter stamps the container's OWN declaration; the
+        // inner div has none and stays unstamped by the inheritance pass
+        // (no text, no phantom stamp)...
+        EXPECT(test::vget<bool>(node_prop_v(r, "bold")) == true);
+        EXPECT(find_prop(r.children[1], "bold") < 0);
+        // ...but the plain label inherits bold
+        EXPECT(test::vget<bool>(node_prop_v(r.children[0], "bold")) == true);
+        // the own 400 declaration beats the inherited bold
+        EXPECT(test::vget<bool>(node_prop_v(r.children[1].children[0], "bold")) ==
+               false);
+    }
+
     // build(): the root's box dress styles the host, geometry never
     // transfers (a fixed host buffer always wins)
     {
