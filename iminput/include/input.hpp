@@ -1,6 +1,8 @@
 #ifndef IMINPUT_INPUT_HPP
 #define IMINPUT_INPUT_HPP
 
+#include <type_traits>
+
 namespace zb::input
 {
     enum class mouse_button_t
@@ -87,6 +89,14 @@ namespace zb::input
         int touch_id = 0;
         int ch = 0;  // Unicode code point (0 = no character)
     };
+
+    // the C-ABI copies this struct verbatim: trivially copyable +
+    // standard layout is the loadable guarantee. The default member
+    // initializers make the default constructor non-trivial, so the
+    // type is deliberately not a strict-C++ POD (ARCHITECTURE §4.2).
+    static_assert(std::is_trivially_copyable_v<input_event> &&
+                      std::is_standard_layout_v<input_event>,
+                  "input_event must stay memcpy-safe across the C-ABI");
 } // namespace zb::input
 
 #endif // IMINPUT_INPUT_HPP

@@ -158,9 +158,12 @@ satisfies. Changing any of these is an architecture change.
 
 ### 4.2 Input pipeline
 
-- `input_event` is a **POD**: `{type, x, y, button, delta, key, touch_id,
-  ch}`. This is the C-ABI pass-through shape and must never grow STL
-  containers, virtuals, or `std::any`.
+- `input_event` is **memcpy-safe**: trivially copyable + standard layout
+  (`{type, x, y, button, delta, key, touch_id, ch}`, all scalars with
+  default member initializers — so not a strict-C++ *POD*; the
+  `static_assert` in `iminput/include/input.hpp` locks the loadable
+  properties). This is the C-ABI pass-through shape and must never grow
+  STL containers, virtuals, or `std::any`.
 - `ev.x/y` are **buffer pixels** (the dispatcher picks targets by
   coordinates). Desktop shells map window-client points through
   `presentation::to_buffer` (I-2a); a point on the letterbox is not app
