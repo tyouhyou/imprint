@@ -236,11 +236,13 @@ satisfies. Changing any of these is an architecture change.
   (slider, knob) must override `captures_pointer()`: while a capturing
   widget is held, **every** move reaches it regardless of location and the
   drift/cancel rule does not apply. A **non-capturing** pressed widget never
-  receives moves at all — a move still over the widget (or off it but
-  within the slop) only resets the drift counter, and a move off it
-  beyond the slop cancels the press (mouse: 8 px at once; touch: two
-  consecutive off-target strikes — any on-target or within-slop sample
-  resets the count, to survive a single glitch sample). A release always
+  receives moves at all — a move still over the widget or its subtree (a
+  container that consumed the press owns its children's area), or off both
+  but within the slop, only resets the drift counter; a move off the target
+  beyond the slop cancels the press. The full author-facing sequence (8 px
+  slop, the two-consecutive-strike touch debounce with its reset rule, and
+  release-always-reaches) is specified once in code-contract §3.3's
+  pointer rules; this section pins only the shape. A release always
   reaches the held
   `pressed_target` even when the pointer left the widget, and `on_action` /
   commit-on-release widgets rely on that. Hidden mid-press: the dispatcher

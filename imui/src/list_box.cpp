@@ -346,10 +346,17 @@ namespace zb::ui
         const size_t row, const bool sel, const int w, const int h,
         const core::Color &fg, const core::Color &bg) const
     {
+        // channel equality through the accessors (contract A-19): a raw
+        // pixel-word compare would miss on 16bpp's unused X bit
+        const auto same_color = [](const core::Color &a, const core::Color &b)
+        {
+            return a.r() == b.r() && a.g() == b.g() && a.b() == b.b() &&
+                   a.a() == b.a();
+        };
         for (const auto &e : row_cache_)
         {
             if (e.row == row && e.sel == sel && e.w == w && e.h == h &&
-                e.fg.pixel == fg.pixel && e.bg.pixel == bg.pixel)
+                same_color(e.fg, fg) && same_color(e.bg, bg))
             {
                 return &e;
             }

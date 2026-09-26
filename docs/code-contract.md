@@ -1084,6 +1084,13 @@ dispatcher's raw pointers against dangling/UAF:
   (`IM_PREVIEW_TTF_FONT` build default, `UI_PREVIEW_FONT` runtime
   override; load failure degrades to the 5x7 bitmap with a warning),
   which is what makes per-widget `font_size` resolve at all.
+- **Process-default provider swaps are a before-first-tree concern**:
+  text caches (the wrap-span cache keyed `(width, wrap_gen_)` and the
+  advance cache) are invalidated by widget setters only —
+  `set_default_glyph_provider` does not walk live trees. Install the
+  family before building screens (the preview host above does exactly
+  that); swapping the process default under an already-built,
+  text-bearing tree leaves stale line breaks and advances.
 - **The in-paint order (layout → damage → draw) is defined
   architecturally in ARCHITECTURE.md §4.1**; API obligation: mark_dirty
   calls triggered inside layout must be picked up by the subsequent

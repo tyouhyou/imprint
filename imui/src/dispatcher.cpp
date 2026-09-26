@@ -319,6 +319,15 @@ namespace zb::ui
                 pressed_target = nullptr;
                 return true;
             }
+            if (pressed_target != nullptr)
+            {
+                // a release from another pointer: ignored (one active
+                // press; the data model stays multi-touch)
+                LD << "release from touch_id " << ev.touch_id
+                   << " ignored (press held by touch_id " << press_touch_id
+                   << ")";
+                return false;
+            }
             LD << "release with no pressed target";
             return false;
         }
