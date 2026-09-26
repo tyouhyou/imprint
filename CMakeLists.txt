@@ -97,7 +97,7 @@ add_subdirectory(imshell)
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree; install/export is
 # condition-triggered later work.
-foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas shell_common shell_backend)
+foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas shell_common shell_hostloop shell_backend)
     if (TARGET ${_imprint_target})
         add_library(imprint::${_imprint_target} ALIAS ${_imprint_target})
     endif()
