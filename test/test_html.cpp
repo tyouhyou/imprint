@@ -2,6 +2,7 @@
 
 #include "html.hpp"
 #include "imui.hpp"
+#include "logging.hpp"
 
 using namespace zb::ui;
 
@@ -2101,6 +2102,33 @@ int test_html()
             "<div style=\"display:flex\"><label style=\"flex-shrink: 0\">x</label></div>\n",
             nullptr);
         EXPECT(r.children[0].flex_shrink == 0);
+    }
+
+    // the whitelisted flex longhands apply without the unknown-property
+    // whitelist warning (the false-warning class commit 8203879 fixed
+    // for margin/padding sides); a genuinely unknown property still warns
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            {
+                if (m.find("not in the whitelist") != std::string::npos)
+                {
+                    warns.push_back(m);
+                }
+            });
+        ui_node r = parse_html(
+            "<div style=\"display:flex\">"
+            "<label style=\"flex-grow: 2;flex-shrink: 1;flex-basis: 40px\">x</label>"
+            "<label style=\"nonsense-prop: 1\">y</label>"
+            "</div>\n",
+            nullptr);
+        zb::Logging::set_log_handle();
+        EXPECT(r.children[0].flex_grow == 2);
+        EXPECT(r.children[0].flex_shrink == 1);
+        EXPECT(r.children[0].flex_basis_px == 40);
+        EXPECT(warns.size() == 1);
+        EXPECT(warns[0].find("nonsense-prop") != std::string::npos);
     }
 
     // H-7c flex shorthand: 1 token (grow), 2 tokens (grow shrink), 3 tokens (grow shrink basis), none

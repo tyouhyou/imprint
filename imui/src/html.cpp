@@ -59,6 +59,8 @@ namespace zb::ui
         {
             return p == "display" || p == "flex-direction" || p == "width" ||
                    p == "height" || p == "flex" || p == "gap" ||
+                   p == "flex-grow" || p == "flex-shrink" ||
+                   p == "flex-basis" ||
                    p == "padding" || p == "flex-wrap" ||
                    p == "justify-content" || p == "align-items" ||
                    p == "align-self" ||
