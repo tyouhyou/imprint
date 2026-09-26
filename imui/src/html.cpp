@@ -3143,7 +3143,7 @@ namespace zb::ui
 
         // --- svg path data (H-6 first cut) ---------------------------------
         // Stroke-only `d` parsing plus adaptive flattening into
-        // per-subpath polylines (code-contract §3.3). Commands M m L l
+        // per-subpath polylines (code-contract §3.2). Commands M m L l
         // H h V v C c S s Q q T t Z z with the SVG grammar (implicit
         // repeats, relative forms); arcs drop the whole path with one
         // warning. Flattening is plain IEEE double with a fixed chord

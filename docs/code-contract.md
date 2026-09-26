@@ -154,11 +154,11 @@ sources and intersect them with the hand-drawn table in
   not fail): that character is skipped with zero width at runtime — same
   semantics as "dynamically generated runtime text is not in the subset";
   characters absent from static sources never enter the table.
-- **Design-file sources (A-7)**: `text="…"` / `items="…"` in `.ui`
-  documents are source input too and must be scanned
-  (`imcore/CMakeLists.txt` gains a `*.ui` glob; `font_subset.py` grows a
-  `.ui` parsing branch). Until then, non-ASCII text in `.ui` being
-  zero-width-skipped at runtime is a known gap.
+- **Design-file sources (A-7, closed)**: `text="…"` / `items="…"` in
+  `.ui` documents are scanned too — `imcore/CMakeLists.txt` globs
+  `tools/examples/*.ui` and `apps/*/*.ui`, and `font_subset.py` parses
+  the `.ui` `text=`/`items=` attributes — so non-ASCII text in `.ui`
+  enters the subset instead of being zero-width-skipped at runtime.
 - Builds without Python 3 or without `FONT_SUBSET=ON` fall back to
   ASCII-only: `IMCORE_HAS_SUBSET` undefined, coverage is exactly 32..95,
   behavior identical to pre-batch-E (tests assert both branches under
@@ -316,7 +316,7 @@ multi-size capability (`provider_for`) exposed per widget, so HTML
   0): added to the advance of every covered code unit — trailing unit
   included, per CSS — in both measure and draw. Spacing 0 keeps the
   provider-run path bit-identical (no per-glyph split; splitting is
-  safe only because kerning is never applied, line 198). Center/right
+  safe only because kerning is never applied, §2.4). Center/right
   alignment follows automatically through `text_advance`.
 - `font-weight` 600+ / `bold` (`set_bold`): double-strike — the string
   draws twice, the second pass shifted +1px in the same color. No bold
@@ -403,7 +403,7 @@ keeps only API-level supplements.
   ARCHITECTURE.md §4.8; API-level supplement — wasm hosts register the
   callback via `addFunction` (build needs `ALLOW_TABLE_GROWTH=1`).
 
-### 3.2 V-5 composition widgets (ToggleSwitch / GaugeDial / Knob / TrendLine)
+### 3.1 V-5 composition widgets (ToggleSwitch / GaugeDial / Knob / TrendLine)
 
 All four are ordinary `Widget` subclasses built from the rasterizer
 primitives (V-1 + `draw_arc_aa`), theme-token driven, with no animation
@@ -438,7 +438,7 @@ system (standing non-goals):
 - Integer math only; both color depths degrade through the existing
   quantization rules.
 
-### 3.3 SVG path strokes (H-6 first cut)
+### 3.2 SVG path strokes (H-6 first cut)
 
 `SvgCanvas` gains a stroke-only path item beside its lines/texts
 (html-path.md §SVG subset is the dialect contract; the whitelist is the
@@ -467,7 +467,7 @@ boundary):
   fixed chord tolerance and depth cap, so desktop/WASM/NDS flatten
   identically; the draw keeps the no-FPU-per-pixel rule.
 
-### 3.1 Character event contract
+### 3.3 Character event contract
 
 - `input_event.ch` (int, 0 = no character) is the **printable character**
   channel carried by key_down/key_up. Current semantics = ASCII code
@@ -591,7 +591,13 @@ boundary):
   real extent (viewport centering works) and stretch fills the
   container, not just the sibling max — multi-line stacks keep packing
   from the padding origin. The fill is stable under H-9 (stretch never
-  feeds a demand, so an auto-cross pass settles at its demand size). Sizes
+  feeds a demand, so an auto-cross pass settles at its demand size). The
+  stretch write is additionally **capped at the container content box**
+  (H-9e): a child whose natural demand overflows the container — a
+  wrapping paragraph's single-line demand is the recorded case — must
+  not inflate the line past the container, and a wrapping
+  (`text_wrap`) stretch child resolves its stretch width to the
+  container content box directly (html-path §Text wrapping). Sizes
   on the main axis, `measure()` (demands, not positions), and line
   breaking are untouched; the stretch write is closed over settled
   demands so the H-9 loop sees no drift. HTML `align-items` maps
