@@ -433,6 +433,19 @@ satisfies. Changing any of these is an architecture change.
   not destroy the app from inside a callback (use-after-free).
 - The app never exits a process itself; on close it fires the closed
   callback and the host stops driving it.
+- **Declarative apps (P3, 2026-09-26)**: `zb_app_create_from_ui(ui_text,
+  is_html, w, h)` builds the app from a design file (§4.10 layer:
+  `parse_ui_text`, or `parse_html` when `is_html`) instead of the
+  linked-in story app; screen size = the host's nonzero w/h, else the
+  HTML page box, else the 800×600 default. `zb_set_event_callback(app,
+  id, cb, userdata)` binds `cb(id, userdata)` to a widget's primary
+  action (click / change / submit — the tag table decides,
+  code-contract §4); `zb_widget_text` / `zb_widget_set_text` read and
+  write a widget's text (UTF-8 at the boundary). Callbacks fire inside
+  the driving `zb_*` call (single thread, §4.11 unchanged) and must not
+  destroy the app reentrantly; registering before or after the create
+  is equivalent (the binding consults the host's registration at fire
+  time). All additive — `ZB_API_VERSION` stays 1.
 
 ### 4.9 Build-time configuration
 
@@ -476,6 +489,12 @@ exactly what it always did.
   untouched. Fixed-size host buffers (NDS) win over the page.
 - The layer is deliberately **static**: no dynamic models (ListBox `ItemText`
   callbacks), no event wiring, no font/glyph content in the description.
+- The C-ABI materialization path (P3): `zb_app_create_from_ui` runs the
+  same parse → `build()` → `bind_actions` sequence inside the binding
+  layer, so a foreign host (Python, a WASM plugin) drives a design-file
+  UI through `zb_input` / `zb_paint` and receives action callbacks by
+  id (§4.8). The static-structure-in-file boundary is unchanged: events
+  are wired by the host, never carried in the file.
 
 ### 4.11 Script-driven hosts and test automation
 

@@ -992,6 +992,20 @@ boundary):
   hot path); returns nullptr on miss. Event binding = materialize, fetch
   the Widget* by id, then subscribe via Event<> (the framework introduces
   no callback registry).
+- Action binding (P3, 2026-09-26): `bind_actions(root, node, sink)`
+  (declared in ui_builder.hpp) walks the same ui_node IR `build()`
+  materialized and, for every node carrying a non-empty id, subscribes
+  that widget's primary action event to `sink(id)` — the concrete
+  event per tag (button `clicked`; checkbox / toggle `changed`; radio
+  `changed`; slider `changed`; text_input `submitted`; list_box
+  `changed`) is chosen in ui_builder.cpp beside the tag table, the
+  single home of that knowledge (static_cast only on widgets `build()`
+  created from the same node — the §4.3 no-RTTI discipline). The sink
+  receives the id only; typed payloads stay on the native per-widget
+  events for C++ consumers. This is a binder, not a registry: the
+  framework still holds no id→handler map — a host maps ids to its own
+  callbacks on its side of the boundary. Handlers registered with `+=`
+  live as long as the widget does; destroying the tree detaches them.
 
 ## 5. Design files (batch G6 final)
 
