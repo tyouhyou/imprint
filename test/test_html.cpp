@@ -742,6 +742,60 @@ int test_html()
         EXPECT(depth_warned);
     }
 
+    // <body> re-roots only at the document top (directly or through the
+    // html/head chain); anywhere else or repeated, it is inert with an
+    // LW warning (tolerance table)
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { warns.push_back(m); });
+
+        // inside a dropped subtree: the table is skipped, the body does
+        // not resurrect its content at top level
+        bool ok = true;
+        ui_node r = parse_html(
+            "<table><body><label>x</label></body></table>", &ok);
+        EXPECT(!ok);  // nothing built
+        EXPECT(r.children.empty());
+
+        // inside a built container: dropped with the container intact
+        r = parse_html("<div><body><label>x</label></body></div>", &ok);
+        EXPECT(ok);
+        EXPECT(r.type == "column");
+        EXPECT(r.children.empty());
+
+        // a repeated body: only the first feeds the page/children
+        r = parse_html(
+            "<body><label>a</label></body><body><label>b</label></body>",
+            &ok);
+        EXPECT(ok);
+        EXPECT(r.children.size() == 1);
+        EXPECT(test::vget<std::string>(
+                   node_prop_v(r.children[0], "text")) == "a");
+
+        // the html/head chain still re-roots (regression)
+        r = parse_html(
+            "<html><head><style>p{}</style></head>"
+            "<body><label>ok</label></body></html>",
+            &ok);
+        zb::Logging::set_log_handle();
+        EXPECT(ok);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+
+        // exactly the three stray bodies warned
+        int body_warns = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("<body>") != std::string::npos)
+            {
+                ++body_warns;
+            }
+        }
+        EXPECT(body_warns == 3);
+    }
+
     // P-1 paint: background shorthand (solid/linear/radial layers),
     // border, radius
     {

@@ -4795,6 +4795,7 @@ namespace zb::ui
             std::unique_ptr<Elem> root;  // the body/document container
             std::vector<Frame> frames;
             bool depth_warned = false;  // the depth-cap warning: once per parse
+            bool body_seen = false;     // only the first <body> re-roots
             // transparent <g> presentation maps inside svg, innermost last;
             // each level already merges its ancestors (nearest wins by
             // overwrite), so resolution reads the back only
@@ -5191,17 +5192,44 @@ namespace zb::ui
                 }
                 else if (name == "body")
                 {
-                    // body is the document container: its children land on
-                    // the root, so a single top-level container still
-                    // becomes the document root (the .ui convention)
-                    mode = k_build;
-                    elem = root.get();
-                    pushed = true;
-                    if (elem != nullptr)
+                    // body re-roots only at the document top: directly,
+                    // or through the html/head boilerplate chain. Inside
+                    // a dropped subtree, a built container, or a second
+                    // occurrence it is inert like an off-whitelist tag
+                    // (tolerance table): the frame swallows the subtree
+                    bool top = true;
+                    for (std::size_t i = 1; i < frames.size(); ++i)
                     {
-                        for (const auto &a : t.attrs)
+                        if (frames[i].mode != k_no_build)
                         {
-                            elem->attrs.emplace_back(a.first, a.second);
+                            top = false;
+                            break;
+                        }
+                    }
+                    if (!top || body_seen)
+                    {
+                        LW << "html: line " << t.line
+                           << ": stray <body> ignored; its subtree was "
+                              "dropped";
+                        mode = k_skip;
+                        elem = nullptr;
+                        pushed = false;
+                    }
+                    else
+                    {
+                        body_seen = true;
+                        // body is the document container: its children land
+                        // on the root, so a single top-level container still
+                        // becomes the document root (the .ui convention)
+                        mode = k_build;
+                        elem = root.get();
+                        pushed = true;
+                        if (elem != nullptr)
+                        {
+                            for (const auto &a : t.attrs)
+                            {
+                                elem->attrs.emplace_back(a.first, a.second);
+                            }
                         }
                     }
                 }
