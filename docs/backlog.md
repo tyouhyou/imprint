@@ -21,8 +21,11 @@ Dependency-driven: each tier unlocks what follows.
    unscheduled), **I-2b per-shell adoption** (device_overlay math + tests
    landed; shells paint natively — per-shell adoption needs maintainer
    eyes).
-3. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21/A-23, D-*,
-   Batch G. Condition-triggered items stay trigger-gated.
+3. **P1 external consumability** (2026-09-26 roadmap, Batch G): CMake
+   packaging gates + library-mode `run()` — in flight; closes A-23.
+4. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*. Batch G is
+   unfrozen (2026-09-26) — its P1–P4 roadmap is the active product map.
+   Condition-triggered items stay trigger-gated.
 
 ### Batch V — Visual Presentation (open remainder only)
 
@@ -206,46 +209,73 @@ Orthogonal to Widget hit-test/shape (A-24) and to theme (colors/tokens)
     beside `imapp_canvas` when a second user appears (§2 tool-placement
     rule).
 
-### Batch G — Positioning & Go-to-Market (Deferred; recorded 2026-09-06)
+### Batch G — Positioning & Go-to-Market (active roadmap; unfrozen 2026-09-26)
 
-Input: a third-party commercial review plus the maintainer assessment
-of 2026-09-06 (discussion in the session log; deliberately deferred —
-the project stays in technical validation until promotion resumes).
-Conclusions recorded so they are not re-derived:
+Origin: a third-party commercial review plus the maintainer assessment
+of 2026-09-06 (deliberately deferred then — technical validation first).
+Unfrozen 2026-09-26 after a positioning brainstorm (third-party advisory
+fragments + a full-code re-read); the rulings below supersede/extend the
+09-06 record, whose discussion history lives in `git log`.
 
-- **Reposition when promotion resumes**: lead with the
-  already-delivered differentiator — a deterministic, pixel-testable
-  UI runtime (input → deterministic frames → pixel assertions,
-  allocation gates, cross-platform identical output; all locked by the
-  test battery) — not "another cross-platform C++ GUI framework". Do
-  not lead with "embedded": the only embedded target so far is the NDS
-  (entertainment-class hardware), so the embedded claim stays partially
-  earned until a real MCU-tier footprint exists.
-- **Cheapest moves when resumed** (packaging only, zero architecture
-  change): README first line — **done** (2026-09-06: the three-language
-  READMEs lead with the deterministic-testing contract, NDS demoted
-  into the target list; the live gh-pages WASM showcase rebuilt to the
-  V-2 dark showcase the same day). Remaining: a landing page assembled
-  from existing assets (GIF, four-platform screenshot strip, NDS photos,
-  single-file WASM demo) with a "tell us about your device" intake;
-  the deterministic-test capability packaged as an explicit feature
-  with a CI recipe.
-- **First revenue path**: per-target port engagements (display /
-  input / font glue for a customer's board) — small, immediate,
-  single-customer. SDK/enterprise licensing and any designer product
-  are later-stage; a designer would reverse the "no drag-drop
-  designer" ruling (an architecture-level decision, not a feature).
-- **Rejected directions** (with reasons): Figma import (free-form
-  canvas → constraint-layout mapping is unmaintainable; the viable
-  variant is LLM-generated `.ui` files, which the grammar already
-  supports); AI-agent-friendly runtime as a commercial wedge (circular
-  — agents drive pre-existing GUIs; deterministic rendering remains a
-  free option for agent-eval sandboxes); hardware-SDK-vendor sales at
-  the current validation stage (B2B2B needs support infrastructure and
-  bus-factor credibility that do not exist yet).
-- **Standing constraint**: single-maintainer bus factor outweighs star
-  count for embedded adopters; the first external committer matters
-  more than stars.
+**Standing rulings (2026-09-06, unchanged):**
+
+- Lead with the already-delivered differentiator — a deterministic,
+  pixel-testable UI runtime — not "another cross-platform C++ GUI
+  framework"; do not lead with "embedded" (NDS is entertainment-class;
+  the embedded claim stays partially earned until a real MCU-tier
+  footprint exists). Executed at README level 2026-09-22 (three
+  languages).
+- First revenue path: per-target port engagements (display / input /
+  font glue for a customer's board); SDK/enterprise licensing and any
+  designer product are later-stage (a designer would reverse the
+  "no drag-drop designer" ruling).
+- Rejected directions (with reasons): Figma import (free-form canvas →
+  constraint-layout mapping is unmaintainable; the viable variant is
+  LLM-generated `.ui` files, which the grammar already supports);
+  "AI-agent-friendly runtime" as a *commercial wedge* (circular —
+  agents drive pre-existing GUIs); hardware-SDK-vendor sales at the
+  validation stage.
+- Standing constraint: single-maintainer bus factor outweighs star
+  count; the first external committer matters more than stars.
+
+**2026-09-26 rulings (positioning brainstorm, user-ratified):**
+
+- Positioning confirmed: "embeddable deterministic UI runtime". Moat
+  order (hardest to copy first): determinism-as-contract → zero-
+  dependency + C ABI → HTML-subset design file (designer-friendly and
+  inherently sandboxed) → any-target portability (NDS as the proof) →
+  compile-time pixel model. Do not enter the widget-armament race
+  (the LVGL / Slint / Qt dimensions: more widgets, faster, prettier).
+- Roadmap (ratified order; each phase unlocks the next):
+  - **P1. External consumability** — CMake packaging gates
+    (`IMPRINT_WITH_*`), `imprint::` aliases, library mode
+    `zb::shell::run(IApp, options)`. The A-23 trigger fires here and
+    A-23 closes with it. *P1.5 (condition-triggered): install/export
+    `imprintConfig.cmake` when the first real external consumer
+    appears.*
+  - **P2. Deterministic-test story** — `imprint::snapshot` test helper
+    (render an `IApp` → hash / PNG / GIF + baseline compare) +
+    `imprint-render` design-file CLI (`.ui`/`.html` → PNG, the
+    ui_preview core re-shelled; no app code needed) + a CI recipe.
+    Closes the 09-06 "deterministic-test as a feature with CI recipe"
+    cheapest-move. A standalone drives-your-app CLI is explicitly NOT
+    the form (apps are link-time); a WASM-app CLI variant is a later
+    option.
+  - **P3. Declarative plugin protocol** — `zb_app_create_from_ui(ui_text)`
+    + per-id event callbacks (additive C ABI, `ZB_API_VERSION` stays 1,
+    contract-first). Unlocks script-language GUIs (declarative file +
+    host-language callbacks) and the plugin story. Not a re-run of the
+    rejected "AI wedge": this is a technical capability inside the
+    static-structure-in-file boundary ruling; the *marketing* wedge
+    remains the determinism story.
+  - **P4. Terminal graphics demo target** — sixel/Kitty presenter +
+    stdin InputSource (~200 lines of glue, A-2 doctrine) as a
+    propagation demo, not a mainline target.
+- Business stance reconfirmed: port engagements first; external
+  consumability is itself the revenue enabler (before P1 an external
+  project cannot even `add_subdirectory`).
+- Still deferred from 09-06: landing page assembled from existing
+  assets with a "tell us about your device" intake.
 
 ## 1. Architecture Backlog
 
@@ -268,6 +298,21 @@ Conclusions recorded so they are not re-derived:
 
 - The whole tree always configures and builds; there is no `IMPRINT_WITH_*` switch to trim the configure. Binary granularity is already right — static linking drops unreferenced objects, the Linux host ships only `libimcore.so` + `zbapi.so`, the NDS ROM is fully static — and `zbapi.so` statically embeds imui + the story app, which is inherent to the current C-ABI contract (a foreign host drives a whole app).
 - **Trigger:** Add configure-time module switches only when a real distribution case appears that must ship or withhold specific modules at configure time; until then the whole-tree build is the cheaper representation.
+
+### A-25. Host-shaped glyph feed (text "Level 2", condition-triggered)
+
+- The `GlyphProvider` contract is per-`char16_t` (no cluster/advance
+  model), so a host cannot feed pre-shaped text (HarfBuzz-grade
+  shaping, dynamic complex-script text, emoji) through any seam, and
+  the C ABI has no glyph exports at all. Static label text is covered
+  by the build-time subset (`tools/font_subset.py` + `ttf_subset`);
+  desktop dynamic text by `USE_TTF_RUNTIME`.
+- **What is deferred:** extending the glyph contract with a
+  cluster/advance (or host glyph-feed) shape — contract-first, touches
+  code-contract §2.4 and possibly ARCHITECTURE §4.8.
+- **Trigger:** a real embedding needs dynamic complex-script text the
+  subset + runtime-TTF paths cannot serve. IME and RTL themselves stay
+  declared non-goals (the host owns them).
 
 ### Deferred this round (recorded, not blocking)
 
