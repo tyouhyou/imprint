@@ -65,11 +65,8 @@ Thumbs.db
 !/demo/wasm/main.js
 !/demo/wasm/smoke.js
 
-reports/
-design/
-.zcode/
-docker/
-snapshot_test_out/
+/reports/
+/design/
+/docker/
+/snapshot_test_out/
 
-# AI session tooling — local-only (nested git repo inside .ai/, never published)
-/.ai/
