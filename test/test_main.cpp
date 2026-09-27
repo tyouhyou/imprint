@@ -1,5 +1,7 @@
 #include "test.hpp"
 
+#include <cstring>
+
 int test_panel();
 int test_button();
 int test_label();
@@ -72,83 +74,149 @@ int test_font_size();
 int test_runtime_ttf();
 #endif
 
-int main()
+struct suite
 {
-    int total = 0;
-    total += test_panel();
-    total += test_button();
-    total += test_label();
-    total += test_dialog();
-    total += test_dispatch();
-    total += test_hit_override();
-    total += test_on_input_custom();
-    total += test_focus();
-    total += test_canvas_window();
-    total += test_board();
-    total += test_game();
-    total += test_ai();
-    total += test_blit_font();
-    total += test_app_flow();
-    total += test_automation();
-    total += test_quit();
-    total += test_graphics();
-    total += test_render_mode();
-    total += test_event();
-    total += test_text();
-    total += test_flex();
-    total += test_percent();
-    total += test_ptr();
-    total += test_codec();
-    total += test_gif();
-    total += test_checkbox();
-    total += test_radio();
-    total += test_slider();
-    total += test_progress_bar();
-    total += test_list_box();
-    total += test_text_input();
-    total += test_builder();
-    total += test_measure();
-    total += test_dirty();
-    total += test_ui_file();
-    total += test_html();
-    total += test_preview();
-    total += test_widget_size();
-    total += test_remove();
-    total += test_layout_dirty();
-    total += test_alloc_guard();
-    total += test_perf_walk();
-    total += test_raster_damage();
-    total += test_pixel_convert();
-    total += test_pixel_traits();
-    total += test_shell_presenter();
-    total += test_snapshot();
-    total += test_sixel();
-    total += test_term_input();
-    total += test_theme();
-    total += test_showcase();
-    total += test_toggle_switch();
-    total += test_gauge_dial();
-    total += test_knob();
-    total += test_trend_line();
-    total += test_svg();
+    const char* name;
+    int (*fn)();
+};
 
+static const suite g_suites[] = {
+    {"panel", test_panel},
+    {"button", test_button},
+    {"label", test_label},
+    {"dialog", test_dialog},
+    {"dispatch", test_dispatch},
+    {"hit_override", test_hit_override},
+    {"on_input_custom", test_on_input_custom},
+    {"focus", test_focus},
+    {"canvas_window", test_canvas_window},
+    {"board", test_board},
+    {"game", test_game},
+    {"ai", test_ai},
+    {"blit_font", test_blit_font},
+    {"app_flow", test_app_flow},
+    {"automation", test_automation},
+    {"quit", test_quit},
+    {"graphics", test_graphics},
+    {"render_mode", test_render_mode},
+    {"event", test_event},
+    {"text", test_text},
+    {"flex", test_flex},
+    {"percent", test_percent},
+    {"ptr", test_ptr},
+    {"codec", test_codec},
+    {"gif", test_gif},
+    {"checkbox", test_checkbox},
+    {"radio", test_radio},
+    {"slider", test_slider},
+    {"progress_bar", test_progress_bar},
+    {"list_box", test_list_box},
+    {"text_input", test_text_input},
+    {"builder", test_builder},
+    {"measure", test_measure},
+    {"dirty", test_dirty},
+    {"ui_file", test_ui_file},
+    {"html", test_html},
+    {"preview", test_preview},
+    {"widget_size", test_widget_size},
+    {"remove", test_remove},
+    {"layout_dirty", test_layout_dirty},
+    {"alloc_guard", test_alloc_guard},
+    {"perf_walk", test_perf_walk},
+    {"raster_damage", test_raster_damage},
+    {"pixel_convert", test_pixel_convert},
+    {"pixel_traits", test_pixel_traits},
+    {"shell_presenter", test_shell_presenter},
+    {"snapshot", test_snapshot},
+    {"sixel", test_sixel},
+    {"term_input", test_term_input},
+    {"theme", test_theme},
+    {"showcase", test_showcase},
+    {"toggle_switch", test_toggle_switch},
+    {"gauge_dial", test_gauge_dial},
+    {"knob", test_knob},
+    {"trend_line", test_trend_line},
+    {"svg", test_svg},
 #if defined(_WIN32)
-    total += test_win_input();
+    {"win_input", test_win_input},
 #endif
 #if defined(IM_TEST_X11_INPUT)
-    total += test_x11_input();
+    {"x11_input", test_x11_input},
 #endif
 #if defined(IMCORE_HAS_TTF_SUBSET)
-    total += test_ttf_subset();
-    total += test_font_size();
+    {"ttf_subset", test_ttf_subset},
+    {"font_size", test_font_size},
 #endif
 #if defined(IMCORE_HAS_TTF_RUNTIME)
-    total += test_runtime_ttf();
+    {"runtime_ttf", test_runtime_ttf},
 #endif
+};
 
-    if (total)
+static constexpr int kMaxSelected = 128;
+static_assert(sizeof(g_suites) / sizeof(g_suites[0]) <= kMaxSelected,
+              "raise kMaxSelected");
+
+// usage: test_imui [--list] [filter ...]
+//   --list        print matching suite names (all suites when no filter given)
+//   filter        substring match against suite names; a suite runs when it
+//                 matches any filter; no filter means run everything
+int main(int argc, char** argv)
+{
+    bool list_only = false;
+    const char* filters[16] = {};
+    int filter_count = 0;
+    for (int i = 1; i < argc && filter_count < 16; ++i)
     {
-        std::printf("TOTAL: %d failure(s)\n", total);
+        if (std::strcmp(argv[i], "--list") == 0)
+            list_only = true;
+        else
+            filters[filter_count++] = argv[i];
+    }
+
+    constexpr int total_suites =
+        static_cast<int>(sizeof(g_suites) / sizeof(g_suites[0]));
+
+    const suite* selected[kMaxSelected];
+    int selected_count = 0;
+    for (const suite& s : g_suites)
+    {
+        if (filter_count == 0)
+        {
+            selected[selected_count++] = &s;
+            continue;
+        }
+        for (int i = 0; i < filter_count; ++i)
+        {
+            if (std::strstr(s.name, filters[i]) != nullptr)
+            {
+                selected[selected_count++] = &s;
+                break;
+            }
+        }
+    }
+
+    if (list_only)
+    {
+        for (int i = 0; i < selected_count; ++i)
+            std::printf("%s\n", selected[i]->name);
+        return 0;
+    }
+
+    if (selected_count == 0)
+    {
+        std::printf("no suite matches filter\n");
+        return 2;
+    }
+
+    std::printf("suites: run=%d total=%d\n", selected_count, total_suites);
+
+    int failures = 0;
+    for (int i = 0; i < selected_count; ++i)
+        failures += selected[i]->fn();
+
+    if (failures)
+    {
+        std::printf("TOTAL: %d failure(s)\n", failures);
         return 1;
     }
     std::printf("all tests passed\n");

@@ -70,3 +70,6 @@ design/
 .zcode/
 docker/
 snapshot_test_out/
+
+# AI session tooling — local-only (nested git repo inside .ai/, never published)
+/.ai/
