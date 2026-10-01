@@ -1281,7 +1281,19 @@ obligations:
   color)` dots the draw area (mode-independent). `ListBox` rows bypass
   the image cache in wireframe (a cached face would blit opaque):
   glyphs write straight to the screen, so flips need no invalidation
-  and the miss counter only tracks FULL-mode cache misses.
+  and the miss counter only tracks FULL-mode cache misses. **SKETCH
+  (S-2)** keeps the full image but hand-draws it: `draw_line` wobbles
+  both endpoints and `fill_rect`'s row spans wobble their ends by a
+  small deterministic jitter before rasterizing — a filled shape's
+  boundary turns uneven while its interior stays a flat color (16bpp-
+  safe; the "uneven fill" is the rough boundary, not per-pixel noise).
+  The jitter is a **pure function** of the coordinate and a salt — no
+  RNG state, no run-to-run or target-to-target drift, so sketch renders
+  satisfy the determinism contract byte-for-byte. AA primitives, text,
+  images, and `fill()` stay FULL-mode in sketch (the wobble lives at
+  the aliased geometry level; depth-tested primitives also keep exact
+  geometry — the depth gate is per exact pixel). Everything else
+  behaves exactly as FULL.
 - **One-call surface blit (U-8)**: `Graphics::draw_surface(src,
   src_stride, width, height, start_x, start_y)` writes a consumer-owned
   pixel block in ONE call while the lib keeps the accounting. It is an

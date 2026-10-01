@@ -845,6 +845,19 @@ Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
     return rst;
 }
 
+int Graphics::sketch_jitter(const int v, const int salt)
+{
+    // integer hash of (v, salt), no state: the same coordinate always
+    // lands on the same offset in {-1, 0, +1} on every target (the
+    // determinism contract locks sketch renders byte-for-byte)
+    uint32_t h = static_cast<uint32_t>(v) * 73856093u ^
+                 static_cast<uint32_t>(salt) * 19349663u;
+    h ^= h >> 13;
+    h *= 3266489917u;
+    h ^= h >> 16;
+    return static_cast<int>(h % 3u) - 1;
+}
+
 void Graphics::fill_span(int x1, int x2, int y, const Color &colr)
 {
     int left = x1 < x2 ? x1 : x2;
@@ -856,6 +869,14 @@ void Graphics::fill_span(int x1, int x2, int y, const Color &colr)
         sx0 += draw_area_offset.x;
         sx1 += draw_area_offset.x;
         sy += draw_area_offset.y;
+    }
+
+    // S-2: rough fill edges — the row span's ends wobble by +-1 px, so
+    // a filled shape's boundary is uneven (the interior stays flat)
+    if (render_mode_ == render_mode::sketch)
+    {
+        sx0 += sketch_jitter(sx0, sy);
+        sx1 += sketch_jitter(sx1, sy + 77);
     }
 
     // the draw_pixel/plot_aa gates as one interval: the draw area
@@ -914,6 +935,17 @@ void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
 
 void Graphics::draw_line(int x1, int y1, int x2, int y2, const Color &colr)
 {
+    // S-2: hand-drawn wobble — both endpoints shift by a small
+    // deterministic offset before anything else; a horizontal line can
+    // become a shallow slope, which the walk below handles unchanged
+    if (render_mode_ == render_mode::sketch)
+    {
+        x1 += sketch_jitter(x1, y1);
+        y1 += sketch_jitter(y1, x1 + 101);
+        x2 += sketch_jitter(x2, y2);
+        y2 += sketch_jitter(y2, x2 + 101);
+    }
+
     // U-7: horizontal runs with an opaque color write one clamped span —
     // the Bresenham below plots every x of the row exactly once (plus
     // idempotent endpoint re-plots), so the direct write is byte-identical.
@@ -1109,6 +1141,16 @@ void Graphics::draw_line_depth(int x1, int y1, float z1,
     {
         draw_line(x1, y1, x2, y2, colr);
         return;
+    }
+
+    // S-2: the same endpoint wobble draw_line applies, so depth-tested
+    // strokes sketch like their untested siblings
+    if (render_mode_ == render_mode::sketch)
+    {
+        x1 += sketch_jitter(x1, y1);
+        y1 += sketch_jitter(y1, x1 + 101);
+        x2 += sketch_jitter(x2, y2);
+        y2 += sketch_jitter(y2, x2 + 101);
     }
 
     // the draw_line walk, with z interpolated by step index

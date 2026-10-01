@@ -145,19 +145,21 @@ namespace zb::ui::core
         }
 
         /*
-         * Render mode (S-1): FULL draws everything (the default, current
-         * behavior); WIREFRAME degrades the shape fills to 1px outlines
-         * for layout-debug/low-power views (strokes, text, images,
-         * damage, and hit-testing are untouched); SKETCH is reserved and
-         * renders as FULL until S-2. Per-Graphics state, set once per
-         * frame/window; the rasterizer branches above the pixel gates so
-         * clipping, damage, and the pixel model are unaffected.
+         * Render mode (S-1/S-2): FULL draws everything (the default,
+         * current behavior); WIREFRAME degrades the shape fills to 1px
+         * outlines for layout-debug/low-power views (strokes, text,
+         * images, damage, and hit-testing are untouched); SKETCH keeps
+         * the full image but hand-draws it — strokes and fill edges
+         * wobble by a small deterministic jitter (S-2). Per-Graphics
+         * state, set once per frame/window; the rasterizer branches
+         * above the pixel gates so clipping, damage, and the pixel
+         * model are unaffected.
          */
         enum class render_mode
         {
             full,
             wireframe,
-            sketch,  // reserved (S-2): currently renders as full
+            sketch,  // S-2: hand-drawn look via deterministic jitter
         };
 
         inline void set_render_mode(const render_mode mode)
@@ -575,6 +577,14 @@ namespace zb::ui::core
         // stride in floats per row); null = untested operation
         float *depth_ = nullptr;
         int depth_stride_ = 0;
+
+        /*
+         * S-2: the deterministic sketch jitter — a pure function of a
+         * coordinate and a salt in {-1, 0, +1}. No RNG state: every
+         * target, every run, and every process order agrees, so sketch
+         * renders stay byte-stable under the determinism contract.
+         */
+        [[nodiscard]] static int sketch_jitter(int v, int salt);
 
 #pragma endregion
 

@@ -386,12 +386,15 @@ satisfies. Changing any of these is an architecture change.
   widgets. API-level detail is in code-contract.md.
 - `clip_safe()` returns a stack RAII `ClipGuard` (zero allocation per widget
   per frame); off-screen widgets get an invalid guard and draw nothing.
-- **Render modes (S-1).** `Graphics` carries a `render_mode` (default
+- **Render modes (S-1/S-2).** `Graphics` carries a `render_mode` (default
   `full`, zero behavior change): `wireframe` degrades shape fills to
-  1px outlines for layout-debug/low-power views; text, strokes, images,
-  damage, and hit-testing are untouched. The branches sit above the
-  pixel gates, so the pixel model, depth matrix, and determinism rules
-  are unaffected on every target (NDS-safe, no float).
+  1px outlines for layout-debug/low-power views; `sketch` hand-draws
+  the full image through a deterministic coordinate hash jitter
+  (±1 px on stroke endpoints and fill-row ends, no state, byte-stable
+  on every target). Text, strokes, images, damage, and hit-testing
+  are untouched in both. The branches sit above the pixel gates, so
+  the pixel model, depth matrix, and determinism rules are unaffected
+  on every target (NDS-safe, no float).
 - **One-call surface blit (U-8).** `draw_surface` is the bulk
   consumer-owned pixel hand-off: one call, row-wise copy, opaque,
   clamped to the draw area and hard-clipped to the damage region (the

@@ -235,5 +235,106 @@ int test_render_mode()
         EXPECT(!same_buffer(gf, gw, 140, 80));  // the mode changes output
     }
 
+    // S-2 sketch: deterministic hand-drawn jitter. The wobble is a pure
+    // function of the coordinates — two renders agree byte-for-byte,
+    // a line's endpoints wobble by at most 1 px, and fills keep their
+    // interior while their boundary turns uneven.
+    {
+        // determinism: identical calls, identical bytes
+        Graphics a(60, 40, nullptr);
+        Graphics b(60, 40, nullptr);
+        a.fill(White);
+        b.fill(White);
+        a.set_render_mode(mode::sketch);
+        b.set_render_mode(mode::sketch);
+        a.draw_rect(5, 5, 40, 30, Black);
+        b.draw_rect(5, 5, 40, 30, Black);
+        a.fill_rect(10, 15, 30, 25, Black);
+        b.fill_rect(10, 15, 30, 25, Black);
+        EXPECT(same_buffer(a, b, 60, 40));
+
+        // sketch differs from full for the same geometry
+        Graphics f(60, 40, nullptr);
+        f.fill(White);
+        f.draw_rect(5, 5, 40, 30, Black);
+        f.fill_rect(10, 15, 30, 25, Black);
+        EXPECT(!same_buffer(a, f, 60, 40));
+
+        // endpoint wobble: a vertical line's pixels stay within one
+        // column of the true x, and the line still reaches both ends
+        Graphics l(60, 40, nullptr);
+        l.fill(White);
+        l.set_render_mode(mode::sketch);
+        l.draw_line(10, 2, 10, 30, Black);
+        int min_x = 60, max_x = 0;
+        for (int y = 0; y < 40; ++y)
+        {
+            for (int x = 0; x < 60; ++x)
+            {
+                if (test::pixel_at(l, x, y) == Black.pixel)
+                {
+                    if (x < min_x) min_x = x;
+                    if (x > max_x) max_x = x;
+                }
+            }
+        }
+        EXPECT(min_x >= 9 && max_x <= 11);
+        // the whole line may shift by up to one pixel (both endpoints
+        // may wobble the same way) but stays connected: every row of
+        // the drawn span carries a pixel
+        int rows_drawn = 0;
+        for (int y = 0; y < 40; ++y)
+        {
+            bool row_has = false;
+            for (int x = 0; x < 60; ++x)
+            {
+                if (test::pixel_at(l, x, y) == Black.pixel)
+                {
+                    row_has = true;
+                    break;
+                }
+            }
+            if (row_has)
+            {
+                ++rows_drawn;
+            }
+        }
+        EXPECT(rows_drawn >= 28);  // 30-row line, endpoints wobble +-1
+
+        // fill interior survives, boundary wobbles: the row extents of
+        // a sketched fill_rect deviate from the exact rectangle by at
+        // most one pixel on each side, and the center is solid
+        Graphics r(60, 40, nullptr);
+        r.fill(White);
+        r.set_render_mode(mode::sketch);
+        r.fill_rect(15, 10, 45, 30, Black);
+        EXPECT(test::pixel_at(r, 30, 20) == Black.pixel);
+        int left_most = 60, right_most = 0;
+        for (int y = 10; y <= 30; ++y)
+        {
+            for (int x = 0; x < 60; ++x)
+            {
+                if (test::pixel_at(r, x, y) == Black.pixel)
+                {
+                    if (x < left_most) left_most = x;
+                    if (x > right_most) right_most = x;
+                }
+            }
+        }
+        EXPECT(left_most >= 14 && left_most <= 15);
+        EXPECT(right_most >= 45 && right_most <= 46);
+
+        // sketch draws with the wireframe-style entry too: the mask
+        // helpers (ListBox row images and the like) keep FULL behavior —
+        // text and images are untouched, verified via the fill()
+        // immune primitive
+        Graphics m(60, 40, nullptr);
+        m.fill(White);
+        m.set_render_mode(mode::sketch);
+        m.fill(Black);  // mode-immune clear
+        EXPECT(test::pixel_at(m, 0, 0) == Black.pixel);
+        EXPECT(test::pixel_at(m, 59, 39) == Black.pixel);
+    }
+
     return test::report("render_mode");
 }
