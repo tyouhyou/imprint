@@ -30,7 +30,9 @@ int test_term_input()
         zb::shell::term_input::parser p(320, 240);
         auto ev = feed(p, "a");
         EXPECT(ev.size() == 1 && ev[0].type == input_type::key_down);
-        EXPECT(ev[0].ch == 'a' && ev[0].key == 0);
+        // U-1: letters carry the platform-independent key code alongside
+        // ch (the terminal protocol itself has no key-up)
+        EXPECT(ev[0].ch == 'a' && ev[0].key == 'a');
 
         ev = feed(p, "\r\t\x7f\x03");
         EXPECT(ev.size() == 4);

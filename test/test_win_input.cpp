@@ -40,7 +40,11 @@ int test_win_input()
     EXPECT(zb::shell::win_input::key_from_virtual_key(VK_DOWN) == static_cast<int>(zb::input::key_code::down));
     EXPECT(zb::shell::win_input::key_from_virtual_key(VK_LEFT) == static_cast<int>(zb::input::key_code::left));
     EXPECT(zb::shell::win_input::key_from_virtual_key(VK_RIGHT) == static_cast<int>(zb::input::key_code::right));
-    EXPECT(zb::shell::win_input::key_from_virtual_key(0x41 /* 'A' */) == 0);  // unmapped
+    // U-1: letters and digits are platform-independent key codes
+    // (lowercase letters, verbatim digits) on both edges
+    EXPECT(zb::shell::win_input::key_from_virtual_key(0x57 /* VK 'W' */) == 'w');
+    EXPECT(zb::shell::win_input::key_from_virtual_key(0x41 /* VK 'A' */) == 'a');
+    EXPECT(zb::shell::win_input::key_from_virtual_key('5') == '5');
 
     // pointer events carry client coordinates and the button
     {
@@ -79,11 +83,19 @@ int test_win_input()
         EXPECT(ev.key == static_cast<int>(zb::input::key_code::enter));
         EXPECT(ev.ch == 0);
     }
-    // keyboard: unmapped keys are swallowed (no event, no DefWindowProc)
+    // keyboard: unmapped non-printable keys are swallowed (no event, no
+    // DefWindowProc)
     {
         const POINT wheel_client{0, 0};
         zb::input::input_event ev;
-        EXPECT(translate(WM_KEYDOWN, 0x41, 0, wheel_client, ev) == result::swallowed);
+        EXPECT(translate(WM_KEYDOWN, VK_F1, 0, wheel_client, ev) == result::swallowed);
+    }
+    // U-1: a letter keydown is swallowed here -- the merged key+ch event
+    // comes from WM_CHAR (one key_down per keystroke, not two)
+    {
+        const POINT wheel_client{0, 0};
+        zb::input::input_event ev;
+        EXPECT(translate(WM_KEYDOWN, 0x57 /* VK 'W' */, 0, wheel_client, ev) == result::swallowed);
     }
 
     // characters: printable ASCII becomes a character event
@@ -91,7 +103,25 @@ int test_win_input()
         const zb::input::input_event ev = run(WM_CHAR, 'a');
         EXPECT(ev.type == zb::input::input_type::key_down);
         EXPECT(ev.ch == 'a');
-        EXPECT(ev.key == 0);
+        // U-1: letters also carry the platform-independent key code
+        EXPECT(ev.key == 'a');
+    }
+    // U-1: shifted character keeps its ch, key stays lowercase
+    {
+        const zb::input::input_event ev = run(WM_CHAR, 'W');
+        EXPECT(ev.type == zb::input::input_type::key_down);
+        EXPECT(ev.ch == 'W');
+        EXPECT(ev.key == 'w');
+    }
+    // U-1: keyup carries the same key code, ch is 0
+    {
+        const zb::input::input_event ev = run(WM_KEYUP, 0x57 /* VK 'W' */);
+        EXPECT(ev.type == zb::input::input_type::key_up);
+        EXPECT(ev.key == 'w');
+        EXPECT(ev.ch == 0);
+        const zb::input::input_event ev2 = run(WM_KEYUP, VK_RETURN);
+        EXPECT(ev2.type == zb::input::input_type::key_up);
+        EXPECT(ev2.key == static_cast<int>(zb::input::key_code::enter));
     }
     // characters: space keeps its navigation-key routing (no WM_CHAR event)
     {

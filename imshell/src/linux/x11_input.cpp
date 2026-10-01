@@ -34,7 +34,24 @@ int key_from_keysym(const KeySym ks)
         case XK_Down: return static_cast<int>(zb::input::key_code::down);
         case XK_Left: return static_cast<int>(zb::input::key_code::left);
         case XK_Right: return static_cast<int>(zb::input::key_code::right);
-        default: return 0;
+        default:
+            // letters and digits are platform-independent key codes on
+            // both edges (U-1): lowercase keysyms ARE the ASCII codes,
+            // shifted letters arrive as the uppercase keysym and
+            // normalize to lowercase
+            if (ks >= XK_a && ks <= XK_z)
+            {
+                return static_cast<int>(ks);
+            }
+            if (ks >= XK_A && ks <= XK_Z)
+            {
+                return static_cast<int>(ks + 0x20);
+            }
+            if (ks >= XK_0 && ks <= XK_9)
+            {
+                return static_cast<int>(ks);
+            }
+            return 0;
     }
 }
 
@@ -47,13 +64,14 @@ result translate(const XEvent &event, zb::input::input_event &out)
             {
                 out.type = zb::input::input_type::key_down;
                 out.key = key_from_keysym(XLookupKeysym(const_cast<XKeyPressedEvent *>(&event.xkey), 0));
-                if (out.key == 0)
+                // printable character (latin-1 from XLookupString;
+                // only single-byte, handles shift via the modifier
+                // state). Keys that produced a key field keep their
+                // key semantics (space is the navigation-activation
+                // key, not a character). U-1: a mapped letter/digit
+                // carries BOTH key and ch in the same key_down.
+                if (out.key != static_cast<int>(zb::input::key_code::space))
                 {
-                    // printable character (latin-1 from XLookupString;
-                    // only single-byte, handles shift via the modifier
-                    // state). Keys that produced a key field keep their
-                    // key semantics (space is the navigation-activation
-                    // key, not a character)
                     char buf[4];
                     const int len = XLookupString(const_cast<XKeyPressedEvent *>(&event.xkey), buf, sizeof(buf), nullptr, nullptr);
                     if (len == 1 && static_cast<unsigned char>(buf[0]) >= 0x20 &&
@@ -63,6 +81,17 @@ result translate(const XEvent &event, zb::input::input_event &out)
                     }
                 }
                 return (out.key != 0 || out.ch != 0) ? result::handled : result::swallowed;
+            }
+            case KeyRelease:
+            {
+                // U-1: keys ride both edges so hosts can pair down/up for
+                // key-state; ch is always 0 on key_up. X11 autorepeat
+                // interleaves release/press pairs while a key is held --
+                // a key-state host dedupes them (ARCHITECTURE §4.2);
+                // the pure translator cannot peek the queue.
+                out.type = zb::input::input_type::key_up;
+                out.key = key_from_keysym(XLookupKeysym(const_cast<XKeyPressedEvent *>(&event.xkey), 0));
+                return (out.key != 0) ? result::handled : result::swallowed;
             }
             case ButtonPress:
             {

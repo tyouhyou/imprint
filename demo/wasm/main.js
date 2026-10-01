@@ -90,8 +90,10 @@
     send(type, x, y, 0, 0, t.identifier);
   }
 
-  /* navigation/editing keys fill key (ch 0); other single-char keys fill
-   * ch (printable text), matching the shell convention (B2/B5) */
+  /* navigation/editing keys fill key (ch 0); printable letters/digits
+   * carry BOTH key (lowercase platform-independent code, U-1) and ch on
+   * keydown, keyup pairs on the same key (ch 0); other single-char keys
+   * fill ch only (punctuation stays layout-specific) */
   function resolveKey(e) {
     if (KEY_MAP[e.key] !== undefined) {
       return [KEY_MAP[e.key], 0];
@@ -101,7 +103,14 @@
       return [ZB_KEY_SPACE, 0];
     }
     if (e.key.length === 1) {
-      return [0, e.key.charCodeAt(0)];
+      var c = e.key.charCodeAt(0);
+      if ((c >= 97 && c <= 122) || (c >= 48 && c <= 57)) {
+        return [c, c];       // a-z, 0-9: key + ch in one event
+      }
+      if (c >= 65 && c <= 90) {
+        return [c + 32, c];  // shifted letter: key lowercase, ch uppercase
+      }
+      return [0, c];
     }
     return null; // unknown non-printable key: send nothing
   }

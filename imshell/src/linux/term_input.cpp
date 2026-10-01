@@ -181,6 +181,18 @@ namespace zb::shell::term_input
             zb::input::input_event ev{};
             ev.type = zb::input::input_type::key_down;
             ev.ch = static_cast<int>(ch);
+            // U-1: letters/digits also carry the platform-independent key
+            // code (lowercase/verbatim). The terminal protocol has no
+            // key-up at all -- key-state is unavailable on this target
+            // (ARCHITECTURE §4.2).
+            if (ch >= 'A' && ch <= 'Z')
+            {
+                ev.key = ch + 0x20;
+            }
+            else if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))
+            {
+                ev.key = ch;
+            }
             out.push_back(ev);
         }
         // other control bytes are dropped

@@ -33,6 +33,12 @@ int test_x11_input()
     EXPECT(zb::shell::x11_input::key_from_keysym(XK_Down) == static_cast<int>(zb::input::key_code::down));
     EXPECT(zb::shell::x11_input::key_from_keysym(XK_Left) == static_cast<int>(zb::input::key_code::left));
     EXPECT(zb::shell::x11_input::key_from_keysym(XK_Right) == static_cast<int>(zb::input::key_code::right));
+    // U-1: letters and digits are platform-independent key codes
+    // (lowercase letters, verbatim digits); shifted letters arrive as
+    // the uppercase keysym and normalize to lowercase
+    EXPECT(zb::shell::x11_input::key_from_keysym(XK_w) == 'w');
+    EXPECT(zb::shell::x11_input::key_from_keysym(XK_W) == 'w');
+    EXPECT(zb::shell::x11_input::key_from_keysym(XK_5) == '5');
     EXPECT(zb::shell::x11_input::key_from_keysym(XK_Home) == 0);  // unmapped
 
     // buttons: left press/release carry the button and position

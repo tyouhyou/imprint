@@ -71,7 +71,9 @@ namespace
     bool nsevent_to_key(NSEvent *nse, zb::input::input_event &out)
     {
         out = zb::input::input_event{};
-        out.type = zb::input::input_type::key_down;
+        out.type = (nse.type == NSEventTypeKeyUp)
+                       ? zb::input::input_type::key_up
+                       : zb::input::input_type::key_down;
         switch (nse.keyCode)
         {
             case 36: out.key = static_cast<int>(zb::input::key_code::enter); break;  // return
@@ -86,7 +88,10 @@ namespace
             case 124: out.key = static_cast<int>(zb::input::key_code::right); break;
             default: break;
         }
-        if (out.key == 0)
+        // printable ASCII (layout-aware characters string): ch on key_down,
+        // plus the platform-independent lowercase key code on both edges
+        // (U-1). Space keeps its navigation-key routing (B1).
+        if (out.key != static_cast<int>(zb::input::key_code::space))
         {
             NSString *chars = nse.characters;
             if (chars.length > 0)
@@ -94,9 +99,18 @@ namespace
                 const unichar c = [chars characterAtIndex:0];
                 if (c >= 0x20 && c <= 0x7e && c != ' ')
                 {
-                    // printable ASCII only, like the other shells' character
-                    // paths; space keeps its navigation-key routing (B1)
-                    out.ch = c;
+                    if (out.type == zb::input::input_type::key_down)
+                    {
+                        out.ch = c;
+                    }
+                    if (c >= 'A' && c <= 'Z')
+                    {
+                        out.key = c + 0x20;
+                    }
+                    else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+                    {
+                        out.key = c;
+                    }
                 }
             }
         }
@@ -203,6 +217,15 @@ namespace
     }
     // unmapped keys without a character are dropped, like win_input's
     // swallowed keydowns
+}
+- (void)keyUp:(NSEvent *)e
+{
+    // U-1: keys ride both edges so hosts can pair down/up for key-state
+    zb::input::input_event ev;
+    if (nsevent_to_key(e, ev))
+    {
+        feed(ev);
+    }
 }
 
 - (void)drawRect:(NSRect)dirtyRect

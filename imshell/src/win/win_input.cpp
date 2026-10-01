@@ -19,7 +19,19 @@ namespace zb::shell::win_input
             case VK_DOWN: return static_cast<int>(zb::input::key_code::down);
             case VK_LEFT: return static_cast<int>(zb::input::key_code::left);
             case VK_RIGHT: return static_cast<int>(zb::input::key_code::right);
-            default: return 0;
+            default:
+                // letters and digits are platform-independent key codes on
+                // both edges (U-1): their VK codes are ASCII, letters
+                // normalize to lowercase
+                if (vk >= 'A' && vk <= 'Z')
+                {
+                    return static_cast<int>(vk + 0x20);
+                }
+                if (vk >= '0' && vk <= '9')
+                {
+                    return static_cast<int>(vk);
+                }
+                return 0;
         }
     }
 
@@ -70,7 +82,27 @@ namespace zb::shell::win_input
                     // DefWindowProc -- keep that discipline
                     return result::swallowed;
                 }
+                // letters/digits emit through WM_CHAR instead (one merged
+                // key_down carrying key + ch, U-1) -- emitting here too
+                // would deliver two key_down events per keystroke
+                if ((key >= 'a' && key <= 'z') || (key >= '0' && key <= '9'))
+                {
+                    return result::swallowed;
+                }
                 out.type = zb::input::input_type::key_down;
+                out.key = key;
+                return result::handled;
+            }
+            case WM_KEYUP:
+            {
+                // U-1: keys ride both edges so hosts can pair down/up for
+                // key-state (hold-to-walk); ch is always 0 on keyup
+                const int key = key_from_virtual_key(wparam);
+                if (key == 0)
+                {
+                    return result::swallowed;
+                }
+                out.type = zb::input::input_type::key_up;
                 out.key = key;
                 return result::handled;
             }
@@ -87,6 +119,17 @@ namespace zb::shell::win_input
                 }
                 out.type = zb::input::input_type::key_down;
                 out.ch = c;
+                // U-1: letters/digits also carry the platform-independent
+                // key code (lowercase), so this single event pairs with
+                // its WM_KEYUP; punctuation stays key == 0 (layout-bound)
+                if (c >= 'A' && c <= 'Z')
+                {
+                    out.key = c + 0x20;
+                }
+                else if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9'))
+                {
+                    out.key = c;
+                }
                 return result::handled;
             }
             case WM_MOUSEWHEEL:
