@@ -1474,7 +1474,12 @@ int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
   `window()->width()/height()/title()`, event pump → `feed_input`
   (§4.1), `region_to_present` presentation, teardown.
 - `run_options` is creation-time only. The buffer never resizes after
-  `create_window` (I-2a); there is no runtime resize/reshape API.
+  `create_window` (I-2a); there is no runtime resize/reshape API. A
+  resolution change is therefore a **recreate-the-app** operation —
+  tear down and `create_window` again with the new size. That is the
+  only supported route; hosts should not attempt wrapper-rebuild
+  workarounds (a host-requested resize API is deferred until a real
+  host needs it — backlog U-9).
 - `title` overrides the OS window title only; the app-visible
   `IWindow::title()` is untouched.
 

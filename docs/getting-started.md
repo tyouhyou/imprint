@@ -112,6 +112,13 @@ keep your app in **your own project** and link Imprint as a library
 instead — your own `main`, `zb::shell::run`, the `imprint::` CMake
 targets — see "Use as a library" in `README.md`.
 
+One constraint to plan around: **the buffer resolution is fixed for
+the lifetime of the window.** `create_window(w, h)` sizes it once;
+there is no runtime resize. If your host window can resize, present
+the fixed buffer scaled (that is what the platform shells do), and
+treat a true resolution change as a recreate-the-app operation —
+there is no API for resizing a live buffer (code-contract §11.1).
+
 ## Describe UIs as text (optional)
 
 Layouts can also be written as `.ui` design files — a tiny text format

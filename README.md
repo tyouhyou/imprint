@@ -203,6 +203,12 @@ with — needs no shell at all: `CanvasWindow::create()` + `paint()` (see
 `test/external_smoke/`, wired into the test battery). The shell-loop
 contract is `docs/code-contract.md` §11.
 
+One constraint worth knowing up front: **the buffer is fixed for the
+lifetime of the window.** `create_window(w, h)` sizes it once (I-2a);
+there is no runtime resize API. If the resolution must change, the
+supported route is to recreate the app — tear down and `create_window`
+again with the new size (code-contract §11.1).
+
 ## Deterministic testing in CI
 
 For a fixed build and buffer size, one input sequence always yields
