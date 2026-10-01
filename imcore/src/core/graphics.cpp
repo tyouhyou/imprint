@@ -1042,6 +1042,214 @@ void Graphics::draw_circle(int x, int y, int radius, const Color &colr)
     }
 }
 
+void Graphics::attach_depth_buffer(float *depth, const int stride)
+{
+    // init path: a malformed plane is a host bug, reject it loudly
+    // (contract 1.1) instead of failing silently per pixel later
+    if (depth == nullptr || stride < imsize.width)
+    {
+        throw error("attach_depth_buffer: null plane or stride < buffer width");
+    }
+    depth_ = depth;
+    depth_stride_ = stride;
+}
+
+void Graphics::detach_depth_buffer()
+{
+    depth_ = nullptr;
+    depth_stride_ = 0;
+}
+
+void Graphics::depth_plot(int x, int y, float z, const Color &colr)
+{
+    int sx = x, sy = y;
+    if (draw_area_offset_enabled)
+    {
+        sx = draw_area_offset.x + x;
+        sy = draw_area_offset.y + y;
+    }
+    if (sx < draw_area.start_x || sy < draw_area.start_y || sx > draw_area.end_x || sy > draw_area.end_y)
+    {
+        return;
+    }
+    if (damage_on_ && !damage_contains(sx, sy))
+    {
+        return;
+    }
+
+    // GL-style LESS: smaller z is closer; a tie is rejected (the plane
+    // keeps the FIRST writer, matching the painter's fixed walk order)
+    float &d = depth_[depth_stride_ * sy + sx];
+    if (z >= d)
+    {
+        return;
+    }
+    d = z;
+
+    Color &px = pixels[imsize.width * sy + sx];
+    if (!this->alpha_enabled)
+    {
+        px = colr;
+    }
+    else
+    {
+        px = alpha_blend(colr, px);
+    }
+}
+
+void Graphics::draw_line_depth(int x1, int y1, float z1,
+                               int x2, int y2, float z2, const Color &colr)
+{
+    if (depth_ == nullptr)
+    {
+        draw_line(x1, y1, x2, y2, colr);
+        return;
+    }
+    if (render_mode_ == render_mode::wireframe)
+    {
+        draw_line(x1, y1, x2, y2, colr);
+        return;
+    }
+
+    // the draw_line walk, with z interpolated by step index
+    int nDx = x2 - x1;
+    int nDy = y2 - y1;
+    int nIx = abs(nDx);
+    int nIy = abs(nDy);
+    int nInc = (nIx > nIy ? nIx : nIy);
+    if (nInc < 2)
+    {
+        depth_plot(x1, y1, z1, colr);
+        depth_plot(x2, y2, z2, colr);
+        return;
+    }
+
+    const float dz = (z2 - z1) / static_cast<float>(nInc);
+    int64_t nJudgeX = -nIy;
+    int64_t nJudgeY = -nIx;
+    int x = x1;
+    int y = y1;
+    float z = z1;
+
+    nInc--;
+    int64_t nTwoIx = 2 * nIx;
+    int64_t nTwoIy = 2 * nIy;
+
+    for (int i = 0; i < nInc; i++)
+    {
+        nJudgeX += nTwoIx;
+        nJudgeY += nTwoIy;
+        z += dz;
+
+        bool bPlot = false;
+        if (nJudgeX >= 0)
+        {
+            bPlot = true;
+            nJudgeX -= nTwoIy;
+            if (nDx > 0)
+                x++;
+            else if (nDx < 0)
+                x--;
+        }
+        if (nJudgeY >= 0)
+        {
+            bPlot = true;
+            nJudgeY -= nTwoIx;
+            if (nDy > 0)
+                y++;
+            else if (nDy < 0)
+                y--;
+        }
+        if (bPlot)
+        {
+            depth_plot(x, y, z, colr);
+        }
+    }
+    depth_plot(x1, y1, z1, colr);
+    depth_plot(x2, y2, z2, colr);
+}
+
+void Graphics::fill_triangle_depth(int x1, int y1, float z1,
+                                   int x2, int y2, float z2,
+                                   int x3, int y3, float z3, const Color &colr)
+{
+    if (depth_ == nullptr)
+    {
+        fill_triangle(x1, y1, x2, y2, x3, y3, colr);
+        return;
+    }
+    if (render_mode_ == render_mode::wireframe)
+    {
+        draw_triangle(x1, y1, x2, y2, x3, y3, colr);
+        return;
+    }
+
+    // the fill_triangle scanline (sorted vertices, long edge a-c), with
+    // z interpolated along the edges and across each row span
+    int xa = x1, ya = y1, xb = x2, yb = y2, xc = x3, yc = y3;
+    float za = z1, zb = z2, zc = z3;
+    const auto sort_vertices = [](int &xa, int &ya, float &za, int &xb, int &yb, float &zb)
+    {
+        if (yb < ya)
+        {
+            std::swap(xa, xb);
+            std::swap(ya, yb);
+            std::swap(za, zb);
+        }
+    };
+    sort_vertices(xa, ya, za, xb, yb, zb);
+    sort_vertices(xa, ya, za, xc, yc, zc);
+    sort_vertices(xb, yb, zb, xc, yc, zc);
+    if (ya == yc)
+    {
+        return;  // degenerate: all vertices on one row
+    }
+
+    // a value on the edge (x1,y1)-(x2,y2) at row y; y1 == y2 keeps the
+    // vertex value
+    const auto edge_x = [](const int y, const int x1, const int y1, const int x2, const int y2) -> int
+    {
+        const int dy = y2 - y1;
+        if (dy == 0)
+        {
+            return x1;
+        }
+        return x1 + (x2 - x1) * (y - y1) / dy;
+    };
+    const auto edge_z = [](const int y, const int y1, const float z1, const int y2, const float z2) -> float
+    {
+        const int dy = y2 - y1;
+        if (dy == 0)
+        {
+            return z1;
+        }
+        return z1 + (z2 - z1) * static_cast<float>(y - y1) / static_cast<float>(dy);
+    };
+
+    for (int y = ya; y <= yc; y++)
+    {
+        const int x_long = edge_x(y, xa, ya, xc, yc);
+        const int x_other = y <= yb ? edge_x(y, xa, ya, xb, yb) : edge_x(y, xb, yb, xc, yc);
+        const float z_long = edge_z(y, ya, za, yc, zc);
+        const float z_other = y <= yb ? edge_z(y, ya, za, yb, zb) : edge_z(y, yb, zb, yc, zc);
+        if (x_long == x_other)
+        {
+            depth_plot(x_long, y, z_long, colr);
+            continue;
+        }
+        const int xa_ = std::min(x_long, x_other);
+        const int xb_ = std::max(x_long, x_other);
+        const float za_ = (x_long < x_other) ? z_long : z_other;
+        const float zb_ = (x_long < x_other) ? z_other : z_long;
+        const float dz = (zb_ - za_) / static_cast<float>(xb_ - xa_);
+        float z = za_;
+        for (int x = xa_; x <= xb_; x++, z += dz)
+        {
+            depth_plot(x, y, z, colr);
+        }
+    }
+}
+
 void Graphics::fill_circle(int x, int y, int radius, const Color &colr)
 {
     if (render_mode_ == render_mode::wireframe)

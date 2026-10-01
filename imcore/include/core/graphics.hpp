@@ -509,6 +509,32 @@ namespace zb::ui::core
          */
         void draw_wireframe_grid(int spacing, const Color &colr);
 
+        /*
+         * U-6 depth semantics: an OPTIONAL host-owned depth plane beside
+         * the framebuffer. attach is an init path (throws zb::ui::error
+         * on a malformed stride; the pointer is borrowed — the host
+         * keeps it alive and clears/rewrites it each frame). Comparison
+         * is GL-style LESS: smaller z is closer.
+         */
+        void attach_depth_buffer(float *depth, int stride);
+        void detach_depth_buffer();
+
+        /*
+         * Depth-tested primitives (U-6). z interpolates linearly along
+         * the walk (line) / across the scanline fill (triangle); a
+         * passing pixel writes color through the draw_pixel policy and
+         * records z; a rejected pixel touches nothing. The depth test is
+         * additive to the offset/draw-area/damage gates. Without an
+         * attached buffer both degenerate to their untested siblings;
+         * in WIREFRAME mode the triangle degrades to the untested
+         * outline. Contracts: code-contract §9, ARCHITECTURE §4.4.
+         */
+        void draw_line_depth(int x1, int y1, float z1,
+                             int x2, int y2, float z2, const Color &colr);
+        void fill_triangle_depth(int x1, int y1, float z1,
+                                 int x2, int y2, float z2,
+                                 int x3, int y3, float z3, const Color &colr);
+
         // the AA primitives' single write path, public: widget paint
         // (shadow masks, rim) is a second consumer beside the fills,
         // through the same gate and blend policy.
@@ -545,6 +571,11 @@ namespace zb::ui::core
         int damage_r_ = -1;
         int damage_b_ = -1;
 
+        // U-6: optional host-owned depth plane (borrowed pointer,
+        // stride in floats per row); null = untested operation
+        float *depth_ = nullptr;
+        int depth_stride_ = 0;
+
 #pragma endregion
 
 #pragma region private methods
@@ -561,6 +592,14 @@ namespace zb::ui::core
          * and the 16bpp binary path returns front for any alpha bit).
          */
         void fill_span(int x1, int x2, int y, const Color &colr);
+
+        /*
+         * U-6: the single depth-tested write path — the same gates as
+         * draw_pixel (offset / draw area / damage) plus the LESS depth
+         * test; a passing pixel writes through draw_pixel's policy and
+         * records z on the plane. Requires an attached buffer.
+         */
+        void depth_plot(int x, int y, float z, const Color &colr);
 
         // single canonical test for the damage clip (A-13): the damage
         // rect is half-open, draw_area is inclusive; every raster write

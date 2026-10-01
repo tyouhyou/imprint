@@ -47,6 +47,7 @@ int test_alloc_guard();
 int test_perf_walk();
 int test_raster_damage();
 int test_draw_surface();
+int test_depth_fill();
 int test_pixel_convert();
 int test_pixel_traits();
 int test_shell_presenter();
@@ -126,6 +127,7 @@ static const suite g_suites[] = {
     {"perf_walk", test_perf_walk},
     {"raster_damage", test_raster_damage},
     {"draw_surface", test_draw_surface},
+    {"depth_fill", test_depth_fill},
     {"pixel_convert", test_pixel_convert},
     {"pixel_traits", test_pixel_traits},
     {"shell_presenter", test_shell_presenter},
