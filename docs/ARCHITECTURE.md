@@ -373,6 +373,14 @@ satisfies. Changing any of these is an architecture change.
   damage, and hit-testing are untouched. The branches sit above the
   pixel gates, so the pixel model, depth matrix, and determinism rules
   are unaffected on every target (NDS-safe, no float).
+- **One-call surface blit (U-8).** `draw_surface` is the bulk
+  consumer-owned pixel hand-off: one call, row-wise copy, opaque,
+  clamped to the draw area and hard-clipped to the damage region (the
+  same gates as `fill`, at block granularity instead of per-pixel
+  `draw_pixel` traversal). Whole pixel words move — no channel work —
+  so it is deterministic and 16bpp-safe on every target. C++-level
+  only (a widget's `draw_at` hand-off); the ABI note is in
+  code-contract §9.
 - **Presentation seam (A-1).** The kernel renders exactly one internal
   format per build (the `COLOR_DEPTH` matrix above); conversion to a panel
   format happens only at the presentation edge (a shell's blit), as a row

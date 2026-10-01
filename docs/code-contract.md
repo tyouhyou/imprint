@@ -1282,6 +1282,23 @@ obligations:
   the image cache in wireframe (a cached face would blit opaque):
   glyphs write straight to the screen, so flips need no invalidation
   and the miss counter only tracks FULL-mode cache misses.
+- **One-call surface blit (U-8)**: `Graphics::draw_surface(src,
+  src_stride, width, height, start_x, start_y)` writes a consumer-owned
+  pixel block in ONE call while the lib keeps the accounting. It is an
+  **opaque overwrite** (`alpha_enabled` is ignored — bulk scene hand-off,
+  not a blend), a row-wise `std::copy_n` (deterministic, no per-pixel
+  gate), clamped to the draw area (inclusive bounds) and hard-clipped to
+  the damage region when damage mode is on — a full-screen scene
+  widget's blit inside a partial repaint cannot smear pixels outside the
+  damaged region (the fps F9 failure mode, locked by `test_draw_surface`).
+  Widget-local coordinates resolve through `draw_area_offset` like every
+  primitive; malformed views (null `src`, `stride < width`, non-positive
+  extents) draw nothing, like the malformed `image_t` view. The API is
+  deliberately C++-level — the consumer side is a widget's `draw_at`
+  hand-off. A raw C-ABI blit export would fight the retained tree's
+  damage model (pixels written outside a widget's paint are overdrawn by
+  the next repaint) and no ABI host has asked for it; revisit only when
+  an ABI-side custom-widget hook exists.
 - **Continuous rounded geometry (rim gate)**: every rounded-rect raster
   (the fills' row spans, the translucent border stroke band, the inset
   shadow's hole and clip, the outer shadow's silhouette mask rows)
