@@ -233,9 +233,9 @@ namespace zb::ui
         for (size_t i = 0; i < items.size(); ++i)
         {
             const Widget &child = *items[i].child;
-            if (child.is_absolute())
+            if (child.is_absolute() || !child.is_visible())
             {
-                continue;
+                continue;  // abs: outside the flow (P-3); hidden: display:none (H-9)
             }
             // flex items and percent children contribute nothing on their
             // open axis: their size only exists relative to a resolved
@@ -309,9 +309,9 @@ namespace zb::ui
         // later against their containing block, never here.
         for (const auto &item : items)
         {
-            if (item.child->is_absolute())
+            if (item.child->is_absolute() || !item.child->is_visible())
             {
-                continue;
+                continue;  // abs (P-3) / hidden (H-9): outside the flow
             }
             const int pct = cross_percent(*item.child, direction);
             if (pct > 0)
@@ -329,9 +329,9 @@ namespace zb::ui
         // children resolve in resolve_abs, never here.
         for (auto &item : items)
         {
-            if (item.child->is_absolute())
+            if (item.child->is_absolute() || !item.child->is_visible())
             {
-                continue;
+                continue;  // abs (P-3) / hidden (H-9): outside the flow
             }
             int derived = 0;
             if (aspect_derive_main(*item.child, direction, derived))
@@ -352,9 +352,9 @@ namespace zb::ui
             int need = 0;
             for (size_t i = 0; i < items.size(); ++i)
             {
-                if (items[i].child->is_absolute())
+                if (items[i].child->is_absolute() || !items[i].child->is_visible())
                 {
-                    continue;
+                    continue;  // abs (P-3) / hidden (H-9): outside the flow
                 }
                 const int pct = main_percent(*items[i].child, direction);
                 // an explicit basis is the line claim even for growers
@@ -388,7 +388,9 @@ namespace zb::ui
             // no normal flow, but abs children still resolve (P-3)
             for (auto &item : items)
             {
-                if (item.child->is_absolute())
+                // a hidden abs child resolves nothing while hidden (H-9);
+                // set_visible re-runs the pass when it shows again
+                if (item.child->is_absolute() && item.child->is_visible())
                 {
                     resolve_abs(*item.child, changed);
                 }
@@ -889,7 +891,9 @@ namespace zb::ui
         // absolute children resolve after the normal flow (P-3)
         for (auto &item : items)
         {
-            if (item.child->is_absolute())
+            // a hidden abs child resolves nothing while hidden (H-9);
+            // set_visible re-runs the pass when it shows again
+            if (item.child->is_absolute() && item.child->is_visible())
             {
                 resolve_abs(*item.child, changed);
             }

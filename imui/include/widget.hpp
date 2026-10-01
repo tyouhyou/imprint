@@ -503,6 +503,10 @@ namespace zb::ui
         {
             mark_dirty();
             visible = v;
+            // H-9: visibility is a layout input — flow containers skip
+            // hidden children (display:none semantics), so a toggle must
+            // re-run the container's layout pass, not just repaint
+            mark_layout_dirty();
         }
         [[nodiscard]] bool is_visible() const { return visible; }
 

@@ -495,6 +495,18 @@ boundary):
   and the shells must be extended first.
 - Public boundary headers must be self-contained and includable by C
   hosts; they must not leak C++ types.
+- **Visibility is a layout input (H-9 tail)**: a hidden
+  (`set_visible(false)`) child is `display:none` for the flow —
+  `FlexPanel` skips it in every pass (demand/measure, percent and
+  aspect resolution, line splitting, placement) and in abs resolution,
+  so it claims no space and gets no geometry while hidden. This is what
+  the HTML path's `display:none` mapping (`visible=false`) promises. The
+  other side of the rule: `set_visible` marks the layout dirty in
+  addition to the damage, so hiding/showing re-runs the container's
+  layout pass and the change takes effect at the next gated paint.
+  Plain `Panel` keeps its legacy geometry (hidden children keep their
+  slots), and stale geometry on a hidden child is irrelevant — the
+  re-run on show re-derives it.
 - Widget sizing: `Widget::measure()` returns the natural size (default =
   current size; Label/Checkbox/RadioButton/Slider/ListBox override with
   content-derived sizes; ProgressBar overrides with a fixed intrinsic

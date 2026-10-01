@@ -825,5 +825,44 @@ int test_flex()
         EXPECT(c[0].child->get_position().x == 10);
     }
 
+    // H-9 visibility tail: a hidden child is display:none for the flow —
+    // it claims no space, and showing/hiding re-runs the layout pass
+    {
+        FlexPanel p;
+        p.set_direction(FlexPanel::flex_direction::row);
+        p.set_size(120, 40);
+        p.set_padding(0);
+
+        auto a = make_child(30, 20);
+        auto b = make_child(30, 20);
+        auto hidden = make_child(30, 20);
+        auto *pa = a.get();
+        auto *pb = b.get();
+        auto *ph = hidden.get();
+        p.add_child(std::move(a));
+        p.add_child(std::move(hidden));
+        p.add_child(std::move(b));
+
+        // hidden up front: only a and b pack; hidden keeps stale geometry
+        ph->set_visible(false);
+        p.layout();
+        EXPECT(pa->get_position().x == 0);
+        EXPECT(pb->get_position().x == 30);  // hidden claims nothing
+        // hidden never entered a pass: its geometry stays the default
+        EXPECT(ph->get_position().x == 0);
+
+        // showing re-runs the layout: it reclaims its slot in the middle
+        ph->set_visible(true);
+        p.layout();
+        EXPECT(pa->get_position().x == 0);
+        EXPECT(ph->get_position().x == 30);
+        EXPECT(pb->get_position().x == 60);
+
+        // hiding again collapses the flow back
+        ph->set_visible(false);
+        p.layout();
+        EXPECT(pb->get_position().x == 30);
+    }
+
     return test::report("flex");
 }
