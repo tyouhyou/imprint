@@ -237,6 +237,17 @@ satisfies. Changing any of these is an architecture change.
   interleaves release/press pairs while the key is held — a key-state
   host tolerates or dedupes them; the framework itself never acts on
   `key_up` (the dispatcher drops it).
+- **Relative motion (U-3).** `input_event` carries `dx`/`dy` — a pure
+  relative displacement — and `input_type::pointer_delta` is the event
+  that transports it. The deltas are **host-provided** (pointer-locked
+  hosts, tablets, raw-input channels): desktop shells derive pointer
+  state from absolute positions only, and a delta derived from those is
+  expressible by the consumer, so shells do not fill `dx`/`dy`. For a
+  locked-pointer host absolute `x`/`y` are meaningless; a
+  `pointer_delta` event leaves them untouched. The dispatcher is
+  deliberately **inert** to `pointer_delta` (no framework UI consumes
+  relative motion today); the event exists so library-mode hosts and
+  the C-ABI (`zb_input_delta`) have a stable carrier.
 - Focus is keyboard-only and modal-scoped; `Tab`/arrows cycle focusable
   widgets; `Enter`/`Space` activate. Focus does not travel through hidden
   widgets or closed dialogs.
