@@ -92,7 +92,9 @@ if (NOT NDS_PLATFORM)
         src/linux/sixel.cpp
         src/linux/term_input.cpp
     )
-    target_include_directories(shell_common PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    target_include_directories(shell_common PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include/imprint/imshell/include>)
     target_link_libraries(shell_common PUBLIC ${IMAPPLIB} ${IMINPUTLIB})
 endif()
 
@@ -103,7 +105,8 @@ endif()
 # zb::shell::run (code-contract §11) instead of a backend main.
 add_library(shell_backend INTERFACE)
 target_include_directories(shell_backend INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include)
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/imprint/imshell/include>)
 if (build_inc)
     target_include_directories(shell_backend INTERFACE ${build_inc})
 endif()
@@ -125,7 +128,8 @@ endif()
 if (NOT NDS_PLATFORM AND hostloop_src)
     add_library(shell_hostloop STATIC ${hostloop_src})
     target_include_directories(shell_hostloop PUBLIC
-        ${CMAKE_CURRENT_SOURCE_DIR}/include)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include/imprint/imshell/include>)
     target_link_libraries(shell_hostloop PUBLIC
         ${IMAPPLIB} ${IMINPUTLIB} shell_common)
     if (build_inc)

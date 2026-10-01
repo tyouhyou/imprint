@@ -1,0 +1,12 @@
+@PACKAGE_INIT@
+
+# Imprint — the install-tree consumption entry (Batch G P1.5).
+# The exported targets mirror the add_subdirectory consumption names
+# (ARCHITECTURE §3.2): imprint::imutil/imcore/imevent/iminput/imui/
+# imapp/imapp_canvas/snapshot and the shell targets built by the
+# generating configuration (imprint::shell_common/shell_hostloop/
+# shell_backend, platform-dependent).
+
+include("${CMAKE_CURRENT_LIST_DIR}/imprintTargets.cmake")
+
+check_required_components(imprint)

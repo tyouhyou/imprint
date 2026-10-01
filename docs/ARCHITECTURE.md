@@ -115,15 +115,34 @@ Consequences:
 
 ### 3.2 External consumption (library mode)
 
-A foreign CMake project consumes Imprint with `add_subdirectory` or
-FetchContent (install/export packaging is condition-triggered work, not
-built yet — the out-of-tree `add_subdirectory` path is the supported
-consumption story):
+A foreign CMake project consumes Imprint two ways, both providing the
+same `imprint::` targets (P1.5, 2026-10-01):
 
-```cmake
-add_subdirectory(imprint)   # or FetchContent_MakeAvailable(imprint)
-target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
-```
+- **Installed package** — `cmake --install` ships it, then
+  `find_package(imprint CONFIG REQUIRED)`:
+
+  ```cmake
+  find_package(imprint 0.1 CONFIG REQUIRED)
+  target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
+  ```
+
+  The export set carries every library target the generating build had
+  (`imutil` … `imui`, `imapp` / `imapp_canvas` / `snapshot`, the
+  shell targets of that configuration); header layout reproduces each
+  module's `-I` root verbatim under `include/imprint/<module>/include`.
+  The shell targets' platform link requirements (e.g. X11 on the
+  linux-x11 backend) travel in the export set — a consumer linking
+  them needs the same platform packages the generating build used.
+  The headless path (`imprint::imapp_canvas` alone) is platform-clean.
+  Locked by `test/installed_smoke` (staging install + find_package
+  consumer, CI linux-desktop).
+- **Source tree** — `add_subdirectory` / FetchContent (the original
+  story, still supported):
+
+  ```cmake
+  add_subdirectory(imprint)   # or FetchContent_MakeAvailable(imprint)
+  target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
+  ```
 
 - As a subproject the tree configures **libraries only** (`imutil` …
   `imui`, `imapp` / `imapp_canvas`, `shell_common` + `shell_hostloop` +

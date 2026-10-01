@@ -7,5 +7,6 @@ add_library(
 target_include_directories(
     ${IMEVENTLIB}
     INTERFACE
-    "${PROJECT_SOURCE_DIR}/imevent/include"
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/imevent/include>
+    $<INSTALL_INTERFACE:include/imprint/imevent/include>
 )

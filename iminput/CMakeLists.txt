@@ -6,5 +6,6 @@ add_library(
 target_include_directories(
     iminput
     INTERFACE
-    "${PROJECT_SOURCE_DIR}/iminput/include"
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/iminput/include>
+    $<INSTALL_INTERFACE:include/imprint/iminput/include>
 )

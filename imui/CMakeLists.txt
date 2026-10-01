@@ -27,7 +27,8 @@ add_library(
 target_include_directories(
     ${IMUILIB}
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/imprint/imui/include>
 )
 
 target_link_libraries(

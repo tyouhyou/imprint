@@ -195,6 +195,14 @@ add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
 ```
 
+Prefer an installed package? `cmake --install` ships one; after a
+`cmake --install <build> --prefix <prefix>`, your project says
+`find_package(imprint CONFIG REQUIRED)` (point `CMAKE_PREFIX_PATH` at
+the prefix) and links the same `imprint::` targets. The export set
+carries the library targets of the generating build; the shell targets
+keep their platform link requirements (e.g. X11), while the headless
+`imprint::imapp_canvas` path is platform-clean.
+
 As a subproject Imprint configures **libraries only** — no demo apps, no
 binding, no host tools; the `IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` /
 `IMPRINT_WITH_DEMOS` switches re-enable each piece (the default in-tree

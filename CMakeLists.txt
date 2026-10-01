@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(imprint)
+project(imprint VERSION 0.1.0)
 
 # Subproject detection (CMake 3.16 has no PROJECT_IS_TOP_LEVEL): when
 # imprint is consumed via add_subdirectory/FetchContent, CMAKE_SOURCE_DIR
@@ -95,8 +95,7 @@ endif()
 add_subdirectory(imshell)
 
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
-# §3.2). Aliases resolve inside the consuming tree; install/export is
-# condition-triggered later work.
+# §3.2). Aliases resolve inside the consuming tree.
 foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend)
     if (TARGET ${_imprint_target})
         add_library(imprint::${_imprint_target} ALIAS ${_imprint_target})
@@ -106,6 +105,56 @@ endforeach()
 if (TARGET imapp_snapshot)
     add_library(imprint::snapshot ALIAS imapp_snapshot)
 endif()
+
+# Batch G P1.5: install/export. `cmake --install` ships the library-mode
+# surface, and find_package(imprint CONFIG) afterwards provides the same
+# imprint:: targets the add_subdirectory path does (ARCHITECTURE §3.2).
+# Header layout: each module's -I root is reproduced verbatim under
+# include/imprint/<module>/include, matching the INSTALL_INTERFACE
+# generator expressions in the module files. The rules are inert on
+# targets that never install (NDS toolchain, framework-mode builds that
+# never run cmake --install).
+set(IMPRINT_INSTALL_TARGETS "")
+foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend)
+    if (TARGET ${_imprint_target})
+        list(APPEND IMPRINT_INSTALL_TARGETS ${_imprint_target})
+    endif()
+endforeach()
+# the glibc shim travels with the shared imcore as a LINK_ONLY
+# dependency; the export set must contain it (binding/CMakeLists)
+if (TARGET zbcompat)
+    list(APPEND IMPRINT_INSTALL_TARGETS zbcompat)
+endif()
+# the exported consumption name (the alias imprint::snapshot has no
+# install form; the property renames the target inside the export set)
+if (TARGET imapp_snapshot)
+    set_target_properties(imapp_snapshot PROPERTIES EXPORT_NAME snapshot)
+endif()
+install(TARGETS ${IMPRINT_INSTALL_TARGETS} EXPORT imprintTargets
+    ARCHIVE DESTINATION lib
+    LIBRARY DESTINATION lib
+    RUNTIME DESTINATION bin)
+install(EXPORT imprintTargets
+    FILE imprintTargets.cmake
+    NAMESPACE imprint::
+    DESTINATION lib/cmake/imprint)
+foreach(_imprint_module imutil imcore imevent iminput imui imapp imshell)
+    install(DIRECTORY ${_imprint_module}/include/
+            DESTINATION include/imprint/${_imprint_module}/include)
+endforeach()
+include(CMakePackageConfigHelpers)
+configure_package_config_file(
+    cmake/imprintConfig.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/imprintConfig.cmake
+    INSTALL_DESTINATION lib/cmake/imprint)
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/imprintConfigVersion.cmake
+    VERSION ${PROJECT_VERSION}
+    COMPATIBILITY SameMinorVersion)
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/imprintConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/imprintConfigVersion.cmake
+    DESTINATION lib/cmake/imprint)
 
 # A-22: the one composition point (framework mode, IMPRINT_WITH_DEMOS).
 # imshell provides shell_backend (the selected backend's usage

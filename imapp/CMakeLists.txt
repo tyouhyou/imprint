@@ -16,7 +16,8 @@ add_library(
 target_include_directories(
     ${IMAPPLIB}
     INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/imprint/imapp/include>
 )
 
 target_link_libraries(
@@ -36,7 +37,8 @@ add_library(
 target_include_directories(
     imapp_canvas
     INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/imprint/imapp/include>
 )
 
 target_link_libraries(
@@ -56,7 +58,8 @@ add_library(
 target_include_directories(
     imapp_snapshot
     INTERFACE
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/imprint/imapp/include>
 )
 
 target_link_libraries(

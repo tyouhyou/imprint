@@ -187,7 +187,11 @@ target_include_directories(
     ${IMCORELIB}
 
     PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    # P1.5 install/export: build tree keeps the source path; the
+    # installed tree reproduces the module's -I root under
+    # include/imprint/imcore/include
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include/imprint/imcore/include>
 
     PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}/include/core
@@ -209,7 +213,8 @@ if (IMCORE_HAS_SUBSET)
     # branch on the same macro the provider was compiled with
     target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_SUBSET)
     target_include_directories(${IMCORELIB} PUBLIC
-        ${CMAKE_CURRENT_BINARY_DIR}/include/text ${CMAKE_CURRENT_BINARY_DIR}/include)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/text>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
 endif()
 
 if (IMCORE_HAS_TTF_SUBSET)
@@ -217,7 +222,8 @@ if (IMCORE_HAS_TTF_SUBSET)
     # subset: PUBLIC macro + generated include dir
     target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_TTF_SUBSET)
     target_include_directories(${IMCORELIB} PUBLIC
-        ${CMAKE_CURRENT_BINARY_DIR}/include/text ${CMAKE_CURRENT_BINARY_DIR}/include)
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include/text>
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_BINARY_DIR}/include>)
 endif()
 
 if (USE_FONT_SIZE)

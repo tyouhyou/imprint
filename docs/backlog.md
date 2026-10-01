@@ -22,8 +22,8 @@ Dependency-driven: each tier unlocks what follows.
    landed; shells paint natively — per-shell adoption needs maintainer
    eyes).
 3. **P1 external consumability** (2026-09-26 roadmap, Batch G) — landed
-   2026-09-26 (closes A-23); next in the G sequence is P1.5 install/export
-   (trigger met 2026-09-27 — see Batch G).
+   2026-09-26 (closes A-23); **P1.5 install/export landed 2026-10-01**
+   (see Batch G).
 4. **Batch U — external-consumer feedback** (opened 2026-09-27,
    **landed 2026-10-01** except U-6): U-1..U-5, U-7..U-9 from the fps
    acceptance rig are done (docs tier, input-contract tier, U-8
@@ -257,8 +257,11 @@ fragments + a full-code re-read); the rulings below supersede/extend the
     gates (A-23 closed), `imprint::` aliases, library mode
     `zb::shell::run(IApp, options)` (code-contract §11), the
     external-consumption smoke in the battery + CI. *P1.5
+    (install/export `imprintConfig.cmake`) — **landed 2026-10-01**
     (trigger met 2026-09-27 — fps is the first real external
-    consumer): install/export `imprintConfig.cmake`.*
+    consumer): `cmake --install` + `find_package(imprint CONFIG)`,
+    the consumption contract in ARCHITECTURE §3.2, locked by
+    `test/installed_smoke` (battery + CI linux-desktop).*
   - **P2. Deterministic-test story** — **landed 2026-09-26**: `zb::snap`
     snapshot helper (code-contract §12: frame hash, record/check with
     mismatch artifact, GIF/PNG dumps; showcase SELF-CHECK rides it) +

@@ -151,3 +151,16 @@ add_test(NAME external_smoke
         --build-noclean
         --test-command ${CMAKE_CURRENT_BINARY_DIR}/external_smoke/bin/external_smoke)
 endif()
+
+# installed-config smoke (Batch G P1.5): installs THIS build into a
+# staging prefix and builds a find_package(imprint) consumer against it
+# (test/installed_smoke/run.cmake drives the sequence). Local path is
+# single-config generators only; the CI linux-desktop job runs the same
+# driver directly.
+if (NOT WIN32 AND NOT NDS_PLATFORM AND NOT CMAKE_CONFIGURATION_TYPES)
+add_test(NAME installed_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DSRC=${PROJECT_SOURCE_DIR}
+        -DBIN=${CMAKE_BINARY_DIR}
+        -P ${PROJECT_SOURCE_DIR}/test/installed_smoke/run.cmake)
+endif()
