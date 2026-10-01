@@ -155,6 +155,22 @@ font). Without the switch the 5x7 bitmap fallback keeps every build
 green. To ship only the glyphs you need, subset the font first with
 `tools/font_subset.py`.
 
+## Dialog assembly — two things the defaults won't do for you
+
+`Dialog` lays its frame out manually, which has two consequences that
+fail silently if you miss them (both bite at `auto_layout`-off, the
+default when you build the tree by hand):
+
+1. **Call `layout()` once after configuring the dialog.** Without it
+   the frame is never centered in the dialog area — no error, just a
+   misplaced frame. (With `CanvasWindow::set_auto_layout(true)` the
+   paint loop performs pending layouts for you.)
+2. **Title height follows the title's font size only if the title
+   declares one.** The default title box is 16px; if you set a larger
+   font on the title (`dialog.get_title().set_font_size(px)`), the box
+   auto-grows to `px + 4` at layout time — unless you gave the title an
+   explicit `set_size`, which always wins.
+
 ## Describe UIs as text (optional)
 
 Layouts can also be written as `.ui` design files — a tiny text format

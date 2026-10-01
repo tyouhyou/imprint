@@ -106,6 +106,9 @@ namespace zb::ui
 
         int frame_padding = 8;
         int spacing = 4;
+        // auto title height (applied when the title width is still zero at
+        // layout time): a title that declared set_font_size(px) gets
+        // px + 4; this 16 stays the default otherwise (U-4)
         int default_title_height = 16;
         int button_width = 48;
         int button_height = 18;

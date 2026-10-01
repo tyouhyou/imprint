@@ -44,10 +44,15 @@ namespace zb::ui
 
         const int pad = frame_padding;
 
-        // title at the top; a zero-width title stretches to the frame width
+        // title at the top; a zero-width title stretches to the frame width.
+        // The auto height follows the title's declared font size when it
+        // has one (U-4: the 16px default box clips sized glyphs); +4 keeps
+        // 2px of breathing room per edge.
         if (0 == title_label->get_size().width)
         {
-            title_label->set_size(f.width - 2 * pad, default_title_height);
+            const int px = title_label->font_size();
+            const int h = (px > 0) ? px + 4 : default_title_height;
+            title_label->set_size(f.width - 2 * pad, h);
         }
         title_label->set_position(pad, pad);
 

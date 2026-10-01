@@ -39,6 +39,28 @@ int test_dialog()
         EXPECT(body_sz.height == (80 - pad - 18) - 4 - body_pos.y);  // 22
     }
 
+    // U-4: the auto title height follows the title's declared font size
+    // (runtime-TTF builds only; without the runtime set_font_size is a
+    // documented no-op and the 16px default applies)
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    {
+        Dialog d;
+        d.set_size(100, 100);
+        d.set_frame_size(80, 100);
+        d.set_title("Sized");
+        // two-argument overload: installs its own family (the process has
+        // none in this battery — single-arg set_font_size would throw)
+        d.get_title().set_font_size(
+            28, TtfFamily::from_file(IM_TEST_RUNTIME_TTF_FONT));
+        d.add_button("OK");
+        d.layout();
+
+        // zero-width title is auto-sized: 28px font -> 32px box, not 16
+        EXPECT(d.get_title().get_size().height == 28 + 4);
+        EXPECT(d.get_body().get_position().y == 8 + 32 + 4);
+    }
+#endif
+
     // add_button: returned reference is usable
     {
         Dialog d;
