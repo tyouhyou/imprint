@@ -39,7 +39,11 @@ namespace zb::input
 
     /*
      * Keyboard key codes used by the `key` field of input_event.
-     * ASCII codes are used verbatim; non-ASCII keys start at 256.
+     * ASCII codes are used verbatim: the control keys below, and every
+     * mapped printable key as its lowercase/verbatim ASCII code
+     * (letters `a`=97..`z`=122, digits 48..57) — carried on key_down
+     * AND key_up so a host can pair the edges (U-1, ARCHITECTURE §4.2).
+     * Non-ASCII keys start at 256.
      */
     enum class key_code : int
     {
@@ -64,8 +68,11 @@ namespace zb::input
      *   - mouse_* (click / move) : x, y, button
      *   - touch_*                : x, y, touch_id (which finger)
      *   - mouse_wheel            : delta  (> 0 up / forward, < 0 down / back)
-     *   - key_*                  : key (see key_code), ch (printable character
-     *                              when the key produces one; 0 otherwise)
+     *   - key_*                  : key (see key_code — mapped printable
+     *                              keys carry their lowercase/verbatim ASCII
+     *                              code on both edges, U-1), ch (the
+     *                              printable character on key_down when the
+     *                              key produces one; always 0 on key_up)
      *
      * `ch` holds a Unicode code point produced by a printable key (ASCII
      * 0x20..0x7E for now). Both fields are independent: a key may set only

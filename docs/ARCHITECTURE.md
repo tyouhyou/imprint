@@ -225,6 +225,18 @@ satisfies. Changing any of these is an architecture change.
   no server, no display) and dummy-driven unit-tested with synthetic
   messages; each returns handled / swallowed / not-handled so the shell
   keeps only its blit and its non-input event cases.
+- **Key codes ride both edges (U-1).** Every key a translator maps
+  carries the same platform-independent `key` code on `key_down` AND
+  `key_up` — printable letters and digits included (lowercase ASCII
+  letters `a`..`z`, verbatim digits; punctuation stays platform-specific
+  and may remain `key == 0`). `key_down` additionally carries `ch` (the
+  character the key produces, shift/caps applied — so `shift+w` is
+  `key='w'`, `ch='W'`); `key_up` always has `ch == 0`. A host pairs
+  down/up on `key` to maintain key-state (hold-to-walk). Platform note:
+  the terminal input protocol has no key-up at all, and X11 autorepeat
+  interleaves release/press pairs while the key is held — a key-state
+  host tolerates or dedupes them; the framework itself never acts on
+  `key_up` (the dispatcher drops it).
 - Focus is keyboard-only and modal-scoped; `Tab`/arrows cycle focusable
   widgets; `Enter`/`Space` activate. Focus does not travel through hidden
   widgets or closed dialogs.

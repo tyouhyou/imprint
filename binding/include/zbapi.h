@@ -81,6 +81,12 @@ enum
     ZB_KEY_RIGHT
 };
 
+/* key-state semantics (U-1): mapped printable keys carry their
+ * lowercase/verbatim ASCII code in `key` on BOTH ZB_INPUT_KEY_DOWN and
+ * ZB_INPUT_KEY_UP (letters 'a'=97..'z'=122, digits verbatim), so hosts can
+ * pair the edges for key-state; `ch` carries the produced character on
+ * key_down and is always 0 on key_up. ASCII codes are used verbatim. */
+
 /* creates the default app (see make_app) and its window */
 zb_app_t *zb_app_create(uint32_t width, uint32_t height);
 
