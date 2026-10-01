@@ -305,6 +305,9 @@ fragments + a full-code re-read); the rulings below supersede/extend the
 > `docs/DESIGN.md` 「消费反馈」F1-F8 + 「验收结论」, incl. the measured
 > performance data) live on the fps side. fps cross-references these
 > items (its CONTEXT.md points at U-6/U-7), so U-numbers are stable.
+> Later fps feedback F9/F10 (2026-09-30, measured) is folded into
+> U-8/U-7 below; F11 (pixel regression only valid on sim-frozen
+> frames) is a host-side simulation-layer concern, not a lib item.
 >
 > Architecture-level items: U-1/U-3 (`input_event` stays a POD — key
 > codes on both edges / relative motion), U-6 (depth-tested fill), U-8
@@ -356,6 +359,16 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   primitives (N vertical spans in one call), a fast opaque-fill path
   bypassing per-call clip setup, dirty-region presentation. The
   interim directions here are superseded in leverage by U-8.
+  **Update (fps F10, 2026-09-30, measured)**: the root cause is
+  per-pixel `draw_pixel` traversal, not call count —
+  `fill_round_rect_rotated` runs the SDF (an `isqrt_floor` Newton
+  iteration + `plot_aa` alpha blend) on every pixel of the rotated
+  bounding box including fully-interior ones; ~25 such calls in the
+  fps viewmodel cost **~7 ms/frame** (larger than the whole 3D scene).
+  Fix direction (benefits every consumer of the primitive):
+  per-row/col interior-interval recognition — `std::fill_n` the
+  interior, SDF/`plot_aa` only on the boundary edges, consistent with
+  `fill`'s existing span write. Outputs must stay byte-identical.
 - **U-8. Surface/blit interface** (fps acceptance-verdict convergence
   path #1 — "the single biggest lever"): a consumer-owned pixel block
   written in one call while the lib keeps clipping/damage/compositing.
@@ -366,6 +379,17 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   surface — architecture-change rules apply). fps DESIGN.md D7 refers
   to this as "U-6" — stale numbering on the fps side; this item is
   U-8 (U-6 here is the depth-aware fill).
+  **Update (fps F9, 2026-09-30, measured)**: `draw_image` — the only
+  existing one-call API — also traverses per pixel through
+  `draw_pixel` (13.9 ms/full-screen at 1080p) and cannot close the
+  gap, while the consumer writing the same block directly costs
+  0.43 ms/half-screen (**16x**). fps therefore owns its scene buffer
+  (`render::Target`) and hands off via one `Graphics::data()` write —
+  a transition that **bypasses damage accounting** and bit them in
+  practice (a full-screen widget's memcpy wiped not-yet-repainted HUD
+  pixels during partial repaints; they now gate on a self-kept
+  repaint flag). This is exactly why the accounting granularity must
+  be whole-block inside the lib, not delegated to consumer care.
 - **U-9. Fixed buffer resolution — document the only supported route**
   (fps F1, docs-only): the buffer is immutable for its lifetime (I-2a);
   document in code-contract/getting-started that "recreate the app" is
