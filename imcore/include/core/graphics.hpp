@@ -483,6 +483,25 @@ namespace zb::ui::core
             const Color &tint);
 
         /*
+         * One-call surface blit (U-8): a consumer-owned pixel block
+         * written in one call while the lib keeps clip/damage accounting.
+         * Opaque overwrite (alpha_enabled ignored), row-wise copy,
+         * clamped to the draw area and hard-clipped to the damage region
+         * (a full-screen blit inside a partial repaint cannot smear
+         * undamaged pixels). start_x/start_y are widget-local like every
+         * primitive (draw_area_offset applies). A malformed view (null
+         * src, stride < width, non-positive extents) draws nothing.
+         * Contracts: code-contract §9, ARCHITECTURE §4.4.
+         */
+        void draw_surface(
+            const Color *src,   // consumer-owned pixel block
+            int src_stride,     // pixel amount in one source row
+            int width,          // surface width in pixels
+            int height,         // surface height in pixels
+            int start_x,        // widget-local destination x
+            int start_y);       // widget-local destination y
+
+        /*
          * WIREFRAME companion (S-1, opt-in): 1px dots every `spacing`
          * pixels across the draw area. Mode-independent (the app calls
          * it when wireframing); spacing <= 0 draws nothing. Plots

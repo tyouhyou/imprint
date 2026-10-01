@@ -657,6 +657,58 @@ void Graphics::draw_image(
     draw_image(img.pixels, img.width, img.height, stride, start_x, start_y, tint);
 }
 
+void Graphics::draw_surface(
+    const Color *src,
+    int src_stride,
+    int width,
+    int height,
+    int start_x,
+    int start_y)
+{
+    // malformed view: refuse to read past the rows (batch K / N1
+    // discipline, same as the malformed image_t view)
+    if (src == nullptr || width <= 0 || height <= 0 || src_stride < width)
+    {
+        return;
+    }
+
+    // widget-local destination coordinates (draw_at semantics)
+    int sx = start_x, sy = start_y;
+    if (draw_area_offset_enabled)
+    {
+        sx = draw_area_offset.x + start_x;
+        sy = draw_area_offset.y + start_y;
+    }
+
+    // opaque block overwrite: the same gates as fill() at block
+    // granularity — draw area (inclusive) and the half-open damage
+    // region (A-13). A full-screen blit inside a partial repaint must
+    // not smear pixels outside the damaged region (fps F9 failure mode).
+    int col0 = std::max(sx, draw_area.start_x);
+    int col1 = std::min(sx + width - 1, draw_area.end_x);
+    int row0 = std::max(sy, draw_area.start_y);
+    int row1 = std::min(sy + height - 1, draw_area.end_y);
+    if (damage_on_)
+    {
+        col0 = std::max(col0, damage_l_);
+        col1 = std::min(col1, damage_r_ - 1);
+        row0 = std::max(row0, damage_t_);
+        row1 = std::min(row1, damage_b_ - 1);
+    }
+    if (col0 > col1 || row0 > row1)
+    {
+        return;
+    }
+
+    // whole pixel words move: no channel work, no blend — deterministic
+    // on every depth and target
+    for (int row = row0; row <= row1; row++)
+    {
+        const Color *src_row = src + (row - sy) * src_stride + (col0 - sx);
+        std::copy_n(src_row, col1 - col0 + 1, pixels + imsize.width * row + col0);
+    }
+}
+
 void Graphics::fill(const Color &colr)
 {
     // damage mode: the fill is part of a partial repaint -- rows and
