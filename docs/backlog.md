@@ -24,12 +24,11 @@ Dependency-driven: each tier unlocks what follows.
 3. **P1 external consumability** (2026-09-26 roadmap, Batch G) — landed
    2026-09-26 (closes A-23); next in the G sequence is P1.5 install/export
    (trigger met 2026-09-27 — see Batch G).
-4. **Batch U — external-consumer feedback** (HIGH priority, opened
-   2026-09-27): U-1..U-9 from the fps acceptance rig, the first real
-   external consumer. Suggested consumption order: docs-first items
-   (U-2, U-4, U-5, U-9) → input-contract items (U-1, U-3; contract
-   first) → performance work (U-8 Surface/blit is the biggest lever,
-   U-7 holds the interim directions) → long-term (U-6).
+4. **Batch U — external-consumer feedback** (opened 2026-09-27,
+   **landed 2026-10-01** except U-6): U-1..U-5, U-7..U-9 from the fps
+   acceptance rig are done (docs tier, input-contract tier, U-8
+   `draw_surface` + U-7 span fast paths; history in `git log`). The
+   sole remainder is U-6 (long-term, below).
 5. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*. Batch G is
    unfrozen (2026-09-26) — its P1–P4 roadmap is the active product map.
    Condition-triggered items stay trigger-gated.
@@ -294,108 +293,23 @@ fragments + a full-code re-read); the rulings below supersede/extend the
 - Still deferred from 09-06: landing page assembled from existing
   assets with a "tell us about your device" intake.
 
-### Batch U — External-consumer feedback: fps acceptance rig (HIGH priority; opened 2026-09-27)
+### Batch U — External-consumer feedback: fps acceptance rig (sole remainder: U-6)
 
-> Written from the fps project (`../fps`), the first real external
-> consumer: a wasm FPS game consuming imprintUI in library mode (own
-> C-ABI, own main, `CanvasWindow` + widget tree, 1920x1080 BGRA8
-> buffer). Accepted and committed 2026-09-27 as this repo's
-> high-priority work list. Division of sources: the task list lives
-> here; the feedback narrative and acceptance verdict (fps
-> `docs/DESIGN.md` 「消费反馈」F1-F8 + 「验收结论」, incl. the measured
-> performance data) live on the fps side. fps cross-references these
-> items (its CONTEXT.md points at U-6/U-7), so U-numbers are stable.
-> Later fps feedback F9/F10 (2026-09-30, measured) is folded into
-> U-8/U-7 below; F11 (pixel regression only valid on sim-frozen
-> frames) is a host-side simulation-layer concern, not a lib item.
->
-> Architecture-level items: U-1/U-3 (`input_event` stays a POD — key
-> codes on both edges / relative motion), U-6 (depth-tested fill), U-8
-> (Surface/blit C-ABI surface). When picked up they follow the
-> architecture-change rules (code-contract first, ARCHITECTURE §4
-> sync); they stay U-numbered here rather than moving to §1.
+> Opened 2026-09-27 from the fps project (`../fps`), the first real
+> external consumer; **landed 2026-10-01** except the long-term item
+> below. U-1 (key codes on both edges), U-3 (relative-motion carrier),
+> U-8 (`Graphics::draw_surface`), and U-9 (fixed-buffer docs) carried
+> contract changes — see `docs/code-contract.md` §9, ARCHITECTURE §4.2/
+> §4.4 and `git log` for what landed. U-8 stayed C++-level by design
+> (the raw C-ABI blit note is in code-contract §9). fps D7 refers to
+> the Surface/blit item as "U-6" — stale numbering on the fps side.
 
-- **U-1. Key-state semantics missing from input_event** (fps F2):
-  shell convention sends printable keys via `ch` with `key=0` on
-  keydown and drops `ch` on keyup — down/up cannot be paired, so
-  "hold W to walk" is unimplementable for a host. fps works around it
-  with its own C-ABI convention (both edges carry a key code).
-  Suggestion: platform-independent key code on both edges (printable
-  included).
-- **U-2. Bitmap font does not scale** (fps F3): the default 5x7 glyph
-  provider is unreadable at 1920-wide buffers; the escape hatch
-  (USE_TTF_RUNTIME + stb_truetype + bytes_embed + global
-  `set_font_family`) exists but is showcase-glue, not a documented
-  consumption path. Suggestion: getting-started section + a scalable
-  default provider long-term.
-- **U-3. No relative-motion input channel** (fps F4): `input_event`
-  carries only absolute buffer pixels; pointer-look needs deltas. fps
-  added its own `fps_mouse_delta` export fed from pointer-lock
-  movementX/Y. Suggestion: relative dx/dy on `input_event` (or a host
-  channel).
-- **U-4. Dialog assembly traps** (fps F5): default title box is 16px
-  high (sized glyphs get clipped), and with auto_layout off a manual
-  `layout()` call is required or the frame never centers — both fail
-  silently. Suggestion: document in getting-started; a title default
-  height that follows `font_size`.
-- **U-5. Dialog button row neither shrinks nor wraps** (fps F6): a
-  third default-size button overflows the frame inner width and is
-  clipped. fps manually resized buttons to fit. Suggestion: proportion
-  shrink on overflow, or document the width budget.
-- **U-6. No depth-aware fill for 3D content** (fps F7): `fill_triangle`
-  et al. have no depth/occlusion semantics, so scene-space geometry
-  (sprites, box characters) must be software-rasterized by the consumer
-  through per-column `draw_line` against a hand-kept depth buffer.
-  Suggestion (long-term): an optional depth-tested fill path or a host
-  depth-buffer hook.
-- **U-7. Performance datum** (fps, 2026-09-27): wasm, 1920x1080 BGRA8,
-  scene = 1920-column raycast (per-column `draw_line`) + animated
-  box-man figures (hundreds..thousands of extra `draw_line` spans) +
-  full-viewport damage each frame + HUD/menu TTF text. Sustained
-  full-scene repaint measured at **18-25 fps** (~40-55 ms per
-  sim+paint); sim itself sustains ~100-120 Hz when ticks are batched.
-  Per-primitive call overhead appears dominant at thousands of
-  `draw_line` calls per frame. Possible directions: span/batch fill
-  primitives (N vertical spans in one call), a fast opaque-fill path
-  bypassing per-call clip setup, dirty-region presentation. The
-  interim directions here are superseded in leverage by U-8.
-  **Update (fps F10, 2026-09-30, measured)**: the root cause is
-  per-pixel `draw_pixel` traversal, not call count —
-  `fill_round_rect_rotated` runs the SDF (an `isqrt_floor` Newton
-  iteration + `plot_aa` alpha blend) on every pixel of the rotated
-  bounding box including fully-interior ones; ~25 such calls in the
-  fps viewmodel cost **~7 ms/frame** (larger than the whole 3D scene).
-  Fix direction (benefits every consumer of the primitive):
-  per-row/col interior-interval recognition — `std::fill_n` the
-  interior, SDF/`plot_aa` only on the boundary edges, consistent with
-  `fill`'s existing span write. Outputs must stay byte-identical.
-- **U-8. Surface/blit interface** (fps acceptance-verdict convergence
-  path #1 — "the single biggest lever"): a consumer-owned pixel block
-  written in one call while the lib keeps clipping/damage/compositing.
-  Collapses the per-frame thousands of `draw_line` calls into one blit
-  (fps measured wasm paint at 40-55 ms/frame; a blit path would drop
-  it to a few ms). CPU-side bulk write — does not touch the
-  GPU-acceleration non-goal. Architecture-level (a C-ABI buffer
-  surface — architecture-change rules apply). fps DESIGN.md D7 refers
-  to this as "U-6" — stale numbering on the fps side; this item is
-  U-8 (U-6 here is the depth-aware fill).
-  **Update (fps F9, 2026-09-30, measured)**: `draw_image` — the only
-  existing one-call API — also traverses per pixel through
-  `draw_pixel` (13.9 ms/full-screen at 1080p) and cannot close the
-  gap, while the consumer writing the same block directly costs
-  0.43 ms/half-screen (**16x**). fps therefore owns its scene buffer
-  (`render::Target`) and hands off via one `Graphics::data()` write —
-  a transition that **bypasses damage accounting** and bit them in
-  practice (a full-screen widget's memcpy wiped not-yet-repainted HUD
-  pixels during partial repaints; they now gate on a self-kept
-  repaint flag). This is exactly why the accounting granularity must
-  be whole-block inside the lib, not delegated to consumer care.
-- **U-9. Fixed buffer resolution — document the only supported route**
-  (fps F1, docs-only): the buffer is immutable for its lifetime (I-2a);
-  document in code-contract/getting-started that "recreate the app" is
-  the route for a resolution change, so consumers don't grope toward
-  wrapper-rebuild workarounds. A minimal host-requested resize API
-  (resize + full redraw) is deferred until a real host needs it.
+- **U-6. No depth-aware fill for 3D content** (fps F7, long-term):
+  `fill_triangle` et al. have no depth/occlusion semantics, so
+  scene-space geometry must be software-rasterized by the consumer.
+  Suggestion: an optional depth-tested fill path or a host depth-buffer
+  hook. fps itself has since moved to a consumer-owned per-column depth
+  buffer (`render::Target`), which lowers the urgency further.
 
 ## 1. Architecture Backlog
 
