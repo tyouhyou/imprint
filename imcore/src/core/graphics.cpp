@@ -845,6 +845,43 @@ Color Graphics::alpha_blend(const Color &front_color, const Color &back_color)
     return rst;
 }
 
+void Graphics::fill_span(int x1, int x2, int y, const Color &colr)
+{
+    int left = x1 < x2 ? x1 : x2;
+    int right = x1 < x2 ? x2 : x1;
+
+    int sx0 = left, sx1 = right, sy = y;
+    if (draw_area_offset_enabled)
+    {
+        sx0 += draw_area_offset.x;
+        sx1 += draw_area_offset.x;
+        sy += draw_area_offset.y;
+    }
+
+    // the draw_pixel/plot_aa gates as one interval: the draw area
+    // (inclusive bounds) and the half-open damage region
+    if (sy < draw_area.start_y || sy > draw_area.end_y)
+    {
+        return;
+    }
+    int c0 = std::max(sx0, draw_area.start_x);
+    int c1 = std::min(sx1, draw_area.end_x);
+    if (damage_on_)
+    {
+        if (sy < damage_t_ || sy >= damage_b_)
+        {
+            return;
+        }
+        c0 = std::max(c0, damage_l_);
+        c1 = std::min(c1, damage_r_ - 1);
+    }
+    if (c0 > c1)
+    {
+        return;
+    }
+    std::fill_n(pixels + imsize.width * sy + c0, c1 - c0 + 1, colr);
+}
+
 void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
 {
     if (render_mode_ == render_mode::wireframe)
@@ -856,6 +893,19 @@ void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
     // descending branch never ran and looped forever on a single row)
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
+    // U-7: an opaque fill writes the same word into every pixel of the
+    // rect — one clamped span per row replaces the per-pixel draw_line
+    // traversal; translucent colors keep the per-pixel blend path
+    const bool opaque = !alpha_enabled ||
+                        (Color::per_channel_blend ? colr.a() >= 0xFF : colr.a() != 0);
+    if (opaque)
+    {
+        for (int row = top; row <= bottom; ++row)
+        {
+            fill_span(x1, x2, row, colr);
+        }
+        return;
+    }
     for (int row = top; row <= bottom; ++row)
     {
         draw_line(x1, row, x2, row, colr);
@@ -864,6 +914,21 @@ void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
 
 void Graphics::draw_line(int x1, int y1, int x2, int y2, const Color &colr)
 {
+    // U-7: horizontal runs with an opaque color write one clamped span —
+    // the Bresenham below plots every x of the row exactly once (plus
+    // idempotent endpoint re-plots), so the direct write is byte-identical.
+    // This is the per-column scene-rasterization hot path (U-7 / fps F9).
+    if (y1 == y2)
+    {
+        const bool opaque = !alpha_enabled ||
+                            (Color::per_channel_blend ? colr.a() >= 0xFF : colr.a() != 0);
+        if (opaque)
+        {
+            fill_span(x1, x2, y1, colr);
+            return;
+        }
+    }
+
     int nDx = x2 - x1;
     int nDy = y2 - y1;
 
@@ -1399,8 +1464,29 @@ void Graphics::fill_round_rect_rotated(int x, int y, int w, int h, int radius, i
                         static_cast<int64_t>(pivot_x) * 256;
     const int64_t dcy = static_cast<int64_t>(y) * 256 + hh -
                         static_cast<int64_t>(pivot_y) * 256;
+    // U-7 / F10: the SDF's full-coverage and zero-coverage regions are
+    // classified without isqrt; fully-interior runs of an OPAQUE color
+    // write as one clamped span instead of per-pixel plot_aa calls.
+    // Classification is exact: cov == ((128 - d) * 255 + 128) >> 8 is
+    // 255 iff d <= -128 and 0 iff d >= 128, and for the corner region
+    // isqrt_floor(s) <= rr - 128  <=>  s <= (rr - 127)^2 - 1.
+    const bool opaque = !alpha_enabled ||
+                        (Color::per_channel_blend ? colr.a() >= 0xFF : colr.a() != 0);
+    const int64_t inner2 = (rr >= 128) ? (rr - 127) * (rr - 127) - 1 : -1;
+    const int64_t outer2 = (rr + 128) * (rr + 128);
+    int run_start = 0;
+    bool run_active = false;
+    const auto flush_run = [&](const int row, const int end_col_inclusive)
+    {
+        if (run_active)
+        {
+            fill_span(run_start, end_col_inclusive, row, colr);
+            run_active = false;
+        }
+    };
     for (int row = by0; row <= by1; ++row)
     {
+        run_active = false;
         for (int col = bx0; col <= bx1; ++col)
         {
             // pixel center into the pivot frame, rotated back by -angle
@@ -1410,10 +1496,26 @@ void Graphics::fill_round_rect_rotated(int x, int y, int w, int h, int radius, i
             const int64_t ly = (-dx * sin256 + dy * cos256) / 256 - dcy;
             const int64_t qx = (lx >= 0 ? lx : -lx) - ex;
             const int64_t qy = (ly >= 0 ? ly : -ly) - ey;
-            int64_t d;
+            int64_t d = 0;
+            bool interior = false;
             if (qx > 0 && qy > 0)
             {
-                d = isqrt_floor(qx * qx + qy * qy) - rr;
+                // corner region: the band around the arc needs the exact
+                // distance; inside/outside of it is a squared compare
+                const int64_t s = qx * qx + qy * qy;
+                if (s <= inner2)
+                {
+                    interior = true;
+                }
+                else if (s >= outer2)
+                {
+                    flush_run(row, col - 1);
+                    continue;
+                }
+                else
+                {
+                    d = isqrt_floor(s) - rr;
+                }
             }
             else
             {
@@ -1421,6 +1523,28 @@ void Graphics::fill_round_rect_rotated(int x, int y, int w, int h, int radius, i
                 // stands off the distance (missing it thins every
                 // straight run by r and clips r off each end)
                 d = (qx > qy ? qx : qy) - rr;
+                if (d <= -128)
+                {
+                    interior = true;
+                }
+            }
+            if (interior)
+            {
+                if (opaque)
+                {
+                    if (!run_active)
+                    {
+                        run_start = col;
+                        run_active = true;
+                    }
+                }
+                else
+                {
+                    // translucent color: the interior blend depends on
+                    // the destination, keep the per-pixel write
+                    plot_aa(col, row, 255, colr);
+                }
+                continue;
             }
             // coverage: 1px linear ramp over the zero crossing
             int64_t cov = (128 - d) * 255 + 128;
@@ -1429,8 +1553,10 @@ void Graphics::fill_round_rect_rotated(int x, int y, int w, int h, int radius, i
             {
                 continue;
             }
+            flush_run(row, col - 1);
             plot_aa(col, row, cov > 255 ? 255 : static_cast<int>(cov), colr);
         }
+        flush_run(row, bx1);
     }
 }
 

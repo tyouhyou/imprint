@@ -551,6 +551,17 @@ namespace zb::ui::core
 
         void set_draw_area(int x, int y, int width, int height);
 
+        /*
+         * U-7: clamped opaque span write for horizontal runs (widget-local
+         * coords, like draw_pixel). Applies the same gates as draw_pixel —
+         * draw-area bounds, draw_area_offset, the half-open damage region —
+         * as one interval, then writes the surviving span with fill_n. For
+         * an opaque color this is byte-identical to per-pixel draw_pixel
+         * and plot_aa(255) writes (alpha_blend returns front for a==255,
+         * and the 16bpp binary path returns front for any alpha bit).
+         */
+        void fill_span(int x1, int x2, int y, const Color &colr);
+
         // single canonical test for the damage clip (A-13): the damage
         // rect is half-open, draw_area is inclusive; every raster write
         // goes through this instead of ad-hoc clamps
