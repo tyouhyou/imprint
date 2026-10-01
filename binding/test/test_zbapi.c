@@ -93,7 +93,14 @@ int main(void)
      * no crash, and nothing is claimed */
     const int base = painted_calls;
     zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, 0, 'A', 0);
-    zb_input(app, ZB_INPUT_KEY_UP, 0, 0, 0, 0, 0);
+    zb_input(app, ZB_INPUT_KEY_UP, 0, 0, 'a', 0, 0);
+    assert(painted_calls == base);
+
+    /* U-1/U-3: a printable letter keydown now carries the lowercase key
+     * code as well, and the relative-motion export links and is inert */
+    zb_input(app, ZB_INPUT_KEY_DOWN, 0, 0, 'w', 'w', 0);
+    zb_input(app, ZB_INPUT_KEY_UP, 0, 0, 'w', 0, 0);
+    zb_input_delta(app, 12, -7);
     assert(painted_calls == base);
 
     zb_app_destroy(app);

@@ -861,5 +861,32 @@ int test_dispatch()
         EXPECT(d.get_focus_target() == nullptr);
     }
 
+    // U-3: pointer_delta is inert to the dispatcher -- it changes no
+    // state, reaches no widget, and disturbs neither press nor focus
+    {
+        Panel root;
+        root.set_size(100, 100);
+        auto probe = std::make_unique<CaptureProbe>();
+        probe->set_size(20, 20);
+        probe->set_position(10, 10);
+        auto *pprobe = probe.get();
+        root.add_child(std::move(probe));
+
+        InputDispatcher d;
+        EXPECT(d.dispatch(root, press_at(15, 15)));
+        EXPECT(pprobe->pressed);
+
+        zb::input::input_event delta;
+        delta.type = zb::input::input_type::pointer_delta;
+        delta.dx = 12;
+        delta.dy = -7;
+        EXPECT(!d.dispatch(root, delta));
+        EXPECT(pprobe->moves_while_captured == 0);  // not routed anywhere
+        // the press survives the delta (no cancel, no slop drift) and
+        // the release still delivers to the pressed target
+        EXPECT(d.dispatch(root, release_at(15, 15)));
+        EXPECT(d.get_focus_target() == nullptr);
+    }
+
     return test::report("dispatch");
 }

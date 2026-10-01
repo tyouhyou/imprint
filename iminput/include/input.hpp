@@ -35,6 +35,11 @@ namespace zb::input
         // keyboard
         key_down,
         key_up,
+
+        // pure relative motion (U-3): dx/dy carry the displacement,
+        // x/y are untouched; the dispatcher is inert to it — the event
+        // is a carrier for library-mode hosts (ARCHITECTURE §4.2)
+        pointer_delta,
     };
 
     /*
@@ -73,6 +78,8 @@ namespace zb::input
      *                              code on both edges, U-1), ch (the
      *                              printable character on key_down when the
      *                              key produces one; always 0 on key_up)
+     *   - pointer_delta          : dx, dy (host-provided relative
+     *                              displacement, U-3; x/y untouched)
      *
      * `ch` holds a Unicode code point produced by a printable key (ASCII
      * 0x20..0x7E for now). Both fields are independent: a key may set only
@@ -95,6 +102,8 @@ namespace zb::input
         int key = 0;
         int touch_id = 0;
         int ch = 0;  // Unicode code point (0 = no character)
+        int dx = 0;  // relative motion (pointer_delta, U-3)
+        int dy = 0;
     };
 
     // the C-ABI copies this struct verbatim: trivially copyable +

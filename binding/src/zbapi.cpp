@@ -185,7 +185,7 @@ extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int ch
     // the type comes from an untrusted host: reject values outside the
     // enum range so a future dispatch that indexes by type cannot go OOB
     const int first = static_cast<int>(zb::input::input_type::none);
-    const int last = static_cast<int>(zb::input::input_type::key_up);
+    const int last = static_cast<int>(zb::input::input_type::pointer_delta);
     if (type < first || type > last)
     {
         return;
@@ -230,6 +230,29 @@ extern "C" void zb_input(zb_app_t *self, int type, int x, int y, int key, int ch
     catch (...)
     {
         LE << "zb_input failed.";
+    }
+}
+
+extern "C" void zb_input_delta(zb_app_t *self, int dx, int dy)
+{
+    if (self == nullptr || self->app == nullptr)
+    {
+        return;
+    }
+    try
+    {
+        // pure relative motion (U-3): a stable carrier for hosts that
+        // track their own relative state (pointer lock, tablet); the
+        // dispatcher is inert to it by contract
+        zb::input::input_event ev;
+        ev.type = zb::input::input_type::pointer_delta;
+        ev.dx = dx;
+        ev.dy = dy;
+        self->app->input(ev);
+    }
+    catch (...)
+    {
+        LE << "zb_input_delta failed.";
     }
 }
 

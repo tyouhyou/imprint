@@ -63,7 +63,9 @@ enum
     ZB_INPUT_TOUCH_UP,
     ZB_INPUT_TOUCH_MOVE,
     ZB_INPUT_KEY_DOWN = 12,
-    ZB_INPUT_KEY_UP
+    ZB_INPUT_KEY_UP,
+    /* pure relative motion (U-3): dx/dy via zb_input_delta */
+    ZB_INPUT_POINTER_DELTA
 };
 
 /* ---- keyboard codes (must match zb::input::key_code) ---- */
@@ -117,8 +119,17 @@ void zb_app_destroy(zb_app_t *app);
  *                                      Unicode later) -- navigation keys
  *                                      always set key and leave ch 0, and
  *                                      a text-producing key may set both
+ *                                      (mapped printable keys carry their
+ *                                      lowercase/verbatim ASCII code on
+ *                                      both edges, see U-1 above)
  */
 void zb_input(zb_app_t *app, int type, int x, int y, int key, int ch, int touch_id);
+
+/* feeds a pure relative-motion event (U-3): dx/dy carry the
+ * host-provided displacement (pointer lock, tablet); absolute x/y are
+ * untouched and the framework's dispatcher is inert to the event -- it
+ * is a stable carrier for hosts that track their own relative state */
+void zb_input_delta(zb_app_t *app, int dx, int dy);
 
 /* renders one frame; the host should drive this from its own loop */
 void zb_paint(zb_app_t *app);
