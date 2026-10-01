@@ -61,6 +61,42 @@ int test_dialog()
     }
 #endif
 
+    // U-5: a button row wider than the frame inner width shrinks the
+    // button widths proportionally instead of overflowing into clipping
+    {
+        Dialog d;
+        d.set_size(100, 100);
+        d.set_frame_size(100, 100);  // inner width 100 - 2*8 = 84
+        auto &a = d.add_button("A");
+        auto &b = d.add_button("B");
+        auto &c = d.add_button("C");
+        d.layout();
+
+        // three default buttons: 48*3 + 2*4 spacing = 152 > 84;
+        // width budget = 84 - 8 gaps = 76 for 144 button pixels
+        const int inner = 100 - 2 * 8;
+        EXPECT(a.get_size().width + b.get_size().width + c.get_size().width <= inner - 8);
+        // proportional: every button lands on the same share (48*76/144 = 25)
+        EXPECT(a.get_size().width == 48 * (inner - 8) / 144);
+        // heights are untouched by the width shrink
+        EXPECT(a.get_size().height == 18);
+        // the shrunk row fits: a second layout pass does not shrink again
+        d.layout();
+        EXPECT(a.get_size().width == 48 * (inner - 8) / 144);
+    }
+
+    // a button row that fits is untouched by the shrink pass
+    {
+        Dialog d;
+        d.set_size(100, 100);
+        d.set_frame_size(160, 100);  // inner width 144, row 48+48+8 = 104
+        auto &a = d.add_button("A");
+        auto &b = d.add_button("B");
+        d.layout();
+        EXPECT(a.get_size().width == 48);
+        EXPECT(b.get_size().width == 48);
+    }
+
     // add_button: returned reference is usable
     {
         Dialog d;

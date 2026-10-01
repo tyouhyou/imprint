@@ -56,7 +56,34 @@ namespace zb::ui
         }
         title_label->set_position(pad, pad);
 
-        // buttons at the bottom: row size derived from the buttons
+        // buttons at the bottom: row size derived from the buttons.
+        // On overflow the button widths shrink proportionally to fit the
+        // frame inner width (U-5) — the row never overflows into clipping.
+        // The spacing gaps come out of the budget first, so the shrunk
+        // sum + gaps stays within inner and the pass is idempotent;
+        // widths are baked like add_button's sizes, so a later-widened
+        // frame does not restore them (re-add to resize).
+        const int inner = f.width - 2 * pad;
+        const auto &btns = buttons->get_children();
+        if (!btns.empty())
+        {
+            const int gaps = buttons->spacing * static_cast<int>(btns.size() - 1);
+            int buttons_total = 0;
+            for (const auto &b : btns)
+            {
+                buttons_total += b->get_size().width;
+            }
+            const int avail = inner - gaps;
+            if (buttons_total + gaps > inner && avail > 0)
+            {
+                for (const auto &b : btns)
+                {
+                    const int w = b->get_size().width;
+                    const int shrunk = w * avail / buttons_total;
+                    b->set_size(shrunk > 0 ? shrunk : 1, b->get_size().height);
+                }
+            }
+        }
         int btn_height = 0;
         for (const auto &b : buttons->get_children())
         {

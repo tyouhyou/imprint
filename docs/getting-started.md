@@ -170,6 +170,11 @@ default when you build the tree by hand):
    font on the title (`dialog.get_title().set_font_size(px)`), the box
    auto-grows to `px + 4` at layout time — unless you gave the title an
    explicit `set_size`, which always wins.
+3. **The button row never overflows.** If the buttons' widths plus
+   spacing exceed the frame's inner width, `layout()` shrinks the
+   button widths proportionally to fit (heights untouched). There is no
+   wrapping; if you need wide buttons, widen the frame or set smaller
+   button sizes before layout.
 
 ## Describe UIs as text (optional)
 
