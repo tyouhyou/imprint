@@ -1299,6 +1299,31 @@ obligations:
   damage model (pixels written outside a widget's paint are overdrawn by
   the next repaint) and no ABI host has asked for it; revisit only when
   an ABI-side custom-widget hook exists.
+- **Depth-tested primitives (U-6)**: an *optional, host-owned* depth
+  plane rides beside the framebuffer — `attach_depth_buffer(float
+  *depth, int stride)` (init path: `stride < buffer width` throws
+  `zb::ui::error`; the pointer is borrowed, the host keeps it alive and
+  clears/rewrites it every frame, typically `1.0f` fill), `detach_
+  depth_buffer()` returns to untested operation. Two primitives use it:
+  `draw_line_depth(...)` (z interpolated linearly along the Bresenham
+  walk) and `fill_triangle_depth(...)` (per-vertex z, edge + span
+  interpolation across the scanline fill). Comparison is **GL-style
+  LESS**: smaller z is closer; a pixel whose z is `>=` the stored value
+  is rejected without touching color or depth; a passing pixel writes
+  color through the exact `draw_pixel` policy (blend only when
+  `alpha_enabled` and the color is translucent) and records its z. The
+  depth test is *in addition to* the existing gates — draw area, offset,
+  damage — never instead of them, so a depth primitive inside a partial
+  repaint still cannot smear undamaged pixels. Without an attached
+  buffer both primitives degenerate to their untested siblings
+  (`draw_line` / `fill_triangle`). In WIREFRAME mode
+  `fill_triangle_depth` degrades to the untested outline (bones carry no
+  depth, matching the other fills). The plane is pure `float` per pixel,
+  host-word-sized, no pixel-model coupling; the consumer's scene
+  rasterizer writes the wall depth it already maintains and lets the
+  widgets/geometry interleave through the lib (fps F7's original ask).
+  Deterministic: fixed walk order, pure float math (soft-float on
+  FPU-less targets is IEEE-exact). Locked by `test_depth_fill`.
 - **Continuous rounded geometry (rim gate)**: every rounded-rect raster
   (the fills' row spans, the translucent border stroke band, the inset
   shadow's hole and clip, the outer shadow's silhouette mask rows)

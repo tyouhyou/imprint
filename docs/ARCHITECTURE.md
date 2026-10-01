@@ -400,6 +400,14 @@ satisfies. Changing any of these is an architecture change.
   so it is deterministic and 16bpp-safe on every target. C++-level
   only (a widget's `draw_at` hand-off); the ABI note is in
   code-contract §9.
+- **Optional host depth plane (U-6).** Depth/occlusion semantics are a
+  host-owned `float` plane attached to `Graphics` (GL-style LESS test,
+  per-pixel z interpolation in `draw_line_depth` / `fill_triangle_depth`,
+  contract in code-contract §9). It is an *additive gate* beside
+  draw-area/damage — the pixel model (compile-time traits, §4.4 above)
+  is untouched, no new build-matrix entry, and a build that never
+  attaches a buffer behaves exactly as before. API-level detail is in
+  code-contract.md.
 - **Presentation seam (A-1).** The kernel renders exactly one internal
   format per build (the `COLOR_DEPTH` matrix above); conversion to a panel
   format happens only at the presentation edge (a shell's blit), as a row
