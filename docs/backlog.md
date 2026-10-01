@@ -25,10 +25,10 @@ Dependency-driven: each tier unlocks what follows.
    2026-09-26 (closes A-23); **P1.5 install/export landed 2026-10-01**
    (see Batch G).
 4. **Batch U — external-consumer feedback** (opened 2026-09-27,
-   **landed 2026-10-01** except U-6): U-1..U-5, U-7..U-9 from the fps
-   acceptance rig are done (docs tier, input-contract tier, U-8
-   `draw_surface` + U-7 span fast paths; history in `git log`). The
-   sole remainder is U-6 (long-term, below).
+   **landed 2026-10-01**, complete): docs tier (U-2/U-4/U-5/U-9),
+   input-contract tier (U-1/U-3), U-8 `Graphics::draw_surface`, U-7
+   span fast paths, and U-6 depth-tested primitives (contract in
+   code-contract §9, ARCHITECTURE §4.4; history in `git log`).
 5. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*. Batch G is
    unfrozen (2026-09-26) — its P1–P4 roadmap is the active product map.
    Condition-triggered items stay trigger-gated.
@@ -295,24 +295,6 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   project cannot even `add_subdirectory`).
 - Still deferred from 09-06: landing page assembled from existing
   assets with a "tell us about your device" intake.
-
-### Batch U — External-consumer feedback: fps acceptance rig (sole remainder: U-6)
-
-> Opened 2026-09-27 from the fps project (`../fps`), the first real
-> external consumer; **landed 2026-10-01** except the long-term item
-> below. U-1 (key codes on both edges), U-3 (relative-motion carrier),
-> U-8 (`Graphics::draw_surface`), and U-9 (fixed-buffer docs) carried
-> contract changes — see `docs/code-contract.md` §9, ARCHITECTURE §4.2/
-> §4.4 and `git log` for what landed. U-8 stayed C++-level by design
-> (the raw C-ABI blit note is in code-contract §9). fps D7 refers to
-> the Surface/blit item as "U-6" — stale numbering on the fps side.
-
-- **U-6. No depth-aware fill for 3D content** (fps F7, long-term):
-  `fill_triangle` et al. have no depth/occlusion semantics, so
-  scene-space geometry must be software-rasterized by the consumer.
-  Suggestion: an optional depth-tested fill path or a host depth-buffer
-  hook. fps itself has since moved to a consumer-owned per-column depth
-  buffer (`render::Target`), which lowers the urgency further.
 
 ## 1. Architecture Backlog
 
