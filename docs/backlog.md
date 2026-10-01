@@ -46,11 +46,6 @@ frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
   compressed-asset use case appears; until then the procedural
   generator covers the demo.
 
-### Batch L — Layout & Text Enhancements (Unscheduled)
-
-- **L-3. `list_box rows=` declaration width trap**:
-  - Context: `list_box rows=` implicit `set_size` sets undeclared width to 0 (`685c004`), requiring explicit width declarations in `.ui` files. Needs cleaner auto-width sizing behavior.
-
 ### Batch H — HTML/CSS Rendering Path (Medium-high priority)
 
 Goal: an optional declarative smooth-path that renders an HTML/CSS **subset**
