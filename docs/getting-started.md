@@ -119,6 +119,42 @@ the fixed buffer scaled (that is what the platform shells do), and
 treat a true resolution change as a recreate-the-app operation —
 there is no API for resizing a live buffer (code-contract §11.1).
 
+## Text at scale — bitmap default vs runtime TTF
+
+The built-in glyph provider is a fixed **5x7 bitmap font**: zero
+dependencies, byte-deterministic, ideal for small buffers (the NDS's
+256x192, a terminal panel). It does **not** scale — glyphs render at
+their native cell, so on a large buffer (1080p canvas, 4K panel) text
+stays small and becomes hard to read. This is the single most common
+surprise for library-mode consumers targeting high-resolution buffers.
+
+If your buffer is large, switch text to the **runtime TTF provider**:
+
+1. Build with `-DUSE_TTF_RUNTIME=ON` (adds the vendored stb_truetype
+   rasterizer — no external dependency, no FreeType).
+2. Load a font and make it the global family:
+
+   ```cpp
+   #include "runtime_ttf_provider.hpp"   // zb::ui::TtfFamily
+
+   static const zb::ui::TtfFamily family =
+       zb::ui::TtfFamily::from_file("assets/fonts/Inter-Regular.ttf");
+   zb::ui::set_font_family(family);
+   // per widget: label->set_font_size(28, family);
+   ```
+
+3. On targets without a filesystem (embedded ROM, one-file WASM
+   pages), pack the TTF into a C array at build time with
+   `tools/bytes_embed` and load it with `TtfFamily::from_memory(bytes,
+   n)` — it borrows the buffer, so keep it alive for the app's
+   lifetime.
+
+In-tree references: `apps/showcase/src/showcase.cpp` (`from_file` +
+`USE_TTF_RUNTIME`) and `demo/wasm/build.sh` (`bytes_embed` + a packed
+font). Without the switch the 5x7 bitmap fallback keeps every build
+green. To ship only the glyphs you need, subset the font first with
+`tools/font_subset.py`.
+
 ## Describe UIs as text (optional)
 
 Layouts can also be written as `.ui` design files — a tiny text format
