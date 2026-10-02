@@ -486,7 +486,10 @@ whitelist is the boundary):
   through the shared flatteners (`svg_flatten_cubic` /
   `svg_flatten_quad`, moved beside the canvas; the html converter
   calls the same functions — single source, identical output). Each
-  subpath becomes one `Path` item; `close` marks it closed. Fill is
+  subpath becomes one `Path` item; `close` marks it closed and
+  returns the current point to the subpath start (SVG `Z` semantics:
+  a `line`/`cubic`/`quad` following `close` continues from there, as
+  a new subpath). Fill is
   per subpath (even-odd within one subpath): compound-path holes
   (even-odd across subpaths) are out — a documented deviation.
 - **Canvas transform (H-6)**: `set_transform(tx, ty, deg, sx, sy)` —
@@ -497,8 +500,9 @@ whitelist is the boundary):
   the flattened outline + even-odd; without rotation the implicit
   fast paths hold); the stroke width multiplies by `sqrt(|det|)` of
   the user affine on top of the existing viewBox geometric mean. Text
-  draws upright at the transformed baseline, sized by the y scale
-  (documented deviation; no rotated glyphs). An identity transform
+  draws upright at the transformed baseline, sized by `sqrt(|det|)`
+  of the user affine — the same rule as the stroke width (documented
+  deviation; no rotated glyphs). An identity transform
   clears the flag and renders byte-identically to no transform
   (locked by test). Trig resolves through a libm-free range-reduced
   series at set time (the embedded link has no libm trig; the
