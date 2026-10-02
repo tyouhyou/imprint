@@ -17,18 +17,13 @@ Dependency-driven: each tier unlocks what follows.
 1. **Batch H core / HTML path** — landed end to end (whitelist +
    parser + preview consumer + three-platform showcase; H-6 closed
    2026-10-02, see below).
-2. **Quick wins** (<1 day each, opportunistic): **S-2 SKETCH** (landed
-   2026-10-02), **I-2b per-shell adoption** (landed 2026-10-02 — the
-   desktop letterbox shells paint the `chrome_around` bars with their
-   native fill; code-contract §3).
+2. **Quick wins** (<1 day each, opportunistic): S-2, I-2b, H-9 tail,
+   L-3, H-4 — landed 2026-10-02, entries removed (history in `git log`).
 3. **P1 external consumability** (2026-09-26 roadmap, Batch G) — landed
-   2026-09-26 (closes A-23); **P1.5 install/export landed 2026-10-01**
-   (see Batch G).
-4. **Batch U — external-consumer feedback** (opened 2026-09-27,
-   **landed 2026-10-01**, complete): docs tier (U-2/U-4/U-5/U-9),
-   input-contract tier (U-1/U-3), U-8 `Graphics::draw_surface`, U-7
-   span fast paths, and U-6 depth-tested primitives (contract in
-   code-contract §9, ARCHITECTURE §4.4; history in `git log`).
+   2026-09-26 (closes A-23); P1.5 install/export landed 2026-10-01.
+4. **Batch U — external-consumer feedback** — landed 2026-10-01,
+   complete (contracts: code-contract §9, ARCHITECTURE §4.4; history in
+   `git log`).
 5. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*. Batch G is
    unfrozen (2026-09-26) — its P1–P4 roadmap is the active product map.
    Condition-triggered items stay trigger-gated.
@@ -94,10 +89,6 @@ pseudo-elements, P-1 paint, P-3 positioning; L-2 alignment attributes
 via external PR #4). What remains is listed below.
 
 **Open / condition-triggered sub-items:**
-- H-7. Layout alignment & flex fill — landed 2026-09-13/14 (H-7a/b/c
-  and the flex-body root, contracts in code-contract §3); the sole
-  remainder (min/max constraints) landed as **D-1** 2026-10-02 and the
-  entry is closed.
 - P-2. Paint remainder (gated by a real page): follow-ups that still
   matter: document-width roots are not centered by UiPreview (amp runs
   full-bleed); body gradient backgrounds have no `html_page` carrier
@@ -185,41 +176,21 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   compile-time pixel model. Do not enter the widget-armament race
   (the LVGL / Slint / Qt dimensions: more widgets, faster, prettier).
 - Roadmap (ratified order; each phase unlocks the next):
-  - **P1. External consumability** — **landed 2026-09-26**: `IMPRINT_WITH_*`
-    gates (A-23 closed), `imprint::` aliases, library mode
-    `zb::shell::run(IApp, options)` (code-contract §11), the
-    external-consumption smoke in the battery + CI. *P1.5
-    (install/export `imprintConfig.cmake`) — **landed 2026-10-01**
-    (trigger met 2026-09-27 — fps is the first real external
-    consumer): `cmake --install` + `find_package(imprint CONFIG)`,
-    the consumption contract in ARCHITECTURE §3.2, locked by
-    `test/installed_smoke` (battery + CI linux-desktop).*
-  - **P2. Deterministic-test story** — **landed 2026-09-26**: `zb::snap`
-    snapshot helper (code-contract §12: frame hash, record/check with
-    mismatch artifact, GIF/PNG dumps; showcase SELF-CHECK rides it) +
-    the `imprint-render` design-file CLI (`.ui`/`.html` → PNG/GIF,
-    frame hash on stdout) + the CI recipe (README, three languages;
-    Tier-1 runs the two-render byte-compare). A standalone
-    drives-your-app CLI remains explicitly NOT the form; a WASM-app CLI
-    variant is a later option.
-  - **P3. Declarative plugin protocol** — **landed 2026-09-26**:
-    `zb_app_create_from_ui` + `zb_set_event_callback` (per-id) +
-    `zb_widget_text` / `zb_widget_set_text` (additive C ABI,
-    `ZB_API_VERSION` stays 1; ARCHITECTURE §4.8/§4.10); `bind_actions`
-    in the builder (code-contract §4) keeps the tag knowledge
-    single-homed; the C smoke test and the Python demo
-    (`demo/python/ui_app.py`) drive it end to end. *P3.1
-    (condition-triggered): typed state read/write through the ABI
-    (checkbox checked, slider value) when a real host needs it — the
-    native per-widget events already carry the payloads for C++
-    consumers.* Not a re-run of the rejected "AI wedge": this is a
-    technical capability inside the static-structure-in-file boundary
-    ruling; the *marketing* wedge remains the determinism story.
-  - **P4. Terminal graphics demo target** — **landed 2026-09-26**: the
-    SIXEL backend (`IM_SHELL_BACKEND=SIXEL`) — sixel presenter +
-    `term_input` parser as pure unit-tested TUs in shell_common, an
-    fd-glue main (framework-mode only, §11.3), a Tier-2 compile job,
-    and a pty smoke (two deterministic full frames + RLE verified).
+  - **P1. External consumability** — landed 2026-09-26 (A-23 closed).
+    P1.5 install/export — landed 2026-10-01 (first external consumer:
+    fps; contract in ARCHITECTURE §3.2, locked by
+    `test/installed_smoke`).
+  - **P2. Deterministic-test story** — landed 2026-09-26 (contract:
+    code-contract §12; the `imprint-render` CI recipe runs in Tier-1).
+    A standalone drives-your-app CLI remains explicitly NOT the form;
+    a WASM-app CLI variant is a later option.
+  - **P3. Declarative plugin protocol** — landed 2026-09-26 (contracts:
+    ARCHITECTURE §4.8/§4.10, code-contract §4; C smoke + Python demo
+    drive it). *P3.1 (condition-triggered): typed state read/write
+    through the ABI when a real host needs it — the native per-widget
+    events already carry the payloads for C++ consumers.*
+  - **P4. Terminal graphics demo target** — landed 2026-09-26 (the
+    SIXEL backend, §11.3, Tier-2 compile job + pty smoke).
     *Extension (unscheduled): the Kitty graphics protocol as a second
     presenter for the same input source.*
 - Business stance reconfirmed: port engagements first; external

@@ -215,7 +215,7 @@ satisfies. Changing any of these is an architecture change.
 ### 4.2 Input pipeline
 
 - `input_event` is **memcpy-safe**: trivially copyable + standard layout
-  (`{type, x, y, button, delta, key, touch_id, ch}`, all scalars with
+  (`{type, x, y, button, delta, key, touch_id, ch, dx, dy}`, all scalars with
   default member initializers — so not a strict-C++ *POD*; the
   `static_assert` in `iminput/include/input.hpp` locks the loadable
   properties). This is the C-ABI pass-through shape and must never grow
@@ -604,7 +604,7 @@ contract, not an add-on:
   It needs a sixel-capable terminal (WezTerm, foot, mlterm, xterm -ti
   vt340, iTerm2); run it over SSH and it still shows the same UI.
 - Input tracks a single active press even though the data model is
-  multi-touch; key-up is not dispatched yet.
+  multi-touch.
 - By design: no GPU acceleration (rendering stays CPU; future "GPU support"
   would be presentation-only), no animation/transition system, no runtime
   backend switching, no multi-threaded rendering, no IME, no RTL/bidi.

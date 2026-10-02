@@ -141,7 +141,7 @@ applies unchanged.
 | `button` | `button` | `text` = element text content |
 | `checkbox` | `checkbox` | `text` = content; `checked` = **attribute presence** (HTML semantics) |
 | `radio` | `radio` | `text` = content; `checked` = presence; `group` |
-| `br` | an empty label | blank-line spacer, height = one text line; meaningful as a child of a column. Void element: `<br>`, `<br/>`, `<br />` are equivalent and it never takes a close; a stray `</br>` is ignored |
+| `br` | an empty label | blank-line spacer, fixed 7 px height (the bitmap-font line pitch; styled heights still win); meaningful as a child of a column. Void element: `<br>`, `<br/>`, `<br />` are equivalent and it never takes a close; a stray `</br>` is ignored |
 | `toggle` | `toggle` | `checked` = presence |
 | `gauge` | `gauge` | `min` / `max` / `value` |
 | `knob` | `knob` | `min` / `max` / `step` / `value` |
@@ -197,7 +197,7 @@ applies unchanged.
 | `top` / `left` / `right` / `bottom` | `Npx`, `N%`, bare `0`, `auto` | abs offsets against the containing-block content box (`auto` = unset; only read on absolutely positioned elements) |
 | `transform` | `translate(X[, Y])` (`%` of self or px) | shift after abs placement; any other function drops the declaration |
 | `color` | same color forms | the shared `color` property (text color) |
-| `font-size` | `Npx` or bare `N` | per-widget pixel size (`set_font_size`, code-contract §2.4): `N` clamps to 1..128, out-of-range/missing-family warns once and keeps the current provider; explicit per element on top of the text-axis inheritance pass (below); ignored without `IMCORE_HAS_TTF_RUNTIME` (documented degradation) |
+| `font-size` | `Npx` or bare `N` | per-widget pixel size (`set_font_size`, code-contract §2.4 — the range and warn-on-degradation rule live there): explicit per element on top of the text-axis inheritance pass (below); ignored without `IMCORE_HAS_TTF_RUNTIME` (documented degradation) |
 | `letter-spacing` | `Npx` | per-code-unit tracking in measure and draw (trailing unit included, per CSS); negative clamps to 0 |
 | `font-weight` | `bold`, or a number ≥ 600 → on; `normal` / < 600 → off | double-strike: second pass shifted +1px, no bold variant |
 | `text-shadow` | `DXpx DYpx [blur] <color>` | one solid offset copy drawn first; blur parsed-and-ignored; a comma list keeps the first shadow only |

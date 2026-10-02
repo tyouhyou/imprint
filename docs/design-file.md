@@ -48,8 +48,9 @@ documents.
   skipped). An *even* number of trailing backslashes is a literal
   backslash, not a continuation.
 - A line with an unclosed string is discarded whole.
-- Unknown tags, unknown properties, and malformed values are logged as
-  warnings and skipped — **parsing never fails** on bad content
+- Unknown tags and malformed values are logged as warnings and skipped;
+  unknown properties are silently tolerated (only unknown tags warn,
+  see the property list below) — **parsing never fails** on bad content
   (`parse_ui_text` reports failure only for a document with no nodes).
 
 Example (`tools/examples/menu.ui`):
@@ -66,7 +67,7 @@ column id="root" spacing=6 padding=10
 ```
 
 The tag and property set is defined by the factory/property tables in
-`imui/src/ui_builder.cpp`: containers (`panel`, `column`, `row`,
+`imui/src/ui_builder.cpp` — except `flex` and `items`, which are parser-level keys in `imui/src/ui_file.cpp`): containers (`panel`, `column`, `row`,
 `scroll_panel` — a vertical scroll container, H-4) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
@@ -105,10 +106,8 @@ subset (`transparent`, `black`, `white`, `red`, `green`, `blue`,
 silently dropped (nothing is set — the tolerated-value rule).
 `background` sets the widget's background color, `color` its text color;
 `transparent` for either is a no-op (the default "no background / theme
-text" stays). `font_size` is a bare integer pixel size (1..128,
-`set_font_size`, code-contract §2.4) — out-of-range values and builds
-without `IMCORE_HAS_TTF_RUNTIME` keep the current provider per the
-tolerance rule. Both the fluent builder and the
+text" stays). `font_size` is a bare integer pixel size — the 1..128 range and the
+degradation rule live in code-contract §2.4 and are not restated here. Both the fluent builder and the
 parser feed the same tables, so anything expressible in C++ builder
 form parses identically from text.
 

@@ -10,6 +10,10 @@ The repo ships demo apps called *stories*, selected with the `STORY` CMake
 variable. `hello` is the smallest one — a label and a button that counts
 its own clicks.
 
+The canonical build-command home is README.md "Build" — the sequences
+below are the tutorial walk-through of the same commands for the `hello`
+story.
+
 Windows (MSVC):
 
 ```
@@ -62,9 +66,11 @@ The pieces that matter:
    root.add_child(std::move(button));
    ```
 
-   Available widgets: `Button`, `Label`, `Checkbox`, `RadioButton`,
-   `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, and the
-   `FlexPanel` row/column container.
+   The widgets used above: `Button`, `Label`, and the `FlexPanel`
+   row/column container — the full set (`Panel`, `Checkbox`,
+   `RadioButton`, `Slider`, `ProgressBar`, `ToggleSwitch`, `GaugeDial`,
+   `Knob`, `TrendLine`, `ListBox`, `TextInput`, `Dialog`, `ScrollPanel`,
+   `SvgCanvas`, …) is listed in ARCHITECTURE §2, the module map.
 4. **Placement is explicit unless you ask for layout.** `set_position` /
    `set_size` are respected as-is; `FlexPanel` stacks its children for you.
 5. **Repaint is on demand.** Widget setters report damage automatically;
