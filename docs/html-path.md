@@ -147,7 +147,7 @@ applies unchanged.
 | `knob` | `knob` | `min` / `max` / `step` / `value` |
 | `trend` | `trend` | sized with `width` / `height` |
 | `meter` | `progress_bar` | degraded stand-in (HTML meter is a horizontal scalar); `min` / `max` / `value` |
-| `svg`, `vectordial` | `svg` | vector-dial subset (§SVG subset): `viewBox` + `line`/`text` children; `g` folds its presentation attributes onto them; `vectordial` is the same widget under an instrument name (the alias costs one table row, the implementation is shared) |
+| `svg`, `vectordial` | `svg` | vector-dial subset (§SVG subset): `viewBox` + `line`/`text`/`rect`/`circle`/`ellipse`/`polyline`/`polygon` children; `g` folds its presentation attributes onto them; `vectordial` is the same widget under an instrument name (the alias costs one table row, the implementation is shared) |
 
 ## Whitelist — attributes
 
@@ -161,6 +161,8 @@ applies unchanged.
 | `group` | radio | radio group id (integer, any sign — equality-matched, never indexed) |
 | `viewBox` | svg / vectordial | four viewBox units (`minx miny w h`, space/comma separated, decimals round half away from zero); malformed, absent, or non-positive size = pixel units (coordinates map 1:1) |
 | `d` | path (inside svg) | path data, stroke-only (§SVG subset); `M m L l H h V v C c S s Q q T t Z z` with SVG number/separator grammar and implicit repeats; unsupported or malformed data drops the path with one warning |
+| `points` | polyline / polygon (inside svg) | vertex list, viewBox units (decimals accepted, space/comma separators); malformed or <2 points drops the element |
+| `x`/`y`/`width`/`height`, `cx`/`cy`/`r`, `rx`/`ry` | rect / circle / ellipse (inside svg) | static geometry, viewBox units (decimals accepted); non-positive `width`/`height`/`r`/`rx`/`ry` renders nothing (per SVG); rect `rx`/`ry` (corner rounding) is not in the subset — warned and ignored, corners stay square |
 
 ## Whitelist — CSS properties (inline `style=` and `<style>` rules)
 
@@ -247,10 +249,10 @@ applies unchanged.
 
 ## SVG subset (`svg` / `vectordial`)
 
-Only the instrument-dial shapes the demo documents use — stroke-only
-geometry plus baseline text; everything else in SVG (fills, gradients,
-transform, filters) is out of scope (the fill model stays in backlog
-H-6):
+Only the instrument-dial shapes the demo documents use — static
+geometry (fills for the closed figures, strokes, baseline text);
+everything else in SVG (gradients, transform, filters, animation) is
+out of scope:
 
 - `viewBox="minx miny w h"` maps the viewBox onto the widget bounds by
   stretch (integer truncation toward zero; `preserveAspectRatio` is
@@ -271,6 +273,30 @@ H-6):
   ghost strokes stay visible, and the supersample coverage quantizes
   to plot/skip at half — the fringe rows drop, the band narrows to its
   solid core).
+- `rect x y width height` / `circle cx cy r` / `ellipse cx cy rx ry`:
+  the static geometry subset. `fill` follows SVG semantics — absent =
+  black, `none` = no fill, else the shared color forms; `stroke`
+  defaults to none (a bare shape renders its fill only). `stroke`,
+  `stroke-width`, `stroke-linecap`, `opacity` follow the `line`
+  rules. Rect `rx`/`ry` (corner rounding) is not in the subset:
+  warned and ignored. Degenerate geometry (non-positive
+  `width`/`height`/`r`/`rx`/`ry`) renders nothing (per SVG). Fill
+  rasterizes through per-pixel 2x2 supersampled coverage (the ellipse
+  test is the implicit equation, exact under the stretch; the rect
+  test is box comparisons); the stroke is the outline closed into a
+  polyline riding the path stroke machinery (an ellipse flattens to an
+  N-gon at draw time, chord ≈ 2px device, clamped 16..256), so joins
+  are round.
+- `polyline points` / `polygon points`: vertex lists (viewBox units,
+  decimals accepted, space/comma separators; <2 points or malformed
+  data drops the element with one warning). `polygon` closes
+  implicitly; `polyline` stays open but its `fill` still fills the
+  implicitly closed region (per SVG). Fill follows the shape rule
+  above (absent = black, `none` = no fill) and rasterizes through the
+  even-odd crossing count per sample; the stroke is the vertex
+  polyline (`polygon` closed) riding the path stroke machinery.
+  `stroke`, `stroke-width`, `stroke-linecap`, `opacity` follow the
+  `line` rules.
 - `text x y`: the element content drawn with the widget text seam
   (provider fallback chain included); `x/y` is the baseline start,
   `fill` defaults to the theme text, `text-anchor` selects
@@ -283,7 +309,10 @@ H-6):
   (the `svg` element's own `font-size` sizes the whole canvas,
   code-contract §2.4).
 - `path d="..."`: stroke-only path data — the instrument curves the
-  demos draw (no fill model; the fill model stays in backlog H-6).
+  demos draw (the `d` grammar carries no fill model; `fill` on a
+  `path` is accepted and ignored, existing documents lean on that —
+  the filled figures of the subset are the static geometry elements
+  above).
   Grammar: the SVG path commands `M m L l H h V v C c S s Q q T t Z z`
   (numbers with optional sign/decimals, space/comma separators,
   implicit repeats per SVG — extra pairs after `M` are `L`, extra
@@ -304,11 +333,13 @@ H-6):
   `M`) draws a round-cap dot or nothing per the linecap.
 - `g` never builds: inside `svg` it is transparent and folds
   `stroke`/`stroke-width`/`stroke-linecap`/`opacity`/`fill`/
-  `text-anchor` onto its descendant `line`/`path`/`text` (nearest
-  ancestor wins, the element's own attribute wins over all). Outside
-  `svg`, `g`/`line`/`path`/`text` are off-whitelist elements (skipped
-  with content dropped, like every non-table tag).
-- draw order within one canvas is `line`s, then `path`s, then
+  `text-anchor` onto its descendant `line`/`path`/`text`/`rect`/
+  `circle`/`ellipse`/`polyline`/`polygon` (nearest ancestor wins, the
+  element's own attribute wins over all). Outside `svg`, `g`/`line`/
+  `path`/`text` and the static geometry elements are off-whitelist
+  elements (skipped with content dropped, like every non-table tag).
+- draw order within one canvas is the static shapes, then `line`s,
+  then `path`s, then
   `text`s — document order across the three kinds is not kept (a
   documented deviation; each kind keeps its own document order).
 - `svg` is meaningful as a container child (it sizes through the

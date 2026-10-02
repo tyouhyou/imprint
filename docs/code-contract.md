@@ -438,19 +438,49 @@ system (standing non-goals):
 - Integer math only; both color depths degrade through the existing
   quantization rules.
 
-### 3.2 SVG path strokes (H-6 first cut)
+### 3.2 SVG static geometry (H-6)
 
-`SvgCanvas` gains a stroke-only path item beside its lines/texts
-(html-path.md §SVG subset is the dialect contract; the whitelist is the
-boundary):
+`SvgCanvas` carries filled static shapes beside its stroked lines/paths
+and texts (html-path.md §SVG subset is the dialect contract; the
+whitelist is the boundary):
 
-- C++ shape: `SvgCanvas::Path` — a pre-flattened polyline in viewBox
-  units (`std::vector<std::pair<double, double>>` points, `closed`,
-  stroke `color`/`width`/`round_caps`). The canvas strokes polylines;
-  it never parses `d` (the html converter owns command parsing,
-  curve flattening and subpath splitting; `d` parsing is not a
-  widget concern and stays out of the canvas).
-- Rendering: the same device-space stroke geometry as `line` —
+- C++ shape: `SvgCanvas::Shape` — one closed static figure, `kind`
+  `rect` or `ellipse` (a circle is an ellipse with `rx == ry`), stored
+  as center + half-extents `cx/cy/rx/ry` in viewBox units (fractional;
+  `rx <= 0 || ry <= 0` renders nothing, per SVG). Fill and stroke are
+  independent (`has_fill`/`has_stroke`; SVG default fill = black,
+  stroke = none — the converter decides, the canvas stores what it is
+  given).
+- `SvgCanvas::Path` gains an optional fill beside its stroke
+  (`has_fill`/`fill`): a closed (or implicitly closed) flattened
+  polyline can carry the polygon fill of the static geometry subset
+  (`polyline`/`polygon`). Fill paints before the stroke of the same
+  item (the SVG paint order); `path` elements from the HTML `d`
+  grammar stay stroke-only (the converter never sets their fill —
+  existing documents lean on that).
+- Rendering — fill: per-pixel 2x2 supersampled coverage, the same
+  loop policy and color-depth quantization as the strokes. The inside
+  test per kind: rect = box comparisons; ellipse = the implicit
+  equation through the axis-stretched center/radii (exact under the
+  viewBox stretch — an affine image of an ellipse is an ellipse);
+  polygon = the even-odd crossing count per sample with the implicit
+  closing segment. All per-pixel math stays integer Q10 (no FPU per
+  pixel); geometry maps once through doubles at the edges.
+- Rendering — stroke of a static shape: the shape's outline becomes
+  a closed polyline and rides the unchanged path stroke machinery.
+  Rect = its four corners; circle/ellipse = a draw-time flattening
+  into an N-gon whose segment count derives from the device-space
+  perimeter (chord ≈ 2px, clamped 16..256; plain IEEE double, so
+  every platform flattens alike) into a reused static scratch buffer —
+  the per-draw allocation-free rule holds. Polygon strokes are the
+  polygon points closed. Joins stay round (the capsule model, like
+  every path stroke).
+- Draw order in `draw_at`: shapes, then lines, then paths, then
+  texts — document order across kinds is not kept (documented
+  deviation; the declarative subset never interleaves them; within
+  one item fill precedes stroke).
+- Stroke geometry (paths and static-shape outlines): the same
+  device-space stroke geometry as `line` —
   per-pixel 2x2 supersampled capsule coverage over the
   integer-Q10 polyline (per-point doubles map once, per-pixel math
   stays fixed point), stroke width scaled by the viewBox geometric
@@ -460,9 +490,6 @@ boundary):
   standing color-depth rules (per-channel alpha scaling at 32bpp,
   plot/skip at half at 16bpp). Allocation-free per draw (no
   coverage buffers).
-- Draw order in `draw_at`: lines, then paths, then texts — document
-  order across kinds is not kept (documented deviation; the
-  declarative subset never interleaves them).
 - Determinism: parse-time flattening is plain IEEE double with a
   fixed chord tolerance and depth cap, so desktop/WASM/NDS flatten
   identically; the draw keeps the no-FPU-per-pixel rule.
