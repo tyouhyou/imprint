@@ -895,7 +895,9 @@ instead of clipping**. What the offset does and does not touch:
   every widget apply unchanged.
 - Interaction: wheel up (delta > 0) scrolls toward the top, 32 px per
   notch, and the wheel event falls through (returns false) at either
-  end so an outer scroller can take it; pressing the proportional
+  end so an outer scroller can take it; the bubble is confined to an
+  open modal subtree (inclusive) — an ancestor above a dialog never
+  takes the notch; pressing the proportional
   scrollbar thumb captures the pointer until release (the ListBox drag
   precedent — never cancelled); clicks map through the offset, so
   content under the viewport edge hits where it draws.

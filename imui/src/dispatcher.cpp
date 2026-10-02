@@ -270,6 +270,14 @@ namespace zb::ui
                         LD << "wheel claimed by widget";
                         return true;
                     }
+                    // the bubble is confined to an open modal subtree
+                    // (inclusive), mirroring the key path above: an
+                    // ancestor above the dialog (e.g. a page scroller
+                    // hosting the overlay) must not take the notch
+                    if (w == modal)
+                    {
+                        break;
+                    }
                 }
             }
             return false;
@@ -366,8 +374,11 @@ namespace zb::ui
                 const bool beyond_slop =
                     dx * dx + dy * dy > press_slop * press_slop;
                 Widget *picked = pick_target(root, ev.x, ev.y);
-                const bool on_target = picked == pressed_target ||
-                                       picked->is_descendant_of(pressed_target);
+                // a nullptr pick (off-window, or a modal miss) is simply
+                // off target — do not dereference it
+                const bool on_target = picked != nullptr &&
+                                       (picked == pressed_target ||
+                                        picked->is_descendant_of(pressed_target));
                 if (!on_target && beyond_slop)
                 {
                     // touch panels occasionally report one glitch

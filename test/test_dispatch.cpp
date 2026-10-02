@@ -488,6 +488,75 @@ int test_dispatch()
         EXPECT(outer_clicks == 2);
     }
 
+    // a move that leaves the window entirely (no modal): pick_target
+    // returns nullptr because the root's hit area misses — the null
+    // pick counts as off target (press cancels), it is not dereferenced
+    {
+        Tree t;
+        int clicks = 0;
+        t.button->clicked += [&clicks]() { ++clicks; };
+        InputDispatcher d;
+        d.dispatch(t.root, press_at(15, 15));
+        d.dispatch(t.root, move_to(-10, -10));
+        EXPECT(t.button->get_state() == Button::state::normal);
+        d.dispatch(t.root, release_at(-10, -10));
+        EXPECT(clicks == 0);
+    }
+
+    // wheel bubbling is confined to an open modal subtree (inclusive):
+    // an ancestor above the dialog (e.g. a page scroller hosting the
+    // overlay) must not take the notch — mirrors the key path
+    {
+        struct WheelProbe : public Panel
+        {
+            int wheels = 0;
+            bool on_input(const zb::input::input_event &ev) override
+            {
+                if (ev.type == zb::input::input_type::mouse_wheel)
+                {
+                    ++wheels;
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        Panel root;
+        root.set_size(100, 100);
+        auto page = std::make_unique<WheelProbe>();
+        page->set_size(100, 100);
+        auto *ppage = page.get();
+
+        auto dlg = std::make_unique<Dialog>();
+        dlg->set_size(40, 40);
+        dlg->set_position(30, 30);
+        dlg->set_frame_size(40, 40);
+        dlg->set_button_size(20, 18);
+        dlg->open();
+        auto *pdlg = dlg.get();
+        page->add_child(std::move(dlg));
+        root.add_child(std::move(page));
+        pdlg->layout();
+
+        InputDispatcher d;
+        zb::input::input_event wheel;
+        wheel.type = zb::input::input_type::mouse_wheel;
+        wheel.delta = -1;
+        wheel.x = 45;
+        wheel.y = 50;
+
+        // no modal: the wheel bubbles past the dialog to the page probe
+        d.dispatch(root, wheel);
+        EXPECT(ppage->wheels == 1);
+
+        // modal: the bubble stops at the dialog itself — the page probe
+        // behind the overlay stays still
+        d.set_modal(pdlg);
+        d.dispatch(root, wheel);
+        EXPECT(ppage->wheels == 1);
+        d.set_modal(nullptr);
+    }
+
     // a closed dialog does not intercept clicks in its area
     {
         Panel root;
