@@ -10,6 +10,22 @@
 namespace zb::ui
 {
     /*
+     * Shared path flatteners (H-6): de Casteljau subdivision to a
+     * ~0.1 viewBox-unit chord tolerance, depth-capped — the html
+     * converter and the DrawPath canvas form both flatten through
+     * these (single source, identical output). Plain IEEE double, so
+     * every platform flattens alike.
+     */
+    void svg_flatten_cubic(std::vector<std::pair<double, double>> &out,
+                           double x0, double y0, double x1, double y1,
+                           double x2, double y2, double x3, double y3,
+                           int depth);
+    // quadratic -> cubic elevation, one flattener
+    void svg_flatten_quad(std::vector<std::pair<double, double>> &out,
+                          double x0, double y0, double x1, double y1,
+                          double x, double y);
+
+    /*
      * Vector-dial canvas: the HTML `svg`/`vectordial` subset as a
      * display-only widget (docs/html-path.md §SVG subset). It holds
      * viewBox-unit strokes (lines through their device-space capsule
@@ -20,7 +36,8 @@ namespace zb::ui
      *
      * Deliberately narrow: paths arrive already flattened (the html
      * converter owns `d` parsing and de Casteljau subdivision —
-     * code-contract §3.2), fills cover the closed static figures
+     * code-contract §3.2; the DrawPath form below flattens at add
+     * time), fills cover the closed static figures
      * only (rect/ellipse/even-odd polygon), no aspect preservation.
      * Display-only like GaugeDial: not focusable, no events,
      * plain-rect hit.
@@ -48,6 +65,9 @@ namespace zb::ui
             core::Color color{};                 // alpha carries opacity
             double width = 1.0;                  // viewBox units (0 clips to 1)
             bool round_caps = false;             // stroke-linecap="round"
+            // a Path strokes by default; the DrawPath front-end clears
+            // this for fill-only paths
+            bool has_stroke = true;
             // optional fill under the stroke (the static geometry
             // subset: polyline/polygon); SVG paint order = fill first
             bool has_fill = false;
@@ -96,11 +116,48 @@ namespace zb::ui
         void add_path(const Path &p);
         void add_shape(const Shape &s);
         void add_text(const Text &t);
+        /*
+         * DrawCommand path form (H-6): structured commands flattened at
+         * add time into per-subpath Path items (same paint style on
+         * every subpath; fill is even-odd within one subpath —
+         * compound-path holes are out, code-contract §3.2).
+         */
+        struct PathCmd
+        {
+            enum class Op { move, line, cubic, quad, close };
+            Op op = Op::move;
+            // move/line: (x,y); cubic: controls (x1,y1) (x2,y2) -> (x,y);
+            // quad: control (x1,y1) -> (x,y); close: unused
+            double x1 = 0, y1 = 0, x2 = 0, y2 = 0, x = 0, y = 0;
+        };
+        struct DrawPath
+        {
+            std::vector<PathCmd> cmds;
+            bool has_fill = false;
+            core::Color fill{};                  // alpha carries opacity
+            bool has_stroke = false;
+            core::Color stroke{};                // alpha carries opacity
+            double width = 1.0;                  // viewBox units (0 clips to 1)
+            bool round_caps = false;             // stroke-linecap="round"
+        };
+        void add_draw_path(const DrawPath &p);
         void clear_vectors();
         [[nodiscard]] const std::vector<Line> &lines() const { return lines_; }
         [[nodiscard]] const std::vector<Path> &paths() const { return paths_; }
         [[nodiscard]] const std::vector<Shape> &shapes() const { return shapes_; }
         [[nodiscard]] const std::vector<Text> &texts() const { return texts_; }
+
+        /*
+         * Canvas transform (H-6): one affine per canvas, composed
+         * translate · rotate(deg, positive = visually clockwise on
+         * y-down) · scale, applied after the viewBox stretch
+         * (code-contract §3.2). Identity clears the flag; text draws
+         * upright at the transformed baseline.
+         */
+        void set_transform(double tx, double ty, double deg = 0.0,
+                           double sx = 1.0, double sy = 1.0);
+        void clear_transform();
+        [[nodiscard]] bool transform_active() const { return tf_active_; }
 
         // natural size: the viewBox in pixels, 64x64 without one
         [[nodiscard]] core::imsize_t measure() const override;
@@ -140,8 +197,23 @@ namespace zb::ui
                                const std::vector<int64_t> &qx,
                                const std::vector<int64_t> &qy,
                                const core::Color &color) const;
+        // the shape outline in viewBox units (rect corners / flattened
+        // ellipse), shared by the stroke and the rotated-fill fallback
+        void build_outline(const Shape &s,
+                           std::vector<std::pair<double, double>> &out) const;
+        // apply the user affine to device-space doubles (no-op when
+        // inactive)
+        void apply_tf(double &x, double &y) const;
+        // sqrt(|det|) of the user affine in Q10 (isqrt, no libm;
+        // kQ10 when inactive)
+        [[nodiscard]] int64_t tf_len_q10() const;
 
         int vb_x_ = 0, vb_y_ = 0, vb_w_ = 0, vb_h_ = 0;
+        // user affine T·R·S (device space, applied after the stretch):
+        // x' = tf_a_ x + tf_c_ y + tf_e_; y' = tf_b_ x + tf_d_ y + tf_f_
+        bool tf_active_ = false;
+        double tf_a_ = 1.0, tf_b_ = 0.0, tf_c_ = 0.0;
+        double tf_d_ = 1.0, tf_e_ = 0.0, tf_f_ = 0.0;
         std::vector<Line> lines_;
         std::vector<Path> paths_;
         std::vector<Shape> shapes_;

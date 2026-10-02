@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "logging.hpp"
+#include "svg_canvas.hpp"
 
 namespace zb::ui
 {
@@ -3383,51 +3384,13 @@ namespace zb::ui
         }
 
         // --- svg path data (H-6 first cut) ---------------------------------
-        // Stroke-only `d` parsing plus adaptive flattening into
-        // per-subpath polylines (code-contract §3.2). Commands M m L l
-        // H h V v C c S s Q q T t Z z with the SVG grammar (implicit
-        // repeats, relative forms); arcs drop the whole path with one
-        // warning. Flattening is plain IEEE double with a fixed chord
-        // tolerance and depth cap, so every platform flattens alike.
-
-        constexpr double kPathTol = 0.1;      // viewBox-unit chord tolerance
-        constexpr int kPathMaxDepth = 12;     // <= 4096 emits per curve
-
-        void flatten_cubic(std::vector<std::pair<double, double>> &out,
-                           const double x0, const double y0,
-                           const double x1, const double y1,
-                           const double x2, const double y2,
-                           const double x3, const double y3,
-                           const int depth)
-        {
-            // flatness without sqrt: the control points' squared
-            // distance to the chord vs the tolerance (all doubles, no
-            // overflow below any real coordinate magnitude)
-            const double dx = x3 - x0;
-            const double dy = y3 - y0;
-            const double len2 = dx * dx + dy * dy;
-            const double tol2 = kPathTol * kPathTol;
-            bool flat = len2 <= tol2;
-            if (!flat)
-            {
-                const double c1 = (x1 - x0) * dy - (y1 - y0) * dx;
-                const double c2 = (x2 - x0) * dy - (y2 - y0) * dx;
-                flat = c1 * c1 <= tol2 * len2 && c2 * c2 <= tol2 * len2;
-            }
-            if (flat || depth >= kPathMaxDepth)
-            {
-                out.emplace_back(x3, y3);
-                return;
-            }
-            const double x01 = (x0 + x1) / 2, y01 = (y0 + y1) / 2;
-            const double x12 = (x1 + x2) / 2, y12 = (y1 + y2) / 2;
-            const double x23 = (x2 + x3) / 2, y23 = (y2 + y3) / 2;
-            const double xa = (x01 + x12) / 2, ya = (y01 + y12) / 2;
-            const double xb = (x12 + x23) / 2, yb = (y12 + y23) / 2;
-            const double xm = (xa + xb) / 2, ym = (ya + yb) / 2;
-            flatten_cubic(out, x0, y0, x01, y01, xa, ya, xm, ym, depth + 1);
-            flatten_cubic(out, xm, ym, xb, yb, x23, y23, x3, y3, depth + 1);
-        }
+        // Stroke-only `d` parsing into per-subpath polylines
+        // (code-contract §3.2). Commands M m L l H h V v C c S s Q q T t
+        // Z z with the SVG grammar (implicit repeats, relative forms);
+        // arcs drop the whole path with one warning. Flattening goes
+        // through the shared svg_flatten_* helpers (plain IEEE double,
+        // fixed chord tolerance and depth cap — single source with the
+        // DrawPath canvas form, identical output).
 
         // one polyline per subpath, closed flag from `Z`
         struct PathSub
@@ -3602,7 +3565,7 @@ namespace zb::ui
                         x2 += cx; y2 += cy;
                         x += cx; y += cy;
                     }
-                    flatten_cubic(cur->pts, cx, cy, x1, y1, x2, y2, x, y, 0);
+                    svg_flatten_cubic(cur->pts, cx, cy, x1, y1, x2, y2, x, y, 0);
                     lc_x = x2;
                     lc_y = y2;
                     cx = x;
@@ -3633,7 +3596,7 @@ namespace zb::ui
                         x2 += cx; y2 += cy;
                         x += cx; y += cy;
                     }
-                    flatten_cubic(cur->pts, cx, cy, rx, ry, x2, y2, x, y, 0);
+                    svg_flatten_cubic(cur->pts, cx, cy, rx, ry, x2, y2, x, y, 0);
                     lc_x = x2;
                     lc_y = y2;
                     cx = x;
@@ -3659,12 +3622,7 @@ namespace zb::ui
                         x += cx; y += cy;
                     }
                     // quadratic -> cubic elevation, one flattener
-                    const double c1x = cx + 2.0 / 3 * (x1 - cx);
-                    const double c1y = cy + 2.0 / 3 * (y1 - cy);
-                    const double c2x = x + 2.0 / 3 * (x1 - x);
-                    const double c2y = y + 2.0 / 3 * (y1 - y);
-                    flatten_cubic(cur->pts, cx, cy, c1x, c1y, c2x, c2y,
-                                  x, y, 0);
+                    svg_flatten_quad(cur->pts, cx, cy, x1, y1, x, y);
                     lq_x = x1;
                     lq_y = y1;
                     cx = x;
@@ -3697,7 +3655,7 @@ namespace zb::ui
                     const double c1y = cy + 2.0 / 3 * (ry - cy);
                     const double c2x = x + 2.0 / 3 * (rx - x);
                     const double c2y = y + 2.0 / 3 * (ry - y);
-                    flatten_cubic(cur->pts, cx, cy, c1x, c1y, c2x, c2y,
+                    svg_flatten_cubic(cur->pts, cx, cy, c1x, c1y, c2x, c2y,
                                   x, y, 0);
                     lq_x = rx;
                     lq_y = ry;

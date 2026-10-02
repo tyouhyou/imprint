@@ -14,9 +14,9 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **Batch H core / HTML path** — landed (whitelist + parser + preview
-   consumer + three-platform showcase); remaining open sub-items below
-   (H-6 SVG remainder).
+1. **Batch H core / HTML path** — landed end to end (whitelist +
+   parser + preview consumer + three-platform showcase; H-6 closed
+   2026-10-02, see below).
 2. **Quick wins** (<1 day each, opportunistic): **S-2 SKETCH** (landed
    2026-10-02), **I-2b per-shell adoption** (landed 2026-10-02 — the
    desktop letterbox shells paint the `chrome_around` bars with their
@@ -84,31 +84,16 @@ parser scope:
   `flex-basis`, `flex-shrink`, and `flex` min/max constraints map to
   FlexPanel enhancements — see H-7 (partially landed).
 
-**Status:** the batch's core is landed end to end — whitelist contract
+**Status:** the batch is landed end to end — whitelist contract
 (`docs/html-path.md`, the single source), property tables, `parse_html`
 parser + battery, preview consumer, and the `showcase_html` story on
 desktop / NDS / wasm. Completed sub-items are removed from this file
-(H-1 wrapping, H-2 border, H-8 page box, H-10 pseudo-elements, P-1
-paint, P-3 positioning; L-2 alignment attributes via external PR #4).
-What remains is listed below.
+(H-1 wrapping, H-2 border, H-6 closed 2026-10-02 with the static
+geometry subset + DrawPath + canvas transform, H-8 page box, H-10
+pseudo-elements, P-1 paint, P-3 positioning; L-2 alignment attributes
+via external PR #4). What remains is listed below.
 
 **Open / condition-triggered sub-items:**
-- H-6. `SvgCanvas` remainder (recorded 2026-09-10, **unscheduled — note
-  only, no priority**). Landed so far: first cut 2026-09-12 (`viewBox` +
-  `line`/`text` + `g` folding, 1px strokes, stretch mapping; HTML tags
-  `svg`/`vectordial`) and the path `d` stroke grammar for the HTML path
-  (parse-time flattening, code-contract §3.2); the static geometry
-  subset 2026-10-02 (`rect`/`circle`/`ellipse`/`polyline`/`polygon` +
-  SVG fill semantics, even-odd polygon fill, outline strokes via the
-  path machinery — code-contract §3.2). Remaining:
-  - widget `DrawCommand[]` form of `path` (its own flattener) +
-    `transform` translate/rotate/scale (~600 lines);
-  - out of scope: filters, gradient defs, clipPath, symbol/use,
-    animation.
-  - Embedded caution: Bezier rasterization at runtime may cost more than
-    pre-rendered pixel assets (asset_gen precedent) — SVG suits reusable
-    UI-drawing widgets (icons, gauge faces, decoration), not
-    pixel-dense assets.
 - H-7. Layout alignment & flex fill — landed 2026-09-13/14 (H-7a/b/c
   and the flex-body root, contracts in code-contract §3); the sole
   remainder (min/max constraints) landed as **D-1** 2026-10-02 and the

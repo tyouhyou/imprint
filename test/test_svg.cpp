@@ -444,5 +444,156 @@ int test_svg()
         EXPECT(v->paths()[0].closed);
     }
 
+    // DrawPath (H-6): structured commands flatten at add time into
+    // per-subpath Path items; close marks closed; fill-only clears
+    // the stroke
+    {
+        SvgCanvas v;
+        v.set_size(100, 50);
+        SvgCanvas::DrawPath dp;
+        SvgCanvas::PathCmd m;
+        m.op = SvgCanvas::PathCmd::Op::move;
+        m.x = 10;
+        m.y = 10;
+        dp.cmds.push_back(m);
+        SvgCanvas::PathCmd l1 = m;
+        l1.op = SvgCanvas::PathCmd::Op::line;
+        l1.x = 40;
+        l1.y = 10;
+        dp.cmds.push_back(l1);
+        SvgCanvas::PathCmd q = m;
+        q.op = SvgCanvas::PathCmd::Op::quad;
+        q.x1 = 60;
+        q.y1 = 30;
+        q.x = 80;
+        q.y = 40;
+        dp.cmds.push_back(q);
+        SvgCanvas::PathCmd cl = m;
+        cl.op = SvgCanvas::PathCmd::Op::close;
+        dp.cmds.push_back(cl);
+        // a second subpath via move
+        SvgCanvas::PathCmd m2 = m;
+        m2.x = 5;
+        m2.y = 45;
+        dp.cmds.push_back(m2);
+        SvgCanvas::PathCmd l2 = l1;
+        l2.x = 15;
+        l2.y = 45;
+        dp.cmds.push_back(l2);
+        dp.has_fill = true;
+        dp.fill = core::colors::Black;
+        dp.has_stroke = true;
+        dp.stroke = core::colors::Red;
+        v.add_draw_path(dp);
+        EXPECT(v.paths().size() == 2);
+        const SvgCanvas::Path &first = v.paths()[0];
+        EXPECT(first.pts.size() >= 4);  // M + L + the quad flattening
+        EXPECT(first.closed);
+        EXPECT(first.pts.front().first == 10 && first.pts.front().second == 10);
+        EXPECT(first.pts.back().first == 80 && first.pts.back().second == 40);
+        EXPECT(first.has_fill && first.has_stroke);
+        const SvgCanvas::Path &second = v.paths()[1];
+        EXPECT(second.pts.size() == 2);
+        EXPECT(!second.closed);
+        // fill-only clears the stroke
+        v.clear_vectors();
+        dp.cmds.clear();
+        dp.cmds.push_back(m);
+        dp.cmds.push_back(l1);
+        dp.has_stroke = false;
+        v.add_draw_path(dp);
+        EXPECT(v.paths().size() == 1);
+        EXPECT(v.paths()[0].has_fill && !v.paths()[0].has_stroke);
+        // a bare move with no segments drops
+        v.clear_vectors();
+        dp.cmds.clear();
+        dp.cmds.push_back(m);
+        v.add_draw_path(dp);
+        EXPECT(v.paths().empty());
+    }
+
+    // canvas transform (H-6): identity renders byte-identically,
+    // translate shifts, scale widens, rotation routes through the
+    // even-odd fallback
+    {
+        const auto render = [](SvgCanvas &v) {
+            core::Graphics g(100, 50, nullptr);
+            g.fill(core::colors::White);
+            v.draw(g);
+            std::vector<uint32_t> out(static_cast<size_t>(100) * 50);
+            for (int y = 0; y < 50; ++y)
+            {
+                for (int x = 0; x < 100; ++x)
+                {
+                    out[static_cast<size_t>(y) * 100 + x] =
+                        test::pixel_at(g, x, y);
+                }
+            }
+            return out;
+        };
+        const auto at = [](const std::vector<uint32_t> &px, const int x,
+                           const int y) {
+            return px[static_cast<size_t>(y) * 100 + x];
+        };
+        const auto make = [] {
+            auto c = std::make_unique<SvgCanvas>();
+            c->set_size(100, 50);
+            SvgCanvas::Shape box;
+            box.cx = 20;
+            box.cy = 20;
+            box.rx = 10;
+            box.ry = 10;
+            box.has_fill = true;
+            box.fill = core::colors::Black;
+            c->add_shape(box);
+            return c;
+        };
+        const auto base = render(*make());
+
+        // identity: byte-identical to no transform
+        {
+            auto vid = make();
+            vid->set_transform(0, 0, 0, 1, 1);
+            EXPECT(!vid->transform_active());
+            EXPECT(render(*vid) == base);
+        }
+
+        // translate shifts the fill
+        {
+            auto vt = make();
+            vt->set_transform(10, 0);
+            EXPECT(vt->transform_active());
+            const auto tr = render(*vt);
+            // the box moved to [20,40]: far interior ink, the old
+            // center and the far edge blank
+            EXPECT(at(tr, 38, 20) == core::colors::Black.pixel);
+            EXPECT(at(tr, 15, 20) == core::colors::White.pixel);
+            EXPECT(at(tr, 45, 20) == core::colors::White.pixel);
+        }
+
+        // scale doubles the half-extent (10 -> 20: interior to 39)
+        {
+            auto vs = make();
+            vs->set_transform(0, 0, 0, 2, 2);
+            const auto sc = render(*vs);
+            // the center doubles too: the box spans [20,60]
+            EXPECT(at(sc, 39, 20) == core::colors::Black.pixel);
+            EXPECT(at(sc, 59, 20) == core::colors::Black.pixel);
+            EXPECT(at(sc, 75, 20) == core::colors::White.pixel);
+        }
+
+        // rotate 90° (visual clockwise on y-down) about the origin,
+        // then translate back on-canvas: the box spans x 0..20,
+        // y 10..30
+        {
+            auto vr = make();
+            vr->set_transform(30, 0, 90);
+            const auto ro = render(*vr);
+            EXPECT(at(ro, 5, 20) == core::colors::Black.pixel);
+            EXPECT(at(ro, 25, 20) == core::colors::White.pixel);
+            EXPECT(at(ro, 10, 40) == core::colors::White.pixel);
+        }
+    }
+
     return test::report("svg");
 }

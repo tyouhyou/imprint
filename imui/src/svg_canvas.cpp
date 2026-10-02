@@ -78,7 +78,244 @@ namespace zb::ui
                 }
             }
         }
+
+        // the shared flattener constants (code-contract §3.2)
+        constexpr double kPathTol = 0.1;      // viewBox-unit chord tolerance
+        constexpr int kPathMaxDepth = 12;     // <= 4096 emits per curve
+        constexpr double kDegToRad = 0.017453292519943295;
+
+        // sin/cos of degrees, libm-free: integer range reduction to
+        // [0, 90) then a Taylor series (truncation <= ~2e-6 at the 90
+        // degree boundary — sub-pixel at any real scale). Set-time
+        // only; the embedded link has no libm trig.
+        void sincos_deg(const double deg, double &s, double &c)
+        {
+            double x = deg;
+            if (x < 0)
+            {
+                x = -x;
+                // sin(-x) = -sin(x); cos stays even
+            }
+            long long turns = static_cast<long long>(x / 360.0);
+            x -= static_cast<double>(turns) * 360.0;
+            const int quad = static_cast<int>(x / 90.0);
+            x -= static_cast<double>(quad) * 90.0;
+            const double r = x * kDegToRad;
+            const double r2 = r * r;
+            double sn = r * (1.0 - r2 / 6.0 * (1.0 - r2 / 20.0 *
+                             (1.0 - r2 / 42.0 * (1.0 - r2 / 72.0))));
+            double cs = 1.0 - r2 / 2.0 * (1.0 - r2 / 12.0 *
+                         (1.0 - r2 / 30.0 * (1.0 - r2 / 56.0)));
+            switch (quad)
+            {
+                case 1: { const double t = sn; sn = cs; cs = -t; break; }
+                case 2: sn = -sn; cs = -cs; break;
+                case 3: { const double t = sn; sn = -cs; cs = t; break; }
+                default: break;
+            }
+            if (deg < 0)
+            {
+                sn = -sn;
+            }
+            s = sn;
+            c = cs;
+        }
     }  // namespace
+
+    // --- shared path flatteners (H-6; html.cpp calls these too) -------
+
+    void svg_flatten_cubic(std::vector<std::pair<double, double>> &out,
+                           const double x0, const double y0,
+                           const double x1, const double y1,
+                           const double x2, const double y2,
+                           const double x3, const double y3,
+                           const int depth)
+    {
+        // flatness without sqrt: the control points' squared
+        // distance to the chord vs the tolerance (all doubles, no
+        // overflow below any real coordinate magnitude)
+        const double dx = x3 - x0;
+        const double dy = y3 - y0;
+        const double len2 = dx * dx + dy * dy;
+        const double tol2 = kPathTol * kPathTol;
+        bool flat = len2 <= tol2;
+        if (!flat)
+        {
+            const double c1 = (x1 - x0) * dy - (y1 - y0) * dx;
+            const double c2 = (x2 - x0) * dy - (y2 - y0) * dx;
+            flat = c1 * c1 <= tol2 * len2 && c2 * c2 <= tol2 * len2;
+        }
+        if (flat || depth >= kPathMaxDepth)
+        {
+            out.emplace_back(x3, y3);
+            return;
+        }
+        const double x01 = (x0 + x1) / 2, y01 = (y0 + y1) / 2;
+        const double x12 = (x1 + x2) / 2, y12 = (y1 + y2) / 2;
+        const double x23 = (x2 + x3) / 2, y23 = (y2 + y3) / 2;
+        const double xa = (x01 + x12) / 2, ya = (y01 + y12) / 2;
+        const double xb = (x12 + x23) / 2, yb = (y12 + y23) / 2;
+        const double xm = (xa + xb) / 2, ym = (ya + yb) / 2;
+        svg_flatten_cubic(out, x0, y0, x01, y01, xa, ya, xm, ym, depth + 1);
+        svg_flatten_cubic(out, xm, ym, xb, yb, x23, y23, x3, y3, depth + 1);
+    }
+
+    void svg_flatten_quad(std::vector<std::pair<double, double>> &out,
+                          const double x0, const double y0,
+                          const double x1, const double y1,
+                          const double x, const double y)
+    {
+        // quadratic -> cubic elevation, one flattener
+        const double c1x = x0 + 2.0 / 3 * (x1 - x0);
+        const double c1y = y0 + 2.0 / 3 * (y1 - y0);
+        const double c2x = x + 2.0 / 3 * (x1 - x);
+        const double c2y = y + 2.0 / 3 * (y1 - y);
+        svg_flatten_cubic(out, x0, y0, c1x, c1y, c2x, c2y, x, y, 0);
+    }
+
+    void SvgCanvas::set_transform(const double tx, const double ty,
+                                  const double deg, const double sx,
+                                  const double sy)
+    {
+        mark_dirty();
+        double a = sx, b = 0.0, c = 0.0, d = sy, e = tx, f = ty;
+        if (deg != 0.0)
+        {
+            double s = 0.0, co = 0.0;
+            sincos_deg(deg, s, co);
+            // R · [a c; b d], the SVG rotate direction (y-down,
+            // positive = visually clockwise)
+            const double na = co * a - s * b;
+            const double nb = s * a + co * b;
+            const double nc = co * c - s * d;
+            const double nd = s * c + co * d;
+            a = na;
+            b = nb;
+            c = nc;
+            d = nd;
+        }
+        tf_a_ = a;
+        tf_b_ = b;
+        tf_c_ = c;
+        tf_d_ = d;
+        tf_e_ = e;
+        tf_f_ = f;
+        // an identity affine clears the flag: the draw paths keep their
+        // exact pre-transform code (byte-identical renders)
+        tf_active_ = !(a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0 &&
+                       e == 0.0 && f == 0.0);
+        mark_layout_dirty();
+    }
+
+    void SvgCanvas::clear_transform()
+    {
+        mark_dirty();
+        tf_active_ = false;
+        mark_layout_dirty();
+    }
+
+    void SvgCanvas::apply_tf(double &x, double &y) const
+    {
+        const double nx = tf_a_ * x + tf_c_ * y + tf_e_;
+        y = tf_b_ * x + tf_d_ * y + tf_f_;
+        x = nx;
+    }
+
+    int64_t SvgCanvas::tf_len_q10() const
+    {
+        if (!tf_active_)
+        {
+            return kQ10;
+        }
+        const double det = tf_a_ * tf_d_ - tf_b_ * tf_c_;
+        double ad = det < 0 ? -det : det;
+        if (ad > 1e9)
+        {
+            ad = 1e9;  // keep the Q10 product inside int64
+        }
+        return isqrt64(static_cast<int64_t>(ad * kQ10 * kQ10));
+    }
+
+    void SvgCanvas::add_draw_path(const DrawPath &p)
+    {
+        // flatten at add time (the parse-time-flattening precedent):
+        // per-subpath polylines, one Path item each, `close` marks it
+        // closed and the next move/line starts a fresh subpath
+        std::vector<std::pair<double, double>> pts;
+        bool sub_open = false;
+        bool sub_closed = false;
+        double cx = 0.0, cy = 0.0;
+        const auto flush = [&] {
+            if (sub_open && pts.size() >= 2)
+            {
+                Path item;
+                item.pts = std::move(pts);
+                item.closed = sub_closed;
+                item.has_fill = p.has_fill;
+                item.fill = p.fill;
+                item.has_stroke = p.has_stroke;
+                item.color = p.stroke;  // ignored while !has_stroke
+                item.width = p.width;
+                item.round_caps = p.round_caps;
+                paths_.push_back(std::move(item));
+            }
+            pts.clear();
+            sub_open = false;
+            sub_closed = false;
+        };
+        for (const PathCmd &cmd : p.cmds)
+        {
+            switch (cmd.op)
+            {
+                case PathCmd::Op::move:
+                    flush();
+                    cx = cmd.x;
+                    cy = cmd.y;
+                    pts.emplace_back(cx, cy);
+                    sub_open = true;
+                    break;
+                case PathCmd::Op::line:
+                    if (!sub_open)
+                    {
+                        // an implicit subpath start at the current point
+                        pts.emplace_back(cx, cy);
+                        sub_open = true;
+                    }
+                    cx = cmd.x;
+                    cy = cmd.y;
+                    pts.emplace_back(cx, cy);
+                    break;
+                case PathCmd::Op::cubic:
+                    if (!sub_open)
+                    {
+                        pts.emplace_back(cx, cy);
+                        sub_open = true;
+                    }
+                    svg_flatten_cubic(pts, cx, cy, cmd.x1, cmd.y1,
+                                      cmd.x2, cmd.y2, cmd.x, cmd.y, 0);
+                    cx = cmd.x;
+                    cy = cmd.y;
+                    break;
+                case PathCmd::Op::quad:
+                    if (!sub_open)
+                    {
+                        pts.emplace_back(cx, cy);
+                        sub_open = true;
+                    }
+                    svg_flatten_quad(pts, cx, cy, cmd.x1, cmd.y1,
+                                     cmd.x, cmd.y);
+                    cx = cmd.x;
+                    cy = cmd.y;
+                    break;
+                case PathCmd::Op::close:
+                    sub_closed = true;
+                    flush();
+                    break;
+            }
+        }
+        flush();
+        mark_dirty();
+    }
 
     void SvgCanvas::set_view_box(const int x, const int y, const int w, const int h)
     {
@@ -187,10 +424,39 @@ namespace zb::ui
                               vb_w / 2) /
                              vb_w);
         };
-        const int64_t ax = map_q10(l.x1, s.width, vb_x_, vb_w_);
-        const int64_t ay = map_q10(l.y1, s.height, vb_y_, vb_h_);
-        const int64_t bx = map_q10(l.x2, s.width, vb_x_, vb_w_);
-        const int64_t by = map_q10(l.y2, s.height, vb_y_, vb_h_);
+        int64_t ax, ay, bx, by;
+        if (!tf_active_)
+        {
+            ax = map_q10(l.x1, s.width, vb_x_, vb_w_);
+            ay = map_q10(l.y1, s.height, vb_y_, vb_h_);
+            bx = map_q10(l.x2, s.width, vb_x_, vb_w_);
+            by = map_q10(l.y2, s.height, vb_y_, vb_h_);
+        }
+        else
+        {
+            // the transform mixes the axes: map through doubles, apply
+            // the affine, then round into Q10
+            const double dsx = vb_w_ > 0
+                                   ? static_cast<double>(s.width) / vb_w_
+                                   : 1.0;
+            const double dsy = vb_h_ > 0
+                                   ? static_cast<double>(s.height) / vb_h_
+                                   : 1.0;
+            double axd = (l.x1 - vb_x_) * dsx;
+            double ayd = (l.y1 - vb_y_) * dsy;
+            apply_tf(axd, ayd);
+            double bxd = (l.x2 - vb_x_) * dsx;
+            double byd = (l.y2 - vb_y_) * dsy;
+            apply_tf(bxd, byd);
+            ax = clamp_q10(static_cast<int64_t>(
+                axd * kQ10 + (axd >= 0 ? 0.5 : -0.5)));
+            ay = clamp_q10(static_cast<int64_t>(
+                ayd * kQ10 + (ayd >= 0 ? 0.5 : -0.5)));
+            bx = clamp_q10(static_cast<int64_t>(
+                bxd * kQ10 + (bxd >= 0 ? 0.5 : -0.5)));
+            by = clamp_q10(static_cast<int64_t>(
+                byd * kQ10 + (byd >= 0 ? 0.5 : -0.5)));
+        }
 
         // device stroke width = viewBox width * the geometric mean of
         // the two axis scales: sqrt(W*H / (vb_w*vb_h)) in Q10, clamped
@@ -204,6 +470,11 @@ namespace zb::ui
                                       (kQ10 * kQ10) /
                                   (static_cast<int64_t>(vb_w_) * vb_h_);
             dev_w = dev_w * isqrt64(ratio) / kQ10;
+        }
+        const int64_t lenq = tf_len_q10();
+        if (lenq != kQ10)
+        {
+            dev_w = dev_w * lenq / kQ10;
         }
         if (dev_w > kCoordMax * kQ10)
         {
@@ -356,8 +627,12 @@ namespace zb::ui
         qy.resize(n);
         for (size_t i = 0; i < n; ++i)
         {
-            const double dx = (pts[i].first - vb_x_) * sx;
-            const double dy = (pts[i].second - vb_y_) * sy;
+            double dx = (pts[i].first - vb_x_) * sx;
+            double dy = (pts[i].second - vb_y_) * sy;
+            if (tf_active_)
+            {
+                apply_tf(dx, dy);
+            }
             qx[i] = clamp_q10(static_cast<int64_t>(
                 dx * kQ10 + (dx >= 0 ? 0.5 : -0.5)));
             qy[i] = clamp_q10(static_cast<int64_t>(
@@ -374,6 +649,13 @@ namespace zb::ui
                                       (kQ10 * kQ10) /
                                   (static_cast<int64_t>(vb_w_) * vb_h_);
             dev_w = dev_w * isqrt64(ratio) / kQ10;
+        }
+        // the user affine scales the band by sqrt(|det|); identity
+        // skips (byte-identical renders)
+        const int64_t lenq = tf_len_q10();
+        if (lenq != kQ10)
+        {
+            dev_w = dev_w * lenq / kQ10;
         }
         if (dev_w > kCoordMax * kQ10)
         {
@@ -590,10 +872,50 @@ namespace zb::ui
             return clamp_q10(static_cast<int64_t>(
                 d * kQ10 + (d >= 0 ? 0.5 : -0.5)));
         };
-        const int64_t cx = map_q10((s.cx - vb_x_), sx);
-        const int64_t cy = map_q10((s.cy - vb_y_), sy);
-        const int64_t rxd = map_q10(s.rx, sx);
-        const int64_t ryd = map_q10(s.ry, sy);
+        if (tf_active_ && (tf_b_ != 0.0 || tf_c_ != 0.0))
+        {
+            // rotation: the axis-aligned implicit tests are invalid —
+            // fill the flattened outline through the even-odd path
+            std::vector<std::pair<double, double>> outline;
+            build_outline(s, outline);
+            static std::vector<int64_t> fx, fy;
+            fx.resize(outline.size());
+            fy.resize(outline.size());
+            for (size_t i = 0; i < outline.size(); ++i)
+            {
+                double dx = (outline[i].first - vb_x_) * sx;
+                double dy = (outline[i].second - vb_y_) * sy;
+                apply_tf(dx, dy);
+                fx[i] = clamp_q10(static_cast<int64_t>(
+                    dx * kQ10 + (dx >= 0 ? 0.5 : -0.5)));
+                fy[i] = clamp_q10(static_cast<int64_t>(
+                    dy * kQ10 + (dy >= 0 ? 0.5 : -0.5)));
+            }
+            draw_evenodd_fill(area, fx, fy, s.fill);
+            return;
+        }
+        int64_t cx = map_q10((s.cx - vb_x_), sx);
+        int64_t cy = map_q10((s.cy - vb_y_), sy);
+        int64_t rxd = map_q10(s.rx, sx);
+        int64_t ryd = map_q10(s.ry, sy);
+        if (tf_active_)
+        {
+            // translate/scale only: the mapped figure stays an
+            // axis-aligned ellipse/box — scale the center and the
+            // half-extents (mirroring folds into the magnitude).
+            // cx/cy are Q10 device px, the affine translate is in px:
+            // push it into Q10 here
+            const double ncx = tf_a_ * cx + tf_c_ * cy + tf_e_ * kQ10;
+            const double ncy = tf_b_ * cx + tf_d_ * cy + tf_f_ * kQ10;
+            cx = clamp_q10(static_cast<int64_t>(
+                ncx + (ncx >= 0 ? 0.5 : -0.5)));
+            cy = clamp_q10(static_cast<int64_t>(
+                ncy + (ncy >= 0 ? 0.5 : -0.5)));
+            const double ax = tf_a_ < 0 ? -tf_a_ : tf_a_;
+            const double ad = tf_d_ < 0 ? -tf_d_ : tf_d_;
+            rxd = static_cast<int64_t>(ax * rxd);
+            ryd = static_cast<int64_t>(ad * ryd);
+        }
         if (rxd == 0 || ryd == 0)
         {
             return;  // sub-rounding degenerate: nothing to fill
@@ -743,20 +1065,26 @@ namespace zb::ui
     // platform flattens alike; the scratch buffer follows the
     // draw_path_stroke static-scratch precedent (allocation-free per
     // draw).
-    void SvgCanvas::draw_shape_stroke(core::Graphics &area,
-                                      const Shape &s) const
+    // the shape outline in viewBox units: rect = its four corners;
+    // circle/ellipse = an N-gon whose segment count derives from the
+    // device-space perimeter (pi*(a+b), chord ~2px, clamped 16..256,
+    // scaled by sqrt(|det|) of the user affine) generated through the
+    // exact rotation recurrence. The step comes from a libm-free
+    // small-angle series (the embedded link has no libm trig) and is
+    // plain IEEE double, so every platform flattens alike; the scratch
+    // buffer follows the draw_path_stroke static-scratch precedent
+    // (allocation-free per draw).
+    void SvgCanvas::build_outline(const Shape &s,
+                                  std::vector<std::pair<double, double>> &out)
+        const
     {
-        if (!s.has_stroke || s.rx <= 0.0 || s.ry <= 0.0)
-        {
-            return;
-        }
+        out.clear();
         if (s.kind == Shape::Kind::rect)
         {
-            const std::pair<double, double> box[4] = {
-                {s.cx - s.rx, s.cy - s.ry}, {s.cx + s.rx, s.cy - s.ry},
-                {s.cx + s.rx, s.cy + s.ry}, {s.cx - s.rx, s.cy + s.ry}};
-            stroke_points(area, box, 4, true, false, s.stroke,
-                          s.stroke_width);
+            out.emplace_back(s.cx - s.rx, s.cy - s.ry);
+            out.emplace_back(s.cx + s.rx, s.cy - s.ry);
+            out.emplace_back(s.cx + s.rx, s.cy + s.ry);
+            out.emplace_back(s.cx - s.rx, s.cy + s.ry);
             return;
         }
         const auto sz = get_size();
@@ -767,10 +1095,11 @@ namespace zb::ui
                               ? static_cast<double>(sz.height) / vb_h_
                               : 1.0;
         constexpr double kPi = 3.14159265358979323846;
-        const double perim =
-            kPi * (s.rx * sx + s.ry * sy);  // exact for a circle,
-        int segs = static_cast<int>(        // ~9% shy at the extreme
-            perim / 2.0);
+        double perim = kPi * (s.rx * sx + s.ry * sy);  // exact for a
+        const double len =                             // circle, ~9% shy
+            static_cast<double>(tf_len_q10()) / kQ10;  // at the extreme
+        perim *= len;
+        int segs = static_cast<int>(perim / 2.0);
         if (segs < 16)
         {
             segs = 16;
@@ -779,8 +1108,6 @@ namespace zb::ui
         {
             segs = 256;
         }
-        static std::vector<std::pair<double, double>> scratch;
-        scratch.clear();
         const double dt = 2.0 * kPi / static_cast<double>(segs);
         // rotation step, libm-free: a small-angle series (dt <= 2*pi/16,
         // truncation ~1e-7) keeps USE_INTEGER_GEOMETRY targets off the
@@ -793,11 +1120,22 @@ namespace zb::ui
         double ux = 1.0, uy = 0.0;
         for (int i = 0; i < segs; ++i)
         {
-            scratch.emplace_back(s.cx + s.rx * ux, s.cy + s.ry * uy);
+            out.emplace_back(s.cx + s.rx * ux, s.cy + s.ry * uy);
             const double nx = ux * cd - uy * sd;
             uy = ux * sd + uy * cd;
             ux = nx;
         }
+    }
+
+    void SvgCanvas::draw_shape_stroke(core::Graphics &area,
+                                      const Shape &s) const
+    {
+        if (!s.has_stroke || s.rx <= 0.0 || s.ry <= 0.0)
+        {
+            return;
+        }
+        static std::vector<std::pair<double, double>> scratch;
+        build_outline(s, scratch);
         stroke_points(area, scratch.data(), scratch.size(), true, false,
                       s.stroke, s.stroke_width);
     }
@@ -841,8 +1179,12 @@ namespace zb::ui
                 fy.resize(p.pts.size());
                 for (size_t i = 0; i < p.pts.size(); ++i)
                 {
-                    const double dx = (p.pts[i].first - vb_x_) * sx;
-                    const double dy = (p.pts[i].second - vb_y_) * sy;
+                    double dx = (p.pts[i].first - vb_x_) * sx;
+                    double dy = (p.pts[i].second - vb_y_) * sy;
+                    if (tf_active_)
+                    {
+                        apply_tf(dx, dy);
+                    }
                     fx[i] = clamp_q10(static_cast<int64_t>(
                         dx * kQ10 + (dx >= 0 ? 0.5 : -0.5)));
                     fy[i] = clamp_q10(static_cast<int64_t>(
@@ -850,7 +1192,10 @@ namespace zb::ui
                 }
                 draw_evenodd_fill(area, fx, fy, p.fill);
             }
-            draw_path_stroke(area, p);
+            if (p.has_stroke)
+            {
+                draw_path_stroke(area, p);
+            }
         }
         for (const Text &t : texts_)
         {
@@ -864,9 +1209,13 @@ namespace zb::ui
             // font family like every widget seam, the bitmap fallback
             // staying the documented degradation when none is installed
             const auto sz = get_size();
-            const double sy = vb_h_ > 0
-                                  ? static_cast<double>(sz.height) / vb_h_
-                                  : 1.0;
+            double sy = vb_h_ > 0
+                            ? static_cast<double>(sz.height) / vb_h_
+                            : 1.0;
+            // the canvas transform scales the upright glyphs by
+            // sqrt(|det|) (code-contract §3.2: no rotated glyphs)
+            const double tlen = static_cast<double>(tf_len_q10()) / kQ10;
+            sy *= tlen;
             const int px =
                 t.font_size > 0.0
                     ? static_cast<int>(t.font_size * sy + 0.5)
@@ -880,8 +1229,16 @@ namespace zb::ui
                 provider = held.get();
             }
 #endif
-            int pen = map_x(t.x);
-            int baseline = map_y(t.y);
+            // the baseline point maps through the full affine (the
+            // glyphs stay upright, the documented deviation)
+            double tx = map_fx(t.x);
+            double ty = map_fy(t.y);
+            if (tf_active_)
+            {
+                apply_tf(tx, ty);
+            }
+            int pen = static_cast<int>(tx);
+            int baseline = static_cast<int>(ty);
             if (provider != nullptr)
             {
                 const int adv = provider->measure(t.text.data(), len).width;
