@@ -1,6 +1,6 @@
 # Imprint UI
 
-> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-09-26 時点）。
+> 本ファイルは英語版 README の翻訳です。内容は [README.md](README.md) が正（2026-10-02 時点）。
 
 [![English](https://img.shields.io/badge/English-lightgrey)](README.md) [![中文](https://img.shields.io/badge/%E4%B8%AD%E6%96%87-lightgrey)](README.zh-CN.md) [![日本語](https://img.shields.io/badge/%E6%97%A5%E6%9C%AC%E8%AA%9E-blue)](README.ja.md)
 
@@ -8,73 +8,26 @@
 [![C++](https://img.shields.io/badge/C%2B%2B-17-blue.svg)]()
 [![Platforms](https://img.shields.io/badge/platforms-Windows%20%7C%20Linux%20%7C%20macOS%20%7C%20NDS%20%7C%20WASM%20%7C%20Python-lightgrey.svg)]()
 
-**同じ入力、同じピクセル——ディスプレイなしの CI でアサート可能。**
+**同じ入力、同じピクセル——ディスプレイなしで CI の中でピクセル単位にアサート可能。**
 
-Imprint は決定論的で埋め込み可能な C++17 UI ランタイムです：ピクセルバッファは 1 つ、ソフトウェアラスタライズ——GPU 不要、OS の GUI ツールキット不要、タイマーなし、スレッドなし。ホストがすべてのフレームを駆動します：固定のビルドとバッファサイズの下では、同じ入力シーケンスは常に同じフレームバッファバイトを生みます。ヘッドレス CI で UI ロジックをピクセル単位にアサートできることは、テストハーネスの小技ではなく契約そのものの性質です。同じ UI ソースツリー——コード上のウィジェット、またはデザインファイルで記述した 1 画面——が、変更なしで Windows、Linux、macOS、SIXEL ターミナル、WebAssembly、ニンテンドーDS、および `zbapi` 経由の任意の C ホストにコンパイルされます。
-
-**デザインファースト。** 画面は *HTML でデザインします*——id、タグ、スタイルで、ウィジェットコードはゼロ——ビルド時にウィジェットツリーへ実体化します。下のヒーローは 1 枚の HTML ファイルを、Imprint 自身のラスタライザがピクセルバッファに描いたものです：
+Imprint UI は C++17 向けの決定論的 UI ランタイムです：独自のソフトウェアラスタライザで UI を生のピクセルバッファに描画します。固定のビルドとバッファサイズの下では、同じ入力シーケンスは常に同じフレームバッファバイトを生みます。同じ UI ソースツリーが、変更なしで Windows、Linux、macOS、SIXEL ターミナル、WebAssembly、ニンテンドーDS——そして C ABI を呼べるあらゆる言語で動きます。
 
 <p>
-  <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console：真空管ダッシュボード（ tubes、VU バンク、電力メーター、診断パラグラフ）。HTML でデザインし、Imprint がレンダリング">
+  <img src="assets/designs/imprint_console.png" width="860" alt="Imprint Console：真空管ダッシュボード（真空管、VU バンク、電力メーター、診断パラグラフ）。HTML でデザインし、Imprint がレンダリング">
 </p>
 
-モックアップではなく、生きたウィジェットツリーです。デザイナーは HTML かコンパクトな `.ui` 形式を渡します。どちらも、あなたの C++ が作るのとまったく同じツリーに実体化するため、デザインが各ターゲットで実際に同梱されるものになります。HTML のパスは下の `.ui` サンプルの後に明記——いずれにせよ、1 つのツリー、1 つのバッファ、複数のターゲット。
+*モックアップではありません。*上の画像は 1 枚の HTML デザインファイルから：ビルド時にウィジェットツリーへ実体化し、Imprint 自身のラスタライザがピクセルバッファに描画したものです——あなたの C++ がすべてのターゲットで同梱する、あのツリーそのものです。
 
-**1 つの UI ソースツリー。1 つのピクセルバッファ。複数のターゲット。**
+## ハイライト
 
-同じデザインファイルの showcase——ピクセルバッファに打ち抜かれた暖色のターミナル——がデスクトップ、ニンテンドーDS、ブラウザ上に：
-
-![showcase_html は linux、nds、wasm 上に](assets/showcase/montage.png)
-
-```
-                同じ UI ソース
-                      │
-      ┌───────────┬───┴───────┬───────────┐
-      ↓           ↓           ↓           ↓
-   Windows      Linux       macOS     ターミナル
-      │        (X11/FB)               (SIXEL)
-      └───────────┼───────────┘
-                  ↓
-           WebAssembly  ←  ブラウザで試す
-                  ↓
-             ニンテンドーDS
-                  ↓
-      あなたの組み込みボード（C-ABI）
-```
-
-ターミナルも第一級ターゲットです：sixel 対応ターミナル（WezTerm、foot、iTerm2）なら、同じウィジェットツリーが SIXEL グラフィックスとして描画され、入力は SGR マウス + キーボード——ウィンドウシステムはまったく要りません。
-
-showcase デモの実測フットプリント（Release ビルド）：
-
-| ターゲット | 配置フットプリント |
-|---|---|
-| WebAssembly | 583 KB の単一 `.js`——wasm も Inter TTF も埋め込み済み、`file://` で直接動作 |
-| ニンテンドーDS | 256×192 16bpp フレームバッファ（96 KB VRAM）；libatomic のないツールチェーン向けに整数専用ジオメトリと非アトミック参照カウントのオプションを用意 |
-
-GPU 不要。OS の GUI ツールキット不要。プラットフォーム固有の UI コードも不要。
-
-## Showcase 実機デモ
-
-**SIGNAL-ONE** は実際に動くタスクコンソール——上のフットプリントはこのデモのものです——画面のすべてを Imprint 自身のラスタライザが描きます。以下はそのエンドツーエンド記録：レコーダーが公開 API 経由で固定の入力スクリプトによりアプリを駆動するため、GIF はすべてのプラットフォームでバイト単位で同一です。
-
-<p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="エンドツーエンドで記録した SIGNAL-ONE：ライブテレメトリで起動しトレンドラインが進み、GAIN ノブのドラッグで dB 読み取り・負荷ゲージ・温度メーターが追従、MODE が 3 つのアクセントテーマ（シアン、アンバー、グリーン）を循環、モジュールトグルが反転、ABOUT でモーダルオーバーレイを開いて CLOSE で閉じ、RESET で起動状態に戻る">
-</p>
-
-**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)** —— 同じコンソールを WebAssembly にコンパイルしたもので、デスクトップシェルと同じ C-ABI 経由で `<canvas>` に表示されます。GAIN ノブをドラッグ、MODE でテーマ切替、ABOUT オーバーレイを開く。サーバーもインストールも不要：wasm はページに埋め込み済みです。
-
-## 特徴
-
-- **決定論的・ホスト駆動のランタイム** — メインループはシェルが所有；同じ入力シーケンス → 同じピクセル；ダーティトラッキング付きオンデマンド再描画、隠れた再描画なし
-- **契約による自動化** — スクリプトがユーザーの代わりを務められる：入力を与え、フレームをポンプし、ピクセルにアサート。シングルスレッドでタイマーなしのためドライバに sleep 不要——テストバッテリーには公開 API のみで駆動するエンドツーエンドの `automation` スイートを含む
-- **デザインファイル** — `.ui` か外部 HTML で 1 画面を記述し、ビルド時に検証・パック。どのターゲットでも C 配列からロード。`ui_preview` がファイルを直接描画
-- **保持モードのウィジェットツリー** — `Button`、`Label`、`Dialog`、`FlexPanel`、`ListBox` など
-- **生のピクセルバッファへのソフトウェア描画** — GPU 不要、外部レンダリングライブラリ不要。バッファ形式はビルド時に `COLOR_DEPTH` で固定
-- **C-ABI を第一級市民として** — 安定した `zbapi` C インターフェースに、Python（ctypes）、WebAssembly、C スモークテストのホスト
-- **組み込みグレード** — RTTI なし、16 ビットカラー（abgr1555）、整数専用ジオメトリオプション、非アトミック参照カウントオプション（NDS に libatomic なし）
-- **ゼロアロケーションのホットパス** — RAII の `ClipGuard`、イベントのトゥームストーン、`Subscription`
-- **テキストは全体で UTF-8** — 組み込みの 5x7 ビットマップグリフフォールバック（ソース文字列から自動サブセット化）。ランタイム TTF テキスト（vendored stb_truetype）、vendored stb コーデック（PNG/JPEG）、手書き GIF ライターはオプション
-- **C++17、CMake、静的ライブラリ** — すべて組み合わせ可能、強制されるものはなし
+- **決定論的レンダリング** — 同じ入力、同じピクセル。Windows / macOS / Linux でバイト単位一致
+- **ヘッドレス設計** — スクリプトがユーザーを完全に置き換える：ディスプレイ不要、Xvfb 不要、sleep 不要
+- **AI エージェントのために** — エージェントが画面を書き、自ら駆動し、自らピクセル単位で検証する
+- **純 CPU、依存ゼロ** — GPU 不要、OS GUI ツールキット不要、サードパーティ製レンダリングライブラリ不要
+- **1 つのソースツリー、6 つのターゲット** — デスクトップ、SIXEL ターミナル、ブラウザ、ニンテンドーDS、同一コード
+- **デザインファースト** — 画面は HTML か `.ui` で記述、ビルド時に検証・実体化
+- **桁違いに小さい** — 583 KB の単一ファイル WebAssembly（フォント込み）；ニンテンドーDS は 96 KB VRAM で動作
+- **C-ABI 経由であらゆる言語から** — Python、WASM、C を呼べるものすべてに同じプロトコル
 
 ## 非目標
 
@@ -82,6 +35,96 @@ GPU 描画アクセラレーション（レンダリングカーネルは CPU �
 アニメーション/トランジションシステム · 実行時バックエンド切替 · マルチスレッド描画 ·
 IME 合成 · RTL レイアウト。Imprint は意図的に極小を保ちます：1 つのウィジェットツリー、
 1 つのピクセルバッファ、1 つの入力ストリーム——それ以外はホストの仕事です。
+
+## 決定論的レンダリング
+
+固定のビルドとバッファサイズの下では、同じ入力シーケンスは常に同じフレームバッファバイトを生みます——テストハーネスの小技ではなく、契約そのものの性質です。同一ピクセルクラス内なら hash は Windows / macOS / Linux でバイト単位一致。再描画はダーティトラッキング付きのオンデマンドで、隠れた再描画はありません。`zb::snap`（`imprint::snapshot` をリンク）がワークフロー全体です：
+
+```cpp
+#include "snapshot.hpp"
+
+// サーフェスをヘッドレスで駆動（input/paint）してから：
+auto r = zb::snap::check(*app.window(), "main_view", "tests/baselines");
+if (r.status == zb::snap::check_result::status::missing)
+{
+    zb::snap::record(*app.window(), "main_view", "tests/baselines");  // 初回
+}
+// status::mismatch では tests/baselines/main_view.actual.gif も生成され差分確認に使えます
+```
+
+`.zbsnap` ベースラインをコミットしてください。CI はどんなピクセルドリフトでも失敗し、ミスマッチ成果物が何が変わったかを見せます。ベースラインはビルド構成ごとに有効（code-contract §12.2）。リポジトリ内の参照：`test/test_snapshot.cpp` と、同じ決定論に乗っている showcase レコーダー。
+
+## ヘッドレス設計
+
+メインループはシェルが所有し、ホストがすべてのフレームを駆動します——入力を与え、フレームをポンプし、ピクセルにアサート。シングルスレッドでタイマーなしのため、ドライバが sleep することはありません：ディスプレイサーバー不要、Xvfb 不要、「200 ms 待ってからスクリーンショット」も不要。Tier-1 の CI が実行しているのはまさにこれ——同じデザインファイルを 2 回レンダリングし、バイト単位で比較します：
+
+```yaml
+- run: |
+    cmake --build build_ci --target imprint-render
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu1.png
+    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu2.png
+    cmp menu1.png menu2.png   # 2 回の実行でバイト単位一致
+```
+
+アプリコードなしで出図？`imprint-render assets/designs/imprint_console.html --out hero.png`——この README 冒頭のヒーローはこの 1 行の産物です（フレーム hash も表示されます）。
+
+## AI エージェントのために
+
+エージェントは UI コードを書けますが、ウィンドウを開いて結果を目で見ることはできません——これまで、ループは必ず「誰かがスクリーンショットを確認する」箇所で途切れていました。Imprint はそれを閉じます。フレームは決定論的で、ランタイムは公開 API 経由でディスプレイなしで駆動できる——つまりエージェントは画面を書き、フレームをポンプし、結果をピクセル単位で*証明*できます。私たち自身のテストバッテリー（エンドツーエンドの `automation` スイートを含む）が動いているのと同じやり方です。
+
+## 純 CPU、依存ゼロ
+
+レンダリングカーネルは生のピクセルバッファに描くソフトウェアラスタライザで、バッファ形式はビルド時に `COLOR_DEPTH` で固定されます。PNG/JPEG コーデックは vendored stb、GIF ライターは手書き、UTF-8 テキストには 5x7 ビットマップグリフフォールバックを内蔵（ソース文字列から自動サブセット化）、ランタイム TTF（vendored stb_truetype）はオプション。GPU 不要、OS GUI ツールキット不要、サードパーティ製レンダリングライブラリ不要。組み込みグレードの制約は要所に：RTTI なし、16 ビットカラー（abgr1555）、libatomic のないツールチェーン向けの整数専用ジオメトリ・非アトミック参照カウントオプション、ゼロアロケーションのホットパス。
+
+## 1 つのソースツリー、6 つのターゲット
+
+同じデザインファイルの showcase——デスクトップ、ニンテンドーDS、ブラウザ：
+
+![showcase_html は linux、nds、wasm 上に](assets/showcase/montage.png)
+
+Windows、Linux（X11 / フレームバッファ）、macOS（AppKit）、WebAssembly、ニンテンドーDS、すべてが同じウィジェットツリーを走らせます。ターミナルも第一級ターゲットです：sixel 対応ターミナル（WezTerm、foot、iTerm2）なら、同じツリーが SIXEL グラフィックスとして描画され、入力は SGR マウス + キーボード——ウィンドウシステムはまったく要りません。**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)**——SIGNAL-ONE を WebAssembly にコンパイルしたもので、デスクトップシェルと同じ C-ABI 経由で表示されます。
+
+## デザインファースト
+
+画面は *HTML でデザインします*——id、タグ、スタイルで、ウィジェットコードはゼロ——あるいはコンパクトな `.ui` 文法で。どちらも、あなたの C++ が作るのとまったく同じウィジェットツリーに実体化します（HTML パスは `html` / `vectordial` サブセット：レイアウト、ラベル、コントロール、ベクターダイアル——Web エンジンではありません）。ファイルはビルド時に検証・パックされます：不正なファイルは `ui_embed` がビルドを失敗させ、どのターゲットも結果を C 配列からロードします。冒頭の SIGNAL-ONE もまさにこの経路：85 行の HTML デザインファイル + 266 行の C++ 振る舞いコード。デザインファイルはインタラクティブにプレビューできます：
+
+```
+UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
+```
+
+## 桁違いに小さい
+
+実測フットプリント（showcase デモの Release ビルド）：
+
+| ターゲット | 配置フットプリント |
+|---|---|
+| WebAssembly | 583 KB の単一 `.js`——wasm も Inter TTF も埋め込み済み、`file://` で直接動作 |
+| ニンテンドーDS | 256×192 16bpp フレームバッファ（96 KB VRAM）；libatomic のないツールチェーン向けに整数専用ジオメトリと非アトミック参照カウントのオプションを用意 |
+
+保持モードのウィジェット：`Button`、`Label`、`Dialog`、`FlexPanel`、`ListBox`、`TextInput`、`Slider` など——C++17、CMake、静的ライブラリ。すべて組み合わせ可能、強制されるものはなし。
+
+## C-ABI 経由であらゆる言語から
+
+`zbapi` は安定した C インターフェースです——Python（ctypes + pygame）、WebAssembly、素の C ホスト、すべてが同じプロトコルを駆動します。宣言的パスなら、あなたの側に C++ はまったく要りません：`zb_app_create_from_ui` がデザインファイル（`.ui` 文法、または `is_html=1` で HTML サブセット——デザイナーと同じ 2 つのフロントエンド）からウィジェットツリーを組み立て、アクションは id で返ってきます。Python デモが丸ごとのストーリーです（`demo/python/ui_app.py`）：
+
+```python
+UI = """
+column id="root" spacing=8 padding=12
+  label id="count" text="Clicks: 0"
+  button id="inc" text="Count up"
+"""
+
+def on_action(widget_id, userdata):
+    if widget_id == b"inc":
+        clicks[0] += 1
+        lib.zb_widget_set_text(app, b"count", ("Clicks: %d" % clicks[0]).encode())
+
+app = lib.zb_app_create_from_ui(UI.encode(), 0, 320, 240)
+lib.zb_set_event_callback(app, b"inc", action_cb, None)
+# 自分のループで zb_input / zb_paint を駆動——ホストがシェルです
+```
+
+静的構造はファイルに、振る舞いはホストに住む——宣言的境界は変わりません。
 
 ## クイックサンプル
 
@@ -118,33 +161,11 @@ column id="root" spacing=6 padding=10
     button id="cancel" text="Cancel"
 ```
 
-ビルド時に `ui_embed` でパック（不正なファイルはビルドエラー）、実行時は
-`parse_ui_text` + `build()` で実体化 — 全プラットフォーム同一コードパス。
-プレビューはこのように：
-
-```
-UI_PREVIEW_FILES="tools/examples/menu.ui" cmake -B build/build_linux -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux
-```
-
-### HTML を外部デザイナーとして
-
-本物のマークアップツールチェーンが良い？同じ実体化パスは外部 **HTML** デザインファイルも受け付けます。この README 冒頭のヒーローは
-[`assets/designs/imprint_console.html`](assets/designs/imprint_console.html)
-—— ブラウザで開いて編集し、Imprint のデザイナーに渡すと、上の C++ サンプルが作るのと同一のウィジェットツリーになります（`html` / `vectordial` サブセット：レイアウト、ラベル、コントロール、ベクターダイアル——Web エンジンではありません）。プレビューも同じ：
-
-```
-UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
-```
-
-2 つの形式——`.ui` と HTML——は 1 つのツリー、1 つのピクセルバッファ、すべてのターゲットに供給します。冒頭の SIGNAL-ONE もまさにこの経路です：85 行の HTML デザインファイル + 266 行の C++ 振る舞いコード。
+ビルド時に `ui_embed` でパック（不正なファイルはビルドエラー）、実行時は `parse_ui_text` + `build()` で実体化——全プラットフォーム同一コードパス。
 
 ## ライブラリとして使う——あなたのプロジェクト、あなたの main
 
-Imprint の利用形態は 3 つ：リポジトリ内のデモ story（上記）、自分の `main` で
-駆動する**ライブラリサブプロジェクト**（本節）、任意の言語の純 **C-ABI ホスト**
-（下記）。あなたのアプリケーションがこのツリーに住む必要はありません。Imprint を
-サブプロジェクトとして追加し、`zb::shell::run` で駆動してください——プラットフォーム
-シェルが走らせるのと同じホストループです：
+あなたのアプリケーションがこのツリーに住む必要はありません。Imprint をサブプロジェクトとして追加し、`zb::shell::run` で駆動してください——プラットフォームシェルが走らせるのと同じホストループです：
 
 ```cpp
 // あなたの main.cpp —— MyWindow : zb::app::CanvasWindow、または任意の zb::app::IApp
@@ -165,64 +186,9 @@ add_executable(my_app main.cpp)
 target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
 ```
 
-サブプロジェクトのとき Imprint は**ライブラリのみ**を構成します——デモアプリ・バインディング・ホストツールは含みません。`IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` / `IMPRINT_WITH_DEMOS` スイッチで個別に有効化できます（リポジトリ内の既定ビルドはすべて保持）。ヘッドレスパス——CI がピクセルをアサートするのに使うもの——にはシェルまったく不要：`CanvasWindow::create()` + `paint()`（`test/external_smoke/` 参照、テストバッテリーに組み込み済み）。シェルループ契約は `docs/code-contract.md` §11。
+インストールパッケージがお好みですか？`cmake --install <build> --prefix <prefix>` のあと、プロジェクト側は `find_package(imprint CONFIG REQUIRED)`（`CMAKE_PREFIX_PATH` をプレフィックスに向ける）と書き、同じ `imprint::` ターゲットをリンクします。サブプロジェクトのとき Imprint は**ライブラリのみ**を構成します——デモアプリ・バインディング・ホストツールは含みません。`IMPRINT_WITH_TOOLS` / `IMPRINT_WITH_TESTS` / `IMPRINT_WITH_DEMOS` スイッチで個別に有効化できます（リポジトリ内の既定ビルドはすべて保持）。ヘッドレスパス——CI がピクセルをアサートするのに使うもの——にはシェルまったく不要：`CanvasWindow::create()` + `paint()`（`test/external_smoke/` 参照、テストバッテリーに組み込み済み）。シェルループ契約は `docs/code-contract.md` §11。
 
-## CI での決定論的テスト
-
-固定のビルドとバッファサイズの下では、同じ入力シーケンスは常に同じフレームバッファバイトを生みます——つまり UI ロジックはディスプレイなしでピクセル単位にアサートできます。バッファサイズは `create_window(w, h)` で一度宣言します——パーセント指定のレイアウトはそれに対して解決されます。サイズが違えばそれは別のサーフェスであって、別の結果ではありません。`zb::snap` ヘルパー（`imprint::snapshot` をリンク）がワークフロー全体です：
-
-```cpp
-#include "snapshot.hpp"
-
-// サーフェスをヘッドレスで駆動（input/paint）してから：
-auto r = zb::snap::check(*app.window(), "main_view", "tests/baselines");
-if (r.status == zb::snap::check_result::status::missing)
-{
-    zb::snap::record(*app.window(), "main_view", "tests/baselines");  // 初回
-}
-// status::mismatch では tests/baselines/main_view.actual.gif も生成され差分確認に使えます
-```
-
-`.zbsnap` ベースラインをコミットしてください。CI はどんなピクセルドリフトでも失敗し、ミスマッチ成果物が何が変わったかを見せます。ベースラインはビルド構成ごとに有効（code-contract §12.2）；同一ピクセルクラス内なら hash は Windows / macOS / Linux でバイト単位で一致します。リポジトリ内の参照：`test/test_snapshot.cpp`（ワークフロー）と、同じ決定論に乗っている showcase レコーダー。
-
-アプリコードなしで出図？デザインファイルを直接ピクセルへ——この README 冒頭のヒーローはこの 1 行の産物です（フレーム hash も表示）：
-
-```
-imprint-render assets/designs/imprint_console.html --out hero.png
-```
-
-CI レシピ——ブラウザ不要、ディスプレイ不要（Tier-1 ジョブがまさにこれを実行）：
-
-```yaml
-- run: |
-    cmake --build build_ci --target imprint-render
-    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu1.png
-    ./build_ci/bin/imprint-render tools/examples/menu.ui --out menu2.png
-    cmp menu1.png menu2.png   # 2 回の実行でバイト単位一致
-```
-
-## スクリプト言語の GUI——デザインファイル + コールバック
-
-宣言的パスなら、ユーザー側に C++ はまったく要りません：`zb_app_create_from_ui` がデザインファイル（`.ui` 文法、または `is_html=1` で HTML サブセット——デザイナーと同じ 2 つのフロントエンド）からウィジェットツリーを組み立て、アクションは id で返ってきます。Python デモが丸ごとのストーリーです（`demo/python/ui_app.py`）：
-
-```python
-UI = """
-column id="root" spacing=8 padding=12
-  label id="count" text="Clicks: 0"
-  button id="inc" text="Count up"
-"""
-
-def on_action(widget_id, userdata):
-    if widget_id == b"inc":
-        clicks[0] += 1
-        lib.zb_widget_set_text(app, b"count", ("Clicks: %d" % clicks[0]).encode())
-
-app = lib.zb_app_create_from_ui(UI.encode(), 0, 320, 240)
-lib.zb_set_event_callback(app, b"inc", action_cb, None)
-# 自分のループで zb_input / zb_paint を駆動——ホストがシェルです
-```
-
-C ABI を呼べる言語ならどれも同じプロトコルを得ます。静的構造はファイルに、振る舞いはホストに住む——宣言的境界は変わりません。
+最初に知っておくべき制約が 1 つ：**バッファはウィンドウのライフタイム中固定です。**`create_window(w, h)` が一度だけサイズを決めます（I-2a）。実行時の resize API はありません。解像度を変える必要があるなら、サポートされる道はアプリを作り直すことです——破棄して新しいサイズで再度 `create_window` してください（code-contract §11.1）。
 
 ## ビルド
 
@@ -261,7 +227,7 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 5. [`docs/code-contract.md`](docs/code-contract.md)——API レベルのインターフェース契約
 6. [`docs/design-file.md`](docs/design-file.md)——`.ui` ファイルを扱うときに読む
 
-**タスク別の参照先**：公開 API に触れる → 先に `code-contract.md`（契約が API に先行）· 新ターゲット / 新ピクセルフォーマット / 新ビルドオプション → `docs/backlog.md` と ARCHITECTURE §4 · `.ui` 文法やパッケージング → `design-file.md` · C-ABI ホスト → `zbapi.h` + ARCHITECTURE §4.8 · ビルド/実行コマンド → 下の**ビルド**。
+**タスク別の参照先**：公開 API に触れる → 先に `code-contract.md`（契約が API に先行）· 新ターゲット / 新ピクセルフォーマット / 新ビルドオプション → `docs/backlog.md` と ARCHITECTURE §4 · `.ui` 文法やパッケージング → `design-file.md` · C-ABI ホスト → `zbapi.h` + ARCHITECTURE §4.8 · ビルド/実行コマンド → 上の**ビルド**。
 
 - [`docs/getting-started.md`](docs/getting-started.md)——クローンから自分のアプリまで：`hello` ストーリーの実行、`IApp`/`CanvasWindow` の継ぎ目の理解、自分の story の登録
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——実装済みアーキテクチャ：モジュールマップと依存ルール、契約（フレームライフサイクル、入力、ピクセルモデル、テキスト、イベント、エラー処理、C-ABI ホスト、ビルドオプション）、既知の制限
@@ -273,9 +239,15 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 
 ## デモ
 
-**Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
+**SIGNAL-ONE**（`-DSTORY=showcase`）——上のフットプリントの数字の元になったコンソール、エンドツーエンド記録：レコーダーが公開 API 経由で固定の入力スクリプトによりアプリを駆動するため、GIF はすべてのプラットフォームでバイト単位で同一です。ライブテレメトリはフレームごとに 1 つの決定論的ステップで進み（トレンドラインはフレームカウンタの純関数）、GAIN ノブは dB 読み取り・負荷ゲージ・温度メーターを駆動し、MODE は 3 つのアクセントテーマ（シアン/アンバー/グリーン）を循環し、ABOUT は宣言的モーダルオーバーレイを開き、RESET が起動状態に戻します。テキストはランタイム TTF パス（Inter、`bytes_embed` でパック）——意図したプロポーショナルフォントの見た目には `-DUSE_TTF_RUNTIME=ON` を設定。5x7 ビットマップフォールバックが非 TTF ビルドもグリーンのまま保ちます。
 
-**showcase**（`-DSTORY=showcase`）——SIGNAL-ONE。上の「Showcase 実機デモ」のコンソールです：85 行の HTML デザインファイル（`apps/showcase/signal.html`）がビルド時にウィジェットツリーへ実体化し、振る舞いは 266 行の C++。ライブテレメトリはフレームごとに 1 つの決定論的ステップで進み（トレンドラインはフレームカウンタの純関数）、GAIN ノブは dB 読み取り・負荷ゲージ・温度メーターを駆動し、MODE は 3 つのアクセントテーマ（シアン/アンバー/グリーン）を循環し、ABOUT は宣言的モーダルオーバーレイを開き、RESET が起動状態に戻します。テキストはランタイム TTF パス（Inter、`bytes_embed` でパック）——意図したプロポーショナルフォントの見た目には `-DUSE_TTF_RUNTIME=ON` を設定。5x7 ビットマップフォールバックが非 TTF ビルドもグリーンのまま保ちます。「Showcase 実機デモ」の GIF は決定論的レコーダー `showcase_gif` の産物で、ブラウザデモと DS クロスビルド（ビルド参照）は同じソースで動きます。
+<p>
+  <img src="assets/showcase/showcase.gif" width="480" alt="エンドツーエンドで記録した SIGNAL-ONE：ライブテレメトリで起動しトレンドラインが進み、GAIN ノブのドラッグで dB 読み取り・負荷ゲージ・温度メーターが追従、MODE が 3 つのアクセントテーマ（シアン、アンバー、グリーン）を循環、モジュールトグルが反転、ABOUT でモーダルオーバーレイを開いて CLOSE で閉じ、RESET で起動状態に戻る">
+</p>
+
+**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)**——サーバーもインストールも不要：wasm はページに埋め込み済みです。
+
+**Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
 
 **三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します——`.ui` か HTML のパスを渡せます。
 
