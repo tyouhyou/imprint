@@ -472,9 +472,11 @@ namespace zb::ui
         // device stroke width = viewBox width * the geometric mean of
         // the two axis scales: sqrt(W*H / (vb_w*vb_h)) in Q10, clamped
         // to the coordinate range (a pathological ratio must not
-        // overflow the squared radius below)
-        int64_t dev_w = static_cast<int64_t>(l.width > 0.0 ? l.width : 1.0) *
-                        kQ10;
+        // overflow the squared radius below). The width is rounded into
+        // Q10, not truncated first: a fractional stroke-width must
+        // survive to the hairline threshold (html-path.md)
+        int64_t dev_w = static_cast<int64_t>(
+            (l.width > 0.0 ? l.width : 1.0) * kQ10 + 0.5);
         if (vb_w_ > 0 && vb_h_ > 0)
         {
             const int64_t ratio = static_cast<int64_t>(s.width) * s.height *
@@ -651,9 +653,10 @@ namespace zb::ui
         }
 
         // device stroke width = viewBox width * the geometric mean of
-        // the two axis scales (the draw_line_stroke formula)
-        int64_t dev_w = static_cast<int64_t>(width > 0.0 ? width : 1.0) *
-                        kQ10;
+        // the two axis scales (the draw_line_stroke formula); rounded
+        // into Q10 so a fractional stroke-width survives
+        int64_t dev_w = static_cast<int64_t>(
+            (width > 0.0 ? width : 1.0) * kQ10 + 0.5);
         if (vb_w_ > 0 && vb_h_ > 0)
         {
             const int64_t ratio = static_cast<int64_t>(s.width) * s.height *

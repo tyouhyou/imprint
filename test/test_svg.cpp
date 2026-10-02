@@ -649,6 +649,50 @@ int test_svg()
             EXPECT(v.paths()[1].pts.back().first == 50 &&
                    v.paths()[1].pts.back().second == 20);
         }
+
+        // fractional stroke-width survives the Q10 rounding (html-path
+        // §SVG: "stroke-width ... fractional preserved"): 1.5 clears the
+        // 3*kQ10/2 hairline threshold and paints the wider band, while
+        // 1.0 stays a hairline — under the old truncate-first math both
+        // landed on the same 1px hairline
+        {
+            const auto stroke_pixels = [](const double width) {
+                SvgCanvas v;
+                v.set_size(60, 20);
+                SvgCanvas::DrawPath dp;
+                SvgCanvas::PathCmd m;
+                m.op = SvgCanvas::PathCmd::Op::move;
+                m.x = 5;
+                m.y = 10;
+                dp.cmds.push_back(m);
+                SvgCanvas::PathCmd l = m;
+                l.op = SvgCanvas::PathCmd::Op::line;
+                l.x = 55;
+                l.y = 10;
+                dp.cmds.push_back(l);
+                dp.has_stroke = true;
+                dp.stroke = core::colors::Black;
+                dp.width = width;
+                v.add_draw_path(dp);
+                core::Graphics g(60, 20, nullptr);
+                g.fill(core::colors::White);
+                v.draw(g);
+                int dark = 0;
+                for (int y = 0; y < 20; ++y)
+                {
+                    for (int x = 0; x < 60; ++x)
+                    {
+                        if (test::pixel_at(g, x, y) !=
+                            core::colors::White.pixel)
+                        {
+                            ++dark;
+                        }
+                    }
+                }
+                return dark;
+            };
+            EXPECT(stroke_pixels(1.5) > stroke_pixels(1.0));
+        }
     }
 
     return test::report("svg");
