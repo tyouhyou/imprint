@@ -47,6 +47,37 @@ namespace zb::ui
             } while (r * r > v || (r + 1) * (r + 1) <= v);
             return r;
         }
+
+        // one pixel from its 2x2 sample coverage: full coverage plots
+        // the base color, partial coverage scales its alpha (32bpp) or
+        // quantizes to the plot_aa half rule (16bpp binary alpha —
+        // scaling the single-bit alpha would clear every fringe pixel)
+        void plot_covered(core::Graphics &area, const int64_t px,
+                          const int64_t py, const core::Color &base,
+                          const int in)
+        {
+            if (in == 4)
+            {
+                area.draw_pixel(static_cast<int>(px), static_cast<int>(py),
+                                base);
+                return;
+            }
+            if constexpr (core::Color::per_channel_blend)
+            {
+                core::Color c = base;
+                c.set_a(static_cast<uint8_t>(base.a() * in / 4));
+                area.draw_pixel(static_cast<int>(px), static_cast<int>(py),
+                                c);
+            }
+            else
+            {
+                if (in * 0xFF / 4 >= 128)
+                {
+                    area.draw_pixel(static_cast<int>(px),
+                                    static_cast<int>(py), base);
+                }
+            }
+        }
     }  // namespace
 
     void SvgCanvas::set_view_box(const int x, const int y, const int w, const int h)
@@ -72,6 +103,12 @@ namespace zb::ui
         mark_dirty();
     }
 
+    void SvgCanvas::add_shape(const Shape &s)
+    {
+        shapes_.push_back(s);
+        mark_dirty();
+    }
+
     void SvgCanvas::add_text(const Text &t)
     {
         texts_.push_back(t);
@@ -82,6 +119,7 @@ namespace zb::ui
     {
         lines_.clear();
         paths_.clear();
+        shapes_.clear();
         texts_.clear();
         mark_dirty();
     }
@@ -293,9 +331,17 @@ namespace zb::ui
     // static-scratch precedent: grown as needed, reused across draws.
     void SvgCanvas::draw_path_stroke(core::Graphics &area, const Path &p) const
     {
+        stroke_points(area, p.pts.data(), p.pts.size(), p.closed,
+                      p.round_caps, p.color, p.width);
+    }
+
+    void SvgCanvas::stroke_points(
+        core::Graphics &area, const std::pair<double, double> *pts,
+        const size_t n, const bool closed, const bool round_caps,
+        const core::Color &color, const double width) const
+    {
         const auto s = get_size();
-        const size_t n = p.pts.size();
-        const bool caps = p.round_caps && !p.closed;
+        const bool caps = round_caps && !closed;
         if (n == 0 || (n == 1 && !caps))
         {
             return;  // a bare M draws a dot only under round caps
@@ -310,8 +356,8 @@ namespace zb::ui
         qy.resize(n);
         for (size_t i = 0; i < n; ++i)
         {
-            const double dx = (p.pts[i].first - vb_x_) * sx;
-            const double dy = (p.pts[i].second - vb_y_) * sy;
+            const double dx = (pts[i].first - vb_x_) * sx;
+            const double dy = (pts[i].second - vb_y_) * sy;
             qx[i] = clamp_q10(static_cast<int64_t>(
                 dx * kQ10 + (dx >= 0 ? 0.5 : -0.5)));
             qy[i] = clamp_q10(static_cast<int64_t>(
@@ -320,7 +366,7 @@ namespace zb::ui
 
         // device stroke width = viewBox width * the geometric mean of
         // the two axis scales (the draw_line_stroke formula)
-        int64_t dev_w = static_cast<int64_t>(p.width > 0.0 ? p.width : 1.0) *
+        int64_t dev_w = static_cast<int64_t>(width > 0.0 ? width : 1.0) *
                         kQ10;
         if (vb_w_ > 0 && vb_h_ > 0)
         {
@@ -336,7 +382,7 @@ namespace zb::ui
 
         // segment list: the polyline plus the closing segment for Z
         size_t segs = n > 1 ? n - 1 : 0;
-        if (p.closed && n > 2)
+        if (closed && n > 2)
         {
             ++segs;
         }
@@ -354,14 +400,14 @@ namespace zb::ui
             {
                 const size_t j = (i + 1) % n;
                 area.draw_line_aa(round10(qx[i]), round10(qy[i]),
-                                  round10(qx[j]), round10(qy[j]), p.color);
+                                  round10(qx[j]), round10(qy[j]), color);
             }
             if (caps)
             {
                 area.fill_circle_aa(round10(qx[0]), round10(qy[0]), 1,
-                                    p.color);
+                                    color);
                 area.fill_circle_aa(round10(qx[n - 1]), round10(qy[n - 1]),
-                                    1, p.color);
+                                    1, color);
             }
             return;
         }
@@ -399,13 +445,13 @@ namespace zb::ui
         const int64_t y0 = miny - dev_w;
         const int64_t y1 = maxy + dev_w;
 
-        const bool blend = p.color.a() < 255;
+        const bool blend = color.a() < 255;
         const bool bak = area.is_alpha_enabled();
         if (blend)
         {
             area.enable_alpha(true);
         }
-        core::Color c = p.color;
+        core::Color c = color;
         for (int64_t py = (y0 / kQ10) - 1; py <= (y1 / kQ10) + 1; ++py)
         {
             for (int64_t px = (x0 / kQ10) - 1; px <= (x1 / kQ10) + 1; ++px)
@@ -442,7 +488,7 @@ namespace zb::ui
                             }
                             const int64_t dot =
                                 (sxp - qx[i]) * dx + (syp - qy[i]) * dy;
-                            if (!p.round_caps && !p.closed &&
+                            if (!round_caps && !closed &&
                                 ((i == 0 && dot < 0) ||
                                  (i == segs - 1 && dot > seg2)))
                             {
@@ -499,7 +545,7 @@ namespace zb::ui
                     c.set_a(static_cast<uint8_t>(c.a() * in / 4));
                     area.draw_pixel(static_cast<int>(px), static_cast<int>(py),
                                     c);
-                    c.set_a(p.color.a());
+                    c.set_a(color.a());
                 }
                 else
                 {
@@ -519,14 +565,291 @@ namespace zb::ui
         }
     }
 
+    // the static-shape fill: per-pixel 2x2 supersampled coverage (the
+    // stroke loop policy). The inside test per kind — rect = box
+    // comparisons; ellipse = the implicit equation through the
+    // axis-stretched center/radii, exact because the viewBox stretch is
+    // affine (an affine image of an ellipse is an ellipse). Integer Q10
+    // per pixel; the ellipse ratio form (dx/rxd)^2 + (dy/ryd)^2 <= 1
+    // keeps every intermediate inside int64 (dx/rxd <= the bbox slack,
+    // and a sample with |dx/rxd| > 1 is already outside).
+    void SvgCanvas::draw_shape_fill(core::Graphics &area,
+                                    const Shape &s) const
+    {
+        if (!s.has_fill || s.rx <= 0.0 || s.ry <= 0.0)
+        {
+            return;
+        }
+        const auto sz = get_size();
+        const double sx = vb_w_ > 0 ? static_cast<double>(sz.width) / vb_w_
+                                    : 1.0;
+        const double sy = vb_h_ > 0 ? static_cast<double>(sz.height) / vb_h_
+                                    : 1.0;
+        const auto map_q10 = [&](const double v, const double scale) {
+            const double d = v * scale;
+            return clamp_q10(static_cast<int64_t>(
+                d * kQ10 + (d >= 0 ? 0.5 : -0.5)));
+        };
+        const int64_t cx = map_q10((s.cx - vb_x_), sx);
+        const int64_t cy = map_q10((s.cy - vb_y_), sy);
+        const int64_t rxd = map_q10(s.rx, sx);
+        const int64_t ryd = map_q10(s.ry, sy);
+        if (rxd == 0 || ryd == 0)
+        {
+            return;  // sub-rounding degenerate: nothing to fill
+        }
+
+        const int64_t x0 = cx - rxd - kQ10;
+        const int64_t x1 = cx + rxd + kQ10;
+        const int64_t y0 = cy - ryd - kQ10;
+        const int64_t y1 = cy + ryd + kQ10;
+        const bool blend = s.fill.a() < 255;
+        const bool bak = area.is_alpha_enabled();
+        if (blend)
+        {
+            area.enable_alpha(true);
+        }
+        for (int64_t py = (y0 / kQ10) - 1; py <= (y1 / kQ10) + 1; ++py)
+        {
+            for (int64_t px = (x0 / kQ10) - 1; px <= (x1 / kQ10) + 1; ++px)
+            {
+                int in = 0;
+                for (const int64_t off_y : {kQ10 / 4, 3 * kQ10 / 4})
+                {
+                    for (const int64_t off_x : {kQ10 / 4, 3 * kQ10 / 4})
+                    {
+                        const int64_t adx = px * kQ10 + off_x - cx;
+                        const int64_t ady = py * kQ10 + off_y - cy;
+                        bool inside = false;
+                        if (s.kind == Shape::Kind::rect)
+                        {
+                            inside = adx <= rxd && adx >= -rxd &&
+                                     ady <= ryd && ady >= -ryd;
+                        }
+                        else
+                        {
+                            const int64_t a = (adx < 0 ? -adx : adx) * kQ10 /
+                                              rxd;
+                            if (a <= kQ10)
+                            {
+                                const int64_t b = (ady < 0 ? -ady : ady) *
+                                                  kQ10 / ryd;
+                                inside = b <= kQ10 &&
+                                         a * a + b * b <= kQ10 * kQ10;
+                            }
+                        }
+                        if (inside)
+                        {
+                            ++in;
+                        }
+                    }
+                }
+                if (in != 0)
+                {
+                    plot_covered(area, px, py, s.fill, in);
+                }
+            }
+        }
+        if (blend)
+        {
+            area.enable_alpha(bak);
+        }
+    }
+
+    // even-odd fill over device-space Q10 points, the closing segment
+    // implied (SVG fills the implicitly closed region of a polyline
+    // too). Per sample: the crossing count of the horizontal ray
+    // against every edge, the classic half-open rule (a vertex on the
+    // ray belongs to the lower edge). Q10 products stay inside int64
+    // (both factors are clamped coordinates).
+    void SvgCanvas::draw_evenodd_fill(core::Graphics &area,
+                                      const std::vector<int64_t> &qx,
+                                      const std::vector<int64_t> &qy,
+                                      const core::Color &color) const
+    {
+        const size_t n = qx.size();
+        if (n < 3)
+        {
+            return;  // a point or segment has no interior
+        }
+        int64_t minx = qx[0], maxx = qx[0], miny = qy[0], maxy = qy[0];
+        for (size_t i = 1; i < n; ++i)
+        {
+            minx = std::min(minx, qx[i]);
+            maxx = std::max(maxx, qx[i]);
+            miny = std::min(miny, qy[i]);
+            maxy = std::max(maxy, qy[i]);
+        }
+        const bool blend = color.a() < 255;
+        const bool bak = area.is_alpha_enabled();
+        if (blend)
+        {
+            area.enable_alpha(true);
+        }
+        for (int64_t py = (miny / kQ10) - 1; py <= (maxy / kQ10) + 1; ++py)
+        {
+            for (int64_t px = (minx / kQ10) - 1; px <= (maxx / kQ10) + 1;
+                 ++px)
+            {
+                int in = 0;
+                for (const int64_t off_y : {kQ10 / 4, 3 * kQ10 / 4})
+                {
+                    for (const int64_t off_x : {kQ10 / 4, 3 * kQ10 / 4})
+                    {
+                        const int64_t sxp = px * kQ10 + off_x;
+                        const int64_t syp = py * kQ10 + off_y;
+                        bool inside = false;
+                        for (size_t i = 0; i < n; ++i)
+                        {
+                            const size_t j = (i + 1) % n;
+                            const int64_t y1 = qy[i], y2 = qy[j];
+                            if ((y1 > syp) == (y2 > syp))
+                            {
+                                continue;  // no crossing at this height
+                            }
+                            const int64_t x1 = qx[i], x2 = qx[j];
+                            const int64_t xi =
+                                x1 + (syp - y1) * (x2 - x1) / (y2 - y1);
+                            if (sxp < xi)
+                            {
+                                inside = !inside;
+                            }
+                        }
+                        if (inside)
+                        {
+                            ++in;
+                        }
+                    }
+                }
+                if (in != 0)
+                {
+                    plot_covered(area, px, py, color, in);
+                }
+            }
+        }
+        if (blend)
+        {
+            area.enable_alpha(bak);
+        }
+    }
+
+    // the static-shape outline closed into a polyline riding the path
+    // stroke machinery: rect = its four corners; circle/ellipse = a
+    // draw-time N-gon flattening — the segment count derives from the
+    // device-space perimeter (pi*(a+b), chord ~2px, clamped 16..256)
+    // and the unit-circle vertices come from the exact rotation
+    // recurrence, its step from a libm-free small-angle series (the
+    // embedded link has no libm trig). Plain IEEE double, so every
+    // platform flattens alike; the scratch buffer follows the
+    // draw_path_stroke static-scratch precedent (allocation-free per
+    // draw).
+    void SvgCanvas::draw_shape_stroke(core::Graphics &area,
+                                      const Shape &s) const
+    {
+        if (!s.has_stroke || s.rx <= 0.0 || s.ry <= 0.0)
+        {
+            return;
+        }
+        if (s.kind == Shape::Kind::rect)
+        {
+            const std::pair<double, double> box[4] = {
+                {s.cx - s.rx, s.cy - s.ry}, {s.cx + s.rx, s.cy - s.ry},
+                {s.cx + s.rx, s.cy + s.ry}, {s.cx - s.rx, s.cy + s.ry}};
+            stroke_points(area, box, 4, true, false, s.stroke,
+                          s.stroke_width);
+            return;
+        }
+        const auto sz = get_size();
+        const double sx = vb_w_ > 0
+                              ? static_cast<double>(sz.width) / vb_w_
+                              : 1.0;
+        const double sy = vb_h_ > 0
+                              ? static_cast<double>(sz.height) / vb_h_
+                              : 1.0;
+        constexpr double kPi = 3.14159265358979323846;
+        const double perim =
+            kPi * (s.rx * sx + s.ry * sy);  // exact for a circle,
+        int segs = static_cast<int>(        // ~9% shy at the extreme
+            perim / 2.0);
+        if (segs < 16)
+        {
+            segs = 16;
+        }
+        else if (segs > 256)
+        {
+            segs = 256;
+        }
+        static std::vector<std::pair<double, double>> scratch;
+        scratch.clear();
+        const double dt = 2.0 * kPi / static_cast<double>(segs);
+        // rotation step, libm-free: a small-angle series (dt <= 2*pi/16,
+        // truncation ~1e-7) keeps USE_INTEGER_GEOMETRY targets off the
+        // libm trig link while staying plain IEEE double — every
+        // platform computes the same vertices
+        const double dt2 = dt * dt;
+        const double sd =
+            dt * (1.0 - dt2 / 6.0 * (1.0 - dt2 / 20.0 * (1.0 - dt2 / 42.0)));
+        const double cd = 1.0 - dt2 / 2.0 * (1.0 - dt2 / 12.0 * (1.0 - dt2 / 30.0));
+        double ux = 1.0, uy = 0.0;
+        for (int i = 0; i < segs; ++i)
+        {
+            scratch.emplace_back(s.cx + s.rx * ux, s.cy + s.ry * uy);
+            const double nx = ux * cd - uy * sd;
+            uy = ux * sd + uy * cd;
+            ux = nx;
+        }
+        stroke_points(area, scratch.data(), scratch.size(), true, false,
+                      s.stroke, s.stroke_width);
+    }
+
     void SvgCanvas::draw_at(core::Graphics &area) const
     {
+        // the documented draw order: static shapes, lines, paths,
+        // texts; within one item fill precedes stroke (SVG paint order)
+        for (const Shape &sh : shapes_)
+        {
+            if (sh.has_fill)
+            {
+                draw_shape_fill(area, sh);
+            }
+            if (sh.has_stroke)
+            {
+                draw_shape_stroke(area, sh);
+            }
+        }
         for (const Line &l : lines_)
         {
             draw_line_stroke(area, l);
         }
         for (const Path &p : paths_)
         {
+            if (p.has_fill)
+            {
+                // even-odd fill over the mapped points, the closing
+                // segment implied (SVG fills the implicitly closed
+                // region of an open polyline too); same mapping as
+                // stroke_points, own scratch buffers
+                const auto s = get_size();
+                const double sx = vb_w_ > 0
+                                      ? static_cast<double>(s.width) / vb_w_
+                                      : 1.0;
+                const double sy = vb_h_ > 0
+                                      ? static_cast<double>(s.height) / vb_h_
+                                      : 1.0;
+                static std::vector<int64_t> fx, fy;
+                fx.resize(p.pts.size());
+                fy.resize(p.pts.size());
+                for (size_t i = 0; i < p.pts.size(); ++i)
+                {
+                    const double dx = (p.pts[i].first - vb_x_) * sx;
+                    const double dy = (p.pts[i].second - vb_y_) * sy;
+                    fx[i] = clamp_q10(static_cast<int64_t>(
+                        dx * kQ10 + (dx >= 0 ? 0.5 : -0.5)));
+                    fy[i] = clamp_q10(static_cast<int64_t>(
+                        dy * kQ10 + (dy >= 0 ? 0.5 : -0.5)));
+                }
+                draw_evenodd_fill(area, fx, fy, p.fill);
+            }
             draw_path_stroke(area, p);
         }
         for (const Text &t : texts_)

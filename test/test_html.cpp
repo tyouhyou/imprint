@@ -1513,6 +1513,100 @@ int test_html()
         EXPECT(r8.children.empty());
     }
 
+    // svg static geometry (H-6): rect/circle/ellipse/polyline/polygon,
+    // SVG paint defaults (fill black, no stroke), g folding, malformed data
+    {
+        bool ok = false;
+        ui_node root = parse_html(
+            "<div><svg viewBox=\"0 0 100 50\">"
+            "<rect x=\"10\" y=\"20\" width=\"40\" height=\"30\"/>"
+            "<circle cx=\"80\" cy=\"25\" r=\"10\" fill=\"#ff0000\" stroke=\"white\""
+            " stroke-width=\"2.5\"/>"
+            "<ellipse cx=\"50\" cy=\"40\" rx=\"8\" ry=\"4\" fill=\"none\" stroke=\"red\"/>"
+            "<polyline points=\"10,10 20,10.5 30,-2\"/>"
+            "<polygon points=\"0,0 10,0 10,10\" fill=\"green\"/>"
+            "</svg></div>\n", &ok);
+        EXPECT(ok);
+        const ui_node &s = root.children[0];
+        EXPECT(s.children.size() == 5);
+        // rect: center + half-extents form, default black fill
+        const ui_node &rc = s.children[0];
+        EXPECT(rc.type == "svg_shape");
+        EXPECT(test::vget<std::string>(node_prop_v(rc, "kind")) == "rect");
+        EXPECT(test::vget<double>(node_prop_v(rc, "cx")) == 30.0);
+        EXPECT(test::vget<double>(node_prop_v(rc, "cy")) == 35.0);
+        EXPECT(test::vget<double>(node_prop_v(rc, "rx")) == 20.0);
+        EXPECT(test::vget<double>(node_prop_v(rc, "ry")) == 15.0);
+        EXPECT(test::vget<std::string>(node_prop_v(rc, "fill")) == "#000");
+        EXPECT(find_prop(rc, "stroke") < 0);
+        // circle: an ellipse with rx == ry, own fill + fractional stroke
+        const ui_node &ci = s.children[1];
+        EXPECT(test::vget<std::string>(node_prop_v(ci, "kind")) == "ellipse");
+        EXPECT(test::vget<double>(node_prop_v(ci, "rx")) == 10.0);
+        EXPECT(test::vget<double>(node_prop_v(ci, "ry")) == 10.0);
+        EXPECT(test::vget<std::string>(node_prop_v(ci, "fill")) == "#ff0000");
+        EXPECT(test::vget<std::string>(node_prop_v(ci, "stroke")) == "white");
+        EXPECT(test::vget<double>(node_prop_v(ci, "stroke_w")) == 2.5);
+        // ellipse with fill none carries no fill prop, stroke stays
+        const ui_node &el = s.children[2];
+        EXPECT(find_prop(el, "fill") < 0);
+        EXPECT(test::vget<std::string>(node_prop_v(el, "stroke")) == "red");
+        // polyline: open svg_path with the SVG-default black fill;
+        // polygon: closed, own fill
+        const ui_node &pl = s.children[3];
+        EXPECT(pl.type == "svg_path");
+        EXPECT(test::vget<bool>(node_prop_v(pl, "closed")) == false);
+        EXPECT(test::vget<std::string>(node_prop_v(pl, "pts")) ==
+               "10,10 20,10.5 30,-2");
+        EXPECT(test::vget<std::string>(node_prop_v(pl, "fill")) == "#000");
+        EXPECT(test::vget<std::string>(node_prop_v(s.children[4], "fill")) ==
+               "green");
+        EXPECT(test::vget<bool>(node_prop_v(s.children[4], "closed")) == true);
+
+        // degenerate geometry renders nothing (dropped at parse)
+        ui_node rd = parse_html(
+            "<div><svg><rect width=\"0\" height=\"10\"/><circle r=\"-3\"/>"
+            "<ellipse rx=\"0\" ry=\"5\"/></svg></div>\n", nullptr);
+        EXPECT(rd.children[0].children.empty());
+        // rect rx/ry is warned, corners stay square
+        ui_node rr2 = parse_html(
+            "<div><svg><rect x=\"0\" y=\"0\" width=\"10\" height=\"10\" rx=\"3\"/></svg></div>\n",
+            nullptr);
+        EXPECT(rr2.children[0].children.size() == 1);
+        // malformed geometry / points drop the element
+        ui_node rm2 = parse_html(
+            "<div><svg><rect width=\"oops\" height=\"10\"/>"
+            "<polyline points=\"10,10 20\"/>"
+            "<polygon points=\"10,10 x,5 5,5\"/></svg></div>\n", nullptr);
+        EXPECT(rm2.children[0].children.empty());
+        // malformed stroke-width drops the element (the line rule)
+        ui_node rw2 = parse_html(
+            "<div><svg><rect width=\"10\" height=\"10\" stroke=\"red\""
+            " stroke-width=\"oops\"/></svg></div>\n", nullptr);
+        EXPECT(rw2.children[0].children.empty());
+        // zero stroke-width keeps the fill, drops the stroke
+        ui_node rz2 = parse_html(
+            "<div><svg><rect width=\"10\" height=\"10\" fill=\"red\""
+            " stroke=\"blue\" stroke-width=\"0\"/></svg></div>\n", nullptr);
+        EXPECT(test::vget<std::string>(node_prop_v(rz2.children[0].children[0],
+                                                   "fill")) == "red");
+        EXPECT(find_prop(rz2.children[0].children[0], "stroke") < 0);
+        // g folds fill/stroke/opacity onto the static geometry elements
+        ui_node rg = parse_html(
+            "<div><svg><g fill=\"#123456\" stroke=\"white\" opacity=\"0.5\">"
+            "<rect x=\"0\" y=\"0\" width=\"10\" height=\"10\"/></g></svg></div>\n",
+            nullptr);
+        const ui_node &gchild = rg.children[0].children[0];
+        EXPECT(test::vget<std::string>(node_prop_v(gchild, "fill")) == "#123456");
+        EXPECT(test::vget<std::string>(node_prop_v(gchild, "stroke")) == "white");
+        EXPECT(test::vget<long long>(node_prop_v(gchild, "fill_alpha")) == 128);
+        // rect outside svg builds nothing (off-whitelist)
+        bool ok9 = true;
+        ui_node r9 = parse_html("<rect width=\"10\" height=\"10\"/>\n", &ok9);
+        EXPECT(!ok9);
+        EXPECT(r9.children.empty());
+    }
+
     // end-to-end: an svg document materializes into a live SvgCanvas
     {
         bool ok = false;

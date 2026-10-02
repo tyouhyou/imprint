@@ -35,9 +35,10 @@ namespace zb::ui
                    t == "br" || t == "toggle" || t == "gauge" ||
                    t == "knob" || t == "trend" || t == "meter" ||
                    t == "svg" || t == "vectordial";
-            // NOTE: line/text/g are svg-context only (handled in
-            // handle_open while in_svg()); elsewhere they stay
-            // off-whitelist and skip with content dropped
+            // NOTE: line/text and the static geometry elements are
+            // svg-context only (handled in handle_open while
+            // in_svg()); elsewhere they stay off-whitelist and skip
+            // with content dropped
         }
         // elements whose bare text becomes an anonymous label: the container
         // tags, and body (the document container)
@@ -3153,6 +3154,232 @@ namespace zb::ui
             n.children.push_back(std::move(t));
         }
 
+        // --- svg static geometry (H-6) -------------------------------------
+        // rect / circle / ellipse / polyline / polygon: filled closed
+        // figures beside the strokes. Paint follows SVG semantics —
+        // fill defaults to black, stroke defaults to none — decided
+        // here so the canvas stores only what it is given.
+
+        // shared paint attributes of the static geometry elements;
+        // false = a malformed stroke-width drops the element (the line
+        // rule); a non-positive width just disables the stroke (the
+        // fill stays, per SVG)
+        bool svg_shape_paint(ui_node &t, const Elem &c)
+        {
+            const std::string &fv = c.attr("fill");
+            if (ascii_lower(fv) != "none")
+            {
+                // SVG default: fill = black
+                t.prop("fill", fv.empty() ? std::string("#000") : fv);
+                const std::string &op = c.attr("opacity");
+                t.prop("fill_alpha",
+                       op.empty() ? 255LL
+                                  : static_cast<long long>(parse_svg_alpha(op)));
+            }
+            const std::string &sv = c.attr("stroke");
+            if (sv.empty())
+            {
+                return true;  // SVG default: no stroke
+            }
+            double width = 1.0;
+            for (const auto &a : c.attrs)
+            {
+                if (a.first == "stroke-width" &&
+                    (!parse_svg_double(a.second, width) || width < 0))
+                {
+                    return false;  // malformed/negative drops the element
+                }
+            }
+            if (width > 0)
+            {
+                t.prop("stroke", sv);
+                // fractional on purpose: the width rides the viewBox
+                // scale at draw time
+                t.prop("stroke_w", width);
+                if (ascii_lower(c.attr("stroke-linecap")) == "round")
+                {
+                    t.prop("stroke_round", true);
+                }
+                const std::string &op = c.attr("opacity");
+                t.prop("stroke_alpha",
+                       op.empty() ? 255LL
+                                  : static_cast<long long>(parse_svg_alpha(op)));
+            }
+            return true;
+        }
+
+        void convert_svg_rect(ui_node &n, const Elem &c)
+        {
+            double x = 0, y = 0, w = 0, h = 0;
+            bool geo = true;
+            for (const auto &a : c.attrs)
+            {
+                double v = 0;
+                if (a.first == "x" || a.first == "y" ||
+                    a.first == "width" || a.first == "height")
+                {
+                    if (!parse_svg_double(a.second, v))
+                    {
+                        geo = false;
+                        break;
+                    }
+                    if (a.first == "x") x = v;
+                    else if (a.first == "y") y = v;
+                    else if (a.first == "width") w = v;
+                    else h = v;
+                }
+            }
+            if (!geo)
+            {
+                return;  // the shared tolerance: malformed geometry dropped
+            }
+            if (w <= 0 || h <= 0)
+            {
+                return;  // non-positive size disables rendering (per SVG)
+            }
+            if (!c.attr("rx").empty() || !c.attr("ry").empty())
+            {
+                LW << "html: line " << c.line
+                   << ": rect rx/ry is not in the subset; corners stay square";
+            }
+            ui_node t;
+            t.type = "svg_shape";
+            t.prop("kind", std::string("rect"));
+            t.prop("cx", x + w / 2).prop("cy", y + h / 2);
+            t.prop("rx", w / 2).prop("ry", h / 2);
+            if (!svg_shape_paint(t, c))
+            {
+                return;
+            }
+            n.children.push_back(std::move(t));
+        }
+
+        void convert_svg_ellipse(ui_node &n, const Elem &c, const bool circle)
+        {
+            double cx = 0, cy = 0, rx = 0, ry = 0;
+            bool geo = true;
+            for (const auto &a : c.attrs)
+            {
+                double v = 0;
+                if (a.first == "cx" || a.first == "cy" ||
+                    a.first == "rx" || a.first == "ry" || a.first == "r")
+                {
+                    if (!parse_svg_double(a.second, v))
+                    {
+                        geo = false;
+                        break;
+                    }
+                    if (a.first == "cx") cx = v;
+                    else if (a.first == "cy") cy = v;
+                    else if (a.first == "rx") rx = v;
+                    else if (a.first == "r") { rx = v; ry = v; }
+                    else ry = v;
+                }
+            }
+            if (!geo)
+            {
+                return;
+            }
+            if (rx <= 0 || ry <= 0)
+            {
+                return;  // non-positive radius disables rendering (per SVG)
+            }
+            if (!circle && !c.attr("r").empty())
+            {
+                // an ellipse carrying r is a typo: r is not its attribute
+                LW << "html: line " << c.line
+                   << ": ellipse has no r attribute; ignored";
+            }
+            ui_node t;
+            t.type = "svg_shape";
+            t.prop("kind", std::string("ellipse"));
+            t.prop("cx", cx).prop("cy", cy).prop("rx", rx).prop("ry", ry);
+            if (!svg_shape_paint(t, c))
+            {
+                return;
+            }
+            n.children.push_back(std::move(t));
+        }
+
+        // SVG points list: number pairs, space/comma separators
+        // (decimals, optional sign — the path number grammar minus the
+        // exponents); returns the normalized "x,y x,y" string (tokens
+        // verbatim, no float round-trip) or false on malformed/odd data
+        bool normalize_svg_points(const std::string &s, std::string &out)
+        {
+            const auto is_sep = [](const char ch) {
+                return ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r' ||
+                       ch == ',';
+            };
+            out.clear();
+            std::size_t i = 0;
+            int count = 0;
+            while (true)
+            {
+                while (i < s.size() && is_sep(s[i]))
+                {
+                    ++i;
+                }
+                if (i >= s.size())
+                {
+                    break;
+                }
+                const std::size_t b = i;
+                if (s[i] == '+' || s[i] == '-')
+                {
+                    ++i;
+                }
+                bool digits = false;
+                while (i < s.size() && s[i] >= '0' && s[i] <= '9')
+                {
+                    ++i;
+                    digits = true;
+                }
+                if (i < s.size() && s[i] == '.')
+                {
+                    ++i;
+                    while (i < s.size() && s[i] >= '0' && s[i] <= '9')
+                    {
+                        ++i;
+                        digits = true;
+                    }
+                }
+                if (!digits)
+                {
+                    return false;
+                }
+                if (count > 0)
+                {
+                    out += (count % 2 == 1) ? ',' : ' ';
+                }
+                out.append(s, b, i - b);
+                ++count;
+            }
+            return count >= 2 && count % 2 == 0;
+        }
+
+        // polyline (open) / polygon (closed): a filled vertex list in
+        // the svg_path node form (the fill rides the optional path fill)
+        void convert_svg_poly(ui_node &n, const Elem &c, const bool closed)
+        {
+            std::string pts;
+            if (!normalize_svg_points(c.attr("points"), pts))
+            {
+                LW << "html: line " << c.line << ": <" << c.tag
+                   << "> points are malformed; the element was dropped";
+                return;
+            }
+            ui_node t;
+            t.type = "svg_path";
+            t.prop("pts", std::move(pts));
+            t.prop("closed", closed);
+            if (!svg_shape_paint(t, c))
+            {
+                return;
+            }
+            n.children.push_back(std::move(t));
+        }
+
         // --- svg path data (H-6 first cut) ---------------------------------
         // Stroke-only `d` parsing plus adaptive flattening into
         // per-subpath polylines (code-contract §3.2). Commands M m L l
@@ -4665,6 +4892,26 @@ namespace zb::ui
                 {
                     convert_svg_text(n, *c);
                 }
+                else if (c->tag == "rect")
+                {
+                    convert_svg_rect(n, *c);
+                }
+                else if (c->tag == "circle")
+                {
+                    convert_svg_ellipse(n, *c, true);
+                }
+                else if (c->tag == "ellipse")
+                {
+                    convert_svg_ellipse(n, *c, false);
+                }
+                else if (c->tag == "polyline")
+                {
+                    convert_svg_poly(n, *c, false);
+                }
+                else if (c->tag == "polygon")
+                {
+                    convert_svg_poly(n, *c, true);
+                }
                 else
                 {
                     LW << "html: line " << c->line << ": <" << c->tag
@@ -4872,7 +5119,10 @@ namespace zb::ui
                 e->tag = tag;
                 e->line = line;
                 const bool svg_child = (tag == "line" || tag == "text" ||
-                                        tag == "path") &&
+                                        tag == "path" || tag == "rect" ||
+                                        tag == "circle" || tag == "ellipse" ||
+                                        tag == "polyline" ||
+                                        tag == "polygon") &&
                     (p->tag == "svg" || p->tag == "vectordial");
                 if (is_leaf(*p))
                 {
@@ -5097,7 +5347,10 @@ namespace zb::ui
                     svg_stack.push_back(std::move(merged));
                 }
                 else if ((name == "line" || name == "text" ||
-                          name == "path") && in_svg())
+                          name == "path" || name == "rect" ||
+                          name == "circle" || name == "ellipse" ||
+                          name == "polyline" || name == "polygon") &&
+                         in_svg())
                 {
                     mode = k_build;  // strokes of the canvas (attrs merged below)
                 }
@@ -5124,8 +5377,12 @@ namespace zb::ui
                 std::vector<std::pair<std::string, std::string>> resolved;
                 const std::vector<std::pair<std::string, std::string>> *attr_src = &t.attrs;
                 if (mode == k_build && (name == "line" || name == "text" ||
-                                        name == "path") && in_svg() &&
-                    !svg_stack.empty())
+                                        name == "path" || name == "rect" ||
+                                        name == "circle" ||
+                                        name == "ellipse" ||
+                                        name == "polyline" ||
+                                        name == "polygon") &&
+                    in_svg() && !svg_stack.empty())
                 {
                     resolved = t.attrs;
                     for (const auto &m : svg_stack.back())

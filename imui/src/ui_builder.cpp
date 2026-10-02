@@ -1276,10 +1276,19 @@ namespace zb::ui
                     }
                     else if (c.type == "svg_path")
                     {
-                        core::Color stroke;
-                        if (!parse_color(prop_of(c, "stroke", std::string{}), stroke))
+                        core::Color stroke, fill;
+                        const bool has_stroke =
+                            parse_color(prop_of(c, "stroke", std::string{}),
+                                        stroke);
+                        // optional fill under the stroke (the static
+                        // geometry subset: polyline/polygon); a bare
+                        // `path` from the d grammar never carries one
+                        const bool has_fill =
+                            parse_color(prop_of(c, "fill", std::string{}),
+                                        fill);
+                        if (!has_stroke && !has_fill)
                         {
-                            continue;  // SVG default: no stroke = invisible
+                            continue;  // nothing to paint
                         }
                         // the flattened polyline ("x,y x,y ..." viewBox
                         // units, decimals — the converter's form);
@@ -1348,11 +1357,64 @@ namespace zb::ui
                         {
                             continue;
                         }
-                        const long long alpha =
-                            prop_of(c, "stroke_alpha", 255LL) * base_alpha / 255;
-                        stroke.set_a(static_cast<uint8_t>(alpha));
-                        pth.color = stroke;
+                        if (has_stroke)
+                        {
+                            const long long alpha =
+                                prop_of(c, "stroke_alpha", 255LL) *
+                                base_alpha / 255;
+                            stroke.set_a(static_cast<uint8_t>(alpha));
+                            pth.color = stroke;
+                        }
+                        if (has_fill)
+                        {
+                            const long long alpha =
+                                prop_of(c, "fill_alpha", 255LL) *
+                                base_alpha / 255;
+                            fill.set_a(static_cast<uint8_t>(alpha));
+                            pth.fill = fill;
+                            pth.has_fill = true;
+                        }
                         v.add_path(pth);
+                    }
+                    else if (c.type == "svg_shape")
+                    {
+                        // the static geometry subset: one closed figure,
+                        // fill and stroke independent (SVG defaults were
+                        // resolved by the converter — fill black, no stroke)
+                        SvgCanvas::Shape sh;
+                        sh.kind = prop_of(c, "kind", std::string{}) ==
+                                          "ellipse"
+                                      ? SvgCanvas::Shape::Kind::ellipse
+                                      : SvgCanvas::Shape::Kind::rect;
+                        sh.cx = prop_of(c, "cx", 0.0);
+                        sh.cy = prop_of(c, "cy", 0.0);
+                        sh.rx = prop_of(c, "rx", 0.0);
+                        sh.ry = prop_of(c, "ry", 0.0);
+                        core::Color paint;
+                        if (parse_color(prop_of(c, "fill", std::string{}),
+                                        paint))
+                        {
+                            const long long alpha =
+                                prop_of(c, "fill_alpha", 255LL) *
+                                base_alpha / 255;
+                            paint.set_a(static_cast<uint8_t>(alpha));
+                            sh.fill = paint;
+                            sh.has_fill = true;
+                        }
+                        const double sw = prop_of(c, "stroke_w", 1.0);
+                        if (parse_color(prop_of(c, "stroke", std::string{}),
+                                        paint) &&
+                            sw > 0)
+                        {
+                            const long long alpha =
+                                prop_of(c, "stroke_alpha", 255LL) *
+                                base_alpha / 255;
+                            paint.set_a(static_cast<uint8_t>(alpha));
+                            sh.stroke = paint;
+                            sh.stroke_width = sw;
+                            sh.has_stroke = true;
+                        }
+                        v.add_shape(sh);
                     }
                 }
                 return;

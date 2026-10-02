@@ -275,6 +275,27 @@ namespace zb::ui
         n.prop("stroke_alpha", alpha);
         return n;
     }
+    // one closed static figure ("rect" or "ellipse"; a circle is an
+    // ellipse with rx == ry), center + half-extents in viewBox units;
+    // empty fill = SVG default black, "none" disables it
+    inline ui_node svg_shape(std::string kind, const double cx, const double cy,
+                             const double rx, const double ry,
+                             std::string fill = "#000",
+                             std::string stroke = {})
+    {
+        ui_node n;
+        n.type = "svg_shape";
+        n.prop("kind", std::move(kind));
+        n.prop("cx", cx).prop("cy", cy).prop("rx", rx).prop("ry", ry);
+        n.prop("fill", std::move(fill));
+        n.prop("fill_alpha", 255LL);
+        if (!stroke.empty())
+        {
+            n.prop("stroke", std::move(stroke)).prop("stroke_w", 1.0);
+            n.prop("stroke_alpha", 255LL);
+        }
+        return n;
+    }
     inline ui_node list_box(std::vector<std::string> items, const long long rows = 4)
     {
         ui_node n;

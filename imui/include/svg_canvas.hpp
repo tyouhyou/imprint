@@ -20,7 +20,8 @@ namespace zb::ui
      *
      * Deliberately narrow: paths arrive already flattened (the html
      * converter owns `d` parsing and de Casteljau subdivision —
-     * code-contract §3.3), no fills, no aspect preservation.
+     * code-contract §3.2), fills cover the closed static figures
+     * only (rect/ellipse/even-odd polygon), no aspect preservation.
      * Display-only like GaugeDial: not focusable, no events,
      * plain-rect hit.
      */
@@ -47,6 +48,30 @@ namespace zb::ui
             core::Color color{};                 // alpha carries opacity
             double width = 1.0;                  // viewBox units (0 clips to 1)
             bool round_caps = false;             // stroke-linecap="round"
+            // optional fill under the stroke (the static geometry
+            // subset: polyline/polygon); SVG paint order = fill first
+            bool has_fill = false;
+            core::Color fill{};                  // alpha carries opacity
+        };
+        /*
+         * One closed static figure (rect / circle / ellipse). Stored as
+         * center + half-extents in viewBox units (fractional): a rect
+         * at x/y/width/height maps to cx = x + width/2 etc.; a circle
+         * is an ellipse with rx == ry. rx <= 0 || ry <= 0 renders
+         * nothing (per SVG). Fill and stroke are independent — SVG
+         * default fill = black, stroke = none; the converter decides,
+         * the canvas stores what it is given.
+         */
+        struct Shape
+        {
+            enum class Kind { rect, ellipse };
+            Kind kind = Kind::rect;
+            double cx = 0, cy = 0, rx = 0, ry = 0;  // viewBox units
+            bool has_fill = false;
+            core::Color fill{};                  // alpha carries opacity
+            bool has_stroke = false;
+            core::Color stroke{};                // alpha carries opacity
+            double stroke_width = 1.0;           // viewBox units (0 clips to 1)
         };
         struct Text
         {
@@ -69,10 +94,12 @@ namespace zb::ui
 
         void add_line(const Line &l);
         void add_path(const Path &p);
+        void add_shape(const Shape &s);
         void add_text(const Text &t);
         void clear_vectors();
         [[nodiscard]] const std::vector<Line> &lines() const { return lines_; }
         [[nodiscard]] const std::vector<Path> &paths() const { return paths_; }
+        [[nodiscard]] const std::vector<Shape> &shapes() const { return shapes_; }
         [[nodiscard]] const std::vector<Text> &texts() const { return texts_; }
 
         // natural size: the viewBox in pixels, 64x64 without one
@@ -95,10 +122,29 @@ namespace zb::ui
         // one flattened polyline through whole-polyline capsule
         // coverage (2x2 supersampled; joints never double-blend)
         void draw_path_stroke(core::Graphics &area, const Path &p) const;
+        // the polyline worker behind draw_path_stroke / the static
+        // shape outlines (viewBox-unit points, no allocation per draw)
+        void stroke_points(core::Graphics &area,
+                           const std::pair<double, double> *pts, size_t n,
+                           bool closed, bool round_caps,
+                           const core::Color &color, double width) const;
+        // the static-shape fill (rect / ellipse / even-odd polygon),
+        // 2x2 supersampled like the strokes
+        void draw_shape_fill(core::Graphics &area, const Shape &s) const;
+        // the static-shape outline closed into a polyline, riding the
+        // path stroke machinery (an ellipse flattens to an N-gon)
+        void draw_shape_stroke(core::Graphics &area, const Shape &s) const;
+        // even-odd fill over device-space Q10 points (the polygon and
+        // implicit-closed polyline fill; the closing segment is implied)
+        void draw_evenodd_fill(core::Graphics &area,
+                               const std::vector<int64_t> &qx,
+                               const std::vector<int64_t> &qy,
+                               const core::Color &color) const;
 
         int vb_x_ = 0, vb_y_ = 0, vb_w_ = 0, vb_h_ = 0;
         std::vector<Line> lines_;
         std::vector<Path> paths_;
+        std::vector<Shape> shapes_;
         std::vector<Text> texts_;
     };
 }  // namespace zb::ui

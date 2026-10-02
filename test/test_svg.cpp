@@ -289,5 +289,160 @@ int test_svg()
         EXPECT(v2->paths().empty());
     }
 
+    // static shape fills (H-6): rect box test through the viewBox,
+    // ellipse implicit test, even-odd polygon with a notch, polyline
+    // implicit close, degenerate radius draws nothing
+    {
+        SvgCanvas v;
+        v.set_view_box(0, 0, 100, 50);
+        v.set_size(100, 50);  // 1:1 scale
+        SvgCanvas::Shape r;
+        r.kind = SvgCanvas::Shape::Kind::rect;
+        r.cx = 30;
+        r.cy = 25;
+        r.rx = 20;
+        r.ry = 10;
+        r.has_fill = true;
+        r.fill = core::colors::Black;
+        v.add_shape(r);
+        EXPECT(v.shapes().size() == 1);
+        core::Graphics g(100, 50, nullptr);
+        g.fill(core::colors::White);
+        v.draw(g);
+        // the full-coverage interior spans cx-rx..cx+rx-1 (the edge
+        // column lands on the shape side of the 2x2 samples)
+        EXPECT(test::pixel_at(g, 30, 25) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 10, 25) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 49, 25) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 9, 25) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, 50, 25) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, 30, 15) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 30, 14) == core::colors::White.pixel);
+
+        // ellipse fill: exact inside, the bbox corners stay blank
+        v.clear_vectors();
+        SvgCanvas::Shape e;
+        e.kind = SvgCanvas::Shape::Kind::ellipse;
+        e.cx = 50;
+        e.cy = 25;
+        e.rx = 20;
+        e.ry = 10;
+        e.has_fill = true;
+        e.fill = core::colors::Black;
+        v.add_shape(e);
+        core::Graphics g2(100, 50, nullptr);
+        g2.fill(core::colors::White);
+        v.draw(g2);
+        EXPECT(test::pixel_at(g2, 50, 25) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g2, 69, 25) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g2, 70, 25) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(g2, 50, 34) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g2, 50, 35) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(g2, 68, 33) == core::colors::White.pixel);
+        // degenerate radius: nothing renders
+        v.clear_vectors();
+        e.rx = 0;
+        v.add_shape(e);
+        core::Graphics g3(100, 50, nullptr);
+        g3.fill(core::colors::White);
+        v.draw(g3);
+        EXPECT(test::pixel_at(g3, 50, 25) == core::colors::White.pixel);
+    }
+
+    // even-odd polygon fill: the notch stays blank, the lobes fill;
+    // an open polyline fill closes implicitly
+    {
+        SvgCanvas v;
+        v.set_size(100, 60);
+        SvgCanvas::Path poly;
+        poly.pts = {{10, 10}, {40, 10}, {40, 40}, {25, 25}, {10, 40}};
+        poly.closed = true;
+        poly.has_fill = true;
+        poly.fill = core::colors::Black;
+        v.add_path(poly);
+        core::Graphics g(100, 60, nullptr);
+        g.fill(core::colors::White);
+        v.draw(g);
+        // (15,30): three crossings to the right -> inside; (25,35):
+        // two crossings -> the notch is outside
+        EXPECT(test::pixel_at(g, 15, 30) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 35, 30) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 25, 35) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, 25, 12) == core::colors::Black.pixel);
+
+        // polyline (open) fills the implicitly closed region
+        v.clear_vectors();
+        SvgCanvas::Path tri;
+        tri.pts = {{10, 10}, {40, 10}, {10, 40}};
+        tri.closed = false;
+        tri.has_fill = true;
+        tri.fill = core::colors::Black;
+        v.add_path(tri);
+        core::Graphics g2(100, 60, nullptr);
+        g2.fill(core::colors::White);
+        v.draw(g2);
+        EXPECT(test::pixel_at(g2, 15, 15) == core::colors::Black.pixel);
+        // outside the implicit closing edge (the hypotenuse)
+        EXPECT(test::pixel_at(g2, 35, 35) == core::colors::White.pixel);
+    }
+
+    // fill paints under stroke (SVG paint order): a filled+stroked
+    // rect shows its fill inside and its stroke on the border
+    {
+        SvgCanvas v;
+        v.set_size(100, 50);
+        SvgCanvas::Shape r;
+        r.cx = 30;
+        r.cy = 25;
+        r.rx = 20;
+        r.ry = 10;
+        r.has_fill = true;
+        r.fill = core::colors::Black;
+        r.has_stroke = true;
+        r.stroke = core::colors::Red;
+        r.stroke_width = 3.0;
+        v.add_shape(r);
+        core::Graphics g(100, 50, nullptr);
+        g.fill(core::colors::White);
+        v.draw(g);
+        // interior = the fill; the border column rides the stroke band
+        EXPECT(test::pixel_at(g, 20, 25) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(g, 10, 25) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(g, 30, 15) == core::colors::Red.pixel);
+    }
+
+    // builder: svg_shape nodes materialize into Shape items; a filled
+    // svg_path (the polyline/polygon node form) carries the optional fill
+    {
+        ui_node doc = column({svg()});
+        ui_node &s = doc.children[0];
+        s.named("dial");
+        s.prop("vb_w", 100LL).prop("vb_h", 50LL);
+        s.children.push_back(svg_shape("rect", 30, 25, 20, 10));
+        s.children.push_back(svg_shape("ellipse", 70, 25, 5, 5, "#ff0000",
+                                       "#00ff00"));
+        ui_node pn = svg_path("10,10 40,10 10,40", "", true);
+        pn.prop("fill", std::string("#0000ff"));
+        s.children.push_back(pn);
+        FlexPanel host;
+        host.set_size(200, 100);
+        build(host, doc);
+        host.layout();
+        auto *v = static_cast<SvgCanvas *>(host.find_by_id("dial"));
+        EXPECT(v != nullptr);
+        EXPECT(v->shapes().size() == 2);
+        EXPECT(v->shapes()[0].kind == SvgCanvas::Shape::Kind::rect);
+        EXPECT(v->shapes()[0].cx == 30 && v->shapes()[0].ry == 10);
+        EXPECT(v->shapes()[0].has_fill && !v->shapes()[0].has_stroke);
+        EXPECT(v->shapes()[1].kind == SvgCanvas::Shape::Kind::ellipse);
+        EXPECT(v->shapes()[1].has_fill && v->shapes()[1].has_stroke);
+        EXPECT(v->shapes()[1].stroke ==
+               core::Color::from(0, 255, 0, 255));
+        EXPECT(v->paths().size() == 1);
+        EXPECT(v->paths()[0].has_fill);
+        EXPECT(v->paths()[0].fill == core::Color::from(0, 0, 255, 255));
+        EXPECT(v->paths()[0].closed);
+    }
+
     return test::report("svg");
 }

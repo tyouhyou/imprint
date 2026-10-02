@@ -97,11 +97,10 @@ What remains is listed below.
   only, no priority**). Landed so far: first cut 2026-09-12 (`viewBox` +
   `line`/`text` + `g` folding, 1px strokes, stretch mapping; HTML tags
   `svg`/`vectordial`) and the path `d` stroke grammar for the HTML path
-  (parse-time flattening, code-contract §3.2). Remaining, all
-  widget-class work:
-  - static geometry subset — `rect`, `circle`, `ellipse`, `polyline`,
-    `polygon` + `fill`/`stroke`/`stroke-width` (~400 lines, maps to
-    existing Graphics primitives);
+  (parse-time flattening, code-contract §3.2); the static geometry
+  subset 2026-10-02 (`rect`/`circle`/`ellipse`/`polyline`/`polygon` +
+  SVG fill semantics, even-odd polygon fill, outline strokes via the
+  path machinery — code-contract §3.2). Remaining:
   - widget `DrawCommand[]` form of `path` (its own flattener) +
     `transform` translate/rotate/scale (~600 lines);
   - out of scope: filters, gradient defs, clipPath, symbol/use,
