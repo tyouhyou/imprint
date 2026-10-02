@@ -16,8 +16,9 @@ namespace zb::shell
      * CanvasWindow::input, and their widget changes must still get
      * presented -- so the repaint check belongs to this step, not to
      * the caller. Every event-driven shell (win / x11 / mac) feeds its
-     * translated events through here; idle-polling shells (fb / NDS)
-     * have no input source at all and only use the paint loop.
+     * translated events through here; NDS feeds its translated events
+     * directly, and fb has no input source at all (B2) — only the
+     * paint loop.
      */
     void feed_input(zb::app::IApp &app, const zb::input::input_event &ev);
 }

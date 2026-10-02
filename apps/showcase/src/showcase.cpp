@@ -53,9 +53,11 @@ namespace zb::app::showcase
             return;
         }
         // from_memory borrows: the packed blob has static storage
-        // (bytes_embed output) and outlives the family
+        // (bytes_embed output) and outlives the family. The file path
+        // form could never work on NDS (no filesystem) — the blob is
+        // the whole point of the bytes_embed build step
         static const zb::ui::TtfFamily family =
-            zb::ui::TtfFamily::from_file("assets/fonts/Inter-Regular.ttf");
+            zb::ui::TtfFamily::from_memory(showcase_font, showcase_font_len);
         zb::ui::set_font_family(family);
 #endif
     }
@@ -113,7 +115,7 @@ namespace zb::app::showcase
     {
         if (about_overlay_ == nullptr)
         {
-            std::fprintf(stderr, "showcase: about overlay missing\n");
+            LE << "showcase: about overlay missing";
             return;
         }
         about_overlay_->set_visible(true);

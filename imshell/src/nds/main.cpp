@@ -12,13 +12,22 @@ using namespace zb::app;
 
 namespace
 {
-	// sends a key event; A confirms (enter), B is space
-	void send_key(const zb::SharedPtr<IApp> &app, const key_code k)
+	// sends a key event; A confirms (enter), B is space. Both edges
+	// travel (U-1): the shell reports key_down from keysDown() and
+	// key_up from keysUp() so a host can pair them (the dispatcher
+	// itself ignores key_up today)
+	void send_key(const zb::SharedPtr<IApp> &app, const input_type t,
+				  const key_code k)
 	{
 		input_event ev;
-		ev.type = input_type::key_down;
+		ev.type = t;
 		ev.key = static_cast<int>(k);
 		app->input(ev);
+	}
+
+	void send_key(const zb::SharedPtr<IApp> &app, const key_code k)
+	{
+		send_key(app, input_type::key_down, k);
 	}
 
 	/*
@@ -97,7 +106,7 @@ namespace
 	{
 		const u32 down = keysDown();
 		const u32 relevant = KEY_UP | KEY_DOWN | KEY_LEFT | KEY_RIGHT | KEY_A | KEY_B;
-		if ((down & relevant) == 0)
+		if ((down & relevant) == 0 && (keysUp() & relevant) == 0)
 		{
 			return false;
 		}
@@ -114,6 +123,20 @@ namespace
 			send_key(app, key_code::enter);
 		if (down & KEY_B)
 			send_key(app, key_code::space);
+
+		const u32 up = keysUp();
+		if (up & KEY_UP)
+			send_key(app, input_type::key_up, key_code::up);
+		if (up & KEY_DOWN)
+			send_key(app, input_type::key_up, key_code::down);
+		if (up & KEY_LEFT)
+			send_key(app, input_type::key_up, key_code::left);
+		if (up & KEY_RIGHT)
+			send_key(app, input_type::key_up, key_code::right);
+		if (up & KEY_A)
+			send_key(app, input_type::key_up, key_code::enter);
+		if (up & KEY_B)
+			send_key(app, input_type::key_up, key_code::space);
 		return true;
 	}
 } // namespace

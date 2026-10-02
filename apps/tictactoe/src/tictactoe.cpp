@@ -1,6 +1,6 @@
 #include "tictactoe.hpp"
 
-#include <stdexcept>
+#include "core/error.hpp"
 
 namespace zb::app::tictactoe
 {
@@ -18,7 +18,7 @@ namespace zb::app::tictactoe
     {
         if (view_.window())
         {
-            throw std::runtime_error("gui already created");
+            throw zb::ui::error("gui already created");
         }
 
         view_.build(max_client_width, max_client_height, buffer);

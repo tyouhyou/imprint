@@ -1,7 +1,5 @@
 #include "ai.hpp"
 
-#include <cstdlib>
-
 namespace zb::app::tictactoe
 {
     namespace
@@ -246,7 +244,13 @@ namespace zb::app::tictactoe
                     }
                 }
             }
-            return (n > 0) ? candidates[std::rand() % n] : ai_move{-1, -1};
+            // self-owned LCG instead of std::rand(): fixed input must
+            // give fixed output across platforms (the framework's
+            // determinism story extends to the demo app's easy mode)
+            static unsigned rng = 0x1234567u;
+            rng = rng * 1664525u + 1013904223u;
+            return (n > 0) ? candidates[rng % static_cast<unsigned>(n)]
+                           : ai_move{-1, -1};
         }
 
         if (d == difficulty::normal)

@@ -230,6 +230,15 @@ namespace zb::shell
 {
     int run(zb::SharedPtr<zb::app::IApp> app, const run_options &options)
     {
+        // reuse-safe: a second run() in one process (the window class is
+        // registered once) must not inherit the previous run's pending
+        // presentation state
+        g_framebuffer = nullptr;
+        g_buffer_width = 0;
+        g_buffer_height = 0;
+        g_pending.clear();
+        g_presentation = {};
+
         // one window class per process: a second run() call reuses it
         static bool window_class_registered = false;
         if (!window_class_registered)
@@ -289,12 +298,29 @@ namespace zb::shell
 
         const std::string os_title =
             !options.title.empty() ? options.title : window->title();
+#ifdef UNICODE
+        // UTF-8 -> UTF-16 (a byte-wise widen mangles non-ASCII titles)
+        std::wstring wide_title;
+        if (!os_title.empty())
+        {
+            const int n = MultiByteToWideChar(
+                CP_UTF8, 0, os_title.c_str(),
+                static_cast<int>(os_title.size()), nullptr, 0);
+            if (n > 0)
+            {
+                wide_title.resize(static_cast<std::size_t>(n));
+                MultiByteToWideChar(CP_UTF8, 0, os_title.c_str(),
+                                    static_cast<int>(os_title.size()),
+                                    wide_title.data(), n);
+            }
+        }
+#endif
         const HWND hwnd = CreateWindowEx(
             dwExStyle,
             AppClassName,
 #ifdef UNICODE
             // the window title is a runtime string, so TEXT() cannot be used
-            std::wstring(os_title.begin(), os_title.end()).c_str(),
+            wide_title.c_str(),
 #else
             os_title.c_str(),
 #endif

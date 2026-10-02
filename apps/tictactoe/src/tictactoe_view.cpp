@@ -1,6 +1,6 @@
 #include "tictactoe_view.hpp"
 
-#include <stdexcept>
+#include "core/error.hpp"
 
 #include "logging.hpp"
 #include "text/text_image.hpp"
@@ -27,7 +27,7 @@ void TictactoeView::build(uint32_t max_client_width, uint32_t max_client_height,
 {
     if (window_)
     {
-        throw std::runtime_error("gui already created");
+        throw zb::ui::error("gui already created");
     }
 
     auto win = zb::make_shared<CanvasWindow>();
