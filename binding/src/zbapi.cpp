@@ -79,19 +79,36 @@ namespace
     };
 
     // a screen-size chain with the host as the shell (B2): nonzero host
-    // dims, else the HTML page box, else the app default
+    // dims, else the HTML page box, else the app default (warned — the
+    // ARCHITECTURE 4.10 resolution rule)
     void resolve_ui_size(const zb::ui::html_page &page,
                          uint32_t &w, uint32_t &h)
     {
         if (w == 0)
         {
-            w = (page.has_width && page.width > 0)
-                    ? static_cast<uint32_t>(page.width) : 800;
+            if (page.has_width && page.width > 0)
+            {
+                w = static_cast<uint32_t>(page.width);
+            }
+            else
+            {
+                w = 800;
+                LW << "zb_app_create_from_ui: no host width and no page "
+                      "width; using the 800 default";
+            }
         }
         if (h == 0)
         {
-            h = (page.has_height && page.height > 0)
-                    ? static_cast<uint32_t>(page.height) : 600;
+            if (page.has_height && page.height > 0)
+            {
+                h = static_cast<uint32_t>(page.height);
+            }
+            else
+            {
+                h = 600;
+                LW << "zb_app_create_from_ui: no host height and no page "
+                      "height; using the 600 default";
+            }
         }
     }
 }
@@ -477,6 +494,15 @@ extern "C" void zb_set_event_callback(zb_app_t *self, const char *widget_id,
         }
         else
         {
+            // a declarative registration for an id the tree never
+            // materialized is a host typo — warn loudly (the lookup
+            // itself stays deferred, zbapi.h's documented shape)
+            if (self->ui != nullptr &&
+                self->ui->canvas()->root().find_by_id(widget_id) == nullptr)
+            {
+                LW << "zb_set_event_callback: no widget with id '"
+                   << widget_id << "' in the design file";
+            }
             self->actions[widget_id] = zb_app::zb_action{cb, userdata};
         }
     }
@@ -532,6 +558,11 @@ extern "C" void zb_widget_set_text(zb_app_t *self, const char *widget_id,
         if (w != nullptr)
         {
             w->set_text(zb::ui::utf8_to_utf16(utf8_text));
+        }
+        else
+        {
+            LW << "zb_widget_set_text: no widget with id '" << widget_id
+               << "'";
         }
     }
     catch (...)

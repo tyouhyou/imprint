@@ -32,6 +32,12 @@ static void on_action_count(const char *widget_id, void *userdata)
     ++*(int *)userdata;
 }
 
+static void on_action_count_two(const char *widget_id, void *userdata)
+{
+    (void)widget_id;
+    ++*(int *)userdata;
+}
+
 static void on_log(int level, const char *message)
 {
     (void)level;
@@ -119,8 +125,12 @@ int main(void)
     assert(ui != NULL);
 
     int clicks = 0;
+    int clicks2 = 0;
     zb_set_event_callback(ui, "ok", on_action_count, &clicks);
-    /* a second registration replaces, NULL unregisters: exercise both */
+    /* a second registration on the SAME id replaces the handler, NULL
+     * unregisters: exercise both. A registration for an id the tree
+     * never materialized only warns (the deferred-lookup shape). */
+    zb_set_event_callback(ui, "ok", on_action_count_two, &clicks2);
     zb_set_event_callback(ui, "missing_widget", on_action_count, &clicks);
 
     zb_paint(ui);
@@ -136,11 +146,14 @@ int main(void)
     assert(zb_widget_text(ui, "nope", text, sizeof(text)) == -1);
 
     /* Tab focuses the button, Enter activates it: the action callback
-     * fires with the id, and the host writes through zb_widget_set_text */
+     * fires with the id, and the host writes through zb_widget_set_text.
+     * The second registration REPLACED the first handler, so the
+     * replacement counts, the original does not. */
     assert(clicks == 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
-    assert(clicks == 1);
+    assert(clicks2 == 1);
+    assert(clicks == 0);
 
     zb_widget_set_text(ui, "count", "Clicks: 1");
     assert(zb_widget_text(ui, "count", text, sizeof(text)) > 0);
@@ -150,7 +163,7 @@ int main(void)
     zb_set_event_callback(ui, "ok", NULL, NULL);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
-    assert(clicks == 1);
+    assert(clicks2 == 1);
 
     /* a malformed design fails the create (exit code 2 semantics) */
     assert(zb_app_create_from_ui("garbage ?? no tags", 0, 100, 100) == NULL);
