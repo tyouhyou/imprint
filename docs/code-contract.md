@@ -479,6 +479,31 @@ whitelist is the boundary):
   texts — document order across kinds is not kept (documented
   deviation; the declarative subset never interleaves them; within
   one item fill precedes stroke).
+- **DrawCommand path form (H-6)**: `SvgCanvas::DrawPath` — structured
+  commands (`move`/`line`/`cubic`/`quad`/`close`, viewBox-unit
+  doubles) so C++ hosts express curves without the html `d` grammar.
+  The canvas flattens at add time into its polyline `Path` items
+  through the shared flatteners (`svg_flatten_cubic` /
+  `svg_flatten_quad`, moved beside the canvas; the html converter
+  calls the same functions — single source, identical output). Each
+  subpath becomes one `Path` item; `close` marks it closed. Fill is
+  per subpath (even-odd within one subpath): compound-path holes
+  (even-odd across subpaths) are out — a documented deviation.
+- **Canvas transform (H-6)**: `set_transform(tx, ty, deg, sx, sy)` —
+  one affine per canvas, composed `translate · rotate · scale` (SVG
+  order, degrees, positive = visually clockwise on y-down) applied
+  after the viewBox stretch: `device = T·R·S·stretch(v)`. Strokes and
+  fills map through it (rotation routes rect/ellipse fills through
+  the flattened outline + even-odd; without rotation the implicit
+  fast paths hold); the stroke width multiplies by `sqrt(|det|)` of
+  the user affine on top of the existing viewBox geometric mean. Text
+  draws upright at the transformed baseline, sized by the y scale
+  (documented deviation; no rotated glyphs). An identity transform
+  clears the flag and renders byte-identically to no transform
+  (locked by test). Trig resolves through a libm-free range-reduced
+  series at set time (the embedded link has no libm trig; the
+  integer-per-pixel rule is untouched). No HTML/`.ui` surface — the
+  html `transform` attribute stays out of the whitelist.
 - Stroke geometry (paths and static-shape outlines): the same
   device-space stroke geometry as `line` —
   per-pixel 2x2 supersampled capsule coverage over the
