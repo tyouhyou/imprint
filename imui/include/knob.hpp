@@ -49,6 +49,9 @@ namespace zb::ui
         void draw_at(core::Graphics &area) const override;
         bool captures_pointer() const override { return true; }
         bool is_focusable() const override { return true; }
+        // drag-state hygiene: a dispatcher force-cancel (target hidden,
+        // press superseded) must not leave the drag armed
+        void on_cancel() override { captured_drag_ = false; }
 
     public:
         bool on_input(const zb::input::input_event &ev) override;

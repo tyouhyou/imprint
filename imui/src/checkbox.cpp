@@ -88,10 +88,12 @@ namespace zb::ui
         (void)s;
 
         const core::Color check = check_color.value_or(theme().accent);
-        // the box; the border highlights while focused (like Button)
+        // the box; the border highlights while focused (like Button).
+        // draw_rect is corner-inclusive: the outline spans 0..box_size-1
+        // to match the measured {box_size, box_size} cell exactly
         const core::Color box_edge = is_focused() ? check
                                                   : box_color.value_or(theme().border);
-        area.draw_rect(0, 0, box_size, box_size, box_edge);
+        area.draw_rect(0, 0, box_size - 1, box_size - 1, box_edge);
         if (pressed_ && box_size > 2)
         {
             area.fill_rect(1, 1, box_size - 2, box_size - 2, check);

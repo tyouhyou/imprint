@@ -904,8 +904,13 @@ namespace zb::ui
         // moves the text baseline start (e.g. a checkbox labelling to the
         // right of its box); applied on top of the alignment. Set when
         // the geometry that determines it changes (ctor/setters), never
-        // from the const draw path
-        void set_text_offset(const core::impoint_t &off) { text_offset_ = off; }
+        // from the const draw path. Marks dirty: like any pixel-affecting
+        // setter, a post-paint call must not leave stale UI
+        void set_text_offset(const core::impoint_t &off)
+        {
+            text_offset_ = off;
+            mark_dirty();
+        }
         void set_h_align(const h_align a)
         {
             halign = a;

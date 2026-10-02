@@ -202,5 +202,21 @@ int test_slider()
         EXPECT(core::colors::Black.pixel == test::pixel_at(g, 70, 20));
     }
 
+    // repaint-on-demand (the ProgressBar guard): a feed that changes
+    // nothing must not dirty the slider
+    {
+        Tree t;
+        t.slider->clear_dirty();
+        t.slider->set_value(50);  // a real change dirties
+        EXPECT(t.slider->is_dirty());
+        t.slider->clear_dirty();
+        t.slider->set_value(50);  // pinned at its value: no repaint
+        EXPECT(!t.slider->is_dirty());
+        t.slider->set_range(0, 100);  // the current range: no repaint
+        EXPECT(!t.slider->is_dirty());
+        t.slider->set_value(60);  // a change dirties again
+        EXPECT(t.slider->is_dirty());
+    }
+
     return test::report("slider");
 }

@@ -5,6 +5,10 @@ namespace zb::ui
 {
     void GaugeDial::set_range(const int mn, const int mx)
     {
+        if (mn == min && mx == max)
+        {
+            return;  // a dial fed its current range must not repaint
+        }
         mark_dirty();
         min = mn;
         max = mx;

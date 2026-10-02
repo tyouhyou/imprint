@@ -6,6 +6,10 @@ namespace zb::ui
 {
     void Slider::set_range(const int mn, const int mx)
     {
+        if (mn == min && mx == max)
+        {
+            return;  // a slider fed its current range must not repaint
+        }
         mark_dirty();
         min = mn;
         max = mx;
@@ -26,16 +30,21 @@ namespace zb::ui
 
     void Slider::set_value(const int v)
     {
+        int nv = v;
+        if (nv < min)
+        {
+            nv = min;
+        }
+        if (nv > max)
+        {
+            nv = max;
+        }
+        if (nv == value)
+        {
+            return;  // a slider pinned at its value must not repaint
+        }
+        value = nv;
         mark_dirty();
-        value = v;
-        if (value < min)
-        {
-            value = min;
-        }
-        if (value > max)
-        {
-            value = max;
-        }
     }
 
     int Slider::value_from_x(const int x) const

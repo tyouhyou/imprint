@@ -6,6 +6,10 @@ namespace zb::ui
 {
     void ProgressBar::set_range(const int mn, const int mx)
     {
+        if (mn == min && mx == max)
+        {
+            return;  // a bar fed its current range must not repaint
+        }
         mark_dirty();
         min = mn;
         max = mx;
