@@ -10,6 +10,8 @@
 
 #include "codec/gif.hpp"
 
+#include "core/error.hpp"
+
 #include <algorithm>
 #include <array>
 #include <cstring>
@@ -42,7 +44,8 @@ namespace zb::ui
             }
             std::size_t best = 0;
             long best_d = -1;
-            for (std::size_t i = 0; i < pal.count; ++i)
+            const std::size_t n = std::min(pal.count, static_cast<std::size_t>(256));
+            for (std::size_t i = 0; i < n; ++i)
             {
                 const long dr = static_cast<long>(r) - pal.rgb[i * 3 + 0];
                 const long dg = static_cast<long>(g) - pal.rgb[i * 3 + 1];
@@ -342,6 +345,7 @@ namespace zb::ui
         : palette_(nullptr), out_(path, std::ios::binary), width_(width),
           height_(height), delay_cs_(delay_cs)
     {
+        check_open(width, height);
         write_header(nullptr);
     }
 
@@ -351,7 +355,23 @@ namespace zb::ui
         : palette_(&palette), out_(path, std::ios::binary), width_(width),
           height_(height), delay_cs_(delay_cs)
     {
+        check_open(width, height);
         write_header(&palette);
+    }
+
+    // init-path rejection (code-contract §1.1): construction creates the
+    // file, so an unopenable path or a dimension past GIF's 16-bit field
+    // must fail loudly instead of writing every byte into a failed stream
+    void GifWriter::check_open(std::size_t width, std::size_t height) const
+    {
+        if (out_.fail())
+        {
+            throw error("GifWriter: cannot open output file");
+        }
+        if (width > 0xFFFF || height > 0xFFFF)
+        {
+            throw error("GifWriter: dimensions exceed the GIF 16-bit field");
+        }
     }
 
     void GifWriter::write_header(const GifPalette *pal)
@@ -374,8 +394,12 @@ namespace zb::ui
         }
         else
         {
+            // clamp: the GCT holds exactly 256 entries and rgb is sized
+            // for 256 — a caller-built count past that is truncated,
+            // never read past the struct
+            const std::size_t n = std::min(pal->count, static_cast<std::size_t>(256));
             std::size_t i = 0;
-            for (; i < pal->count; ++i)
+            for (; i < n; ++i)
             {
                 out_.put(static_cast<char>(pal->rgb[i * 3 + 0]));
                 out_.put(static_cast<char>(pal->rgb[i * 3 + 1]));

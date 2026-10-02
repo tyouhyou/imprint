@@ -78,9 +78,13 @@ namespace zb::ui
 
         [[nodiscard]] std::size_t frames() const { return frames_; }
 
+    private:
+        /* init-path rejection: unopenable path or dimensions past the
+         * GIF 16-bit field throw zb::ui::error (code-contract §1.1) */
+        void check_open(std::size_t width, std::size_t height) const;
+
         void write_header(const GifPalette *pal);
 
-    private:
         /* null = the built-in web-safe cube; custom = exact-hash then
          * nearest-match mapping over the caller's palette */
         const GifPalette *palette_ = nullptr;

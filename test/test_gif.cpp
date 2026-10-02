@@ -171,6 +171,34 @@ int test_gif()
         EXPECT(frames == 2 && term && trailer);
     }
 
+    // init-path rejection (code-contract §1.1): an unopenable path or a
+    // dimension past the GIF 16-bit field throws zb::ui::error at
+    // construction instead of writing into a failed stream
+    {
+        bool threw = false;
+        try
+        {
+            GifWriter w("no_such_dir_xyz/g.gif", 4, 4, 2);
+        }
+        catch (const zb::ui::error &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+
+        threw = false;
+        try
+        {
+            GifWriter w("test_gif_big.gif", 70000, 4, 2);
+        }
+        catch (const zb::ui::error &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+        std::remove("test_gif_big.gif");
+    }
+
     std::remove("test_gif_out.gif");
     std::remove("test_gif_a.gif");
     std::remove("test_gif_b.gif");

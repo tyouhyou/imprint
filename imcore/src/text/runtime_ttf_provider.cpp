@@ -93,7 +93,11 @@ namespace zb::ui
 
         // get-or-rasterize: a miss counts one rasterization (the 8 gate
         // counts misses through rasterization_count()) and may allocate;
-        // an over-budget insert drops the whole cache (the ListBox rule)
+        // an over-budget insert drops the whole cache (the ListBox rule).
+        // Reference-stability invariant: the returned reference points
+        // into s.cache — consume it fully BEFORE the next entry_for /
+        // measure / write call, any of which can push_back or clear the
+        // vector and invalidate it (write() observes this today)
         const TtfFamilyState::GlyphEntry &entry_for(TtfFamilyState &s, const int px,
                                                     const float scale, const char16_t ch)
         {

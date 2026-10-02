@@ -450,19 +450,22 @@ Graphics::ClipGuard Graphics::clip_safe(int x, int y, int32_t width, int32_t hei
     // is the ACTIVE OFFSET, not the clipped draw-area corner: a nested
     // clip composes through the origin its parent clip requested (the
     // hang-off-child fix), which is also what lets a scroll container
-    // shift its content's origin without moving its clip box (H-4)
-    const int ox = draw_area_offset_enabled ? draw_area_offset.x : draw_area.start_x;
-    const int oy = draw_area_offset_enabled ? draw_area_offset.y : draw_area.start_y;
-    const int ax = ox + x;
-    const int ay = oy + y;
-    const int aex = ax + width - 1;
-    const int aey = ay + height - 1;
+    // shift its content's origin without moving its clip box (H-4).
+    // 64-bit intermediates (the clip_surface_safe discipline): the sums
+    // wrap int for extreme x/y + width/height pairs before the clamp
+    // below gets a say
+    const int64_t ox = draw_area_offset_enabled ? draw_area_offset.x : draw_area.start_x;
+    const int64_t oy = draw_area_offset_enabled ? draw_area_offset.y : draw_area.start_y;
+    const int64_t ax = ox + x;
+    const int64_t ay = oy + y;
+    const int64_t aex = ax + width - 1;
+    const int64_t aey = ay + height - 1;
 
     // intersect with the current draw area
-    const int cx = std::max(ax, draw_area.start_x);
-    const int cy = std::max(ay, draw_area.start_y);
-    const int cex = std::min(aex, draw_area.end_x);
-    const int cey = std::min(aey, draw_area.end_y);
+    const int cx = static_cast<int>(std::max(ax, static_cast<int64_t>(draw_area.start_x)));
+    const int cy = static_cast<int>(std::max(ay, static_cast<int64_t>(draw_area.start_y)));
+    const int cex = static_cast<int>(std::min(aex, static_cast<int64_t>(draw_area.end_x)));
+    const int cey = static_cast<int>(std::min(aey, static_cast<int64_t>(draw_area.end_y)));
     if (cex < cx || cey < cy)
     {
         return ClipGuard(*this, draw_area, draw_area_offset_enabled, draw_area_offset, false);
@@ -480,7 +483,14 @@ Graphics::ClipGuard Graphics::clip_safe(int x, int y, int32_t width, int32_t hei
     // (cx == ax there), which is the asymmetry that pinned it
     draw_area = {cx, cy, cex, cey};
     draw_area_offset_enabled = true;
-    draw_area_offset = {ax, ay};
+    // the offset stays the REQUESTED origin (may sit outside the clip);
+    // saturate the int64 sum back into the int point — the clip box
+    // above is already int-bounded, so only the stored origin narrows
+    draw_area_offset = {
+        static_cast<int>(std::clamp(ax, static_cast<int64_t>(INT32_MIN),
+                                   static_cast<int64_t>(INT32_MAX))),
+        static_cast<int>(std::clamp(ay, static_cast<int64_t>(INT32_MIN),
+                                   static_cast<int64_t>(INT32_MAX)))};
     return ClipGuard(*this, saved_area, saved_offset_enabled, saved_offset, true);
 }
 
@@ -678,22 +688,26 @@ void Graphics::draw_surface(
         return;
     }
 
-    // widget-local destination coordinates (draw_at semantics)
-    int sx = start_x, sy = start_y;
+    // widget-local destination coordinates (draw_at semantics); 64-bit
+    // intermediates — the offset+origin sums must not wrap before the
+    // clamp below
+    int64_t sx = start_x, sy = start_y;
     if (draw_area_offset_enabled)
     {
-        sx = draw_area_offset.x + start_x;
-        sy = draw_area_offset.y + start_y;
+        sx = static_cast<int64_t>(draw_area_offset.x) + start_x;
+        sy = static_cast<int64_t>(draw_area_offset.y) + start_y;
     }
 
     // opaque block overwrite: the same gates as fill() at block
     // granularity — draw area (inclusive) and the half-open damage
     // region (A-13). A full-screen blit inside a partial repaint must
     // not smear pixels outside the damaged region (fps F9 failure mode).
-    int col0 = std::max(sx, draw_area.start_x);
-    int col1 = std::min(sx + width - 1, draw_area.end_x);
-    int row0 = std::max(sy, draw_area.start_y);
-    int row1 = std::min(sy + height - 1, draw_area.end_y);
+    int col0 = static_cast<int>(std::max(sx, static_cast<int64_t>(draw_area.start_x)));
+    int col1 = static_cast<int>(std::min(sx + width - 1,
+                                         static_cast<int64_t>(draw_area.end_x)));
+    int row0 = static_cast<int>(std::max(sy, static_cast<int64_t>(draw_area.start_y)));
+    int row1 = static_cast<int>(std::min(sy + height - 1,
+                                         static_cast<int64_t>(draw_area.end_y)));
     if (damage_on_)
     {
         col0 = std::max(col0, damage_l_);
@@ -2006,6 +2020,9 @@ void Graphics::fill_conic(int x1, int y1, int x2, int y2, int from_deg, const in
     {
         return;
     }
+    // clamp like fill_linear_stops: the header documents 2..4 stops; a
+    // larger caller nstops must not read past the caller's arrays
+    nstops = nstops > 4 ? 4 : nstops;
 
     int r = inscribed_radius(right - left + 1, bottom - top + 1, radius);
 
