@@ -66,7 +66,8 @@ column id="root" spacing=6 padding=10
 ```
 
 The tag and property set is defined by the factory/property tables in
-`imui/src/ui_builder.cpp`: containers (`panel`, `column`, `row`) and
+`imui/src/ui_builder.cpp`: containers (`panel`, `column`, `row`,
+`scroll_panel` — a vertical scroll container, H-4) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
 `text_input`, `svg`), with properties including

@@ -446,9 +446,15 @@ Graphics::ClipGuard Graphics::clip_safe(int x, int y, int32_t width, int32_t hei
         return ClipGuard(*this, draw_area, draw_area_offset_enabled, draw_area_offset, false);
     }
 
-    // requested area in absolute (buffer) coordinates
-    const int ax = draw_area.start_x + x;
-    const int ay = draw_area.start_y + y;
+    // requested area in absolute (buffer) coordinates. The local origin
+    // is the ACTIVE OFFSET, not the clipped draw-area corner: a nested
+    // clip composes through the origin its parent clip requested (the
+    // hang-off-child fix), which is also what lets a scroll container
+    // shift its content's origin without moving its clip box (H-4)
+    const int ox = draw_area_offset_enabled ? draw_area_offset.x : draw_area.start_x;
+    const int oy = draw_area_offset_enabled ? draw_area_offset.y : draw_area.start_y;
+    const int ax = ox + x;
+    const int ay = oy + y;
     const int aex = ax + width - 1;
     const int aey = ay + height - 1;
 
@@ -2846,4 +2852,4 @@ void Graphics::fill_ellipse(int cx, int cy, int rx, int ry, const Color &colr)
         draw_line(cx - dx, cy + y, cx + dx, cy + y, colr);
     }
 #endif
-}
+}

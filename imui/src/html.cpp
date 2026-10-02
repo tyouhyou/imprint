@@ -73,6 +73,7 @@ namespace zb::ui
                    p == "text-shadow" || p == "opacity" ||
                    p == "line-height" ||
                    p == "border-top" || p == "box-shadow" ||
+                   p == "overflow" ||
                    p == "margin" || p == "margin-top" ||
                    p == "margin-right" || p == "margin-bottom" ||
                    p == "margin-left" || p == "padding-top" ||
@@ -2764,6 +2765,17 @@ namespace zb::ui
         {
             if (e.tag == "div" || e.tag == "body")
             {
+                // H-4: an overflowing container scrolls instead of
+                // clipping; the scroll container is always a column (the
+                // flow stacks), flex-direction row + overflow:scroll
+                // still scrolls vertically
+                if (const std::string *ov = fold_lookup(folded, "overflow"))
+                {
+                    if (ascii_lower(*ov) == "scroll")
+                    {
+                        return "scroll_panel";
+                    }
+                }
                 if (const std::string *dir = fold_lookup(folded, "flex-direction"))
                 {
                     if (ascii_lower(*dir) == "row")

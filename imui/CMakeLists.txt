@@ -3,6 +3,7 @@ add_library(
     src/widget.cpp
     src/panel.cpp
     src/flex_panel.cpp
+    src/scroll_panel.cpp
     src/button.cpp
     src/checkbox.cpp
     src/label.cpp

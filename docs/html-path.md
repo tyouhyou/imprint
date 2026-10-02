@@ -135,6 +135,7 @@ applies unchanged.
 | Element | `ui_node` tag | Notes |
 |---|---|---|
 | `div` | `column` / `row` | default `column` (block reading order); `flex-direction: row` → `row`, and a bare `display: flex` also selects `row` (the CSS flex default — stylesheets that lay out with `display: flex` alone depend on it). `display: block` (or anything else) keeps `column`. The div is a content-measuring flex container, **not** HTML block layout; it never stretches to fill a parent's main axis. `flex:` markup drives fill |
+| `div` (with `overflow: scroll`) | `scroll_panel` | H-4: the container becomes a vertical scroll container — the flow stacks (`flex-direction: row` does **not** make it horizontal), children lay out per the flex rules, and overflow is reachable by wheel or the scrollbar thumb instead of clipping. See code-contract §3.4 |
 | `p` | `label` | the paragraph element: the text wraps at the element's assigned width and `br` is a hard line break (§Text wrapping) |
 | `span`, `label`, `small` | `label` | single-line labels (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins) |
 | `button` | `button` | `text` = element text content |
@@ -165,6 +166,7 @@ applies unchanged.
 
 | Property | Values | Mapping |
 |---|---|---|
+| `overflow` | `scroll` | a `div`/`body` container becomes `scroll_panel` (vertical scrolling); any other value is ignored |
 | `display` | `flex`, `block`, `none` | `none` → `visible=false`; `flex` on a `div` selects the `row` direction (see above); any other value leaves the element's table type unchanged |
 | `flex-direction` | `row`, `column` | container type of a `div` |
 | `width` / `height` | `Npx`, `N%` (1..100), `auto` | `Npx` → existing pixel size; `N%` → the `"N%"` percent form (FlexPanel parent content box); `auto` → absent (measured) |

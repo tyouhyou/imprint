@@ -12,6 +12,7 @@
 #include "panel.hpp"
 #include "progress_bar.hpp"
 #include "radio_button.hpp"
+#include "scroll_panel.hpp"
 #include "slider.hpp"
 #include "list_box.hpp"
 #include "svg_canvas.hpp"

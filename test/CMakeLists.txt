@@ -50,6 +50,7 @@ add_executable(
     test_raster_damage.cpp
     test_draw_surface.cpp
     test_depth_fill.cpp
+    test_scroll_panel.cpp
     test_pixel_convert.cpp
     test_pixel_traits.cpp
     test_shell_presenter.cpp

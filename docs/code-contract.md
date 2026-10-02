@@ -796,6 +796,34 @@ boundary):
   `set_title()` (the app code sets it before the shell reads the
   title, i.e. inside `create_window`/`make_window`).
 
+### 3.4 ScrollPanel (H-4, the scroll container)
+
+`zb::ui::ScrollPanel` is a **FlexPanel column whose overflow scrolls
+instead of clipping**. What the offset does and does not touch:
+
+- Layout always sees the unscrolled frame — the scroll offset only
+  shifts the nested clip origin at draw time and the child-local y at
+  hit-test time. Flex math, sizes, and positions are identical to a
+  plain column; scrolling never re-runs layout and never invalidates it.
+- The viewport edge is hard: children draw inside a nested clip whose
+  requested area extends past the bottom and is cut back by the
+  panel's own box (the standard `Widget::draw` clip), so a scrolled-out
+  child can never smear over neighbors — the same damage/clip gates as
+  every widget apply unchanged.
+- Interaction: wheel up (delta > 0) scrolls toward the top, 32 px per
+  notch, and the wheel event falls through (returns false) at either
+  end so an outer scroller can take it; pressing the proportional
+  scrollbar thumb captures the pointer until release (the ListBox drag
+  precedent — never cancelled); clicks map through the offset, so
+  content under the viewport edge hits where it draws.
+- `max_scroll()` is derived from the children's current geometry (the
+  bottom-most child edge against the panel height); `set_scroll_offset`
+  clamps and marks dirty. Declarative surfaces: the `.ui` tag
+  `scroll_panel` (a container, column direction) and the HTML
+  `overflow: scroll` CSS property on a `div`/`body` (whitelist:
+  html-path.md), which swaps the container type — the scroll container
+  is always a column even with `flex-direction: row` markup.
+
 ## 4. Declarative UI builder (batch G contract)
 
 - `ui_node` is the sole entry for static descriptions:

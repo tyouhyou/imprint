@@ -48,6 +48,7 @@ namespace zb::ui
         friend class InputDispatcher;
         friend class Panel;
         friend class FlexPanel;
+        friend class ScrollPanel;
         friend class Dialog;
 
     public:
@@ -1077,9 +1078,22 @@ namespace zb::ui
             {
                 p.x += w->position.x;
                 p.y += w->position.y;
+                // a scroll container translates its content frame at draw
+                // time (H-4): the shift belongs to everything inside the
+                // container, never to the container itself
+                if (w != this)
+                {
+                    p.y += w->content_frame_shift_y();
+                }
             }
             return p;
         }
+
+        // H-4: the y shift a scroll container applies to its content
+        // frame (both the drawn pixels and the input mapping); 0 for
+        // plain widgets. Protected: callers go through
+        // get_absolute_position.
+        [[nodiscard]] virtual int content_frame_shift_y() const { return 0; }
 
         // focus
         [[nodiscard]] bool is_focused() const { return focused; }

@@ -256,14 +256,20 @@ namespace zb::ui
 
         if (is_wheel(ev))
         {
-            // wheel events go to the widget under the pointer; a widget
-            // that does not claim them leaves the event unhandled
+            // wheel events go to the widget under the pointer and BUBBLE
+            // up the ancestor chain (H-4): an unscrolled inner container
+            // lets an outer scroller take the notch, the ListBox-inside-
+            // ScrollPanel shape works, and a fully-consumed wheel still
+            // stops at the first claimer
             if (auto *t = pick_target(root, ev.x, ev.y))
             {
-                if (t->on_input(ev))
+                for (Widget *w = t; w != nullptr; w = w->parent)
                 {
-                    LD << "wheel claimed by widget";
-                    return true;
+                    if (w->on_input(ev))
+                    {
+                        LD << "wheel claimed by widget";
+                        return true;
+                    }
                 }
             }
             return false;

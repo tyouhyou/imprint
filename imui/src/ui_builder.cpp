@@ -9,6 +9,7 @@
 #include "list_box.hpp"
 #include "logging.hpp"
 #include "panel.hpp"
+#include "scroll_panel.hpp"
 #include "progress_bar.hpp"
 #include "radio_button.hpp"
 #include "slider.hpp"
@@ -140,7 +141,8 @@ namespace zb::ui
         // ui_builder.hpp
         bool is_container_tag(const std::string &t)
         {
-            return t == "column" || t == "row" || t == "panel";
+            return t == "column" || t == "row" || t == "panel" ||
+                   t == "scroll_panel";
         }
 
         // element opacity (P-2d): fixed-point 0..1000, default opaque
@@ -169,7 +171,7 @@ namespace zb::ui
         std::unique_ptr<Widget> make_widget(const ui_node &n, bool *is_flex)
         {
             const std::string &t = n.type;
-            *is_flex = (t == "column" || t == "row");
+            *is_flex = (t == "column" || t == "row" || t == "scroll_panel");
             if (t == "label")
             {
                 return std::make_unique<Label>();
@@ -225,6 +227,10 @@ namespace zb::ui
             if (t == "column" || t == "row")
             {
                 return std::make_unique<FlexPanel>();
+            }
+            if (t == "scroll_panel")
+            {
+                return std::make_unique<ScrollPanel>();
             }
             if (t == "panel")
             {
@@ -1370,7 +1376,7 @@ namespace zb::ui
                 }
                 return;
             }
-            if (t == "column" || t == "row")
+            if (t == "column" || t == "row" || t == "scroll_panel")
             {
                 apply_flex_config(*as_flex(w), n);
             }
