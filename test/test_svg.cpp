@@ -442,6 +442,9 @@ int test_svg()
         EXPECT(v->paths()[0].has_fill);
         EXPECT(v->paths()[0].fill == core::Color::from(0, 0, 255, 255));
         EXPECT(v->paths()[0].closed);
+        // the stroke flag rides the node's stroke property, not the
+        // Path default: a fill-only svg_path strokes nothing
+        EXPECT(!v->paths()[0].has_stroke);
     }
 
     // DrawPath (H-6): structured commands flatten at add time into
@@ -592,6 +595,59 @@ int test_svg()
             EXPECT(at(ro, 5, 20) == core::colors::Black.pixel);
             EXPECT(at(ro, 25, 20) == core::colors::White.pixel);
             EXPECT(at(ro, 10, 40) == core::colors::White.pixel);
+        }
+
+        // setter classification: a transform is visual-only — it marks
+        // render dirty, never layout dirty (nothing layout reads
+        // depends on it; code-contract §7)
+        {
+            SvgCanvas v;
+            v.set_size(100, 50);
+            v.layout();
+            EXPECT(!v.is_layout_dirty());
+            v.set_transform(5, 0);
+            EXPECT(!v.is_layout_dirty());
+            EXPECT(v.is_dirty());
+            v.set_transform(0, 0, 0, 1, 1);  // identity clears the flag
+            EXPECT(!v.transform_active());
+            EXPECT(!v.is_layout_dirty());
+            v.clear_transform();
+            EXPECT(!v.is_layout_dirty());
+        }
+
+        // close returns the current point to the subpath start (SVG Z
+        // semantics): a command after close continues from there as a
+        // new subpath
+        {
+            SvgCanvas v;
+            v.set_size(100, 50);
+            SvgCanvas::DrawPath dp;
+            SvgCanvas::PathCmd m;
+            m.op = SvgCanvas::PathCmd::Op::move;
+            m.x = 10;
+            m.y = 10;
+            dp.cmds.push_back(m);
+            SvgCanvas::PathCmd l1 = m;
+            l1.op = SvgCanvas::PathCmd::Op::line;
+            l1.x = 40;
+            l1.y = 10;
+            dp.cmds.push_back(l1);
+            SvgCanvas::PathCmd cl = m;
+            cl.op = SvgCanvas::PathCmd::Op::close;
+            dp.cmds.push_back(cl);
+            SvgCanvas::PathCmd l2 = m;
+            l2.op = SvgCanvas::PathCmd::Op::line;
+            l2.x = 50;
+            l2.y = 20;
+            dp.cmds.push_back(l2);
+            v.add_draw_path(dp);
+            EXPECT(v.paths().size() == 2);
+            EXPECT(v.paths()[1].pts.size() == 2);
+            // the implicit subpath starts at the closed subpath's start
+            EXPECT(v.paths()[1].pts.front().first == 10 &&
+                   v.paths()[1].pts.front().second == 10);
+            EXPECT(v.paths()[1].pts.back().first == 50 &&
+                   v.paths()[1].pts.back().second == 20);
         }
     }
 

@@ -85,8 +85,8 @@ namespace zb::ui
         constexpr double kDegToRad = 0.017453292519943295;
 
         // sin/cos of degrees, libm-free: integer range reduction to
-        // [0, 90) then a Taylor series (truncation <= ~2e-6 at the 90
-        // degree boundary — sub-pixel at any real scale). Set-time
+        // [0, 90) then a Taylor series (truncation <= ~3e-5 at the 90
+        // degree boundary — sub-pixel at any realistic radius). Set-time
         // only; the embedded link has no libm trig.
         void sincos_deg(const double deg, double &s, double &c)
         {
@@ -204,14 +204,12 @@ namespace zb::ui
         // exact pre-transform code (byte-identical renders)
         tf_active_ = !(a == 1.0 && b == 0.0 && c == 0.0 && d == 1.0 &&
                        e == 0.0 && f == 0.0);
-        mark_layout_dirty();
     }
 
     void SvgCanvas::clear_transform()
     {
         mark_dirty();
         tf_active_ = false;
-        mark_layout_dirty();
     }
 
     void SvgCanvas::apply_tf(double &x, double &y) const
@@ -245,6 +243,7 @@ namespace zb::ui
         bool sub_open = false;
         bool sub_closed = false;
         double cx = 0.0, cy = 0.0;
+        double sx = 0.0, sy = 0.0;  // subpath start: close returns here
         const auto flush = [&] {
             if (sub_open && pts.size() >= 2)
             {
@@ -271,6 +270,8 @@ namespace zb::ui
                     flush();
                     cx = cmd.x;
                     cy = cmd.y;
+                    sx = cx;
+                    sy = cy;
                     pts.emplace_back(cx, cy);
                     sub_open = true;
                     break;
@@ -278,6 +279,8 @@ namespace zb::ui
                     if (!sub_open)
                     {
                         // an implicit subpath start at the current point
+                        sx = cx;
+                        sy = cy;
                         pts.emplace_back(cx, cy);
                         sub_open = true;
                     }
@@ -288,6 +291,8 @@ namespace zb::ui
                 case PathCmd::Op::cubic:
                     if (!sub_open)
                     {
+                        sx = cx;
+                        sy = cy;
                         pts.emplace_back(cx, cy);
                         sub_open = true;
                     }
@@ -299,6 +304,8 @@ namespace zb::ui
                 case PathCmd::Op::quad:
                     if (!sub_open)
                     {
+                        sx = cx;
+                        sy = cy;
                         pts.emplace_back(cx, cy);
                         sub_open = true;
                     }
@@ -310,6 +317,10 @@ namespace zb::ui
                 case PathCmd::Op::close:
                     sub_closed = true;
                     flush();
+                    // SVG Z semantics: the current point returns to the
+                    // subpath start
+                    cx = sx;
+                    cy = sy;
                     break;
             }
         }
@@ -876,7 +887,8 @@ namespace zb::ui
         {
             // rotation: the axis-aligned implicit tests are invalid —
             // fill the flattened outline through the even-odd path
-            std::vector<std::pair<double, double>> outline;
+            // (static scratch: zero allocation on the paint path, §8)
+            static std::vector<std::pair<double, double>> outline;
             build_outline(s, outline);
             static std::vector<int64_t> fx, fy;
             fx.resize(outline.size());

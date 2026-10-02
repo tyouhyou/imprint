@@ -136,5 +136,40 @@ int test_alloc_guard()
         EXPECT(c.delta() == 0);
     }
 
+    // 5: an SvgCanvas with an active rotation repaints warm without
+    //    allocating: the rotated-fill fallback rides the static outline
+    //    scratch like the stroke path (code-contract section 8)
+    {
+        CanvasWindow w;
+        w.create(200, 80);
+        auto svg = std::make_unique<SvgCanvas>();
+        svg->set_size(100, 80);
+        svg->set_view_box(0, 0, 100, 80);
+        SvgCanvas::Shape box;
+        box.kind = SvgCanvas::Shape::Kind::rect;
+        box.cx = 50;
+        box.cy = 40;
+        box.rx = 20;
+        box.ry = 10;
+        box.has_fill = true;
+        box.fill = core::colors::Black;
+        box.has_stroke = true;
+        box.stroke = core::colors::Red;
+        box.stroke_width = 2.0;
+        svg->add_shape(box);
+        svg->set_transform(0, 0, 30, 1, 1);  // rotation: even-odd fill path
+        w.root().add_child(std::move(svg));
+        w.paint();  // park; warms the rotated-fill outline scratch
+
+        test::scoped_alloc_count c;
+        for (int i = 0; i < 10; ++i)
+        {
+            w.paint();
+        }
+        std::printf("svg rotated warm repaint allocations (10 frames): %lld\n",
+                    c.delta());
+        EXPECT(c.delta() == 0);
+    }
+
     return test::report("alloc_guard");
 }

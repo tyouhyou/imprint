@@ -1383,6 +1383,7 @@ namespace zb::ui
                             stroke.set_a(static_cast<uint8_t>(alpha));
                             pth.color = stroke;
                         }
+                        pth.has_stroke = has_stroke;
                         if (has_fill)
                         {
                             const long long alpha =
