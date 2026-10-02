@@ -906,6 +906,24 @@ namespace zb::ui
                 w.set_aspect_ratio(static_cast<int>(prop_of(n, "aspect_w", 0LL)),
                                    static_cast<int>(prop_of(n, "aspect_h", 0LL)));
             }
+            // D-1: per-axis min/max constraints (non-negative px; the
+            // setter clamps negatives to unconstrained)
+            if (has_prop(n, "min_width"))
+            {
+                w.set_min_width(static_cast<int>(prop_of(n, "min_width", 0LL)));
+            }
+            if (has_prop(n, "max_width"))
+            {
+                w.set_max_width(static_cast<int>(prop_of(n, "max_width", 0LL)));
+            }
+            if (has_prop(n, "min_height"))
+            {
+                w.set_min_height(static_cast<int>(prop_of(n, "min_height", 0LL)));
+            }
+            if (has_prop(n, "max_height"))
+            {
+                w.set_max_height(static_cast<int>(prop_of(n, "max_height", 0LL)));
+            }
             // in-flow margins (H-3): presence-gated so bare widgets stay
             // allocation-free (set_margin skips the all-zero case too)
             if (has_prop(n, "margin_t") || has_prop(n, "margin_r") ||

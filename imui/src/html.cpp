@@ -70,6 +70,8 @@ namespace zb::ui
                    p == "position" || p == "top" || p == "left" ||
                    p == "right" || p == "bottom" || p == "transform" ||
                    p == "font-size" || p == "aspect-ratio" ||
+                   p == "min-width" || p == "max-width" ||
+                   p == "min-height" || p == "max-height" ||
                    p == "letter-spacing" || p == "font-weight" ||
                    p == "text-shadow" || p == "opacity" ||
                    p == "line-height" ||
@@ -4170,6 +4172,29 @@ namespace zb::ui
                 if (parse_aspect(*ar, aw, ah))
                 {
                     n.prop("aspect_w", aw).prop("aspect_h", ah);
+                }
+            }
+            // D-1 min/max constraints: non-negative Npx/bare px only;
+            // % (and any other form) is not in the subset — warned and
+            // ignored (code-contract §3); the node props use the shared
+            // .ui names (min_width etc.)
+            const std::pair<const char *, const char *> kMinMax[4] = {
+                {"min-width", "min_width"}, {"max-width", "max_width"},
+                {"min-height", "min_height"}, {"max-height", "max_height"}};
+            for (const auto &mm : kMinMax)
+            {
+                if (const std::string *v = fold_lookup(folded, mm.first))
+                {
+                    long long px = 0;
+                    if (parse_gap_value(*v, px))
+                    {
+                        n.prop(mm.second, px);
+                    }
+                    else
+                    {
+                        LW << "html: " << mm.first << " '" << *v
+                           << "' is not in the subset (Npx/bare px) and was ignored";
+                    }
                 }
             }
             // H-3 margins: 1-4 bare/Npx values with the CSS side

@@ -232,6 +232,22 @@ int test_html()
         EXPECT(r2.children[0].type == "label");
         EXPECT(test::vget<bool>(node_prop_v(r2, "visible")) == false);
 
+        // D-1 min/max constraints: px forms land as node props, other
+        // forms are warned out of the subset
+        ui_node mm = parse_html(
+            "<div><label style=\"min-width: 30px; max-width: 90; "
+            "min-height: 12px; max-height: 48px; width: 200px\">x</label></div>\n",
+            nullptr);
+        const ui_node &mmw = mm.children[0];
+        EXPECT(test::vget<long long>(node_prop_v(mmw, "min_width")) == 30);
+        EXPECT(test::vget<long long>(node_prop_v(mmw, "max_width")) == 90);
+        EXPECT(test::vget<long long>(node_prop_v(mmw, "min_height")) == 12);
+        EXPECT(test::vget<long long>(node_prop_v(mmw, "max_height")) == 48);
+        ui_node mb = parse_html(
+            "<div><label style=\"min-width: 30%\">x</label></div>\n",
+            nullptr);
+        EXPECT(find_prop(mb.children[0], "min_width") < 0);
+
         // H-7a justify-content: codes follow the FlexPanel::justify
         // ordinal; unknown values emit no prop (warn + keep)
         ui_node j1 = parse_html(

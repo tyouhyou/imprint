@@ -459,6 +459,46 @@ namespace zb::ui
         [[nodiscard]] int aspect_w() const { return aspect_w_; }
         [[nodiscard]] int aspect_h() const { return aspect_h_; }
 
+        /*
+         * Min/max size constraints (D-1): per-axis pixel clamps a flex
+         * parent applies to every size it resolves (grow shares, shrink
+         * finals, resolved percents, stretch fills, aspect-derived
+         * mains, materialized auto demands, explicit basis claims) and
+         * packs with (claims, wrap breaking, measure contributions).
+         * 0 = unconstrained; when both bind, min wins (the CSS rule).
+         * An explicit set_size axis is exempt -- the explicit setter
+         * wins, like every flex feature here. Values clamp to 65535
+         * like the aspect pair (the J1 size gate); negative clears.
+         */
+        void set_min_width(const int v)
+        {
+            min_w_ = size_clamp16(v);
+            mark_dirty();
+            mark_layout_dirty();
+        }
+        void set_max_width(const int v)
+        {
+            max_w_ = size_clamp16(v);
+            mark_dirty();
+            mark_layout_dirty();
+        }
+        void set_min_height(const int v)
+        {
+            min_h_ = size_clamp16(v);
+            mark_dirty();
+            mark_layout_dirty();
+        }
+        void set_max_height(const int v)
+        {
+            max_h_ = size_clamp16(v);
+            mark_dirty();
+            mark_layout_dirty();
+        }
+        [[nodiscard]] int min_width() const { return min_w_; }
+        [[nodiscard]] int max_width() const { return max_w_; }
+        [[nodiscard]] int min_height() const { return min_h_; }
+        [[nodiscard]] int max_height() const { return max_h_; }
+
         // in-flow margins, top/right/bottom/left (H-3, contract §flex):
         // heap sidecar, bare widgets read 0 without allocating; the
         // FlexPanel/Panel flow counts them around the border box
@@ -1273,11 +1313,24 @@ namespace zb::ui
         // (uint16_t pair: 4 bytes against the J1 size gate)
         uint16_t aspect_w_ = 0;
         uint16_t aspect_h_ = 0;
+        // min/max size constraints (D-1): 0 = unconstrained, otherwise
+        // the pixel clamp (uint16_t: the J1 size gate)
+        uint16_t min_w_ = 0;
+        uint16_t max_w_ = 0;
+        uint16_t min_h_ = 0;
+        uint16_t max_h_ = 0;
         bool layout_dirty_ = true;  // first paint lays out the tree
 
         static unsigned char percent_clamp(const int pct)
         {
             return pct <= 0 ? 0 : (pct > 100 ? 100 : static_cast<unsigned char>(pct));
+        }
+        // the D-1 constraint clamp: 0 = unconstrained, values cap at
+        // 65535 against the J1 size gate (the aspect pair precedent)
+        static uint16_t size_clamp16(const int v)
+        {
+            return v <= 0 ? uint16_t{0}
+                          : (v > 65535 ? uint16_t{65535} : static_cast<uint16_t>(v));
         }
 
         // damage reporting: one unioned rect per widget, in absolute

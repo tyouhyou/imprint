@@ -72,6 +72,8 @@ widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
 `text_input`, `svg`), with properties including
 `id`, `text`, `items`, `width`, `height` (px, or `N%` — see below),
+`min_width` / `max_width` / `min_height` / `max_height` (D-1 flex
+clamps, px; 0 = unconstrained),
 `pos_x` / `pos_y` (pixel position), `valign` (`top`, `center`, `bottom`),
 `halign` (`left`, `center`, `right`), `checked`, `group`, `step`,
 `min`, `max`, `value`, `rows`, `spacing`, `padding`,

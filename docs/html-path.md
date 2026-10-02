@@ -172,6 +172,7 @@ applies unchanged.
 | `display` | `flex`, `block`, `none` | `none` → `visible=false`; `flex` on a `div` selects the `row` direction (see above); any other value leaves the element's table type unchanged |
 | `flex-direction` | `row`, `column` | container type of a `div` |
 | `width` / `height` | `Npx`, `N%` (1..100), `auto` | `Npx` → existing pixel size; `N%` → the `"N%"` percent form (FlexPanel parent content box); `auto` → absent (measured) |
+| `min-width` / `max-width` / `min-height` / `max-height` | `Npx` or bare `N` (≥ 0) | the D-1 flex clamp on that axis (code-contract §3); `%` and negatives are not in the subset (warned, ignored); clamps what the flex parent assigns and packs, explicit pixel sizes are exempt |
 | `flex` | `none`, or 1–3 integer tokens (`grow [shrink [basis]]`) | the `flex_grow` / `flex_shrink` / basis channels (`none` = `0 0 auto`); a single number keeps basis-auto and shrink-0 (documented CSS deviations); malformed tokens warn once, keep current |
 | `flex-grow` / `flex-shrink` | integer ≥ 0 | surplus share / deficit weight; malformed warns once, keeps current |
 | `flex-basis` | `auto`, `Npx`, `N%` (1..100) | the line-claim override (packing, wrap breaks, grow base); malformed warns once, keeps current |

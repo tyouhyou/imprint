@@ -864,5 +864,133 @@ int test_flex()
         EXPECT(pb->get_position().x == 30);
     }
 
+    // D-1: min/max constraints clamp what the flex parent resolves and
+    // packs; explicit set_size axes are exempt
+    {
+        // an auto-axis probe child with a fixed measure (no explicit size)
+        struct MeasureBox : Widget
+        {
+            int mw = 0, mh = 0;
+            [[nodiscard]] core::imsize_t measure() const override
+            {
+                return {mw, mh};
+            }
+        };
+        const auto box = [](const int w, const int h) {
+            auto c = std::make_unique<MeasureBox>();
+            c->mw = w;
+            c->mh = h;
+            return c;
+        };
+
+        // max clamps a grow share; the sibling keeps its exact share and
+        // the freed space stays free (justification settles it)
+        FlexPanel r;
+        r.set_direction(FlexPanel::flex_direction::row);
+        auto a = box(10, 10);
+        a->set_max_width(40);
+        Widget *ap = a.get();
+        r.add_child(std::move(a), 1);
+        r.add_child(box(10, 10), 1);
+        r.set_size(300, 10);
+        r.layout();
+        EXPECT(ap->get_size().width == 40);
+        EXPECT(r.get_items()[1].child->get_size().width == 150);
+        EXPECT(r.get_items()[1].child->get_position().x == 40);
+
+        // min floors a grower above its share (the line may overflow)
+        FlexPanel r2;
+        r2.set_direction(FlexPanel::flex_direction::row);
+        auto m = box(10, 10);
+        m->set_min_width(200);
+        Widget *mp = m.get();
+        r2.add_child(std::move(m), 1);
+        r2.add_child(box(10, 10), 1);
+        r2.set_size(300, 10);
+        r2.layout();
+        EXPECT(mp->get_size().width == 200);
+        EXPECT(r2.get_items()[1].child->get_size().width == 150);
+        EXPECT(r2.get_items()[1].child->get_position().x == 200);
+
+        // min counts into measure() for a grower (absolute, like a px basis)
+        FlexPanel pm;
+        pm.set_direction(FlexPanel::flex_direction::row);
+        auto g = box(10, 10);
+        g->set_min_width(60);
+        pm.add_child(std::move(g), 1);
+        EXPECT(pm.measure().width == 60);
+
+        // the clamp applies to the packed auto demand (no grow needed):
+        // 200 demand capped to 30, 5 demand floored to 40
+        FlexPanel r3;
+        r3.set_direction(FlexPanel::flex_direction::row);
+        auto big = box(200, 10);
+        big->set_max_width(30);
+        auto small = box(5, 10);
+        small->set_min_width(40);
+        Widget *bigp = big.get();
+        Widget *smallp = small.get();
+        r3.add_child(std::move(big));
+        r3.add_child(std::move(small));
+        r3.set_size(300, 10);
+        r3.layout();
+        EXPECT(bigp->get_size().width == 30);
+        EXPECT(smallp->get_size().width == 40);
+        EXPECT(smallp->get_position().x == 30);
+
+        // cross axis: a stretch fill clamps (max wins at 30 fill, min
+        // no-ops); in the smaller container the H-9e container box caps
+        // both fills first, then the write clamp raises the min one
+        // past the box (min wins at write time, overflow clips)
+        FlexPanel r4;
+        r4.set_direction(FlexPanel::flex_direction::row);
+        r4.set_align_items(FlexPanel::align::stretch);
+        auto tall = box(10, 5);
+        tall->set_max_height(15);
+        auto flat = box(10, 5);
+        flat->set_min_height(20);
+        Widget *tallp = tall.get();
+        Widget *flatp = flat.get();
+        r4.add_child(std::move(tall));
+        r4.add_child(std::move(flat));
+        r4.set_size(100, 30);
+        r4.layout();
+        EXPECT(tallp->get_size().height == 15);
+        EXPECT(flatp->get_size().height == 30);
+        r4.set_size(100, 10);
+        r4.layout();
+        EXPECT(tallp->get_size().height == 10);
+        EXPECT(flatp->get_size().height == 20);
+
+        // an explicit set_size axis is exempt (the explicit setter wins)
+        FlexPanel r5;
+        r5.set_direction(FlexPanel::flex_direction::row);
+        auto fixed = std::make_unique<Widget>();
+        fixed->set_size(100, 10);
+        Widget *fp = fixed.get();
+        fixed->set_max_width(40);
+        r5.add_child(std::move(fixed));
+        r5.set_size(300, 10);
+        r5.layout();
+        EXPECT(fp->get_size().width == 100);
+
+        // the deficit side keeps the historical floor-0 rule (min does
+        // not feed the shrink loop, the documented deviation): claims
+        // 80/80 shrink into a 100 box and settle at 50/50
+        FlexPanel r6;
+        r6.set_direction(FlexPanel::flex_direction::row);
+        auto s1 = make_child(80, 10);
+        s1->set_min_width(60);
+        Widget *sp1 = s1.get();
+        r6.add_child(std::move(s1), 0, FlexPanel::self_align::auto_, 1);
+        auto s2 = make_child(80, 10);
+        Widget *sp2 = s2.get();
+        r6.add_child(std::move(s2), 0, FlexPanel::self_align::auto_, 1);
+        r6.set_size(100, 10);
+        r6.layout();
+        EXPECT(sp1->get_size().width == 50);
+        EXPECT(sp2->get_size().width == 50);
+    }
+
     return test::report("flex");
 }

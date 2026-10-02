@@ -109,9 +109,10 @@ What remains is listed below.
     pre-rendered pixel assets (asset_gen precedent) — SVG suits reusable
     UI-drawing widgets (icons, gauge faces, decoration), not
     pixel-dense assets.
-- H-7. Layout alignment & flex fill — H-7a/b/c and the flex-body root
-  landed 2026-09-13/14 (contracts in code-contract §3.1). Sole
-  remainder: `flex` min/max constraints → **D-1**.
+- H-7. Layout alignment & flex fill — landed 2026-09-13/14 (H-7a/b/c
+  and the flex-body root, contracts in code-contract §3); the sole
+  remainder (min/max constraints) landed as **D-1** 2026-10-02 and the
+  entry is closed.
 - P-2. Paint remainder (gated by a real page): follow-ups that still
   matter: document-width roots are not centered by UiPreview (amp runs
   full-bleed); body gradient backgrounds have no `html_page` carrier
@@ -282,7 +283,6 @@ fragments + a full-code re-read); the rulings below supersede/extend the
 
 ### Unscheduled Design Debt (Batch K Triage)
 
-- **D-1**: `FlexPanel` min/max size constraints.
 - **D-3**: Focus navigation history.
 - **D-4**: `Event` once-handler and priority handlers.
 - **D-9**: Centralized resource management.

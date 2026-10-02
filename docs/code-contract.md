@@ -669,12 +669,31 @@ whitelist is the boundary):
   basis-auto (not CSS's `0%`) and shrink-0 (not CSS's `1`) — additive,
   documented deviations. `flex-basis: auto/px/%` and `flex-shrink: N`
   set the same channels alone; negative or malformed values warn once
-  and keep the current values. Min/max constraints stay unscheduled
-  (H-7d): nothing on the gating page uses them. Viewport units
+  and keep the current values. Viewport units
   (  `min-height:100vh`) stay out too — but the viewport-centering
   wrapper now grounds: a flex `body` is kept as the document root
   (html-path.md), so its container properties and box dress land on
   the build host while the content width constrains the child.
+- **Widget min/max size constraints (D-1, the landed H-7d)**: per-axis
+  non-negative pixel constraints on any widget
+  (`min_width`/`max_width`/`min_height`/`max_height`; 0 = unconstrained;
+  when both bind, min wins over max — the CSS rule). They clamp what a
+  flex parent writes: grow shares, resolved percents, stretch fills,
+  aspect-derived mains, and materialized auto demands. On the demand
+  side the claims cap by **max only** — min
+  never raises a claim, because a min-raised claim would fight the
+  deficit path across the H-9 convergence passes; min raises at write
+  time instead, which is a fixed point. The deficit path floors at 0
+  with no clamp (the historical overflow rule; a CSS-style min-width
+  floor under `flex-shrink` stays out — documented deviation). An
+  explicit `set_size` axis is exempt — the explicit setter wins, like
+  every flex feature here. `measure()` counts a constrained
+  grower/percent child at its min (an absolute contribution, like a px
+  basis). Outside a flex parent the declarations stay unresolved (like
+  percent). HTML `min-width`/`max-width`/`min-height`/`max-height` take
+  non-negative `Npx`/bare pixel values (`%` is not in the subset —
+  warned and ignored); `.ui`/builder flows use the same-named node
+  props.
 - **Widget margins (H-3)**: per-side non-negative margins (top/right/
   bottom/left) live in the heap `ext_` sidecar (`has_margin`; bare
   widgets stay allocation-free and read 0). In-flow FlexPanel/Panel

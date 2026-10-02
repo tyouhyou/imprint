@@ -13,10 +13,44 @@ namespace zb::ui
             return d == FlexPanel::flex_direction::row;
         }
 
-        void set_main_size(Widget &w, const FlexPanel::flex_direction d, const int v)
+        // the D-1 min/max constraint clamp for one axis (width_axis
+        // selects the width/height pair): min wins over max (the CSS
+        // rule), 0 = unconstrained. Applied to every size a flex parent
+        // writes; an explicit set_size axis stays exempt (the explicit
+        // setter wins, like every flex feature here).
+        int clamp_minmax(const Widget &w, const bool width_axis, int v)
         {
-            // per-axis write: a grown main size must not clear an
-            // explicit cross-axis size (set_size_auto clears both flags)
+            const int mx = width_axis ? w.max_width() : w.max_height();
+            if (mx > 0 && v > mx)
+            {
+                v = mx;
+            }
+            const int mn = width_axis ? w.min_width() : w.min_height();
+            if (mn > 0 && v < mn)
+            {
+                v = mn;
+            }
+            return v;
+        }
+
+        // the demand half of the D-1 clamp: packing claims cap by max
+        // only. min never raises a claim — a min-raised claim would
+        // fight the deficit path across the H-9 convergence passes
+        // (claim up, final down, forever); min raises at write time
+        // instead (clamp_minmax), which is a fixed point.
+        int cap_max(const Widget &w, const bool width_axis, const int v)
+        {
+            const int mx = width_axis ? w.max_width() : w.max_height();
+            return (mx > 0 && v > mx) ? mx : v;
+        }
+
+        // the deficit writer: floors at 0 with no D-1 clamp — the
+        // historical overflow rule stands on the deficit side (a
+        // min-raised final would re-enter the claim loop and never
+        // settle; documented deviation from the CSS min-width floor)
+        void write_main_raw(Widget &w, const FlexPanel::flex_direction d,
+                            const int v)
+        {
             if (is_row(d))
             {
                 w.set_width_auto(v);
@@ -24,6 +58,28 @@ namespace zb::ui
             else
             {
                 w.set_height_auto(v);
+            }
+        }
+
+        // the axis's min constraint (0 = none): an absolute demand a
+        // grower/percent child contributes to FlexPanel::measure like a
+        // px basis
+        int min_of(const Widget &w, const bool width_axis)
+        {
+            return width_axis ? w.min_width() : w.min_height();
+        }
+
+        void set_main_size(Widget &w, const FlexPanel::flex_direction d, const int v)
+        {
+            // per-axis write: a grown main size must not clear an
+            // explicit cross-axis size (set_size_auto clears both flags)
+            if (is_row(d))
+            {
+                w.set_width_auto(clamp_minmax(w, true, v));
+            }
+            else
+            {
+                w.set_height_auto(clamp_minmax(w, false, v));
             }
         }
 
@@ -73,25 +129,42 @@ namespace zb::ui
 
         // the layout demand of a child along the main axis: aspect-ratio
         // derivation first, then an explicit set_size on that axis,
-        // otherwise the widget's measure()
+        // otherwise the widget's measure(). An explicit axis is exempt
+        // from the D-1 clamp; an auto/percent axis clamps into it.
         int main_demand(const Widget &w, const FlexPanel::flex_direction d)
         {
+            const bool row = is_row(d);
             int aspect = 0;
             if (aspect_derive_main(w, d, aspect))
             {
-                return aspect;
+                // cap too: the write pass clamps through set_main_size,
+                // and packing must re-derive the identical value (no
+                // drift between the passes)
+                return cap_max(w, row, aspect);
             }
-            const bool own = is_row(d) ? w.is_width_explicit() : w.is_height_explicit();
+            const bool own = row ? w.is_width_explicit() : w.is_height_explicit();
             const auto demand = own ? w.get_size() : w.measure();
-            return is_row(d) ? demand.width : demand.height;
+            const int raw = row ? demand.width : demand.height;
+            if (own)
+            {
+                return raw;
+            }
+            return cap_max(w, row, raw);
         }
 
-        // the layout demand of a child along the cross axis
+        // the layout demand of a child along the cross axis (explicit
+        // axes exempt from the D-1 clamp, like main_demand)
         int cross_demand(const Widget &w, const FlexPanel::flex_direction d)
         {
-            const bool own = is_row(d) ? w.is_height_explicit() : w.is_width_explicit();
+            const bool row = is_row(d);
+            const bool own = row ? w.is_height_explicit() : w.is_width_explicit();
             const auto demand = own ? w.get_size() : w.measure();
-            return is_row(d) ? demand.height : demand.width;
+            const int raw = row ? demand.height : demand.width;
+            if (own)
+            {
+                return raw;
+            }
+            return cap_max(w, !row, raw);
         }
 
         // the child's final main/cross size (after materialization)
@@ -118,27 +191,34 @@ namespace zb::ui
         }
 
         // the main-axis demand a child brings to line packing: a percent
-        // child participates with its declared share of the content box,
-        // otherwise its fixed demand (explicit axis or measure)
+        // child participates with its declared share of the content box
+        // (clamped into its D-1 constraints), otherwise its demand
         int main_desired(const Widget &w, const FlexPanel::flex_direction d,
                          const int content_main)
         {
             const int pct = main_percent(w, d);
-            return pct > 0 ? pct * content_main / 100 : main_demand(w, d);
+            if (pct > 0)
+            {
+                return cap_max(w, is_row(d), pct * content_main / 100);
+            }
+            return main_demand(w, d);
         }
 
         // the explicit basis claim (H-7c), or -1 for auto: a pixel basis
-        // is absolute, a percent basis resolves against the content box
+        // is absolute, a percent basis resolves against the content box;
+        // both clamp into the D-1 constraints like any other claim
         int basis_claim(const FlexPanel::flex_item &item,
                         const FlexPanel::flex_direction d, const int content_main)
         {
             if (item.basis_px >= 0)
             {
-                return item.basis_px;
+                return cap_max(*item.child, is_row(d), item.basis_px);
             }
             if (item.basis_pct > 0)
             {
-                return std::max(0, item.basis_pct * content_main / 100);
+                return cap_max(
+                    *item.child, is_row(d),
+                    std::max(0, item.basis_pct * content_main / 100));
             }
             return -1;
         }
@@ -166,11 +246,11 @@ namespace zb::ui
         {
             if (is_row(d))
             {
-                w.set_height_auto(v);
+                w.set_height_auto(clamp_minmax(w, false, v));
             }
             else
             {
-                w.set_width_auto(v);
+                w.set_width_auto(clamp_minmax(w, true, v));
             }
         }
 
@@ -241,19 +321,20 @@ namespace zb::ui
             // open axis: their size only exists relative to a resolved
             // parent size, which a measure() has no access to. A pixel
             // basis is absolute and counts; a percent basis is relative
-            // and counts 0 like a percent child (H-7c).
+            // and counts 0 like a percent child (H-7c); a D-1 min
+            // constraint is absolute and counts like a px basis.
             const int m = items[i].basis_px >= 0 ? items[i].basis_px
                               : (items[i].flex_grow > 0 ||
                                  main_percent(child, direction) > 0 ||
                                  items[i].basis_pct > 0)
-                                    ? 0
+                                    ? min_of(child, is_row(direction))
                                     : main_demand(child, direction);
             // in-flow margins count around the border box (H-3)
             main += m + main_margin_before(child, direction) +
                     main_margin_after(child, direction) + (first ? 0 : spacing);
             first = false;
             const int cd = cross_percent(child, direction) > 0
-                               ? 0
+                               ? min_of(child, !is_row(direction))
                                : cross_demand(child, direction);
             cross = std::max(cross, cd + cross_margin_before(child, direction) +
                                          cross_margin_after(child, direction));
@@ -629,7 +710,7 @@ namespace zb::ui
                                           claim / total_scaled;
                             const int final = std::max(0, claim - static_cast<int>(cut));
                             changed |= (main_now(*items[i].child, direction) != final);
-                            set_main_size(*items[i].child, direction, final);
+                            write_main_raw(*items[i].child, direction, final);
                             distributed += cut;
                         }
                         else if (grows(i) && basis < 0)
@@ -637,12 +718,12 @@ namespace zb::ui
                             // historical overflow: a baseless grower
                             // collapses to 0, keeping the far edge clip
                             changed |= (main_now(*items[i].child, direction) != 0);
-                            set_main_size(*items[i].child, direction, 0);
+                            write_main_raw(*items[i].child, direction, 0);
                         }
                         else if (basis >= 0)
                         {
                             changed |= (main_now(*items[i].child, direction) != claim);
-                            set_main_size(*items[i].child, direction, claim);
+                            write_main_raw(*items[i].child, direction, claim);
                         }
                         // percent/demand claims already landed elsewhere
                     }
@@ -656,13 +737,13 @@ namespace zb::ui
                         if (grows(i) && basis < 0)
                         {
                             changed |= (main_now(*items[i].child, direction) != 0);
-                            set_main_size(*items[i].child, direction, 0);
+                            write_main_raw(*items[i].child, direction, 0);
                         }
                         else if (basis >= 0)
                         {
                             const int final = claim_of(i);
                             changed |= (main_now(*items[i].child, direction) != final);
-                            set_main_size(*items[i].child, direction, final);
+                            write_main_raw(*items[i].child, direction, final);
                         }
                     }
                 }
@@ -678,33 +759,32 @@ namespace zb::ui
                 const bool row = is_row(direction);
                 const bool main_explicit = row ? child.is_width_explicit() : child.is_height_explicit();
                 const bool cross_explicit = row ? child.is_height_explicit() : child.is_width_explicit();
+                // the write goes through the D-1 clamp (set_main_size):
+                // min raises a materialized demand, max caps it; both are
+                // fixed points (the next pass re-derives the same demand
+                // from the settled size). A shrink-weighted item stays
+                // raw: the deficit path owns its size (a min raise here
+                // would re-enter the shrink loop every pass).
                 if (!main_explicit && main_percent(child, direction) == 0
                     && items[i].flex_grow == 0
                     && basis_claim(items[i], direction, avail_main) < 0)
                 {
                     const int demand = main_demand(child, direction);
                     changed |= (main_now(child, direction) != demand);
-                    if (row)
+                    if (items[i].flex_shrink > 0)
                     {
-                        child.set_width_auto(demand);
+                        write_main_raw(child, direction, demand);
                     }
                     else
                     {
-                        child.set_height_auto(demand);
+                        set_main_size(child, direction, demand);
                     }
                 }
                 if (!cross_explicit && cross_percent(child, direction) == 0)
                 {
                     const int cross = cross_demand(child, direction);
                     changed |= (cross_now(child, direction) != cross);
-                    if (row)
-                    {
-                        child.set_height_auto(cross);
-                    }
-                    else
-                    {
-                        child.set_width_auto(cross);
-                    }
+                    set_cross_size(child, direction, cross);
                 }
             }
 
