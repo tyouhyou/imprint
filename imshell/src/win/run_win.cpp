@@ -10,6 +10,7 @@
 #include "imcore.hpp"
 #include "input.hpp"
 #include "logging.hpp"
+#include "shell/device_overlay.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presentation.hpp"
@@ -163,10 +164,31 @@ namespace
         }
         g_pending.clear();  // presented; the next painted callback accumulates afresh
 
-        // the letterbox: the client area outside the presented rect is
-        // not app content; the blit below is clipped to the paint region
-        // by BeginPaint, so the fill stays flicker-free
-        FillRect(hDC, &rc_paint, reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+        // the letterbox (I-2b): the chrome bars around the presented rect
+        // are the only non-app area, so only they are filled -- the blit
+        // below covers the presented rect itself and is clipped to the
+        // paint region by BeginPaint, so the fills stay flicker-free
+        RECT rc_client;
+        const HBRUSH black = reinterpret_cast<HBRUSH>(GetStockObject(BLACK_BRUSH));
+        if (GetClientRect(hwnd, &rc_client))
+        {
+            const zb::shell::chrome_bars bars = zb::shell::chrome_around(
+                pres, rc_client.right - rc_client.left,
+                rc_client.bottom - rc_client.top);
+            for (const zb::shell::present_rect *b :
+                 {&bars.top, &bars.bottom, &bars.left, &bars.right})
+            {
+                if (b->w > 0 && b->h > 0)
+                {
+                    const RECT r{b->x, b->y, b->x + b->w, b->y + b->h};
+                    FillRect(hDC, &r, black);
+                }
+            }
+        }
+        else
+        {
+            FillRect(hDC, &rc_paint, black);  // unreachable in practice; keep the old blanket fill
+        }
 
         // NOTE: this blit assumes 32bpp (biBitCount = 32, BI_RGB). A
         // COLOR_DEPTH=16 build would produce an abgr1555 buffer while the

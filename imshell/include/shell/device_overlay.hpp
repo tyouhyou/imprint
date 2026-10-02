@@ -8,11 +8,11 @@ namespace zb::shell
      * I-2b device overlay: bezel/chrome around the presented buffer,
      * shaped by target screen constraints (dual NDS 256x192 screens with
      * a hinge gap, 320x240 framebuffers, ...). Pure integer layout math
-     * beside the I-2a seam: shells paint the computed bars with their
-     * native fill instead of black letterbox, and swallow pointer events
-     * landing on chrome (see the composition under hinge_bar). No shell
-     * is rewired here -- adopting per shell needs maintainer eyes on
-     * the verified present paths, so that lands separately.
+     * beside the I-2a seam: the desktop shells paint the computed bars
+     * with their native fill instead of blanket black letterbox
+     * (adopted; see code-contract §3), and pointer events landing on
+     * chrome are swallowed (letterbox rule; the hinge composition under
+     * hinge_bar applies when a device profile covers buffer rows).
      *
      * Single-buffer rule: the overlay frames ONE app buffer. A hinge bar
      * covers buffer rows of the presented buffer itself (a stacked

@@ -771,12 +771,20 @@ boundary):
   bars (a degenerate present yields one full-window bar), `hinge_bar`
   reusing the `presentation_region` ceil mapping for buffer rows shown
   as chrome (NDS `nds_screen_w/h` constants), `contains_rect`
-  half-open like `to_buffer`. Shells paint the bars natively and
-  swallow pointer events on chrome/hinge (`to_buffer` success AND NOT
-  contained); no shell is rewired here — per-shell adoption needs
-  maintainer eyes on the verified present paths. Single-buffer rule: a
-  hinge covers rows of the presented buffer itself. Locked by the I-2b
-  section of `test_shell_presenter`.
+  half-open like `to_buffer`. **Per-shell adoption (landed)**: the
+  desktop shells with a letterbox paint the `chrome_around` bars with
+  their native fill (win `FillRect`, x11 `XFillRectangle` through a
+  BlackPixel gc on resize, mac `NSRectFillUsingOperation` in the
+  y-up view coordinates) instead of blanket-filling the paint area —
+  visuals are unchanged (the bars are the old letterbox, the presented
+  rect is always covered by the blit/draw that follows); the 1:1
+  shells (NDS/FB) have no letterbox and adopt nothing. Pointer
+  swallowing on chrome is the existing letterbox rule (`to_buffer`
+  failure); the hinge composition (`to_buffer` success AND NOT
+  `contains_rect(hinge, ...)`) is shell-side duty for a device profile
+  that covers buffer rows — none exists yet, the composition stays
+  locked by `test_shell_presenter`. Single-buffer rule: a hinge covers
+  rows of the presented buffer itself.
 - **Module consumption paths (A-22)**: `imapp` (`IApp`/`IWindow`/`IGui` +
   `make_app`) has no widget dependency — a graphics-only app links
   `imapp` plus a shell backend and implements `IApp` directly on

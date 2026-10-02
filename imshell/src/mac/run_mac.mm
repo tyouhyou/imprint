@@ -31,6 +31,7 @@
 #include "imcore.hpp"
 #include "input.hpp"
 #include "core/error.hpp"
+#include "shell/device_overlay.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presentation.hpp"
@@ -267,14 +268,32 @@ namespace
     CGContextRef ctx = nsc.CGContext;
     CGContextSaveGState(ctx);
     // I-2a: the fixed buffer is presented fitted into the view, aspect
-    // preserved and centered; the letterbox is filled black first (the
-    // blit below is clipped to the dirty rect by AppKit)
+    // preserved and centered; the letterbox chrome bars (I-2b) are the
+    // only non-app area, so only they are filled black -- the draw
+    // below always covers the whole presented rect (the fill is clipped
+    // to the dirty rect by AppKit)
     const NSRect bounds = self.bounds;
     const zb::shell::presentation pres = zb::shell::presentation_fit(
         static_cast<int>(bounds.size.width), static_cast<int>(bounds.size.height),
         g_buffer_width, g_buffer_height);
     [[NSColor blackColor] setFill];
-    NSRectFillUsingOperation(bounds, NSCompositingOperationCopy);
+    const zb::shell::chrome_bars bars = zb::shell::chrome_around(
+        pres, static_cast<int>(bounds.size.width),
+        static_cast<int>(bounds.size.height));
+    // the bars are window-client px measured from the top; NSView
+    // coordinates are y-up from the bottom-left, so a bar's view y is
+    // bounds.height - (y + h). A degenerate presented rect reports the
+    // whole window as one bar -- the old blanket fill.
+    for (const zb::shell::present_rect *b :
+         {&bars.top, &bars.bottom, &bars.left, &bars.right})
+    {
+        if (b->w > 0 && b->h > 0)
+        {
+            NSRectFillUsingOperation(
+                NSMakeRect(b->x, bounds.size.height - b->y - b->h, b->w, b->h),
+                NSCompositingOperationCopy);
+        }
+    }
     if (pres.w > 0 && pres.h > 0)
     {
         // nearest-neighbor resampling keeps the pixels identical to the

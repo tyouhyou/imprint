@@ -16,11 +16,11 @@ Dependency-driven: each tier unlocks what follows.
 
 1. **Batch H core / HTML path** — landed (whitelist + parser + preview
    consumer + three-platform showcase); remaining open sub-items below
-   (H-4 ScrollPanel, H-6 SVG remainder, H-9 dial-visibility tail).
-2. **Quick wins** (<1 day each, opportunistic): **S-2 SKETCH** (recorded,
-   unscheduled), **I-2b per-shell adoption** (device_overlay math + tests
-   landed; shells paint natively — per-shell adoption needs maintainer
-   eyes).
+   (H-6 SVG remainder).
+2. **Quick wins** (<1 day each, opportunistic): **S-2 SKETCH** (landed
+   2026-10-02), **I-2b per-shell adoption** (landed 2026-10-02 — the
+   desktop letterbox shells paint the `chrome_around` bars with their
+   native fill; code-contract §3).
 3. **P1 external consumability** (2026-09-26 roadmap, Batch G) — landed
    2026-09-26 (closes A-23); **P1.5 install/export landed 2026-10-01**
    (see Batch G).
@@ -77,7 +77,7 @@ parser scope:
   not treated as equivalent).
 - **No second layout engine**: no `position: absolute/fixed`
   (no offset/z-index/overlap — abs/relative landed as P-3 for the HTML
-  path's own model), no `overflow: scroll` (H-4), no grid /
+  path's own model), no grid /
   multi-column / RTL / bidi — each is a container/scroller enhancement,
   not parser work.
 - **CSS flex features**: `justify-content`, `align-items`/`align-self`,
@@ -93,7 +93,6 @@ paint, P-3 positioning; L-2 alignment attributes via external PR #4).
 What remains is listed below.
 
 **Open / condition-triggered sub-items:**
-- H-4. `ScrollPanel` + `overflow` (moderate — needs a scroll container).
 - H-6. `SvgCanvas` remainder (recorded 2026-09-10, **unscheduled — note
   only, no priority**). Landed so far: first cut 2026-09-12 (`viewBox` +
   `line`/`text` + `g` folding, 1px strokes, stretch mapping; HTML tags
@@ -114,9 +113,6 @@ What remains is listed below.
 - H-7. Layout alignment & flex fill — H-7a/b/c and the flex-body root
   landed 2026-09-13/14 (contracts in code-contract §3.1). Sole
   remainder: `flex` min/max constraints → **D-1**.
-- H-9. Convergent layout passes — **landed 2026-09-13**: `layout()`
-  re-runs its pass while a child size/position/measure changed (bound 3;
-  contract §7). Dial *visibility* still needs paint + positioning follow-ups.
 - P-2. Paint remainder (gated by a real page): follow-ups that still
   matter: document-width roots are not centered by UiPreview (amp runs
   full-bleed); body gradient backgrounds have no `html_page` carrier
@@ -136,54 +132,10 @@ per the A-23 precedent the `html` translation unit stays in imui (STATIC);
 unreferenced on targets that don't use it, dropped by the static linker at
 image build. Consumer-side, not a new C-ABI surface at this stage.
 
-### Batch S — Render Modes: Sketch & Wireframe (S-2 still unscheduled; S-1 landed)
-
-Alternative rendering modes for the same widget tree. Not new widget
-classes — these are `Graphics`-layer `RenderMode` switches (~150 lines
-total) that change how existing draw calls behave. A widget tree
-rendered in WIREFRAME mode shows only structural bones; in SKETCH mode
-it looks hand-drawn. The widget tree, dispatcher, damage tracking, and
-Widget hit-testing are all unchanged.
-
-- **S-1. WIREFRAME mode** (landed):跳过填充，只画 1px 边框和文字骨架；
-  grid/spacing 可选显示。Render-mode switch on `Graphics`
-  (`set_render_mode`, default FULL); shape fills degrade to 1px
-  outlines, `fill()` stays the immune clear primitive, `ListBox` row
-  images follow the screen mode; `sketch` reserved for S-2. Contracts in
-  ARCHITECTURE §4.4 + code-contract raster section, locked by
-  `test_render_mode`. Use cases:
-  - **Layout debug view**：开发者查看界面布局结构，隐藏视觉噪音。
-  - **e-ink / low-power mode**：减少像素翻转量，延长 e-ink 屏幕
-    寿命；低带宽远程监控只传骨架（省 90%+ 帧数据）。
-  - **Accessibility / high-contrast**：极端简化，只保留结构信息。
-- **S-2. SKETCH mode**：线条加 jitter 偏移（轻微抖动），填充不完全
-  均匀，边缘有"毛刺"感。Use cases:
-  - **Product configurator kiosk**：家具/户型选配，手绘风暗示
-    "这是草图，还没定稿"，降低用户心理压力。
-  - **Education / children's devices**：触摸屏教育玩具，手绘风比
-    精确工业风更亲切。
-  - **Creative tool UI**：嵌入式绘图板/UI，sketch 模式让 UI 跟
-    内容风格统一。
-
-**Architecture note**: both modes live in `imcore` Graphics as a
-`set_render_mode(FULL|WIREFRAME|SKETCH)` enum. Each `draw_*` call
-branches on mode: WIREFRAME skips fills, SKETCH adds jitter to line
-endpoints. FULL is the default (current behavior, zero overhead).
-Orthogonal to Widget hit-test/shape (A-24) and to theme (colors/tokens)
-— a GaugeDial can render in any mode with any theme.
-
 ### Batch I — Tooling & Inspection (Unscheduled)
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
   - Watch `.ui` file changes on disk and reload in-place without restarting the previewer.
-- **I-2b. Device overlay** (landed): bezel/chrome around the presented buffer
-  matching target screen constraints (dual NDS 256x192 screens,
-  framebuffer 320x240) — pure layout math in
-  `shell/device_overlay.hpp` (chrome bars, hinge bar via the region
-  ceil mapping, half-open contains + documented input composition);
-  shells paint natively, no shell rewired (per-shell adoption needs
-  maintainer eyes). Contracts in code-contract §3, locked by
-  `test_shell_presenter`.
 
 ### Batch F — Event Loop Extension & Frame Automation (Long-term)
 

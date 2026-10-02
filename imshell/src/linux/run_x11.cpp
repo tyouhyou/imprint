@@ -10,6 +10,7 @@
 #include "core/error.hpp"
 #include "imcore.hpp"
 #include "logging.hpp"
+#include "shell/device_overlay.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presentation.hpp"
@@ -89,6 +90,10 @@ namespace zb::shell
         XMapWindow(display, window);
 
         GC gc = XCreateGC(display, window, 0, nullptr);
+        // the letterbox chrome fills (I-2b) paint black through this gc;
+        // BlackPixel is a pixel value, not always 0, so set it explicitly
+        // (XPutImage ignores the gc, the value affects nothing else)
+        XSetForeground(display, gc, BlackPixel(display, screen));
 
         // XImage directly maps the framework framebuffer (BGRA little-endian == X 32bit TrueColor on x86)
         XImage *xi = XCreateImage(
@@ -178,7 +183,24 @@ namespace zb::shell
                     pres, zb::shell::present_rect{0, 0, pres.w, pres.h},
                     win->data(), scratch.data());
             }
-            XClearWindow(display, window);  // the letterbox shows the black background
+            // the letterbox (I-2b): the chrome bars around the presented
+            // rect are painted through the shared overlay math instead of
+            // clearing the whole window -- the presented area is
+            // re-presented right below, so only the bars need paint. The
+            // server-side black background stays as the fallback for an
+            // exposure that arrives before the first present.
+            const zb::shell::chrome_bars bars =
+                zb::shell::chrome_around(pres, win_w, win_h);
+            for (const zb::shell::present_rect *b :
+                 {&bars.top, &bars.bottom, &bars.left, &bars.right})
+            {
+                if (b->w > 0 && b->h > 0)
+                {
+                    XFillRectangle(display, window, gc, b->x, b->y,
+                                   static_cast<unsigned int>(b->w),
+                                   static_cast<unsigned int>(b->h));
+                }
+            }
             present_region(0, 0, buf_w, buf_h);
         };
 
