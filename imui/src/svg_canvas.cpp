@@ -558,8 +558,29 @@ namespace zb::ui
                         {
                             t = kQ10;
                         }
-                        const int64_t ex = qx - ((t * dx) / kQ10);
-                        const int64_t ey = qy - ((t * dy) / kQ10);
+                        int64_t ex, ey;
+                        if (dy == 0 && t > 0 && t < kQ10)
+                        {
+                            // axis-parallel interior: the foot of the
+                            // perpendicular is the sample itself. The t
+                            // path below rounds the projection into Q10
+                            // and puts up to len/1024 px of noise on
+                            // ex/ey, which flips the exact-boundary
+                            // samples of a fractional stroke-width out
+                            // of the closed band (<= r2)
+                            ex = 0;
+                            ey = qy;
+                        }
+                        else if (dx == 0 && t > 0 && t < kQ10)
+                        {
+                            ex = qx;
+                            ey = 0;
+                        }
+                        else
+                        {
+                            ex = qx - ((t * dx) / kQ10);
+                            ey = qy - ((t * dy) / kQ10);
+                        }
                         if (ex * ex + ey * ey <= r2)
                         {
                             ++in;
@@ -799,10 +820,26 @@ namespace zb::ui
                             {
                                 t = kQ10;
                             }
-                            const int64_t ex =
-                                sxp - qx[i] - ((t * dx) / kQ10);
-                            const int64_t ey =
-                                syp - qy[i] - ((t * dy) / kQ10);
+                            int64_t ex, ey;
+                            if (dy == 0 && t > 0 && t < kQ10)
+                            {
+                                // axis-parallel interior, the
+                                // draw_line_stroke exactness rule: the
+                                // t path's Q10 projection noise must not
+                                // push a closed-band boundary sample out
+                                ex = 0;
+                                ey = syp - qy[i];
+                            }
+                            else if (dx == 0 && t > 0 && t < kQ10)
+                            {
+                                ex = sxp - qx[i];
+                                ey = 0;
+                            }
+                            else
+                            {
+                                ex = sxp - qx[i] - ((t * dx) / kQ10);
+                                ey = syp - qy[i] - ((t * dy) / kQ10);
+                            }
                             const int64_t d2 = ex * ex + ey * ey;
                             if (d2 < best)
                             {
