@@ -23,12 +23,14 @@
  * The generated header only needs the struct below; it does not include
  * any framework header (the consumer decides how to parse the bytes).
  */
+#include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <string>
 #include <vector>
 
 #include "html.hpp"
+#include "ui_builder.hpp"
 
 namespace
 {
@@ -98,7 +100,9 @@ int main(int argc, char **argv)
 
     const std::vector<std::string> inputs(argv + 2, argv + argc);
 
-    // pass 1: validate every document with the library parser
+    // pass 1: validate every document with the library parser — the
+    // document must parse AND yield at least one known widget (the
+    // runtime zb_app_create_from_ui gate), not merely carry nodes
     for (const std::string &path : inputs)
     {
         std::vector<unsigned char> bytes;
@@ -108,8 +112,9 @@ int main(int argc, char **argv)
         {
             bytes.push_back(0);  // NUL-terminate for the parser
             bool ok = false;
-            zb::ui::parse_html(reinterpret_cast<const char *>(bytes.data()), &ok);
-            ok_parse = ok;
+            const zb::ui::ui_node doc = zb::ui::parse_html(
+                reinterpret_cast<const char *>(bytes.data()), &ok);
+            ok_parse = ok && zb::ui::materializes_widget(doc);
         }
         if (!ok_read || !ok_parse)
         {

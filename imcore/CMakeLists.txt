@@ -242,10 +242,6 @@ if (USE_TTF_RUNTIME)
     target_compile_definitions(${IMCORELIB} PUBLIC IMCORE_HAS_TTF_RUNTIME)
 endif()
 
-if (USE_PNG)
-    target_compile_definitions(${IMCORELIB} PUBLIC USE_PNG)
-endif()
-
 if (USE_JPEG)
     target_compile_definitions(${IMCORELIB} PUBLIC USE_JPEG)
 endif()

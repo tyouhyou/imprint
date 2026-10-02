@@ -197,7 +197,11 @@ endif()
 # embeds documents as byte arrays). Host tool only: embedded targets
 # ship pre-packed documents from their own build.
 if (IMPRINT_USE_TOOLS AND NOT NDS_PLATFORM)
-    add_executable(ui_embed tools/ui_embed.cpp imui/src/ui_file.cpp)
+    # links the full imui (the html_embed precedent): pass 1 gates on
+    # materializes_widget, which needs the widget factory, not just the
+    # parser — a document of only unknown tags must fail the build
+    add_executable(ui_embed tools/ui_embed.cpp)
+    target_link_libraries(ui_embed PRIVATE imui)
     target_include_directories(ui_embed PRIVATE
         ${PROJECT_SOURCE_DIR}/imui/include
         ${PROJECT_SOURCE_DIR}/imutil/include

@@ -220,7 +220,9 @@ int main(int argc, char *argv[])
     {
         doc = zb::ui::parse_ui_text(text.c_str(), &ok);
     }
-    if (!ok)
+    // the ui_embed gate: the document must parse AND yield at least one
+    // known widget (an unknown-tags-only doc renders an empty frame)
+    if (!ok || !zb::ui::materializes_widget(doc))
     {
         LE << "imprint-render: '" << in_path << "' yields no widget";
         return 2;

@@ -10,9 +10,11 @@
  *   static const embedded_ui_file kUiFiles[] = { {"menu.ui", menu_ui, n}, ... };
  *   static inline const embedded_ui_file *find_ui_file(const char *name);
  *
- * A document that does not parse (empty / every line dropped) makes the
- * tool exit non-zero, so the CMake custom command fails the build: the
- * "build-time validation" guarantee, without a second parser. Embedded
+ * A document that does not parse, or parses but yields no widget
+ * (unknown tags only — the runtime zb_app_create_from_ui gate), makes
+ * the tool exit non-zero, so the CMake custom command fails the build:
+ * the "build-time validation" guarantee, without a second parser.
+ * Embedded
  * bytes are the raw UTF-8 text plus one trailing 0x00 sentinel (the size
  * field excludes the sentinel): parse_ui_text scans for a NUL terminator,
  * so the embedded array must carry the same shape pass 1 validated. At
@@ -29,6 +31,7 @@
 #include <string>
 #include <vector>
 
+#include "ui_builder.hpp"
 #include "ui_file.hpp"
 
 namespace
@@ -99,7 +102,9 @@ int main(int argc, char **argv)
 
     const std::vector<std::string> inputs(argv + 2, argv + argc);
 
-    // pass 1: validate every document with the library parser
+    // pass 1: validate every document with the library parser — the
+    // document must parse AND yield at least one known widget (the
+    // runtime zb_app_create_from_ui gate), not merely carry nodes
     for (const std::string &path : inputs)
     {
         std::vector<unsigned char> bytes;
@@ -108,7 +113,9 @@ int main(int argc, char **argv)
         if (ok_read)
         {
             bytes.push_back(0);  // NUL-terminate for the parser
-            zb::ui::parse_ui_text(reinterpret_cast<const char *>(bytes.data()), &ok_parse);
+            const zb::ui::ui_node doc = zb::ui::parse_ui_text(
+                reinterpret_cast<const char *>(bytes.data()), &ok_parse);
+            ok_parse = ok_parse && zb::ui::materializes_widget(doc);
         }
         if (!ok_read || !ok_parse)
         {
