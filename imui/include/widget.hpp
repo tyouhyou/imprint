@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstddef>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -1376,6 +1377,12 @@ namespace zb::ui
         int dirty_r_ = -1;
         int dirty_b_ = -1;
 
+        // out-of-line compile-time gate (defined after the class):
+        // pins the packing claim above -- offsetof needs a complete
+        // type (unusable inside the class body) and the fields are
+        // private (unusable from namespace scope). Never called.
+        static void packing_invariant_probe();
+
         // re-bubbles the subtree's reach into the ancestor chain; called
         // by add_shadow_outer and by the attach sites (the friend classes
         // set `parent` directly)
@@ -1582,6 +1589,37 @@ namespace zb::ui
         mutable int wrap_gen_ = 0;
         void reset_wrap_cache() { advance_cache_ = -1; ++wrap_gen_; }
     };
+
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Winvalid-offsetof"
+#endif
+    // review-2 packing gate: subtree_shadow_reach_ must sit inside the
+    // alignment hole between subtree_dirty_ and dirty_l_ (the J1
+    // zero-growth claim in the field comment above; the hole can be 2
+    // or 3 bytes depending on the parity of the bool pair's offset --
+    // uint16_t keeps 2-byte alignment, so it may leave one hole byte
+    // unused without growing sizeof). A toolchain that places the
+    // field anywhere else silently grows sizeof(Widget); this fails at
+    // compile time instead of in a passing-then-failing size suite
+    // (test_widget_size's sizeof gates have per-ABI headroom, this
+    // does not). offsetof on this non-standard-layout type is
+    // conditionally supported; every shipped toolchain (gcc/clang/
+    // MSVC/devkitARM) accepts it.
+    inline void Widget::packing_invariant_probe()
+    {
+        static_assert(
+            offsetof(Widget, subtree_dirty_) + sizeof(subtree_dirty_) <=
+                    offsetof(Widget, subtree_shadow_reach_) &&
+                offsetof(Widget, subtree_shadow_reach_) +
+                        sizeof(subtree_shadow_reach_) <=
+                    offsetof(Widget, dirty_l_),
+            "subtree_shadow_reach_ must fill the alignment hole between "
+            "subtree_dirty_ and dirty_l_ (Widget J1 size gate)");
+    }
+#if defined(__GNUC__) || defined(__clang__)
+#pragma GCC diagnostic pop
+#endif
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)
     /*

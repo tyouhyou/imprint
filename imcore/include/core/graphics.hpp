@@ -601,6 +601,20 @@ namespace zb::ui::core
         void set_draw_area(int x, int y, int width, int height);
 
         /*
+         * A-26 batch-blit gate (draw_image plain/tinted, draw_surface):
+         * intersect the int64 destination rect with the draw area and
+         * the half-open damage region (the draw area is always
+         * surface-clamped by set_draw_area/clip_safe, so one stage
+         * covers the surface bounds too). The math stays in int64
+         * until the intersection is proven non-empty -- narrowing the
+         * origin first would wrap an extreme x/y back into the surface
+         * and wild-pointer the row walk (A-26 step 2b). Returns false
+         * when empty; otherwise the clamped inclusive rect fits int.
+         */
+        bool blit_rect_intersect(int64_t sx, int64_t sy, int64_t w, int64_t h,
+                                 int &c0, int &c1, int &r0, int &r1) const;
+
+        /*
          * U-7: clamped opaque span write for horizontal runs (widget-local
          * coords, like draw_pixel). Applies the same gates as draw_pixel —
          * draw-area bounds, draw_area_offset, the half-open damage region —

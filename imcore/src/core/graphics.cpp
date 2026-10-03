@@ -557,6 +557,38 @@ void Graphics::set_draw_area(int x, int y, int width, int height)
     draw_area = {sx, sy, endx, endy};
 }
 
+bool Graphics::blit_rect_intersect(const int64_t sx, const int64_t sy,
+                                   const int64_t w, const int64_t h,
+                                   int &c0, int &c1, int &r0, int &r1) const
+{
+    // clamp entirely in int64: the draw-area/damage bounds are already
+    // surface-clamped ints, so once the intersection is non-empty it
+    // fits int and is narrowed only below. (Narrowing sx before the
+    // clamps would wrap an out-of-range origin back into the surface
+    // and send the row walk to a wild pointer.)
+    int64_t col0 = std::max(sx, static_cast<int64_t>(draw_area.start_x));
+    int64_t col1 = std::min(sx + w - 1, static_cast<int64_t>(draw_area.end_x));
+    int64_t row0 = std::max(sy, static_cast<int64_t>(draw_area.start_y));
+    int64_t row1 = std::min(sy + h - 1, static_cast<int64_t>(draw_area.end_y));
+    if (damage_on_)
+    {
+        // half-open damage region (A-13)
+        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
+        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
+        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
+        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
+    }
+    if (col0 > col1 || row0 > row1)
+    {
+        return false;
+    }
+    c0 = static_cast<int>(col0);
+    c1 = static_cast<int>(col1);
+    r0 = static_cast<int>(row0);
+    r1 = static_cast<int>(row1);
+    return true;
+}
+
 void Graphics::draw_image(
     const Color *img,          // bitmap buffer pointer
     int img_width,      // bitmap widht
@@ -583,32 +615,11 @@ void Graphics::draw_image(
         sx += draw_area_offset.x;
         sy += draw_area_offset.y;
     }
-    // clamp entirely in int64: the draw-area/damage bounds are already
-    // surface-clamped ints, so once the intersection is non-empty it fits
-    // int and is narrowed only below. (Narrowing sx before the clamps
-    // would wrap an out-of-range origin back into the surface and send
-    // the row walk to a wild pointer.)
-    int64_t col0 = std::max<int64_t>(sx, 0);
-    int64_t col1 = std::min<int64_t>(sx + img_width - 1, imsize.width - 1);
-    int64_t row0 = std::max<int64_t>(sy, 0);
-    int64_t row1 = std::min<int64_t>(sy + img_height - 1, imsize.height - 1);
-    col0 = std::max(col0, static_cast<int64_t>(draw_area.start_x));
-    col1 = std::min(col1, static_cast<int64_t>(draw_area.end_x));
-    row0 = std::max(row0, static_cast<int64_t>(draw_area.start_y));
-    row1 = std::min(row1, static_cast<int64_t>(draw_area.end_y));
-    if (damage_on_)
-    {
-        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
-        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
-        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
-        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
-    }
-    if (col0 > col1 || row0 > row1)
+    int c0, c1, r0, r1;
+    if (!blit_rect_intersect(sx, sy, img_width, img_height, c0, c1, r0, r1))
     {
         return;
     }
-    const int c0 = static_cast<int>(col0), c1 = static_cast<int>(col1);
-    const int r0 = static_cast<int>(row0), r1 = static_cast<int>(row1);
     for (int row = r0; row <= r1; row++)
     {
         const Color *src = img + (row - sy) * img_row_stride + (c0 - sx);
@@ -677,29 +688,11 @@ void Graphics::draw_image(
         sx += draw_area_offset.x;
         sy += draw_area_offset.y;
     }
-    // clamp entirely in int64 (same discipline as the plain path above:
-    // narrow only after the intersection is proven non-empty)
-    int64_t col0 = std::max<int64_t>(sx, 0);
-    int64_t col1 = std::min<int64_t>(sx + img_width - 1, imsize.width - 1);
-    int64_t row0 = std::max<int64_t>(sy, 0);
-    int64_t row1 = std::min<int64_t>(sy + img_height - 1, imsize.height - 1);
-    col0 = std::max(col0, static_cast<int64_t>(draw_area.start_x));
-    col1 = std::min(col1, static_cast<int64_t>(draw_area.end_x));
-    row0 = std::max(row0, static_cast<int64_t>(draw_area.start_y));
-    row1 = std::min(row1, static_cast<int64_t>(draw_area.end_y));
-    if (damage_on_)
-    {
-        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
-        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
-        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
-        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
-    }
-    if (col0 > col1 || row0 > row1)
+    int c0, c1, r0, r1;
+    if (!blit_rect_intersect(sx, sy, img_width, img_height, c0, c1, r0, r1))
     {
         return;
     }
-    const int c0 = static_cast<int>(col0), c1 = static_cast<int>(col1);
-    const int r0 = static_cast<int>(row0), r1 = static_cast<int>(row1);
     for (int row = r0; row <= r1; row++)
     {
         const Color *src = img + (row - sy) * img_row_stride + (c0 - sx);
@@ -762,44 +755,21 @@ void Graphics::draw_surface(
         return;
     }
 
-    // widget-local destination coordinates (draw_at semantics); 64-bit
-    // intermediates — the offset+origin sums must not wrap before the
-    // clamp below
+    // opaque block overwrite: the same gates as fill() at block
+    // granularity — draw area (inclusive) and the half-open damage
+    // region (A-13). A full-screen blit inside a partial repaint must
+    // not smear pixels outside the damaged region (fps F9 failure mode).
     int64_t sx = start_x, sy = start_y;
     if (draw_area_offset_enabled)
     {
         sx = static_cast<int64_t>(draw_area_offset.x) + start_x;
         sy = static_cast<int64_t>(draw_area_offset.y) + start_y;
     }
-
-    // opaque block overwrite: the same gates as fill() at block
-    // granularity — draw area (inclusive) and the half-open damage
-    // region (A-13). A full-screen blit inside a partial repaint must
-    // not smear pixels outside the damaged region (fps F9 failure mode).
-    // clamp entirely in int64 (same discipline as the A-26 draw_image
-    // paths: the bounds are surface-clamped ints, so narrow only after
-    // the intersection is proven non-empty -- a premature narrow would
-    // wrap an out-of-range origin back into the surface and wild-pointer
-    // the copy below)
-    int64_t col0 = std::max(sx, static_cast<int64_t>(draw_area.start_x));
-    int64_t col1 = std::min(sx + width - 1,
-                            static_cast<int64_t>(draw_area.end_x));
-    int64_t row0 = std::max(sy, static_cast<int64_t>(draw_area.start_y));
-    int64_t row1 = std::min(sy + height - 1,
-                            static_cast<int64_t>(draw_area.end_y));
-    if (damage_on_)
-    {
-        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
-        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
-        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
-        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
-    }
-    if (col0 > col1 || row0 > row1)
+    int c0, c1, r0, r1;
+    if (!blit_rect_intersect(sx, sy, width, height, c0, c1, r0, r1))
     {
         return;
     }
-    const int c0 = static_cast<int>(col0), c1 = static_cast<int>(col1);
-    const int r0 = static_cast<int>(row0), r1 = static_cast<int>(row1);
 
     // whole pixel words move: no channel work, no blend — deterministic
     // on every depth and target

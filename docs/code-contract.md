@@ -402,6 +402,13 @@ keeps only API-level supplements.
 - Close-notification contract: host responsibility and reentry ban are in
   ARCHITECTURE.md §4.8; API-level supplement — wasm hosts register the
   callback via `addFunction` (build needs `ALLOW_TABLE_GROWTH=1`).
+- Logging channel: messages go through `imutil/logging.hpp` (`LD`/`LI`/`LW`/
+  `LE`/`LF`), never raw printf. Carve-outs (2026-10-03 review-2): the NDS
+  packing dev console (`imshell/src/nds/arm9_packing.cpp`) draws its on-screen
+  debug console UI (ANSI cursor escapes) with raw printf — terminal UI output,
+  not log messages; and `printlog` there plus the `std::printf` inside the
+  linux `main_term`/`main_fb` log-handle lambdas are log *sinks* wired via
+  `Logging::set_log_handle` — the receiving end of the channel, not a bypass.
 
 ### 3.1 V-5 composition widgets (ToggleSwitch / GaugeDial / Knob / TrendLine)
 
