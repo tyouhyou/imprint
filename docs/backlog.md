@@ -14,8 +14,10 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **A-26. imcore primitive throughput** — next up (fps 1080p
-   evidence): scalar bulk paths → SIMD inner loops → re-measure.
+1. **A-26. imcore primitive throughput** — step ① (scalar word-level
+   bulk paths) landed 2026-10-03; next decision point is the fps
+   re-measure (fps first migrates to `build(host, node, sink)`), which
+   decides whether ② (SIMD inner loops) starts.
 2. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
    items stay trigger-gated. Batch G's P1–P4 roadmap is landed
@@ -255,24 +257,39 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   subset + runtime-TTF paths cannot serve. IME and RTL themselves stay
   declared non-goals (the host owns them).
 
-### A-26. imcore primitive throughput: word-level bulk paths, then SIMD (next up)
+### A-26. imcore primitive throughput (step ① landed 2026-10-03; ② gated on re-measure)
 
-- **Evidence (fps — the first external consumer — at 1920×1080):** the
-  cost is per-primitive paint overhead, not present. Native x86
-  microbench (fps feedback ledger F9): `fill_rect` half-screen
-  8.37 ms, 1920 × `draw_line` 7.62 ms, full-screen `draw_image`
-  13.94 ms — vs **0.43 ms** writing the same half-screen region as raw
-  pixels, a **16× gap**. The wasm pipeline spends 40–55 ms/frame in
-  sim+paint at MAX pacing (18–25 fps); present is already a straight
-  `data.set` (fps builds `RGB_MODEL=rgba32`), so paint dominates
-  (fps `docs/DESIGN.md` D6).
-- **Sequence:** ① word-level bulk fill/span paths — scalar; most of
-  the 16× gap is per-pixel damage-check/struct overhead, not missing
-  SIMD (U-8 `draw_surface`, code-contract §9, is the first bulk
-  primitive) → ② SIMD inner loops for blend/gradient/AA (wasm simd128
-  first — that is where 1080p consumers run; then desktop SSE2/NEON)
-  → ③ re-measure before considering anything heavier.
-- **Hard constraints:** byte-identical determinism is the safety net —
+- **Step ① landed — scalar word-level bulk paths, byte-identical:**
+  translucent `fill_rect` rows and non-opaque horizontal lines route
+  through a clamped `fill_span_blend` (the U-7 gate-as-interval shape
+  with the `alpha_blend` mix inlined; sketch wobble and the
+  single-column double blend stay pinned on the old paths), and
+  `draw_image` (plain + tinted) clamps surface/draw-area/damage to one
+  rect then walks rows (the U-8 `draw_surface` shape; contract §9
+  A-12/A-13 reworded). Opaque fills were already bulk (U-7). Local
+  Release bench (1920×1080, 32bpp): translucent fill with damage on
+  38.3 → 2.0 ms, under a widget clip 35.0 → 2.0 ms; `draw_image`
+  damage-on 12.4 → 1.6 ms, widget clip 10.0 → 2.1 ms, full-screen
+  alpha-on 13.3 → 6.9 ms. Verification: `desktop-test` +
+  `desktop-test-16` green, determinism smoke hash unchanged.
+- **What remains for ② SIMD:** the no-clip remainder is the per-pixel
+  blend/modulate arithmetic itself (fill 5.2 ms, `draw_image` 6.9 ms,
+  tinted 13.1 ms per half/full-screen unit) — exactly the SIMD
+  territory. wasm simd128 first (where 1080p consumers run), then
+  desktop SSE2/NEON. **Trigger:** the fps re-measure (fps must first
+  migrate off the deleted `bind_actions` API to
+  `build(host, node, sink)`) shows the 1080p frame budget still missed.
+- **Deferred within ①:** diagonal `draw_line` gate hoisting — the
+  Bresenham walk is inherently per-pixel (15 ms per 1920 lines locally)
+  and not the fps bottleneck; revisit only if fps evidence says
+  otherwise.
+- **Original evidence (fps F9, 2026-10-03):** 1920×1080 native x86:
+  `fill_rect` half-screen 8.37 ms, 1920 × `draw_line` 7.62 ms,
+  full-screen `draw_image` 13.94 ms vs 0.43 ms raw — the numbers that
+  matched the translucent/clip arms, now largely reclaimed. Wasm
+  pipeline spends 40–55 ms/frame in sim+paint at MAX pacing; present is
+  already a straight `data.set` (fps `docs/DESIGN.md` D6).
+- **Hard constraints (unchanged for ②):** byte-identical determinism —
   every step keeps `zb::snap` `framebuffer_hash` / CI byte-compare
   green **and** passes the 16bpp battery (`.ai/bin/verify.sh
   desktop-test-16`; SIMD rewrites are the classic way to break the
@@ -282,7 +299,7 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   ARCHITECTURE §5, CONTEXT ruling): internal workers would not break
   determinism (disjoint tiles, integer math) but would re-open three
   ruling texts, need SharedArrayBuffer + COOP/COEP on wasm and a
-  compile-out on NDS. Re-evaluate only if ①+② still miss the native
+  compile-out on NDS. Re-evaluate only if ② still misses the native
   1080p frame budget.
 
 ### A-27. C-ABI present-region export (`zb_present_region`) (condition-triggered)
