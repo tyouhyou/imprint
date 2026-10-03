@@ -1,5 +1,5 @@
 set(STORY tictactoe CACHE STRING "Demo application to build")
-set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html)
+set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap)
 
 # app libraries are always built on desktop (tests link them); STORY only
 # selects which one the shell executable links. The previewer is a
@@ -11,6 +11,12 @@ set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello sh
 # build-time tooling and builds for every target.
 add_subdirectory(tictactoe)
 add_subdirectory(hello)
+# the gh-pages demo-portal apps (2026-10-03): no build-time tooling,
+# build for every target (the hello rule)
+add_subdirectory(g2048)
+add_subdirectory(mines)
+add_subdirectory(life)
+add_subdirectory(seedmap)
 if (NOT NDS_PLATFORM)
     add_subdirectory(ui_preview)
 endif()
@@ -24,6 +30,8 @@ if (NOT NDS_PLATFORM OR STORY STREQUAL "showcase_html")
 endif()
 if (NOT STORY STREQUAL "tictactoe" AND NOT STORY STREQUAL "ui_preview"
     AND NOT STORY STREQUAL "showcase" AND NOT STORY STREQUAL "hello"
-    AND NOT STORY STREQUAL "showcase_html")
+    AND NOT STORY STREQUAL "showcase_html" AND NOT STORY STREQUAL "g2048"
+    AND NOT STORY STREQUAL "mines" AND NOT STORY STREQUAL "life"
+    AND NOT STORY STREQUAL "seedmap")
     message(FATAL_ERROR "Unknown STORY: ${STORY}")
 endif()

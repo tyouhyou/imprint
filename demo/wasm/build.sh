@@ -138,8 +138,19 @@ playground)
     EXPORT_NAME=createPlayground
     EXTRA_INCLUDES=""
     ;;
+g2048|mines|life|seedmap)
+    # the gh-pages demo-portal apps (2026-10-03): plain story apps, no
+    # build-time tooling (the hello shape)
+    APP_SRCS="
+      apps/${APP}/src/app_maker.cpp
+      apps/${APP}/src/${APP}.cpp
+    "
+    APP_INCLUDE="/src/apps/${APP}/include"
+    EXPORT_NAME="create$(echo "${APP}" | sed 's/^\(.\)/\U\1/')"
+    EXTRA_INCLUDES=""
+    ;;
 *)
-    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground)" >&2
+    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap)" >&2
     exit 1
     ;;
 esac
