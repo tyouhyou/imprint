@@ -769,7 +769,7 @@ namespace zb::ui
             if (const int reach = std::max(std::max(l, r), std::max(t, b));
                 reach > subtree_shadow_reach_)
             {
-                subtree_shadow_reach_ = reach;
+                subtree_shadow_reach_ = static_cast<uint16_t>(reach);
             }
             bubble_shadow_reach();
             mark_dirty();
@@ -1356,11 +1356,6 @@ namespace zb::ui
         // to dirty_ to fill its alignment padding (J1 size gate).
         bool dirty_ = false;
         bool subtree_dirty_ = false;
-        int dirty_l_ = 0;
-        int dirty_t_ = 0;
-        int dirty_r_ = -1;
-        int dirty_b_ = -1;
-
         // A-10 prune support: the max outer-shadow pad (scalar, all
         // directions) over this widget AND every descendant. The shadow
         // pass clips to the whole surface, so a descendant's spill can
@@ -1369,8 +1364,17 @@ namespace zb::ui
         // Maintained on add_shadow_outer (bubbling the max up the parent
         // chain) and re-bubbled when a subtree is attached under a new
         // parent; monotone (shadows have no removal API), so it can only
-        // over-cull, never under-cull.
-        int subtree_shadow_reach_ = 0;
+        // over-cull, never under-cull. uint16_t is exact, not a clamp:
+        // shadow_spec stores int8 offsets and uint8 blur/spread, so one
+        // pad component is bounded by 127+255+(3*255+1)/2 < 765 and the
+        // reach is the max over at most two shadows. It sits in the
+        // alignment hole between subtree_dirty_ and the dirty ints (J1
+        // size gate: no sizeof growth on any ABI).
+        uint16_t subtree_shadow_reach_ = 0;
+        int dirty_l_ = 0;
+        int dirty_t_ = 0;
+        int dirty_r_ = -1;
+        int dirty_b_ = -1;
 
         // re-bubbles the subtree's reach into the ancestor chain; called
         // by add_shadow_outer and by the attach sites (the friend classes

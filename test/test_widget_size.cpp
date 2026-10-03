@@ -24,6 +24,10 @@ using namespace zb::ui;
 static_assert(sizeof(Widget) <= 192, "Widget inline size must stay under the 32-bit batch J budget");
 #else
 // 64-bit host gate: MSVC Debug baseline 280 + one pointer of headroom.
+// The A-10 subtree_shadow_reach_ field (2026-10-03) was re-packed into
+// the 2-byte alignment hole between the dirty bools and the dirty ints
+// as uint16_t (shadow_spec bounds the pad at < 765), so it costs zero
+// on every ABI and this gate is unchanged.
 static_assert(sizeof(Widget) <= 288, "Widget inline size must stay under the 64-bit batch J budget");
 #endif
 
