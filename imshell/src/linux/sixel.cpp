@@ -9,6 +9,7 @@
 #include <vector>
 
 #include "core/color.hpp"
+#include "logging.hpp"
 
 namespace zb::shell::sixel
 {
@@ -86,9 +87,20 @@ namespace zb::shell::sixel
                             break;
                         }
                     }
-                    if (!found && regs.size() < kMaxRegisters)
+                    if (!found)
                     {
-                        regs.push_back(c);
+                        if (regs.size() < kMaxRegisters)
+                        {
+                            regs.push_back(c);
+                        }
+                        else
+                        {
+                            // the register budget is spent: pixels of this
+                            // color have no register and drop out of the
+                            // band -- never silently
+                            LW << "sixel: band exceeds " << kMaxRegisters
+                               << " colors; extra colors dropped";
+                        }
                     }
                 }
             }

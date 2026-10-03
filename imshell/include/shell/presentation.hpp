@@ -140,9 +140,12 @@ namespace zb::shell
      * scaler): dest pixel (dx, dy) shows the source pixel it is
      * centered over, sampled with the same floor formula the inverse
      * input map uses -- dest rect pixel (dx, dy) reads source pixel
-     * ((dx - p.x) * buf_w / p.w, (dy - p.y) * buf_h / p.h). Writes only
-     * the dest rect (the dirty region's dest footprint); the scratch is
-     * the caller's dest-sized buffer.
+     * ((dx - p.x) * buf_w / p.w, (dy - p.y) * buf_h / p.h). dest is
+     * window-absolute (presentation_region's output) and is clamped
+     * into the presented rect; dst is the caller's p.w x p.h scratch
+     * covering exactly the presented rect, indexed presented-rect-
+     * locally, so a letterboxed window can neither overflow nor
+     * under-read it.
      */
     void resample_presentation(const presentation &p, const present_rect &dest,
                                const void *src, void *dst);

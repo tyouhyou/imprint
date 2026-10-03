@@ -1,3 +1,5 @@
+#include <cerrno>
+#include <cstdint>
 #include <cstring>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -100,9 +102,22 @@ void FB::draw(char *b, int w, int h, int rx, int ry, int rw, int rh)
     // sync whole rows of the region: the old start offset (rx included)
     // plus a row-count length overran the mapping when the region
     // touched the bottom of the screen; MS_SYNC instead of the
-    // implementation-defined flags value 0
-    msync(buf + static_cast<size_t>(ry) * screen_line_len,
-          static_cast<size_t>(rh) * screen_line_len, MS_SYNC);
+    // implementation-defined flags value 0. msync demands a page-aligned
+    // address: align the region start down and extend the length to
+    // cover the gap, and surface a failure instead of dropping it.
+    const long page = sysconf(_SC_PAGESIZE);
+    if (page > 0)
+    {
+        const uintptr_t addr = reinterpret_cast<uintptr_t>(buf) +
+                               static_cast<size_t>(ry) * screen_line_len;
+        const uintptr_t aligned = addr & ~static_cast<uintptr_t>(page - 1);
+        if (msync(reinterpret_cast<void *>(aligned),
+                  static_cast<size_t>(rh) * screen_line_len + (addr - aligned),
+                  MS_SYNC) != 0)
+        {
+            LW << "fb: msync failed (errno " << errno << ")";
+        }
+    }
 }
 
 int FB::init()

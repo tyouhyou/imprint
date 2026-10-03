@@ -241,6 +241,54 @@ int test_shell_presenter()
         }
     }
 
+    // resample with a letterbox: the dest rect arrives window-absolute,
+    // the scratch covers only the presented rect -- both must agree or
+    // the loop indexes past the scratch (or negative into the source).
+    // Window 100x100 / buffer 100x50 fits to a 100x50 rect at y=25
+    {
+        const zb::shell::presentation p = zb::shell::presentation_fit(100, 100, 100, 50);
+        EXPECT(p.x == 0 && p.y == 25 && p.w == 100 && p.h == 50);
+        std::vector<zb::ui::core::Color> src(100 * 50);
+        std::vector<zb::ui::core::Color> dst(100 * 50);
+        for (int y = 0; y < 50; ++y)
+        {
+            for (int x = 0; x < 100; ++x)
+            {
+                src[static_cast<size_t>(y) * 100 + x] =
+                    zb::ui::core::Color::from(x, y, 0, 255);
+            }
+        }
+        // the whole buffer, window-absolute: rows 25..74 of the window
+        zb::shell::resample_presentation(p, present_rect{0, p.y, p.w, p.h},
+                                         src.data(), dst.data());
+        int bx = -1;
+        int by = -1;
+        for (int dy = 0; dy < 50; ++dy)
+        {
+            for (int dx = 0; dx < 100; ++dx)
+            {
+                EXPECT(p.to_buffer(dx, dy + p.y, bx, by));
+                EXPECT(dst[static_cast<size_t>(dy) * 100 + dx].pixel ==
+                       src[static_cast<size_t>(by) * 100 + bx].pixel);
+            }
+        }
+        // a clamped dest (rows reaching above the presented rect) stays
+        // inside the scratch and only covers the intersection: window
+        // rows 25..49 = scratch rows 0..24 get written, the rest stay
+        std::fill(dst.begin(), dst.end(), zb::ui::core::Color{});
+        zb::shell::resample_presentation(p, present_rect{0, 0, p.w, p.h},
+                                         src.data(), dst.data());
+        for (int dy = 0; dy < 25; ++dy)
+        {
+            EXPECT(dst[static_cast<size_t>(dy) * 100 + 37].pixel ==
+                   src[static_cast<size_t>(dy) * 100 + 37].pixel);
+        }
+        for (int dy = 25; dy < 50; ++dy)
+        {
+            EXPECT(dst[static_cast<size_t>(dy) * 100 + 37].pixel == 0);
+        }
+    }
+
     // maps_pointer: pointer types carry a position, keys never do
     {
         EXPECT(zb::shell::maps_pointer(zb::input::input_type::mouse_move));

@@ -94,7 +94,8 @@ namespace zb::shell
 
         XSelectInput(display, window,
                      ExposureMask | StructureNotifyMask | KeyPressMask |
-                     ButtonPressMask | ButtonReleaseMask | PointerMotionMask);
+                     KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
+                     PointerMotionMask);
         XMapWindow(display, window);
 
         GC gc = XCreateGC(display, window, 0, nullptr);
@@ -147,7 +148,10 @@ namespace zb::shell
                 return;
             }
             zb::shell::resample_presentation(pres, d, win->data(), sx->data);
-            XPutImage(display, window, gc, sx, d.x, d.y, d.x, d.y, d.w, d.h);
+            // the scratch image covers only the presented rect, so the
+            // source coords into it are presented-rect-local
+            XPutImage(display, window, gc, sx, d.x - pres.x, d.y - pres.y,
+                      d.x, d.y, d.w, d.h);
             XFlush(display);
         };
 
@@ -188,7 +192,7 @@ namespace zb::shell
                     return;
                 }
                 zb::shell::resample_presentation(
-                    pres, zb::shell::present_rect{0, 0, pres.w, pres.h},
+                    pres, zb::shell::present_rect{pres.x, pres.y, pres.w, pres.h},
                     win->data(), scratch.data());
             }
             // the letterbox (I-2b): the chrome bars around the presented

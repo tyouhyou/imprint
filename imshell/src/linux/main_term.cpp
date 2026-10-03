@@ -51,6 +51,7 @@ namespace
             {
                 return false;
             }
+            saved_valid_ = true;
             termios raw = saved_;
             cfmakeraw(&raw);
             if (tcsetattr(STDIN_FILENO, TCSANOW, &raw) != 0)
@@ -65,7 +66,9 @@ namespace
 
         void restore()
         {
-            if (!restored_)
+            // without a saved termios there is nothing to put back (and
+            // tcsetattr with the zeroed struct would brick the terminal)
+            if (!restored_ && saved_valid_)
             {
                 restored_ = true;
                 std::fputs("\x1b[?25h\x1b[?1000;1002;1006l", stdout);
@@ -77,6 +80,7 @@ namespace
     private:
         termios saved_{};
         bool restored_ = false;
+        bool saved_valid_ = false;
     };
 }
 
