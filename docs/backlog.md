@@ -9,25 +9,17 @@
 > Completed items are removed upon completion (A-numbering is stable, gaps
 > represent finished work; history lives in `git log`).
 
-## 0. Execution Order (2026-09-10 map, Batch U added 2026-09-27; completed steps removed)
+## 0. Execution Order (2026-09-10 map; completed steps removed; A-26 added 2026-10-03)
 
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **Batch H core / HTML path** — landed end to end (whitelist +
-   parser + preview consumer + three-platform showcase; H-6 closed
-   2026-10-02, see below).
-2. **Quick wins** (<1 day each, opportunistic): S-2, I-2b, H-9 tail,
-   L-3, H-4 — landed 2026-10-02, entries removed (history in `git log`).
-3. **P1 external consumability** (2026-09-26 roadmap, Batch G) — landed
-   2026-09-26 (closes A-23); P1.5 install/export landed 2026-10-01.
-4. **Batch U — external-consumer feedback** — landed 2026-10-01,
-   complete (contracts: code-contract §9, ARCHITECTURE §4.4; history in
-   `git log`).
-5. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, and Batch W
-   (audit follow-ups, decision-gated). Batch G is
-   unfrozen (2026-09-26) — its P1–P4 roadmap is the active product map.
-   Condition-triggered items stay trigger-gated.
+1. **A-26. imcore primitive throughput** — next up (fps 1080p
+   evidence): scalar bulk paths → SIMD inner loops → re-measure.
+2. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
+   Batch W (audit follow-ups, decision-gated). Condition-triggered
+   items stay trigger-gated. Batch G's P1–P4 roadmap is landed
+   (2026-09-26 through 2026-10-01; history in `git log`).
 
 ### Batch V — Visual Presentation (open remainder only)
 
@@ -42,21 +34,12 @@ frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
   compressed-asset use case appears; until then the procedural
   generator covers the demo.
 
-### Batch H — HTML/CSS Rendering Path (Medium-high priority)
+### Batch H — HTML/CSS Rendering Path (landed end to end; open remainder only)
 
-Goal: an optional declarative smooth-path that renders an HTML/CSS **subset**
-(no JS) through the existing widget tree, complementing the `.ui` design file.
-Rationale: lets users with existing HTML/CSS authoring patterns describe
-screens without learning the `.ui` grammar or the C++ builder API. No JS, no
-CSS cascade engine — a deliberately narrow declarative front-end onto widgets.
-
-**Dependency:** A-24 (Widget custom hit-test / value binding) landed
-2026-09-10. Without it, the HTML parser can only map
-elements to rectangular widgets (Panel/FlexPanel/Label/Button/Checkbox/
-Radio). With A-24, the parser gains `<gauge>`, `<knob>`, `<trend>`,
-`<meter>` as first-class custom elements — the Widget subclass handles
-its own rendering and interaction, the parser only declares the element
-and its style properties.
+An optional declarative smooth-path that renders an HTML/CSS **subset**
+(no JS) through the existing widget tree, complementing the `.ui` design
+file. Landed end to end — whitelist contract, parser + battery, preview
+consumer, `showcase_html` on desktop / NDS / wasm (history in `git log`).
 
 **Hard support boundary — the whitelist is the contract (rewritten 2026-09-12).**
 The element/attribute/CSS-property whitelists in `docs/html-path.md` are
@@ -78,36 +61,19 @@ parser scope:
   not parser work.
 - **CSS flex features**: `justify-content`, `align-items`/`align-self`,
   `flex-basis`, `flex-shrink`, and `flex` min/max constraints map to
-  FlexPanel enhancements — see H-7 (partially landed).
+  FlexPanel enhancements — landed (H-7, D-1; history in `git log`).
 
-**Status:** the batch is landed end to end — whitelist contract
-(`docs/html-path.md`, the single source), property tables, `parse_html`
-parser + battery, preview consumer, and the `showcase_html` story on
-desktop / NDS / wasm. Completed sub-items are removed from this file
-(H-1 wrapping, H-2 border, H-6 closed 2026-10-02 with the static
-geometry subset + DrawPath + canvas transform, H-8 page box, H-10
-pseudo-elements, P-1 paint, P-3 positioning; L-2 alignment attributes
-via external PR #4). What remains is listed below.
+**Placement note (decided 2026-09-12):** no `IMPRINT_WITH_*` switch needed —
+per the A-23 precedent the `html` translation unit stays in imui (STATIC);
+unreferenced on targets that don't use it, dropped by the static linker at
+image build. Consumer-side, not a new C-ABI surface at this stage.
 
 **Open / condition-triggered sub-items:**
 - P-2. Paint remainder (gated by a real page): follow-ups that still
   matter: document-width roots are not centered by UiPreview (amp runs
   full-bleed); body gradient backgrounds have no `html_page` carrier
   (H-8 holds colors only); GIF review captures band smooth ramps (216-cube) —
-  review from the raw framebuffer. (Outer box-shadow on opaque boxes was
-  fixed with `clip_surface_safe` — removed from this list 2026-09-26.)
-
-**Cost estimate (discussion, 2026-09-10):** the core version ≈ 1500–2000
-lines C++ estimate predates the landings and is historical; the shipped
-parser is the reference. Main risk remains **semantic drift** — users hit
-"why isn't this CSS attribute supported", so the whitelist in
-`docs/html-path.md` is the released boundary (off-table constructs warn
-and render nothing, never a wrong structure).
-
-**Placement note (decided 2026-09-12):** no `IMPRINT_WITH_*` switch needed —
-per the A-23 precedent the `html` translation unit stays in imui (STATIC);
-unreferenced on targets that don't use it, dropped by the static linker at
-image build. Consumer-side, not a new C-ABI surface at this stage.
+  review from the raw framebuffer.
 
 ### Batch I — Tooling & Inspection (Unscheduled)
 
@@ -242,29 +208,18 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   inherently sandboxed) → any-target portability (NDS as the proof) →
   compile-time pixel model. Do not enter the widget-armament race
   (the LVGL / Slint / Qt dimensions: more widgets, faster, prettier).
-- Roadmap (ratified order; each phase unlocks the next):
-  - **P1. External consumability** — landed 2026-09-26 (A-23 closed).
-    P1.5 install/export — landed 2026-10-01 (first external consumer:
-    fps; contract in ARCHITECTURE §3.2, locked by
-    `test/installed_smoke`).
-  - **P2. Deterministic-test story** — landed 2026-09-26 (contract:
-    code-contract §12; the `imprint-render` CI recipe runs in Tier-1).
-    A standalone drives-your-app CLI remains explicitly NOT the form;
-    a WASM-app CLI variant is a later option.
-  - **P3. Declarative plugin protocol** — landed 2026-09-26 (contracts:
-    ARCHITECTURE §4.8/§4.10, code-contract §4; C smoke + Python demo
-    drive it). *P3.1 (condition-triggered): typed state read/write
-    through the ABI when a real host needs it — the native per-widget
-    events already carry the payloads for C++ consumers.*
-  - **P4. Terminal graphics demo target** — landed 2026-09-26 (the
-    SIXEL backend, §11.3, Tier-2 compile job; the pty smoke was a
-    one-time local `script(1)` verification, not a CI gate — the
-    sixel/term_input logic itself is unit-tested from the battery).
-    *Extension (unscheduled): the Kitty graphics protocol as a second
-    presenter for the same input source.*
+- Roadmap P1–P4 — landed 2026-09-26 through 2026-10-01 (external
+  consumability incl. P1.5 install/export, deterministic-test story,
+  declarative plugin protocol, SIXEL terminal target; contracts in
+  ARCHITECTURE §3.2/§4.8/§4.10/§11.3 and code-contract §4/§12; history
+  in `git log`). Open remainders:
+  - *P3.1 (condition-triggered): typed state read/write through the
+    ABI when a real host needs it — the native per-widget events
+    already carry the payloads for C++ consumers.*
+  - *P4 extension (unscheduled): the Kitty graphics protocol as a
+    second presenter for the same input source.*
 - Business stance reconfirmed: port engagements first; external
-  consumability is itself the revenue enabler (before P1 an external
-  project cannot even `add_subdirectory`).
+  consumability is itself the revenue enabler.
 - Still deferred from 09-06: landing page assembled from existing
   assets with a "tell us about your device" intake.
 
@@ -299,6 +254,54 @@ fragments + a full-code re-read); the rulings below supersede/extend the
 - **Trigger:** a real embedding needs dynamic complex-script text the
   subset + runtime-TTF paths cannot serve. IME and RTL themselves stay
   declared non-goals (the host owns them).
+
+### A-26. imcore primitive throughput: word-level bulk paths, then SIMD (next up)
+
+- **Evidence (fps — the first external consumer — at 1920×1080):** the
+  cost is per-primitive paint overhead, not present. Native x86
+  microbench (fps feedback ledger F9): `fill_rect` half-screen
+  8.37 ms, 1920 × `draw_line` 7.62 ms, full-screen `draw_image`
+  13.94 ms — vs **0.43 ms** writing the same half-screen region as raw
+  pixels, a **16× gap**. The wasm pipeline spends 40–55 ms/frame in
+  sim+paint at MAX pacing (18–25 fps); present is already a straight
+  `data.set` (fps builds `RGB_MODEL=rgba32`), so paint dominates
+  (fps `docs/DESIGN.md` D6).
+- **Sequence:** ① word-level bulk fill/span paths — scalar; most of
+  the 16× gap is per-pixel damage-check/struct overhead, not missing
+  SIMD (U-8 `draw_surface`, code-contract §9, is the first bulk
+  primitive) → ② SIMD inner loops for blend/gradient/AA (wasm simd128
+  first — that is where 1080p consumers run; then desktop SSE2/NEON)
+  → ③ re-measure before considering anything heavier.
+- **Hard constraints:** byte-identical determinism is the safety net —
+  every step keeps `zb::snap` `framebuffer_hash` / CI byte-compare
+  green **and** passes the 16bpp battery (`.ai/bin/verify.sh
+  desktop-test-16`; SIMD rewrites are the classic way to break the
+  `plot_aa` quantization rule). Hot paths stay integer
+  (8-bit-normalized accessors, no floating point).
+- Tile-threaded rasterization stays a declared non-goal (README,
+  ARCHITECTURE §5, CONTEXT ruling): internal workers would not break
+  determinism (disjoint tiles, integer math) but would re-open three
+  ruling texts, need SharedArrayBuffer + COOP/COEP on wasm and a
+  compile-out on NDS. Re-evaluate only if ①+② still miss the native
+  1080p frame budget.
+
+### A-27. C-ABI present-region export (`zb_present_region`) (condition-triggered)
+
+- `zb_buffer` (`binding/include/zbapi.h`) exposes the whole frame only,
+  so every zbapi host presents full-buffer; the A-2 seams
+  (`region_to_present`, `dirty_coalescer` in
+  `imshell/include/shell/presenter.hpp`) already compute the present
+  rect internally — only the ABI hop is missing.
+- **Shape:** contract-first (code-contract §9 + ARCHITECTURE §4.8
+  first, then `zbapi.h`): export the current frame's present rect so
+  hosts copy/upload only the changed region — the same seam that would
+  carry a persistent GPU-texture upload ("GPU-accelerated
+  presentation", the permitted form per the ARCHITECTURE §5 ruling).
+- Zero benefit for fps (full-frame game repaint; source-level
+  composition that does not use zbapi).
+- **Trigger:** a zbapi host's present path becomes a measured
+  bottleneck (wasm story demo, Python, a future Kitty presenter), or
+  the wasm demo wants region-wise upload.
 
 ### Deferred this round (recorded, not blocking)
 
