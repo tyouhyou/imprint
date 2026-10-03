@@ -1,6 +1,8 @@
 #include "ui_file.hpp"
 
 #include <cstddef>
+#include <cstring>
+#include <limits>
 #include <utility>
 #include <vector>
 
@@ -127,10 +129,33 @@ namespace zb::ui
         // scratch), which needs the non-const reference -- a const rec
         // (or a const vector) made every std::move a silent deep copy of
         // the whole subtree at each recursion level (O(n^2) on deep trees).
+        // recursion cap: fill() recurses once per nesting level and the
+        // level is driven purely by input indentation (host text, reachable
+        // from the C ABI), so an unbounded tree would exhaust the stack.
+        // Same discipline as the HTML front end's k_max_elem_depth
+        // (html.cpp): a deeper subtree is dropped with one warning per parse
+        constexpr std::size_t k_max_node_depth = 32;
+
         std::size_t fill(ui_node &parent, std::vector<parsed_line> &lines,
-                         std::size_t i, const int parent_depth)
+                         std::size_t i, const int parent_depth,
+                         const std::size_t level, bool &depth_warned)
         {
             const std::size_t start = i;
+            if (level >= k_max_node_depth)
+            {
+                if (!depth_warned)
+                {
+                    depth_warned = true;
+                    LW << "ui_file: node nesting deeper than " << k_max_node_depth
+                       << " levels; deeper elements dropped";
+                }
+                // consume the subtree this node would have taken
+                while (i < lines.size() && lines[i].depth > parent_depth)
+                {
+                    ++i;
+                }
+                return i - start;
+            }
             while (i < lines.size())
             {
                 parsed_line &rec = lines[i];
@@ -140,7 +165,8 @@ namespace zb::ui
                 }
                 parent.children.push_back(std::move(rec.node));
                 const std::size_t consumed =
-                    fill(parent.children.back(), lines, i + 1, rec.depth);
+                    fill(parent.children.back(), lines, i + 1, rec.depth,
+                         level + 1, depth_warned);
                 i += 1 + consumed;
             }
             return i - start;
@@ -171,7 +197,10 @@ namespace zb::ui
         std::vector<parsed_line> lines;
 
         const char *p = text ? text : "";
-        if (text != nullptr && text[0] == '\xEF' && text[1] == '\xBB' && text[2] == '\xBF')
+        // length-checked: a 1- or 2-byte host text must not be read past
+        // its terminator
+        const std::size_t text_len = text != nullptr ? std::strlen(text) : 0;
+        if (text_len >= 3 && text[0] == '\xEF' && text[1] == '\xBB' && text[2] == '\xBF')
         {
             p += 3;  // UTF-8 BOM
         }
@@ -387,7 +416,18 @@ namespace zb::ui
                     {
                         if (const auto *i = std::get_if<long long>(&value))
                         {
-                            rec.node.flex_grow = static_cast<int>(*i);
+                            // parse_int accepts any long long; a value past
+                            // the int flex field must not narrow silently
+                            if (*i < std::numeric_limits<int>::min() ||
+                                *i > std::numeric_limits<int>::max())
+                            {
+                                LW << "ui_file: line " << first_line
+                                   << ": flex value out of range; attribute dropped";
+                            }
+                            else
+                            {
+                                rec.node.flex_grow = static_cast<int>(*i);
+                            }
                         }
                         else
                         {
@@ -449,7 +489,8 @@ namespace zb::ui
         // link the flat lines into a tree by indentation
         ui_node root;
         root.type = "root";
-        fill(root, lines, 0, -1);
+        bool depth_warned = false;
+        fill(root, lines, 0, -1, 0, depth_warned);
 
         if (ok)
         {
