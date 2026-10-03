@@ -624,7 +624,9 @@ namespace zb::ui::core
          * /0xFF), byte-identical to per-pixel draw_pixel blending. No
          * wobble: callers pass already-final endpoints. A no-op on the
          * 16bpp binary-alpha traits (a translucent write is a no-op there,
-         * alpha_blend returns the backdrop).
+         * alpha_blend returns the backdrop). Callers must route here only
+         * through the non-opaque arm (alpha_enabled and a sub-max color);
+         * the opaque case belongs to fill_span.
          */
         void fill_span_blend(int x1, int x2, int y, const Color &colr);
 

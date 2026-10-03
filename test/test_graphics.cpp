@@ -1,5 +1,7 @@
 #include "test.hpp"
 
+#include <climits>
+
 #include "imcore.hpp"
 
 using namespace zb::ui;
@@ -555,6 +557,26 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 1, 1) == core::colors::Black.pixel);  // outside damage
         EXPECT(test::pixel_at(*g, 6, 1) == core::colors::Black.pixel);  // half-open right edge
         EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Black.pixel);  // above the blit
+    }
+
+    // extreme origins draw nothing (review-2 pin): the clamp must stay in
+    // int64 until the intersection is proven non-empty, plain and tinted
+    // -- a premature narrow would wrap INT_MAX back negative, get rescued
+    // by the draw-area clamp, and wild-pointer the row walk
+    {
+        auto g = core::Graphics::make_ptr(4, 2);
+        g->fill(core::colors::Black);
+        g->enable_alpha(false);
+        const core::Color src[4] = {core::colors::White, core::colors::White,
+                                    core::colors::White, core::colors::White};
+        g->draw_image(src, 2, 2, 2, INT_MAX, 0);
+        g->draw_image(src, 2, 2, 2, 0, INT_MAX);
+        g->draw_image(src, 2, 2, 2, INT_MAX, INT_MAX);
+        g->draw_image(src, 2, 2, 2, INT_MIN, INT_MIN);
+        g->draw_image(src, 2, 2, 2, INT_MAX, 0, core::Color::from(128, 128, 128));
+        g->draw_image(src, 2, 2, 2, 0, INT_MIN, core::Color::from(128, 128, 128));
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 3, 1) == core::colors::Black.pixel);
     }
 
     // draw_line_aa: axis-aligned runs fall back to the exact plain line

@@ -1,5 +1,7 @@
 #include "test.hpp"
 
+#include <climits>
+
 #include <vector>
 
 #include "imcore.hpp"
@@ -72,6 +74,23 @@ int test_draw_surface()
         EXPECT(test::pixel_at(*g, 3, 3) == core::colors::Red.pixel);
         EXPECT(test::pixel_at(*g, 2, 1) == core::colors::Black.pixel);
         EXPECT(test::pixel_at(*g, 1, 2) == core::colors::Black.pixel);
+    }
+
+    // extreme origins draw nothing (review-2 pin): the clamp must stay in
+    // int64 until the intersection is proven non-empty -- a premature
+    // narrow would wrap INT_MAX back negative, get rescued by the
+    // draw-area clamp, and wild-pointer the row walk
+    {
+        auto g = core::Graphics::make_ptr(4, 4);
+        g->fill(core::colors::Black);
+
+        std::vector<core::Color> src(4, core::colors::Red);  // 2x2
+        g->draw_surface(src.data(), 2, 2, 2, INT_MAX, 0);
+        g->draw_surface(src.data(), 2, 2, 2, 0, INT_MAX);
+        g->draw_surface(src.data(), 2, 2, 2, INT_MAX, INT_MAX);
+        g->draw_surface(src.data(), 2, 2, 2, INT_MIN, INT_MIN);
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 3, 3) == core::colors::Black.pixel);
     }
 
     // the F9 lock: damage mode hard-clips the blit — a full-surface

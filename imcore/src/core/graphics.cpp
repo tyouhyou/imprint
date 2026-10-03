@@ -583,30 +583,37 @@ void Graphics::draw_image(
         sx += draw_area_offset.x;
         sy += draw_area_offset.y;
     }
-    int col0 = static_cast<int>(std::max<int64_t>(sx, 0));
-    int col1 = static_cast<int>(std::min<int64_t>(sx + img_width - 1, imsize.width - 1));
-    int row0 = static_cast<int>(std::max<int64_t>(sy, 0));
-    int row1 = static_cast<int>(std::min<int64_t>(sy + img_height - 1, imsize.height - 1));
-    col0 = std::max(col0, draw_area.start_x);
-    col1 = std::min(col1, draw_area.end_x);
-    row0 = std::max(row0, draw_area.start_y);
-    row1 = std::min(row1, draw_area.end_y);
+    // clamp entirely in int64: the draw-area/damage bounds are already
+    // surface-clamped ints, so once the intersection is non-empty it fits
+    // int and is narrowed only below. (Narrowing sx before the clamps
+    // would wrap an out-of-range origin back into the surface and send
+    // the row walk to a wild pointer.)
+    int64_t col0 = std::max<int64_t>(sx, 0);
+    int64_t col1 = std::min<int64_t>(sx + img_width - 1, imsize.width - 1);
+    int64_t row0 = std::max<int64_t>(sy, 0);
+    int64_t row1 = std::min<int64_t>(sy + img_height - 1, imsize.height - 1);
+    col0 = std::max(col0, static_cast<int64_t>(draw_area.start_x));
+    col1 = std::min(col1, static_cast<int64_t>(draw_area.end_x));
+    row0 = std::max(row0, static_cast<int64_t>(draw_area.start_y));
+    row1 = std::min(row1, static_cast<int64_t>(draw_area.end_y));
     if (damage_on_)
     {
-        col0 = std::max(col0, damage_l_);
-        col1 = std::min(col1, damage_r_ - 1);
-        row0 = std::max(row0, damage_t_);
-        row1 = std::min(row1, damage_b_ - 1);
+        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
+        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
+        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
+        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
     }
     if (col0 > col1 || row0 > row1)
     {
         return;
     }
-    for (int row = row0; row <= row1; row++)
+    const int c0 = static_cast<int>(col0), c1 = static_cast<int>(col1);
+    const int r0 = static_cast<int>(row0), r1 = static_cast<int>(row1);
+    for (int row = r0; row <= r1; row++)
     {
-        const Color *src = img + (row - sy) * img_row_stride + (col0 - sx);
-        Color *px = pixels + imsize.width * row + col0;
-        for (int i = col1 - col0; i >= 0; --i, ++src, ++px)
+        const Color *src = img + (row - sy) * img_row_stride + (c0 - sx);
+        Color *px = pixels + imsize.width * row + c0;
+        for (int i = c1 - c0; i >= 0; --i, ++src, ++px)
         {
             if (!alpha_enabled)
             {
@@ -670,30 +677,34 @@ void Graphics::draw_image(
         sx += draw_area_offset.x;
         sy += draw_area_offset.y;
     }
-    int col0 = static_cast<int>(std::max<int64_t>(sx, 0));
-    int col1 = static_cast<int>(std::min<int64_t>(sx + img_width - 1, imsize.width - 1));
-    int row0 = static_cast<int>(std::max<int64_t>(sy, 0));
-    int row1 = static_cast<int>(std::min<int64_t>(sy + img_height - 1, imsize.height - 1));
-    col0 = std::max(col0, draw_area.start_x);
-    col1 = std::min(col1, draw_area.end_x);
-    row0 = std::max(row0, draw_area.start_y);
-    row1 = std::min(row1, draw_area.end_y);
+    // clamp entirely in int64 (same discipline as the plain path above:
+    // narrow only after the intersection is proven non-empty)
+    int64_t col0 = std::max<int64_t>(sx, 0);
+    int64_t col1 = std::min<int64_t>(sx + img_width - 1, imsize.width - 1);
+    int64_t row0 = std::max<int64_t>(sy, 0);
+    int64_t row1 = std::min<int64_t>(sy + img_height - 1, imsize.height - 1);
+    col0 = std::max(col0, static_cast<int64_t>(draw_area.start_x));
+    col1 = std::min(col1, static_cast<int64_t>(draw_area.end_x));
+    row0 = std::max(row0, static_cast<int64_t>(draw_area.start_y));
+    row1 = std::min(row1, static_cast<int64_t>(draw_area.end_y));
     if (damage_on_)
     {
-        col0 = std::max(col0, damage_l_);
-        col1 = std::min(col1, damage_r_ - 1);
-        row0 = std::max(row0, damage_t_);
-        row1 = std::min(row1, damage_b_ - 1);
+        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
+        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
+        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
+        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
     }
     if (col0 > col1 || row0 > row1)
     {
         return;
     }
-    for (int row = row0; row <= row1; row++)
+    const int c0 = static_cast<int>(col0), c1 = static_cast<int>(col1);
+    const int r0 = static_cast<int>(row0), r1 = static_cast<int>(row1);
+    for (int row = r0; row <= r1; row++)
     {
-        const Color *src = img + (row - sy) * img_row_stride + (col0 - sx);
-        Color *px = pixels + imsize.width * row + col0;
-        for (int i = col1 - col0; i >= 0; --i, ++src, ++px)
+        const Color *src = img + (row - sy) * img_row_stride + (c0 - sx);
+        Color *px = pixels + imsize.width * row + c0;
+        for (int i = c1 - c0; i >= 0; --i, ++src, ++px)
         {
             Color c{};
             c.set_r(static_cast<uint8_t>(src->r() * tint.r() / 0xFF));
@@ -765,30 +776,37 @@ void Graphics::draw_surface(
     // granularity — draw area (inclusive) and the half-open damage
     // region (A-13). A full-screen blit inside a partial repaint must
     // not smear pixels outside the damaged region (fps F9 failure mode).
-    int col0 = static_cast<int>(std::max(sx, static_cast<int64_t>(draw_area.start_x)));
-    int col1 = static_cast<int>(std::min(sx + width - 1,
-                                         static_cast<int64_t>(draw_area.end_x)));
-    int row0 = static_cast<int>(std::max(sy, static_cast<int64_t>(draw_area.start_y)));
-    int row1 = static_cast<int>(std::min(sy + height - 1,
-                                         static_cast<int64_t>(draw_area.end_y)));
+    // clamp entirely in int64 (same discipline as the A-26 draw_image
+    // paths: the bounds are surface-clamped ints, so narrow only after
+    // the intersection is proven non-empty -- a premature narrow would
+    // wrap an out-of-range origin back into the surface and wild-pointer
+    // the copy below)
+    int64_t col0 = std::max(sx, static_cast<int64_t>(draw_area.start_x));
+    int64_t col1 = std::min(sx + width - 1,
+                            static_cast<int64_t>(draw_area.end_x));
+    int64_t row0 = std::max(sy, static_cast<int64_t>(draw_area.start_y));
+    int64_t row1 = std::min(sy + height - 1,
+                            static_cast<int64_t>(draw_area.end_y));
     if (damage_on_)
     {
-        col0 = std::max(col0, damage_l_);
-        col1 = std::min(col1, damage_r_ - 1);
-        row0 = std::max(row0, damage_t_);
-        row1 = std::min(row1, damage_b_ - 1);
+        col0 = std::max(col0, static_cast<int64_t>(damage_l_));
+        col1 = std::min(col1, static_cast<int64_t>(damage_r_ - 1));
+        row0 = std::max(row0, static_cast<int64_t>(damage_t_));
+        row1 = std::min(row1, static_cast<int64_t>(damage_b_ - 1));
     }
     if (col0 > col1 || row0 > row1)
     {
         return;
     }
+    const int c0 = static_cast<int>(col0), c1 = static_cast<int>(col1);
+    const int r0 = static_cast<int>(row0), r1 = static_cast<int>(row1);
 
     // whole pixel words move: no channel work, no blend — deterministic
     // on every depth and target
-    for (int row = row0; row <= row1; row++)
+    for (int row = r0; row <= r1; row++)
     {
-        const Color *src_row = src + (row - sy) * src_stride + (col0 - sx);
-        std::copy_n(src_row, col1 - col0 + 1, pixels + imsize.width * row + col0);
+        const Color *src_row = src + (row - sy) * src_stride + (c0 - sx);
+        std::copy_n(src_row, c1 - c0 + 1, pixels + imsize.width * row + c0);
     }
 }
 
