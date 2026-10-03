@@ -123,6 +123,69 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 4, 7) != core::colors::White.pixel);
     }
 
+    // 32bpp: a translucent fill_rect must match the per-pixel alpha_blend
+    // reference byte for byte (the A-26 clamped blended span), the single-
+    // column rect must keep its double blend (draw_line_full's nInc<2
+    // branch plots both endpoints on the same pixel), and a translucent
+    // horizontal line must blend every pixel exactly once
+    if (core::ImColor_Depth == 32)
+    {
+        const core::Color front = core::Color::from(200, 40, 40, 128);
+        const core::Color back_a = core::Color::from(10, 220, 90, 255);
+        const core::Color back_b = core::Color::from(30, 60, 200, 255);
+        const auto blend_ref = [front](uint32_t back_pixel)
+        {
+            core::Color back{};
+            back.pixel = back_pixel;
+            const uint32_t a = front.a(), inv = 0xFF - a;
+            const uint32_t r = (front.r() * a + back.r() * inv) / 0xFF;
+            const uint32_t gch = (front.g() * a + back.g() * inv) / 0xFF;
+            const uint32_t b = (front.b() * a + back.b() * inv) / 0xFF;
+            const uint32_t av = a + back.a() * inv / 0xFF;
+            return core::Color::from((uint8_t)r, (uint8_t)gch, (uint8_t)b, (uint8_t)av).pixel;
+        };
+        const auto blend2_ref = [blend_ref](uint32_t back_pixel)
+        {
+            return blend_ref(blend_ref(back_pixel)); // double blend
+        };
+
+        // opaque checker background so every channel mixes differently
+        auto g = core::Graphics::make_ptr(24, 12);
+        g->enable_alpha(true);
+        for (int y = 0; y < 12; ++y)
+            for (int x = 0; x < 24; ++x)
+                g->draw_pixel(x, y, (x + y) % 2 ? back_a : back_b);
+        g->fill_rect(4, 3, 19, 8, front);
+        for (int y = 3; y <= 8; ++y)
+            for (int x = 4; x <= 19; ++x)
+                EXPECT(test::pixel_at(*g, x, y) == blend_ref(((x + y) % 2 ? back_a : back_b).pixel));
+        EXPECT(test::pixel_at(*g, 3, 5) == back_b.pixel);  // outside untouched
+        EXPECT(test::pixel_at(*g, 20, 5) == back_a.pixel); // outside untouched
+
+        // single-column rect: the pinned double blend (x=22,y=0 sits on an
+        // even checker cell -> back_b)
+        g->fill_rect(22, 0, 22, 11, front);
+        EXPECT(test::pixel_at(*g, 22, 0) == blend2_ref(back_b.pixel));
+
+        // translucent horizontal line: one blend per pixel
+        auto gl = core::Graphics::make_ptr(24, 12);
+        gl->enable_alpha(true);
+        gl->fill(back_b);
+        gl->draw_line(2, 5, 21, 5, front);
+        for (int x = 2; x <= 21; ++x)
+            EXPECT(test::pixel_at(*gl, x, 5) == blend_ref(back_b.pixel));
+
+        // the damage region hard-clips the blended span (A-13)
+        auto gd = core::Graphics::make_ptr(24, 12);
+        gd->enable_alpha(true);
+        gd->fill(back_b);
+        gd->set_damage(6, 0, 12, 12);
+        gd->fill_rect(0, 0, 23, 11, front);
+        EXPECT(test::pixel_at(*gd, 6, 4) == blend_ref(back_b.pixel));
+        EXPECT(test::pixel_at(*gd, 5, 4) == back_b.pixel);  // outside damage
+        EXPECT(test::pixel_at(*gd, 12, 4) == back_b.pixel); // half-open right edge
+    }
+
     // 16bpp: the single alpha bit is binary opacity (Z2 core half) -- a
     // set bit paints the foreground, a clear bit leaves the backdrop
     // (the 8-bit blend math would treat the bit as 1/255 and make every

@@ -616,6 +616,19 @@ namespace zb::ui::core
                        bool wobble = true);
 
         /*
+         * A-26: clamped translucent span for horizontal runs (widget-local
+         * coords, like fill_span). Same gates as fill_span -- draw-area
+         * bounds, draw_area_offset, the half-open damage region -- as one
+         * interval, then the alpha_blend source-over mix inlined per pixel
+         * with the front color hoisted (u32 intermediates, truncating
+         * /0xFF), byte-identical to per-pixel draw_pixel blending. No
+         * wobble: callers pass already-final endpoints. A no-op on the
+         * 16bpp binary-alpha traits (a translucent write is a no-op there,
+         * alpha_blend returns the backdrop).
+         */
+        void fill_span_blend(int x1, int x2, int y, const Color &colr);
+
+        /*
          * S-2: draw_line without the sketch endpoint wobble — the seam
          * draw_line_aa's axis-parallel delegation uses, so AA strokes
          * stay FULL-mode in sketch (§9: AA primitives, text, images and

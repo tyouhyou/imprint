@@ -938,6 +938,70 @@ void Graphics::fill_span(int x1, int x2, int y, const Color &colr, const bool wo
     std::fill_n(pixels + imsize.width * sy + c0, c1 - c0 + 1, colr);
 }
 
+void Graphics::fill_span_blend(int x1, int x2, int y, const Color &colr)
+{
+    if constexpr (!Color::per_channel_blend)
+    {
+        // 16bpp binary alpha: the callers only route translucent colors
+        // here, and every such write is a no-op (alpha_blend returns the
+        // backdrop for the clear alpha bit)
+        return;
+    }
+    int left = x1 < x2 ? x1 : x2;
+    int right = x1 < x2 ? x2 : x1;
+
+    int sx0 = left, sx1 = right, sy = y;
+    if (draw_area_offset_enabled)
+    {
+        sx0 += draw_area_offset.x;
+        sx1 += draw_area_offset.x;
+        sy += draw_area_offset.y;
+    }
+
+    // the draw_pixel/plot_aa gates as one interval: the draw area
+    // (inclusive bounds) and the half-open damage region
+    if (sy < draw_area.start_y || sy > draw_area.end_y)
+    {
+        return;
+    }
+    int c0 = std::max(sx0, draw_area.start_x);
+    int c1 = std::min(sx1, draw_area.end_x);
+    if (damage_on_)
+    {
+        if (sy < damage_t_ || sy >= damage_b_)
+        {
+            return;
+        }
+        c0 = std::max(c0, damage_l_);
+        c1 = std::min(c1, damage_r_ - 1);
+    }
+    if (c0 > c1)
+    {
+        return;
+    }
+
+    // alpha_blend's source-over mix inlined per pixel with the front
+    // color hoisted; the per-pixel arithmetic (u32 intermediates,
+    // truncating /0xFF, alpha written last from the untouched backdrop)
+    // is identical to alpha_blend, so the span is byte-identical to
+    // per-pixel draw_pixel blending
+    const uint32_t alpha = colr.a();
+    if (alpha == 0)
+    {
+        return; // alpha_blend returns the backdrop untouched
+    }
+    const uint32_t inv_alpha = 0xFF - alpha;
+    const uint32_t fr = colr.r(), fg = colr.g(), fb = colr.b();
+    Color *px = pixels + imsize.width * sy + c0;
+    for (int i = c1 - c0; i >= 0; --i, ++px)
+    {
+        px->set_r(static_cast<uint8_t>((fr * alpha + px->r() * inv_alpha) / 0xFF));
+        px->set_g(static_cast<uint8_t>((fg * alpha + px->g() * inv_alpha) / 0xFF));
+        px->set_b(static_cast<uint8_t>((fb * alpha + px->b() * inv_alpha) / 0xFF));
+        px->set_a(static_cast<uint8_t>(alpha + px->a() * inv_alpha / 0xFF));  // source-over alpha
+    }
+}
+
 void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
 {
     if (render_mode_ == render_mode::wireframe)
@@ -962,9 +1026,27 @@ void Graphics::fill_rect(int x1, int y1, int x2, int y2, const Color &colr)
         }
         return;
     }
+    if constexpr (!Color::per_channel_blend)
+    {
+        // 16bpp: not opaque means a clear alpha bit, and every such write
+        // is a no-op (alpha_blend returns the backdrop) -- nothing to draw
+        return;
+    }
     for (int row = top; row <= bottom; ++row)
     {
-        draw_line(x1, row, x2, row, colr);
+        // A-26: one clamped blended span replaces the per-pixel traversal.
+        // Sketch mode keeps draw_line: the endpoint wobble can tilt the
+        // row off y. A single-column rect (x1 == x2) keeps it too --
+        // draw_line_full's nInc<2 branch blends that pixel twice, and the
+        // double blend is the pinned behavior.
+        if (render_mode_ == render_mode::sketch || x1 == x2)
+        {
+            draw_line(x1, row, x2, row, colr);
+        }
+        else
+        {
+            fill_span_blend(x1, x2, row, colr);
+        }
     }
 }
 
@@ -998,6 +1080,19 @@ void Graphics::draw_line_full(int x1, int y1, int x2, int y2, const Color &colr)
         {
             fill_span(x1, x2, y1, colr, false);
             return;
+        }
+        if constexpr (Color::per_channel_blend)
+        {
+            if (x1 != x2)
+            {
+                // A-26: for x1 != x2 the walk below blends every pixel of
+                // the run exactly once (the endpoint re-plots included),
+                // so the clamped blended span is byte-identical. x1 == x2
+                // stays on the walk: the nInc<2 branch blends that pixel
+                // twice, and the double blend is the pinned behavior.
+                fill_span_blend(x1, x2, y1, colr);
+                return;
+            }
         }
     }
 
