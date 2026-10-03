@@ -28,6 +28,14 @@ namespace zb::ui
         mark_dirty();
     }
 
+    void ScrollPanel::layout()
+    {
+        FlexPanel::layout();
+        // the content extent (or the viewport) may have shrunk under a
+        // scrolled offset; set_scroll_offset clamps and marks dirty
+        set_scroll_offset(top_);
+    }
+
     bool ScrollPanel::scroll_by(const int delta)
     {
         const int next = std::max(0, std::min(top_ + delta, max_scroll()));

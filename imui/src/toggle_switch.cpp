@@ -1,15 +1,25 @@
 #include "toggle_switch.hpp"
 
+#include "logging.hpp"
+
 namespace zb::ui
 {
     void ToggleSwitch::set_track_size(const core::imsize_t &s)
     {
-        if (track_size_.width != s.width || track_size_.height != s.height)
+        // the knob radius derives as (height - 6) / 2 and must stay
+        // >= 0, and the pill must fit the dot at both ends
+        const int h = s.height < 6 ? 6 : s.height;
+        const int w = s.width < h ? h : s.width;
+        if (w != s.width || h != s.height)
+        {
+            LW << "toggle: track degenerates below a 6 px knob; clamping";
+        }
+        if (track_size_.width != w || track_size_.height != h)
         {
             mark_dirty();
             mark_layout_dirty();
         }
-        track_size_ = s;
+        track_size_ = core::imsize_t{w, h};
     }
 
     void ToggleSwitch::press()

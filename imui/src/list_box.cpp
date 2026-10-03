@@ -282,6 +282,10 @@ namespace zb::ui
         }
         case zb::input::input_type::mouse_wheel:
             // wheel up (delta > 0) shows earlier rows: top decreases
+            if (ev.delta == 0)
+            {
+                return false;  // a normalized zero delta is not a step
+            }
             return scroll_rows(ev.delta > 0 ? 1 : -1);
         case zb::input::input_type::key_down:
             if (ev.key == static_cast<int>(zb::input::key_code::up))

@@ -29,8 +29,8 @@ namespace zb::ui
         void set_checked(const bool c);
         [[nodiscard]] bool is_pressed() const { return pressed_; }
 
-        void set_track_color(const core::Color &c) { track_color = c; mark_dirty(); }
-        void set_dot_color(const core::Color &c) { dot_color = c; mark_dirty(); }
+        void set_track_color(const core::Color &c) { if (track_color && track_color->pixel == c.pixel) return; track_color = c; mark_dirty(); }
+        void set_dot_color(const core::Color &c) { if (dot_color && dot_color->pixel == c.pixel) return; dot_color = c; mark_dirty(); }
         void set_track_size(const core::imsize_t &s);
         [[nodiscard]] const core::imsize_t &track_size() const { return track_size_; }
 

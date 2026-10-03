@@ -1,5 +1,6 @@
 #include "trend_line.hpp"
 #include "theme.hpp"
+#include <cstdint>
 
 namespace zb::ui
 {
@@ -47,12 +48,20 @@ namespace zb::ui
 
     void TrendLine::set_y_auto()
     {
+        if (!y_fixed_)
+        {
+            return;  // already auto: no pixel changes, no damage
+        }
         y_fixed_ = false;
         mark_dirty();
     }
 
     void TrendLine::set_y_range(const int mn, const int mx)
     {
+        if (y_fixed_ && y_min_ == mn && y_max_ == mx)
+        {
+            return;  // same fixed range: no pixel changes, no damage
+        }
         y_fixed_ = true;
         y_min_ = mn;
         y_max_ = mx;
@@ -120,7 +129,9 @@ namespace zb::ui
                 {
                     return y_top + span / 2;
                 }
-                return y_base - (v - lo) * span / range;
+                // int64 intermediate: a wide value range overflows int
+                return y_base - static_cast<int>(
+                                    static_cast<int64_t>(v - lo) * span / range);
             };
 
             area.draw_line_aa(x0, map_y(samples_[i - 1]), x1, map_y(samples_[i]), line);

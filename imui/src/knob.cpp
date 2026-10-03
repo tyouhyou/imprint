@@ -1,8 +1,23 @@
 #include "knob.hpp"
+
+#include "logging.hpp"
 #include "theme.hpp"
+#include <cstdint>
+#include <algorithm>
 
 namespace zb::ui
 {
+    void Knob::set_step(const int s)
+    {
+        if (s == 0)
+        {
+            LW << "knob: step 0 dead-ends the control; clamping to 1";
+            step = 1;
+            return;
+        }
+        step = s;
+    }
+
     void Knob::set_range(const int mn, const int mx)
     {
         if (mn == min && mx == max)
@@ -53,7 +68,8 @@ namespace zb::ui
             return -135;
         }
         const int num = value - min;
-        return -135 + num * 270 / den;
+        // int64 intermediate: a wide range times 270 overflows signed int
+        return -135 + static_cast<int>(static_cast<int64_t>(num) * 270 / den);
     }
 
     bool Knob::apply_step(const int dir)
@@ -141,14 +157,22 @@ namespace zb::ui
             }
             const auto s = get_size();
             const int span = s.height > 0 ? s.height : 1;
-            // one full widget height = whole range; drag up (dy<0) raises
-            const int scale = (max - min) * 256 / span;
-            drag_budget_ += -dy * scale;
-            const int n = drag_budget_ / 256;
+            // one full widget height = whole range; drag up (dy<0) raises.
+            // int64 intermediates: a wide range times 256 overflows int
+            const int64_t scale = static_cast<int64_t>(max - min) * 256 / span;
+            int64_t budget = drag_budget_ + static_cast<int64_t>(-dy) * scale;
+            const int64_t n = budget / 256;
             if (n != 0)
             {
-                drag_budget_ -= n * 256;
-                apply_delta(n);
+                budget -= n * 256;  // the stored remainder always fits int
+                drag_budget_ = static_cast<int>(budget);
+                apply_delta(static_cast<int>(
+                    std::clamp(n, static_cast<int64_t>(INT32_MIN),
+                               static_cast<int64_t>(INT32_MAX))));
+            }
+            else
+            {
+                drag_budget_ = static_cast<int>(budget);
             }
             return true;
         }
@@ -159,6 +183,10 @@ namespace zb::ui
             return true;
 
         case zb::input::input_type::mouse_wheel:
+            if (ev.delta == 0)
+            {
+                return false;  // a normalized zero delta is not a step
+            }
             return apply_step(ev.delta > 0 ? 1 : -1);
 
         case zb::input::input_type::key_down:

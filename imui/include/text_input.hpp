@@ -15,7 +15,9 @@ namespace zb::ui
      * The text lives in Widget::text_slots (the base text_): set_text()
      * is inherited and works through a Widget reference (builder
      * materialization included). The caret is an index into it, clamped
-     * on every edit; a programmatic set_text leaves it at the start.
+     * to the current length at every edit and at draw; a programmatic
+     * set_text shorter than the caret therefore lands the caret at the
+     * new end (it never resets to the start).
      *
      * `changed` fires with the UTF-8 text after every edit; `submitted`
      * fires with the UTF-8 text on enter.

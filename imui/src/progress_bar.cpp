@@ -1,4 +1,5 @@
 #include "progress_bar.hpp"
+#include <cstdint>
 
 #include "logging.hpp"
 
@@ -62,7 +63,12 @@ namespace zb::ui
 
         // fill: interior span only (the outline owns the border pixels)
         const int span = s.width - 2;
-        const int fill_w = (max > min) ? (value - min) * span / (max - min) : 0;
+        // int64 intermediate: a wide range times the span overflows int
+        const int fill_w =
+            (max > min)
+                ? static_cast<int>(static_cast<int64_t>(value - min) * span /
+                                   (max - min))
+                : 0;
         if (fill_w > 0)
         {
             area.fill_rect(1, 1, fill_w, s.height - 2,

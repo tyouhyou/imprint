@@ -320,10 +320,13 @@ namespace zb::ui
             // flex items and percent children contribute nothing on their
             // open axis: their size only exists relative to a resolved
             // parent size, which a measure() has no access to. A pixel
-            // basis is absolute and counts; a percent basis is relative
-            // and counts 0 like a percent child (H-7c); a D-1 min
-            // constraint is absolute and counts like a px basis.
-            const int m = items[i].basis_px >= 0 ? items[i].basis_px
+            // basis is absolute and counts, capped by its D-1 max like
+            // the layout-time basis_claim (measure/layout must agree);
+            // a percent basis is relative and counts 0 like a percent
+            // child (H-7c); a D-1 min constraint is absolute and counts
+            // like a px basis.
+            const int m = items[i].basis_px >= 0
+                              ? cap_max(child, is_row(direction), items[i].basis_px)
                               : (items[i].flex_grow > 0 ||
                                  main_percent(child, direction) > 0 ||
                                  items[i].basis_pct > 0)

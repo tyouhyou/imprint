@@ -29,12 +29,12 @@ namespace zb::ui
         [[nodiscard]] int get_max() const { return max; }
         void set_value(int v);
         [[nodiscard]] int get_value() const { return value; }
-        void set_step(int s) { step = s; }
+        void set_step(int s);
         [[nodiscard]] int get_step() const { return step; }
 
-        void set_face_color(const core::Color &c) { face_color = c; mark_dirty(); }
-        void set_ring_color(const core::Color &c) { ring_color = c; mark_dirty(); }
-        void set_pointer_color(const core::Color &c) { pointer_color = c; mark_dirty(); }
+        void set_face_color(const core::Color &c) { if (face_color && face_color->pixel == c.pixel) return; face_color = c; mark_dirty(); }
+        void set_ring_color(const core::Color &c) { if (ring_color && ring_color->pixel == c.pixel) return; ring_color = c; mark_dirty(); }
+        void set_pointer_color(const core::Color &c) { if (pointer_color && pointer_color->pixel == c.pixel) return; pointer_color = c; mark_dirty(); }
 
         // fired on user interaction with the new value
         zb::event::Event<int> changed;

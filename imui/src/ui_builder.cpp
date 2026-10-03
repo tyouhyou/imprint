@@ -1199,6 +1199,7 @@ namespace zb::ui
                 s.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
                             static_cast<int>(prop_of(n, "max", 100LL)));
                 s.set_step(static_cast<int>(prop_of(n, "step", 1LL)));
+                s.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
                 return;
             }
             if (t == "progress_bar")

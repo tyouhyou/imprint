@@ -1,7 +1,26 @@
 #include "radio_button.hpp"
 
+#include "logging.hpp"
+
 namespace zb::ui
 {
+    void RadioButton::set_circle_size(const int s)
+    {
+        // the ring radius derives as size/2 - 1 and must stay >= 0
+        if (s < 2)
+        {
+            LW << "radio: circle size must be >= 2; clamping";
+            circle_size = 2;
+        }
+        else
+        {
+            circle_size = s;
+        }
+        sync_text_offset();
+        mark_dirty();
+        mark_layout_dirty();
+    }
+
     core::imsize_t RadioButton::measure() const
     {
         if (get_text().empty())

@@ -90,6 +90,32 @@ int test_text()
         EXPECT(decode_utf8_next(p) == 0xFFFD);
     }
 
+    // a UTF-8 encoded surrogate (0xED 0xA0 0x80 = U+D800) is rejected;
+    // only the lead byte is consumed
+    {
+        const char *p = "\xED\xA0\x80" "A";
+        EXPECT(decode_utf8_next(p) == 0xFFFD);
+        EXPECT(*p == '\xA0');
+    }
+
+    // an out-of-range sequence (U+110000 = 0xF4 0x90 0x80 0x80) is
+    // rejected the same way
+    {
+        const char *p = "\xF4\x90\x80\x80";
+        EXPECT(decode_utf8_next(p) == 0xFFFD);
+        EXPECT(*p == '\x90');
+    }
+
+    // utf16_to_utf8 substitutes lone surrogates with U+FFFD
+    {
+        std::u16string lone_lead;
+        lone_lead += static_cast<char16_t>(0xD800);
+        EXPECT(utf16_to_utf8(lone_lead) == "\xEF\xBF\xBD");
+        std::u16string lone_trail;
+        lone_trail += static_cast<char16_t>(0xDC00);
+        EXPECT(utf16_to_utf8(lone_trail) == "\xEF\xBF\xBD");
+    }
+
     // utf8_to_utf16 on null / empty
     {
         EXPECT(utf8_to_utf16(nullptr).empty());

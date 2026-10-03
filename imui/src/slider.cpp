@@ -1,4 +1,5 @@
 #include "slider.hpp"
+#include <cstdint>
 
 #include "logging.hpp"
 
@@ -57,7 +58,10 @@ namespace zb::ui
         }
         // clamp the pointer to the widget, then map the thumb center
         const int cx = x < 0 ? 0 : (x > s.width - 1 ? s.width - 1 : x);
-        int v = min + (cx - thumb_w / 2) * (max - min) / span;
+        // int64 intermediates: a wide range overflows signed int
+        int v = min + static_cast<int>(
+                           static_cast<int64_t>(cx - thumb_w / 2) * (max - min) /
+                           span);
         if (v < min)
         {
             v = min;
@@ -125,6 +129,10 @@ namespace zb::ui
         case zb::input::input_type::touch_up:
             return true;
         case zb::input::input_type::mouse_wheel:
+            if (ev.delta == 0)
+            {
+                return false;  // a normalized zero delta is not a step
+            }
             return apply_step(ev.delta > 0 ? 1 : -1);
         case zb::input::input_type::key_down:
             if (ev.key == static_cast<int>(zb::input::key_code::left))
@@ -154,7 +162,9 @@ namespace zb::ui
         // thumb: center travels [thumb_w/2 .. width-1-thumb_w/2]
         const int span = s.width - thumb_w;
         const int vx = (max > min)
-                           ? thumb_w / 2 + (value - min) * span / (max - min)
+                           ? thumb_w / 2 + static_cast<int>(
+                                 static_cast<int64_t>(value - min) * span /
+                                 (max - min))
                            : thumb_w / 2;
         const int half = thumb_w / 2;
         const int thumb_h = track_h + 8;

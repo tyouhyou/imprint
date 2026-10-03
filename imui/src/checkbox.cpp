@@ -1,7 +1,27 @@
 #include "checkbox.hpp"
 
+#include "logging.hpp"
+
 namespace zb::ui
 {
+    void Checkbox::set_box_size(const int s)
+    {
+        // below 2 the box degenerates (pressed-fill and tick marks
+        // index past the box edge)
+        if (s < 2)
+        {
+            LW << "checkbox: box size must be >= 2; clamping";
+            box_size = 2;
+        }
+        else
+        {
+            box_size = s;
+        }
+        sync_text_offset();
+        mark_dirty();
+        mark_layout_dirty();
+    }
+
     core::imsize_t Checkbox::measure() const
     {
         if (get_text().empty())

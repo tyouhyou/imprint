@@ -42,7 +42,7 @@ namespace zb::ui
         void set_dot_color(const core::Color &c) { dot_color = c; mark_dirty(); }
         // circle_size/text_gap feed measure(): they report damage and
         // invalidate the layout too
-        void set_circle_size(const int s) { circle_size = s; sync_text_offset(); mark_dirty(); mark_layout_dirty(); }
+        void set_circle_size(const int s);
         void set_text_gap(const int g) { text_gap = g; sync_text_offset(); mark_dirty(); mark_layout_dirty(); }
 
         // fired when this button becomes selected by a user interaction

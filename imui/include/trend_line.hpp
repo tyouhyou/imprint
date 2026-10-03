@@ -32,8 +32,8 @@ namespace zb::ui
         void set_y_range(int mn, int mx);
         [[nodiscard]] bool is_y_fixed() const { return y_fixed_; }
 
-        void set_line_color(const core::Color &c) { line_color = c; mark_dirty(); }
-        void set_bg_color(const core::Color &c) { bg_color = c; mark_dirty(); }
+        void set_line_color(const core::Color &c) { if (line_color && line_color->pixel == c.pixel) return; line_color = c; mark_dirty(); }
+        void set_bg_color(const core::Color &c) { if (bg_color && bg_color->pixel == c.pixel) return; bg_color = c; mark_dirty(); }
 
         [[nodiscard]] core::imsize_t measure() const override { return {120, 40}; }
 

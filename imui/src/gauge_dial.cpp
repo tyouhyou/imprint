@@ -1,4 +1,5 @@
 #include "gauge_dial.hpp"
+#include <cstdint>
 #include "theme.hpp"
 
 namespace zb::ui
@@ -73,7 +74,9 @@ namespace zb::ui
             return start_deg;
         }
         const int num = value - min;
-        return start_deg + num * sweep_deg / den;
+        // int64 intermediate: a wide range times the sweep overflows int
+        return start_deg + static_cast<int>(
+                               static_cast<int64_t>(num) * sweep_deg / den);
     }
 
     bool GaugeDial::hit(const int x, const int y) const

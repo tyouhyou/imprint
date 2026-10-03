@@ -40,6 +40,11 @@ namespace zb::ui
         void set_scroll_offset(const int v);
         // how many pixels of content hide below the viewport (0 = fits)
         [[nodiscard]] int max_scroll() const;
+        // re-clamps the offset after any content/viewport change: paint()
+        // always runs layout() before draw (contract 11), so draw/pick/
+        // on_input never see a stale offset (e.g. scrolled to the bottom,
+        // then rows removed)
+        void layout() override;
 
     protected:
         void draw_at(core::Graphics &area) const override;
