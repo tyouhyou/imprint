@@ -171,12 +171,14 @@ int main(void)
 
 	// the app requests to quit by closing its window (e.g. a QUIT button)
 	bool app_closed = false;
-	app->on_closed([&app_closed]() { app_closed = true; });
+	// held for the loop's lifetime (code-contract §11.1: the RAII
+	// subscription must outlive the handler's usefulness)
+	const auto closed_sub = app->on_closed([&app_closed]() { app_closed = true; });
 
 	// a submitted frame (painted event) is copied to VRAM during the next
 	// vblank; idle frames are skipped via is_dirty()
 	bool frame_owed = false;
-	app->on_painted([&frame_owed](const void *) { frame_owed = true; });
+	const auto painted_sub = app->on_painted([&frame_owed](const void *) { frame_owed = true; });
 
 	app->paint(); // render the first frame (marks frame_owed)
 

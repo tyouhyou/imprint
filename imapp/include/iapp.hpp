@@ -82,11 +82,19 @@ namespace zb::app
             return false;
         }
 
-        virtual void on_painting(event::PAINT_EVENT::EventHandler) noexcept = 0;
-        virtual void on_painted(event::PAINT_EVENT::EventHandler) noexcept = 0;
+        /*
+         * Register a shell/app callback; returns the RAII subscription
+         * (event.hpp §1.5) so a library-mode shell can detach its
+         * presentation handlers when its loop ends -- code-contract §11.1.
+         * An implementation without a live window returns a default
+         * (empty) subscription. [[nodiscard]]: discarding the return
+         * unsubscribes the handler immediately (the temporary dies).
+         */
+        [[nodiscard]] virtual event::PAINT_EVENT::Subscription on_painting(event::PAINT_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::PAINT_EVENT::Subscription on_painted(event::PAINT_EVENT::EventHandler) noexcept = 0;
 
-        virtual void on_closing(event::CLOSE_EVENT::EventHandler) noexcept = 0;
-        virtual void on_closed(event::CLOSE_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::CLOSE_EVENT::Subscription on_closing(event::CLOSE_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::CLOSE_EVENT::Subscription on_closed(event::CLOSE_EVENT::EventHandler) noexcept = 0;
     };
 }
 

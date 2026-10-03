@@ -34,9 +34,25 @@ namespace zb::app
         // directly (wrapper mode) when non-null and must be writable
         void create(uint32_t width, uint32_t height, void *buffer = nullptr)
         {
+            // a second create() replaces the tree: the dispatcher's state
+            // references the old one, so drop it while its widgets are
+            // still alive (press cancelled, focus released, modal dropped)
+            // -- the dispatcher's liveness checks walk parent links that
+            // would dangle once root_ is replaced
+            dispatcher_.reset();
+            dispatcher_.clear_focus();
+            dispatcher_.set_modal(nullptr);
             graphics_ = zb::ui::core::Graphics::make_ptr(width, height, buffer);
             root_ = std::make_unique<zb::ui::Panel>();
             root_->set_size(static_cast<int>(width), static_cast<int>(height));
+            // frame bookkeeping describes the replaced surface: owe a full
+            // repaint of the new one (contract 10.4 generation included)
+            dirty_ = true;
+            theme_gen_ = zb::ui::theme_generation();
+            damage_l_ = 0;
+            damage_t_ = 0;
+            damage_r_ = -1;
+            damage_b_ = -1;
         }
 
         // IWindow (null/0 before create(), matching paint()'s guards)

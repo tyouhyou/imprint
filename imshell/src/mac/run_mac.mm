@@ -54,6 +54,10 @@ namespace
     ImprintView *g_view = nil;
     int g_buffer_width = 0;
     int g_buffer_height = 0;
+    // the shell's presentation/quit handlers ride RAII subscriptions
+    // (code-contract §11.1); they live as long as the process's run loop
+    zb::event::PAINT_EVENT::Subscription g_painted_sub;
+    zb::event::CLOSE_EVENT::Subscription g_closed_sub;
 
     void feed(const zb::input::input_event &ev)
     {
@@ -402,7 +406,7 @@ namespace zb::shell
             // asks the shell to present (A-2 presentation seam). AppKit unions
             // invalidated rects until the next drawRect, so the pending region
             // needs no explicit coalescer
-            g_app->on_painted([](const void *data)
+            g_painted_sub = g_app->on_painted([](const void *data)
             {
                 if (data == nullptr || g_view == nil)
                 {
@@ -435,7 +439,7 @@ namespace zb::shell
             // the app requests to quit by closing its window (e.g. a QUIT
             // button): stop the run loop. stop: takes effect one event later,
             // so wake the loop with a dummy application event
-            g_app->on_closed([]()
+            g_closed_sub = g_app->on_closed([]()
             {
                 dispatch_async(dispatch_get_main_queue(), ^
                 {

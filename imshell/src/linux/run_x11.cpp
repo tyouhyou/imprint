@@ -36,6 +36,25 @@ namespace zb::shell
             throw zb::ui::error("X11 shell: cannot open display");
         }
 
+        // init-path failures throw (code-contract §11.2): the guard makes
+        // them leak-free. XCloseDisplay also releases the server-side
+        // resources of this connection (colormap, window, gc), so owning
+        // the Display alone covers every failure path
+        struct display_owner
+        {
+            Display *display;
+            explicit display_owner(Display *d) : display(d) {}
+            ~display_owner()
+            {
+                if (display != nullptr)
+                {
+                    XCloseDisplay(display);
+                }
+            }
+            display_owner(const display_owner &) = delete;
+            display_owner &operator=(const display_owner &) = delete;
+        } display_guard{display};
+
         // flush out any errors in DEBUG builds
 #ifdef DEBUG
         XSynchronize(display, True);
@@ -65,7 +84,6 @@ namespace zb::shell
         XVisualInfo vi{};
         if (!XMatchVisualInfo(display, screen, 32, TrueColor, &vi))
         {
-            XCloseDisplay(display);
             throw zb::ui::error("X11 shell: no 32-bit TrueColor visual found on this display");
         }
         LD << "selected 32-bit visual: " << vi.depth;
@@ -111,7 +129,6 @@ namespace zb::shell
             width, height, 32, 0);
         if (xi == nullptr)
         {
-            XCloseDisplay(display);
             throw zb::ui::error("X11 shell: XCreateImage failed");
         }
 
@@ -220,7 +237,10 @@ namespace zb::shell
         // paint() is requested on the first Expose, and the app repaints after
         // every input event; the "painted" event asks the shell to present.
         // The "what do I blit" decision is the shared A-2 seam.
-        app->on_painted([&](const void *)
+        // §11.1: the shell holds its subscriptions for the loop's lifetime;
+        // they detach at return so no handler outlives run()'s frame (a
+        // library-mode host may keep the app alive past this point)
+        const auto painted_sub = app->on_painted([&](const void *)
         {
             int x = 0, y = 0, w = 0, h = 0;
             // dirty_region fills x/y/w/h through its out-params: the call
@@ -239,11 +259,12 @@ namespace zb::shell
             present_region(r.x, r.y, r.w, r.h);
         });
 
+
         auto hasExposed = false;
 
         // the app requests to quit by closing its window (e.g. a QUIT button)
         bool app_closed = false;
-        app->on_closed([&app_closed]() { app_closed = true; });
+        const auto closed_sub = app->on_closed([&app_closed]() { app_closed = true; });
 
         XEvent event{};
         while (!app_closed)
@@ -325,7 +346,7 @@ namespace zb::shell
         XFreeGC(display, gc);
         XFreeColormap(display, colormap);
         XDestroyWindow(display, window);
-        XCloseDisplay(display);
+        // XCloseDisplay runs in display_guard's destructor
 
         return 0;
     }

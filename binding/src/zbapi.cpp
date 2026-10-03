@@ -84,21 +84,21 @@ namespace
             return window_->dirty_region(x, y, w, h);
         }
 
-        void on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        zb::event::PAINT_EVENT::Subscription on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
         {
-            window_->painting += h;
+            return window_->painting.subscribe(h);
         }
-        void on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        zb::event::PAINT_EVENT::Subscription on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
         {
-            window_->painted += h;
+            return window_->painted.subscribe(h);
         }
-        void on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        zb::event::CLOSE_EVENT::Subscription on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
         {
-            window_->closing += h;
+            return window_->closing.subscribe(h);
         }
-        void on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        zb::event::CLOSE_EVENT::Subscription on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
         {
-            window_->closed += h;
+            return window_->closed.subscribe(h);
         }
 
         // the declarative surface: root/layout/widgets
@@ -161,6 +161,11 @@ struct zb_app
     zb_closed_cb closed_fn = nullptr;
     void *closed_userdata = nullptr;
     bool closed_hooked = false;
+    // the hooked flags pair with live subscriptions: on_* now return an
+    // RAII subscription (code-contract §11.1) that must be held for the
+    // app's lifetime, or the handler unsubscribes itself immediately
+    zb::event::PAINT_EVENT::Subscription painted_sub;
+    zb::event::CLOSE_EVENT::Subscription closed_sub;
 };
 
 /*
@@ -383,7 +388,7 @@ extern "C" void zb_set_painted_callback(zb_app_t *self, zb_painted_cb cb, void *
             // calling zb_set_painted_callback twice fires the callback
             // twice per frame (one closure per call)
             self->painted_hooked = true;
-            self->app->on_painted(
+            self->painted_sub = self->app->on_painted(
                 [self](const void *)
                 {
                     if (self->painted_fn != nullptr)
@@ -412,7 +417,7 @@ extern "C" void zb_set_closed_callback(zb_app_t *self, zb_closed_cb cb, void *us
         if (!self->closed_hooked)
         {
             self->closed_hooked = true;
-            self->app->on_closed(
+            self->closed_sub = self->app->on_closed(
                 [self]()
                 {
                     if (self->closed_fn != nullptr)

@@ -56,21 +56,21 @@ namespace zb::app::showcase
             return window_->dirty_region(x, y, w, h);
         }
 
-        void on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        zb::event::PAINT_EVENT::Subscription on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
         {
-            window_->painting += h;
+            return window_->painting.subscribe(h);
         }
-        void on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        zb::event::PAINT_EVENT::Subscription on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
         {
-            window_->painted += h;
+            return window_->painted.subscribe(h);
         }
-        void on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        zb::event::CLOSE_EVENT::Subscription on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
         {
-            window_->closing += h;
+            return window_->closing.subscribe(h);
         }
-        void on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        zb::event::CLOSE_EVENT::Subscription on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
         {
-            window_->closed += h;
+            return window_->closed.subscribe(h);
         }
 
     private:

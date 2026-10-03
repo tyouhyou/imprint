@@ -42,6 +42,9 @@ namespace zb::event
     {
     public:
         using EventHandler = std::function<void(const TArgs &...args)>;
+        // nested alias so interfaces can spell the RAII guard as
+        // PAINT_EVENT::Subscription (iapp.hpp's on_painted/on_closed)
+        using Subscription = class Subscription<TArgs...>;
 
     public:
         static constexpr uint32_t INVALID_EVENT_ID = 0;
@@ -51,7 +54,7 @@ namespace zb::event
         // detaches every live subscription so their destructors are no-ops
         ~Event()
         {
-            for (Subscription<TArgs...> *s : attached_subscriptions)
+            for (zb::event::Subscription<TArgs...> *s : attached_subscriptions)
             {
                 s->event_ = nullptr;
             }
@@ -128,9 +131,9 @@ namespace zb::event
         }
 
         // RAII registration: the subscription unsubscribes on destruction
-        Subscription<TArgs...> subscribe(const EventHandler &handler)
+        zb::event::Subscription<TArgs...> subscribe(const EventHandler &handler)
         {
-            return Subscription<TArgs...>(*this, sub(handler));
+            return zb::event::Subscription<TArgs...>(*this, sub(handler));
         }
 
         void unsub(uint32_t id)
@@ -210,8 +213,8 @@ namespace zb::event
 
         // Subscription registers/unregisters itself here; the Event
         // destructor detaches all of them so neither object can dangle
-        void attach(Subscription<TArgs...> &s) { attached_subscriptions.push_back(&s); }
-        void detach(Subscription<TArgs...> &s)
+        void attach(zb::event::Subscription<TArgs...> &s) { attached_subscriptions.push_back(&s); }
+        void detach(zb::event::Subscription<TArgs...> &s)
         {
             for (auto it = attached_subscriptions.begin(); it != attached_subscriptions.end(); ++it)
             {
@@ -252,9 +255,9 @@ namespace zb::event
         std::deque<Entry> handlers;
         uint32_t next_id = 0;
         uint32_t invoke_depth = 0;
-        std::vector<Subscription<TArgs...> *> attached_subscriptions;
+        std::vector<zb::event::Subscription<TArgs...> *> attached_subscriptions;
 
-        friend class Subscription<TArgs...>;
+        friend class zb::event::Subscription<TArgs...>;
     };
 
     /*

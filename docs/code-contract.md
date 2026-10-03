@@ -86,6 +86,10 @@ same-shaped `Font::error` type left the codebase with the FreeType path
   performs tombstone compaction — the `unsub` semantics of "erase
   immediately outside invoke, tombstone inside invoke" hold on every path,
   and one exception cannot leave permanent tombstones in the handler table.
+- Subscribers that must outlive the registration statement hold the RAII
+  `Subscription` returned by `subscribe()` (also exposed as the nested
+  alias `Event::Subscription`, e.g. `PAINT_EVENT::Subscription`);
+  `operator+=` keeps returning the raw id for manual `unsub`.
 - Callback failures are reported via return values / out parameters /
   logging (`LW`/`LE`); exceptions must not be used as control flow
   (same rule as the hot path in §1.1).
@@ -1704,6 +1708,13 @@ int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
   platform window/surface creation sized from
   `window()->width()/height()/title()`, event pump → `feed_input`
   (§4.1), `region_to_present` presentation, teardown.
+- Shell registration rides the §1.5 subscription: `IApp::on_painted` /
+  `on_closed` return the RAII `event::Subscription` (not `void`), and
+  `run` holds the subscriptions it registers for the duration of the
+  loop — they detach when `run` returns, so no shell handler survives
+  into a host that keeps driving the app afterward. Corollary: **after
+  `run` returns the app must not be `paint()`ed again** (the
+  presenters are gone; a final snapshot is taken before closing).
 - `run_options` is creation-time only. The buffer never resizes after
   `create_window` (I-2a); there is no runtime resize/reshape API. A
   resolution change is therefore a **recreate-the-app** operation —

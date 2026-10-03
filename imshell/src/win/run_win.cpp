@@ -277,10 +277,14 @@ namespace zb::shell
                 g_app->create_window();
             }
         }
-        g_app->on_painted(handle_painted);
+        // §11.1: the shell holds its subscriptions for the loop's lifetime;
+        // they detach at return so no handler outlives run()'s frame or the
+        // teardown of the globals below (a library-mode host may keep the
+        // app alive past this point)
+        const auto painted_sub = g_app->on_painted(handle_painted);
 
         // the app requests to quit by closing its window (e.g. a QUIT button)
-        g_app->on_closed([]() { PostQuitMessage(0); });
+        const auto closed_sub = g_app->on_closed([]() { PostQuitMessage(0); });
 
         auto window = g_app->window();
         g_buffer_width = window->width();
@@ -353,6 +357,23 @@ namespace zb::shell
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+
+        // teardown (mirrors the X11 shell): the WM_DESTROY route has
+        // already destroyed the window; a quit that arrived through the
+        // closed signal did not. Either way the globals must not name a
+        // dead window, and a second run() in this process must not
+        // inherit the previous run's app/presentation state
+        if (g_hwnd != nullptr && IsWindow(g_hwnd))
+        {
+            DestroyWindow(g_hwnd);
+        }
+        g_hwnd = nullptr;
+        g_app.reset();
+        g_framebuffer = nullptr;
+        g_buffer_width = 0;
+        g_buffer_height = 0;
+        g_pending.clear();
+        g_presentation = {};
 
         return (int)msg.wParam;
     }

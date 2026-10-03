@@ -73,24 +73,24 @@ namespace zb::app::hello
             return window_ && window_->dirty_region(x, y, w, h);
         }
 
-        void on_painting(event::PAINT_EVENT::EventHandler h) noexcept override
+        event::PAINT_EVENT::Subscription on_painting(event::PAINT_EVENT::EventHandler h) noexcept override
         {
-            if (window_) window_->painting += h;
+            return window_ ? window_->painting.subscribe(h) : event::PAINT_EVENT::Subscription();
         }
 
-        void on_painted(event::PAINT_EVENT::EventHandler h) noexcept override
+        event::PAINT_EVENT::Subscription on_painted(event::PAINT_EVENT::EventHandler h) noexcept override
         {
-            if (window_) window_->painted += h;
+            return window_ ? window_->painted.subscribe(h) : event::PAINT_EVENT::Subscription();
         }
 
-        void on_closing(event::CLOSE_EVENT::EventHandler h) noexcept override
+        event::CLOSE_EVENT::Subscription on_closing(event::CLOSE_EVENT::EventHandler h) noexcept override
         {
-            if (window_) window_->closing += h;
+            return window_ ? window_->closing.subscribe(h) : event::CLOSE_EVENT::Subscription();
         }
 
-        void on_closed(event::CLOSE_EVENT::EventHandler h) noexcept override
+        event::CLOSE_EVENT::Subscription on_closed(event::CLOSE_EVENT::EventHandler h) noexcept override
         {
-            if (window_) window_->closed += h;
+            return window_ ? window_->closed.subscribe(h) : event::CLOSE_EVENT::Subscription();
         }
 
     private:

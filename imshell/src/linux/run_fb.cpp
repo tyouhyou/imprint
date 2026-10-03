@@ -35,13 +35,16 @@ namespace zb::shell
 
         // the app requests to quit by closing its window (e.g. a QUIT button)
         bool app_closed = false;
-        app->on_closed([&app_closed]() { app_closed = true; });
+        // §11.1: the shell holds its subscriptions for the loop's lifetime;
+        // they detach at return so no handler outlives run()'s frame (a
+        // library-mode host may keep the app alive past this point)
+        const auto closed_sub = app->on_closed([&app_closed]() { app_closed = true; });
 
         // idle-poll loop: paint (and present via the painted callback) only
         // when the app owns a frame. The FB backend has no input source at
         // all (no keyboard, no pointer); use the X11 backend for input (B2).
         // The "what do I blit" decision is the shared A-2 seam.
-        app->on_painted([&fb, &app, &window](const void *)
+        const auto painted_sub = app->on_painted([&fb, &app, &window](const void *)
         {
             int x = 0, y = 0, w = 0, h = 0;
             // own statement: see the evaluation-order note in run_x11.cpp
