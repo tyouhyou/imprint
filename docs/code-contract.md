@@ -87,9 +87,9 @@ same-shaped `Font::error` type left the codebase with the FreeType path
   immediately outside invoke, tombstone inside invoke" hold on every path,
   and one exception cannot leave permanent tombstones in the handler table.
 - Subscribers that must outlive the registration statement hold the RAII
-  `Subscription` returned by `subscribe()` (also exposed as the nested
-  alias `Event::Subscription`, e.g. `PAINT_EVENT::Subscription`);
-  `operator+=` keeps returning the raw id for manual `unsub`.
+  `Subscription` returned by `subscribe()` (spelled
+  `event::Subscription<T...>` for an `Event<T...>`); `operator+=` keeps
+  returning the raw id for manual `unsub`.
 - Callback failures are reported via return values / out parameters /
   logging (`LW`/`LE`); exceptions must not be used as control flow
   (same rule as the hot path in §1.1).

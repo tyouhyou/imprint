@@ -90,11 +90,11 @@ namespace zb::app
          * (empty) subscription. [[nodiscard]]: discarding the return
          * unsubscribes the handler immediately (the temporary dies).
          */
-        [[nodiscard]] virtual event::PAINT_EVENT::Subscription on_painting(event::PAINT_EVENT::EventHandler) noexcept = 0;
-        [[nodiscard]] virtual event::PAINT_EVENT::Subscription on_painted(event::PAINT_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::Subscription<const void *> on_painting(event::PAINT_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::Subscription<const void *> on_painted(event::PAINT_EVENT::EventHandler) noexcept = 0;
 
-        [[nodiscard]] virtual event::CLOSE_EVENT::Subscription on_closing(event::CLOSE_EVENT::EventHandler) noexcept = 0;
-        [[nodiscard]] virtual event::CLOSE_EVENT::Subscription on_closed(event::CLOSE_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::Subscription<> on_closing(event::CLOSE_EVENT::EventHandler) noexcept = 0;
+        [[nodiscard]] virtual event::Subscription<> on_closed(event::CLOSE_EVENT::EventHandler) noexcept = 0;
     };
 }
 

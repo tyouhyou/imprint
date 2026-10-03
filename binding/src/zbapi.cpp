@@ -84,19 +84,19 @@ namespace
             return window_->dirty_region(x, y, w, h);
         }
 
-        zb::event::PAINT_EVENT::Subscription on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        zb::event::Subscription<const void *> on_painting(zb::event::PAINT_EVENT::EventHandler h) noexcept override
         {
             return window_->painting.subscribe(h);
         }
-        zb::event::PAINT_EVENT::Subscription on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
+        zb::event::Subscription<const void *> on_painted(zb::event::PAINT_EVENT::EventHandler h) noexcept override
         {
             return window_->painted.subscribe(h);
         }
-        zb::event::CLOSE_EVENT::Subscription on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        zb::event::Subscription<> on_closing(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
         {
             return window_->closing.subscribe(h);
         }
-        zb::event::CLOSE_EVENT::Subscription on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
+        zb::event::Subscription<> on_closed(zb::event::CLOSE_EVENT::EventHandler h) noexcept override
         {
             return window_->closed.subscribe(h);
         }
@@ -164,8 +164,8 @@ struct zb_app
     // the hooked flags pair with live subscriptions: on_* now return an
     // RAII subscription (code-contract §11.1) that must be held for the
     // app's lifetime, or the handler unsubscribes itself immediately
-    zb::event::PAINT_EVENT::Subscription painted_sub;
-    zb::event::CLOSE_EVENT::Subscription closed_sub;
+    zb::event::Subscription<const void *> painted_sub;
+    zb::event::Subscription<> closed_sub;
 };
 
 /*

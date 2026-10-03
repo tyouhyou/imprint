@@ -41,10 +41,10 @@ namespace zb::app::showcase_html
         void paint() noexcept override;
         bool is_dirty() const noexcept override;
         bool dirty_region(int &, int &, int &, int &) const noexcept override;
-        event::PAINT_EVENT::Subscription on_painting(event::PAINT_EVENT::EventHandler) noexcept override;
-        event::PAINT_EVENT::Subscription on_painted(event::PAINT_EVENT::EventHandler) noexcept override;
-        event::CLOSE_EVENT::Subscription on_closing(event::CLOSE_EVENT::EventHandler) noexcept override;
-        event::CLOSE_EVENT::Subscription on_closed(event::CLOSE_EVENT::EventHandler) noexcept override;
+        event::Subscription<const void *> on_painting(event::PAINT_EVENT::EventHandler) noexcept override;
+        event::Subscription<const void *> on_painted(event::PAINT_EVENT::EventHandler) noexcept override;
+        event::Subscription<> on_closing(event::CLOSE_EVENT::EventHandler) noexcept override;
+        event::Subscription<> on_closed(event::CLOSE_EVENT::EventHandler) noexcept override;
 
     private:
         void make_window(uint32_t max_client_width,

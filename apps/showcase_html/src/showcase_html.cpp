@@ -209,23 +209,23 @@ namespace zb::app::showcase_html
         return window_ && window_->dirty_region(x, y, rw, rh);
     }
 
-    event::PAINT_EVENT::Subscription ShowcaseHtml::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
+    event::Subscription<const void *> ShowcaseHtml::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->painting.subscribe(handler) : event::PAINT_EVENT::Subscription();
+        return window_ ? window_->painting.subscribe(handler) : event::Subscription<const void *>();
     }
 
-    event::PAINT_EVENT::Subscription ShowcaseHtml::on_painted(const event::PAINT_EVENT::EventHandler handler) noexcept
+    event::Subscription<const void *> ShowcaseHtml::on_painted(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->painted.subscribe(handler) : event::PAINT_EVENT::Subscription();
+        return window_ ? window_->painted.subscribe(handler) : event::Subscription<const void *>();
     }
 
-    event::CLOSE_EVENT::Subscription ShowcaseHtml::on_closing(const event::CLOSE_EVENT::EventHandler handler) noexcept
+    event::Subscription<> ShowcaseHtml::on_closing(const event::CLOSE_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->closing.subscribe(handler) : event::CLOSE_EVENT::Subscription();
+        return window_ ? window_->closing.subscribe(handler) : event::Subscription<>();
     }
 
-    event::CLOSE_EVENT::Subscription ShowcaseHtml::on_closed(const event::CLOSE_EVENT::EventHandler handler) noexcept
+    event::Subscription<> ShowcaseHtml::on_closed(const event::CLOSE_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->closed.subscribe(handler) : event::CLOSE_EVENT::Subscription();
+        return window_ ? window_->closed.subscribe(handler) : event::Subscription<>();
     }
 }  // namespace zb::app::showcase_html

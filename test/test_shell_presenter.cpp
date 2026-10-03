@@ -44,10 +44,10 @@ namespace
             dirty = false;
         }
         [[nodiscard]] bool is_dirty() const noexcept override { return dirty; }
-        zb::event::PAINT_EVENT::Subscription on_painting(zb::event::PAINT_EVENT::EventHandler) noexcept override { return {}; }
-        zb::event::PAINT_EVENT::Subscription on_painted(zb::event::PAINT_EVENT::EventHandler) noexcept override { return {}; }
-        zb::event::CLOSE_EVENT::Subscription on_closing(zb::event::CLOSE_EVENT::EventHandler) noexcept override { return {}; }
-        zb::event::CLOSE_EVENT::Subscription on_closed(zb::event::CLOSE_EVENT::EventHandler) noexcept override { return {}; }
+        zb::event::Subscription<const void *> on_painting(zb::event::PAINT_EVENT::EventHandler) noexcept override { return {}; }
+        zb::event::Subscription<const void *> on_painted(zb::event::PAINT_EVENT::EventHandler) noexcept override { return {}; }
+        zb::event::Subscription<> on_closing(zb::event::CLOSE_EVENT::EventHandler) noexcept override { return {}; }
+        zb::event::Subscription<> on_closed(zb::event::CLOSE_EVENT::EventHandler) noexcept override { return {}; }
     };
 }
 

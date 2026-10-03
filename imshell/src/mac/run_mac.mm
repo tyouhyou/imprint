@@ -56,8 +56,8 @@ namespace
     int g_buffer_height = 0;
     // the shell's presentation/quit handlers ride RAII subscriptions
     // (code-contract §11.1); they live as long as the process's run loop
-    zb::event::PAINT_EVENT::Subscription g_painted_sub;
-    zb::event::CLOSE_EVENT::Subscription g_closed_sub;
+    zb::event::Subscription<const void *> g_painted_sub;
+    zb::event::Subscription<> g_closed_sub;
 
     void feed(const zb::input::input_event &ev)
     {

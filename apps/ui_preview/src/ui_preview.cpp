@@ -263,23 +263,23 @@ namespace zb::app::ui_preview
         return window_ && window_->dirty_region(x, y, rw, rh);
     }
 
-    event::PAINT_EVENT::Subscription UiPreview::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
+    event::Subscription<const void *> UiPreview::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->painting.subscribe(handler) : event::PAINT_EVENT::Subscription();
+        return window_ ? window_->painting.subscribe(handler) : event::Subscription<const void *>();
     }
 
-    event::PAINT_EVENT::Subscription UiPreview::on_painted(const event::PAINT_EVENT::EventHandler handler) noexcept
+    event::Subscription<const void *> UiPreview::on_painted(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->painted.subscribe(handler) : event::PAINT_EVENT::Subscription();
+        return window_ ? window_->painted.subscribe(handler) : event::Subscription<const void *>();
     }
 
-    event::CLOSE_EVENT::Subscription UiPreview::on_closing(const event::CLOSE_EVENT::EventHandler handler) noexcept
+    event::Subscription<> UiPreview::on_closing(const event::CLOSE_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->closing.subscribe(handler) : event::CLOSE_EVENT::Subscription();
+        return window_ ? window_->closing.subscribe(handler) : event::Subscription<>();
     }
 
-    event::CLOSE_EVENT::Subscription UiPreview::on_closed(const event::CLOSE_EVENT::EventHandler handler) noexcept
+    event::Subscription<> UiPreview::on_closed(const event::CLOSE_EVENT::EventHandler handler) noexcept
     {
-        return window_ ? window_->closed.subscribe(handler) : event::CLOSE_EVENT::Subscription();
+        return window_ ? window_->closed.subscribe(handler) : event::Subscription<>();
     }
 }  // namespace zb::app::ui_preview

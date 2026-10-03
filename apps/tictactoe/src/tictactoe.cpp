@@ -54,39 +54,39 @@ namespace zb::app::tictactoe
         return w ? w->dirty_region(x, y, rw, rh) : false;
     }
 
-    event::PAINT_EVENT::Subscription Tictactoe::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
+    event::Subscription<const void *> Tictactoe::on_painting(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
         if (auto w = view_.window())
         {
             return w->painting.subscribe(handler);
         }
-        return event::PAINT_EVENT::Subscription();
+        return event::Subscription<const void *>();
     }
 
-    event::PAINT_EVENT::Subscription Tictactoe::on_painted(const event::PAINT_EVENT::EventHandler handler) noexcept
+    event::Subscription<const void *> Tictactoe::on_painted(const event::PAINT_EVENT::EventHandler handler) noexcept
     {
         if (auto w = view_.window())
         {
             return w->painted.subscribe(handler);
         }
-        return event::PAINT_EVENT::Subscription();
+        return event::Subscription<const void *>();
     }
 
-    event::CLOSE_EVENT::Subscription Tictactoe::on_closing(const event::CLOSE_EVENT::EventHandler handler) noexcept
+    event::Subscription<> Tictactoe::on_closing(const event::CLOSE_EVENT::EventHandler handler) noexcept
     {
         if (auto w = view_.window())
         {
             return w->closing.subscribe(handler);
         }
-        return event::CLOSE_EVENT::Subscription();
+        return event::Subscription<>();
     }
 
-    event::CLOSE_EVENT::Subscription Tictactoe::on_closed(const event::CLOSE_EVENT::EventHandler handler) noexcept
+    event::Subscription<> Tictactoe::on_closed(const event::CLOSE_EVENT::EventHandler handler) noexcept
     {
         if (auto w = view_.window())
         {
             return w->closed.subscribe(handler);
         }
-        return event::CLOSE_EVENT::Subscription();
+        return event::Subscription<>();
     }
 }  // namespace zb::app::tictactoe
