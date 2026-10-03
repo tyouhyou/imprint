@@ -3,12 +3,14 @@
  * html_embed/ui_embed precedent, for non-document binary assets:
  * today the showcase's packed Inter TTF blob).
  *
- * Usage: bytes_embed <out.gen.hpp> <symbol> <file> [file...]
+ * Usage: bytes_embed <out.gen.hpp> <symbol> <file>
  *
- * Each file lands as `static const unsigned char <symbol>[]` plus
+ * The file lands as `static const unsigned char <symbol>[]` plus
  * `static const size_t <symbol>_len`, NUL-terminated beyond the data
- * (the html_embed convention). A missing file makes the tool exit 1 —
- * build-time materialization fails the build.
+ * (the html_embed convention). Exactly one input file — multiple
+ * inputs would all emit the same symbol and collide. A missing or
+ * unreadable file makes the tool exit 1 and removes the partial
+ * output — build-time materialization fails the build.
  */
 #include <cstdio>
 #include <string>
@@ -16,9 +18,9 @@
 
 int main(int argc, char *argv[])
 {
-    if (argc < 4)
+    if (argc != 4)
     {
-        std::fprintf(stderr, "usage: bytes_embed <out.gen.hpp> <symbol> <file> [file...]\n");
+        std::fprintf(stderr, "usage: bytes_embed <out.gen.hpp> <symbol> <file>\n");
         return 1;
     }
     const char *out_path = argv[1];
@@ -40,6 +42,7 @@ int main(int argc, char *argv[])
         {
             std::fprintf(stderr, "bytes_embed: cannot read %s\n", argv[i]);
             std::fclose(out);
+            std::remove(out_path);
             return 1;
         }
         std::fprintf(out, "static const unsigned char %s[] =\n{\n", symbol);
@@ -66,6 +69,7 @@ int main(int argc, char *argv[])
         {
             std::fprintf(stderr, "bytes_embed: short read on %s\n", argv[i]);
             std::fclose(out);
+            std::remove(out_path);
             return 1;
         }
         if (col != 0)

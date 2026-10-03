@@ -2165,17 +2165,17 @@ void Graphics::fill_radial(int x1, int y1, int x2, int y2, const int cx, const i
 void Graphics::fill_conic(int x1, int y1, int x2, int y2, int from_deg, const int *stop_deg,
                            const Color *stop_col, int nstops, int radius)
 {
-    if (render_mode_ == render_mode::wireframe)
-    {
-        draw_rect(x1, y1, x2, y2, nstops > 0 ? stop_col[0] : Color{});
-        return;
-    }
     const int left = x1 < x2 ? x1 : x2;
     const int right = x1 < x2 ? x2 : x1;
     const int top = y1 < y2 ? y1 : y2;
     const int bottom = y1 < y2 ? y2 : y1;
     if (stop_deg == nullptr || stop_col == nullptr || nstops < 2)
     {
+        return;
+    }
+    if (render_mode_ == render_mode::wireframe)
+    {
+        draw_rect(x1, y1, x2, y2, stop_col[0]);
         return;
     }
     // clamp like fill_linear_stops: the header documents 2..4 stops; a
