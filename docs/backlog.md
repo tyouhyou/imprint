@@ -24,7 +24,8 @@ Dependency-driven: each tier unlocks what follows.
 4. **Batch U — external-consumer feedback** — landed 2026-10-01,
    complete (contracts: code-contract §9, ARCHITECTURE §4.4; history in
    `git log`).
-5. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*. Batch G is
+5. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, and Batch W
+   (audit follow-ups, decision-gated). Batch G is
    unfrozen (2026-09-26) — its P1–P4 roadmap is the active product map.
    Condition-triggered items stay trigger-gated.
 
@@ -112,6 +113,72 @@ image build. Consumer-side, not a new C-ABI surface at this stage.
 
 - **I-1. Hot reload for design file previewer (`apps/ui_preview`)**:
   - Watch `.ui` file changes on disk and reload in-place without restarting the previewer.
+
+### Batch W — Full-repo Audit Deferred Items (added 2026-10-03; decision-gated, not scheduled)
+
+Follow-ups from the 2026-10-03 full-repo audit (`reports/review-1.md`,
+local-only). Verified real, deferred by operator ruling; each entry states
+the decision it is waiting on. Fixed the same day: the P0/P1 set, the P2
+majority, and the audit's own "housekeeping" quick wins (history in
+`git log`).
+
+- **W-1 (IM-RAS-002). Arc shape depends on alpha**: a translucent arc
+  (0<a<0xFF) takes the exact-chord octant scan, so its silhouette changes
+  with alpha. Fixing means one rasterizer for all alphas — a rendering
+  change that re-baselines every arc golden. Waiting on: accept as
+  documented deviation vs. unify.
+- **W-2 (IM-IN-002). `ZB_INPUT_MOUSE_*_CLICK` are advertised but the
+  dispatcher silently drops them**. Waiting on: document as inert host-side
+  synonyms vs. remove from `zbapi.h` (C-ABI surface semantics).
+- **W-3 (IM-IN-005). Terminal translator routes Space only through `ch`,
+  so Space can never activate the focused widget on the SIXEL target**.
+  The fix is a translator behavior change needing a fresh NDS/SIXEL
+  verification pass; bundle with the next melonDS re-verify.
+- **W-4 (IM-TXT-003). `decode_utf8_next` has no end bound** though the
+  header advertises slice use — 1-byte over-read. Fix needs an end-pointer
+  parameter (API shape change across text call sites).
+- **W-5 (IM-TXT-004). `TtfFamilyState::size` written, never read;
+  `from_memory` lacks length validation.** Small provider cleanup.
+- **W-6 (IM-TXT-006). Negative glyph advances poison the
+  `advance_cache_` -1 sentinel** — permanent cache miss plus a negative
+  centering offset. Fix is a clamp at the provider/cache boundary;
+  rendering-byte implications confined to fonts with negative advances.
+- **W-7 (IM-BLD-007). `demo/wasm/build.sh` hand-maintains its source
+  list** (stale vs. `imui/CMakeLists.txt`, different font-subset inputs).
+  Currently sufficient (the smoke passes); regenerating the list needs a
+  maintain-vs-generate decision.
+- **W-8 (IM-BLD-008). No symbol-visibility control** —
+  `CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS` exports the whole imcore surface,
+  not just the `zbapi.h` stable ABI. Waiting on: a visibility policy
+  (export macros vs. `--exclude-libs` vs. accept).
+- **W-9 (IM-BLD-009). No `CMAKE_MSVC_RUNTIME_LIBRARY` pin; the
+  installed-package smoke is Linux-only** — the Windows install path
+  (classic LNK2038) is unverified. Needs a Windows CI runner decision.
+- **W-10 (IM-BLD-011). The ASan job does not instrument the
+  shared-library link line; no UBSan job exists.** Add a UBSan Tier-3
+  variant and fix the shared-link sanitizers when touching CI next.
+- **W-11 (IM-BLD-013). `asset_gen` is built by every configuration and
+  consumed by nothing; committed PNG/GIF assets have no documented
+  regeneration path.** Waiting on: wire asset_gen, drop it, or document
+  the regen recipe.
+- **W-12 (IM-DOC-004). §8's alloc exemption is premised on "the battery
+  runs Debug"** — no Linux CI job sets a build type, so `DEBUG` is
+  undefined there. Waiting on: add `-DCMAKE_BUILD_TYPE=Debug` to the
+  Linux jobs vs. amend §8's premise.
+- **W-13 (IM-DOC-005). Eight documentation drift items**: getting-started
+  duplicates README build commands and mis-describes the showcase pages;
+  ARCHITECTURE §2 omits `ScrollPanel` from the imui widget list;
+  `design-file.md` root rule omits `scroll_panel`; a stale "sketch renders
+  as FULL for now" comment; README's "six targets" claim names four. Pure
+  doc fixes — take together in one docs pass.
+- **W-14 (IM-HOST-003 remainder). Shell/ABI hardening, seven sub-items**:
+  X11 `Display` leak on a late-throwing init path; `run_win` assigns
+  global `g_app` before a throwing `CreateWindowEx`; the C-ABI
+  `catch(...)` handlers log via the allocating `LE` path (OOM can throw
+  out of `extern "C"`); shell `main`s catch only `zb::ui::error`; no DPI
+  awareness on win/mac; `maps_pointer()` omits `touch_*`; no C-ABI
+  re-entrancy guard. Each is small; the set needs a hardening-vs-accept
+  ruling (some, like allocating loggers, are the documented design).
 
 ### Batch F — Event Loop Extension & Frame Automation (Long-term)
 
