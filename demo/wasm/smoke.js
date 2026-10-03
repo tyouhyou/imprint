@@ -113,6 +113,24 @@ createModule({
       }
 
       if (NAME === "g2048") {
+        // tiles are child Labels of the board Panel -- they render only
+        // if the draw_at override chains the base (a silent bug found in
+        // the browser). Count tile-palette pixels on a fresh board: both
+        // start tiles are 2 (238/228/218) or 4 (237/224/200), channel
+        // sums are unique against the board bg (520) and empty cell (578).
+        const tilePix = function (buf) {
+          let n = 0;
+          for (let i = 0; i < buf.length; i += 4) {
+            const s = buf[i] + buf[i + 1] + buf[i + 2];
+            if (s === 238 + 228 + 218 || s === 237 + 224 + 200) n++;
+          }
+          return n;
+        };
+        const fresh = tilePix(snapOf(app));
+        if (fresh < 600) {
+          throw new Error("fresh board has no visible tiles (" + fresh + " tile px)");
+        }
+
         // arrows move the board (pixels change after some direction)
         let moved = false;
         for (const k of [ZK_LEFT, ZK_UP, ZK_RIGHT, ZK_DOWN]) {
@@ -152,7 +170,19 @@ createModule({
         // the field sits at (60,30): tap the first cell, it must reveal
         const before = snapOf(app);
         click(app, 68, 38);
-        if (same(before, snapOf(app))) throw new Error("first reveal did not change the field");
+        const after = snapOf(app);
+        if (same(before, after)) throw new Error("first reveal did not change the field");
+        // revealed number cells carry digits in the number fg palette
+        // (1=32+80+192, 2=27+122+46, 3=192+48+40) -- proves the child
+        // Labels render through the draw_at override
+        let digitPx = 0;
+        for (let i = 0; i < after.length; i += 4) {
+          const s = after[i] + after[i + 1] + after[i + 2];
+          if (s === 304 || s === 195 || s === 280) digitPx++;
+        }
+        if (digitPx < 8) {
+          throw new Error("no number digits visible after reveal (" + digitPx + " px)");
+        }
         // FLAG toggles the mode button caption
         click(app, 148, 16);   // FLAG button
         const flagged = snapOf(app);
@@ -203,6 +233,62 @@ createModule({
         if (sameMap(before, snapOf(app))) throw new Error("new seed did not change the map");
         console.log("seedmap: same seed byte-identical, new seed differs");
         Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      if (NAME === "playground") {
+        // the declarative C-ABI path the playground page drives: build a
+        // design file, register a callback, click, read the text back
+        const strPtr = function (s) {
+          const p = Module._malloc(s.length + 1);
+          for (let i = 0; i < s.length; i++) Module.HEAPU8[p + i] = s.charCodeAt(i);
+          Module.HEAPU8[p + s.length] = 0;
+          return p;
+        };
+        const ui = [
+          'panel id="root" width=256 height=192',
+          '  label id="out" text="0"',
+          '  button id="add" text="Add" width=200 height=100'
+        ].join("\n");
+        const uiBuf = strPtr(ui);
+
+        const declApp = Module.ccall("zb_app_create_from_ui", "number",
+          ["number", "number", "number", "number"], [uiBuf, 0, 256, 192]);
+        if (!declApp) throw new Error("zb_app_create_from_ui failed");
+
+        let clicks = 0;
+        const cb = Module.addFunction(function () {
+          clicks++;
+          Module.ccall("zb_widget_set_text", null, ["number", "number", "number"],
+            [declApp, strPtr("out"), strPtr(String(clicks))]);
+        }, "vii");
+        Module.ccall("zb_set_event_callback", null, ["number", "number", "number", "number"],
+          [declApp, strPtr("add"), cb, 0]);
+
+        // the declarative root is a FlexPanel: layout moves children from
+        // their node positions on the first paint, so click the big
+        // button only after the layout has settled (its flex slot keeps
+        // (50,50) covered either way)
+        paint(declApp);
+        for (let i = 0; i < 3; i++) {
+          input(declApp, 9, 50, 50, 0, 0, 0);
+          input(declApp, 10, 50, 50, 0, 0, 0);
+        }
+        paint(declApp);
+        const out = Module._malloc(32), cap = 32;
+        Module.ccall("zb_widget_text", "number", ["number", "number", "number", "number"],
+          [declApp, strPtr("out"), out, cap]);
+        let len = 0;
+        while (Module.HEAPU8[out + len]) len++;
+        const text = String.fromCharCode.apply(null, Module.HEAPU8.subarray(out, out + len));
+        if (clicks !== 3 || text !== "3") {
+          throw new Error("declarative roundtrip broken (clicks=" + clicks + ", text='" + text + "')");
+        }
+        console.log("playground: declarative C-ABI roundtrip ok (clicks=" + clicks + ", text=" + text + ")");
+        Module._zb_app_destroy(declApp);
+        Module._free(uiBuf); Module._free(out);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
         process.exit(0);

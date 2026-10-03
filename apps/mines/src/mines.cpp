@@ -100,6 +100,9 @@ void MinesBoard::draw_at(core::Graphics &area) const
                            core::Color::from(0x6E, 0x7F, 0x8D));
         }
     }
+    // Panel::draw_at draws the children (the number labels) -- an
+    // override that skips it silences every child
+    Panel::draw_at(area);
 }
 
 void Mines::create_window(const uint32_t max_client_width,

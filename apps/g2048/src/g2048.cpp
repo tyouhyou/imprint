@@ -85,6 +85,10 @@ void Board2048::draw_at(core::Graphics &area) const
                                  core::Color::from(0xCD, 0xC1, 0xB4));
         }
     }
+    // Panel::draw_at draws the children -- an override that skips it
+    // silences every child label (found by the browser test: the board
+    // rendered, its tiles did not)
+    Panel::draw_at(area);
 }
 
 void G2048::create_window(const uint32_t max_client_width,
