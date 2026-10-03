@@ -1,5 +1,5 @@
-#ifndef IMEVENT_INPUT_DEF_HPP
-#define IMEVENT_INPUT_DEF_HPP
+#ifndef IMEVENT_EVENT_DEF_HPP
+#define IMEVENT_EVENT_DEF_HPP
 
 #include "event.hpp"
 
@@ -14,4 +14,4 @@ namespace zb::event
     using CLOSE_EVENT = event::Event<>;
 }
 
-#endif // IMEVENT_INPUT_DEF_HPP
+#endif // IMEVENT_EVENT_DEF_HPP

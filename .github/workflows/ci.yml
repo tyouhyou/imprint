@@ -265,11 +265,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Install build tools
         run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
-      - name: Configure, build, test (AddressSanitizer)
+      - name: Configure, build, test (AddressSanitizer + UBSan)
         run: |
           cmake -S . -B build_ci \
-            -DCMAKE_CXX_FLAGS="-fsanitize=address -fno-omit-frame-pointer -g" \
-            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address"
+            -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fno-omit-frame-pointer -g" \
+            -DCMAKE_EXE_LINKER_FLAGS="-fsanitize=address,undefined"
           cmake --build build_ci -j"$(nproc)"
           ./build_ci/bin/test_imui
           ./build_ci/bin/test_zbapi

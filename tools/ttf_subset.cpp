@@ -176,9 +176,28 @@ int main(const int argc, const char **argv)
         unsigned char *bmp = stbtt_GetCodepointBitmap(
             &font, scale, scale, static_cast<int>(cp), &w, &h, &xoff, &yoff);
 
+        // the header fields are fixed-width: a value that would narrow
+        // silently corrupts the runtime metrics, so fail the tool instead
+        // (the same fatal discipline as an unreadable font)
+        const long long scaled_advance = std::llround(advance * scale);
+        if (scaled_advance < 0 || scaled_advance > 0xFFFF ||
+            w < 0 || w > 0xFF || h < 0 || h > 0xFF ||
+            xoff < -0x8000 || xoff > 0x7FFF || yoff < -0x8000 || yoff > 0x7FFF)
+        {
+            std::fprintf(stderr,
+                         "ttf_subset: U+%04X metrics out of range "
+                         "(advance=%lld w=%d h=%d xoff=%d yoff=%d); rejected\n",
+                         cp, scaled_advance, w, h, xoff, yoff);
+            if (bmp != nullptr)
+            {
+                STBTT_free(bmp, nullptr);
+            }
+            return 1;
+        }
+
         Entry e;
         e.cp = cp;
-        e.advance = static_cast<uint16_t>(std::llround(advance * scale));
+        e.advance = static_cast<uint16_t>(scaled_advance);
         e.width = static_cast<uint8_t>(w);
         e.height = static_cast<uint8_t>(h);
         e.xoff = static_cast<int16_t>(xoff);
@@ -190,6 +209,25 @@ int main(const int argc, const char **argv)
             STBTT_free(bmp, nullptr);
         }
         entries.push_back(e);
+    }
+
+    if (entries.empty())
+    {
+        // zero entries (no usable code points) would emit a zero-size
+        // array -- not valid C++, fatal under -pedantic-errors. Fail with
+        // the tool's own diagnostic instead of an unhelpful consumer error
+        std::fprintf(stderr,
+                     "ttf_subset: no usable glyphs found in %s; refusing to "
+                     "emit an empty glyph table\n",
+                     font_path);
+        return 1;
+    }
+    // a subset of only zero-size glyphs (whitespace) yields no alpha
+    // bytes; a zero-size array is not valid C++, so emit one sentinel
+    // byte (a 0x0 bitmap never dereferences it)
+    if (alpha.empty())
+    {
+        alpha.push_back(0);
     }
 
     std::string out;

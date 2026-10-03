@@ -63,7 +63,9 @@ namespace zb::ui
     public:
         GifWriter(const char *path, std::size_t width, std::size_t height,
                   std::size_t delay_cs);
-        /* custom global palette (the optimal-palette two-pass flow) */
+        /* custom global palette (the optimal-palette two-pass flow). The
+         * palette is borrowed, not copied: it must outlive the writer --
+         * every add_frame maps pixels through it. */
         GifWriter(const char *path, std::size_t width, std::size_t height,
                   std::size_t delay_cs, const GifPalette &palette);
         ~GifWriter() { close(); }

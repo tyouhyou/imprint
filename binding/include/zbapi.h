@@ -190,9 +190,11 @@ zb_app_t *zb_app_create_from_ui(const char *ui_text, int is_html,
 
 /*
  * Binds cb(widget_id, userdata) to the widget's action (see zb_action_cb).
- * cb == NULL unregisters. Registering before or after
- * zb_app_create_from_ui is equivalent: the binding consults the
- * registration at fire time. Only declarative apps dispatch actions.
+ * cb == NULL unregisters. The binding consults the registration at fire
+ * time, so the registration order relative to the widget tree is
+ * irrelevant; the app handle only exists once materialized, so
+ * zb_app_create_from_ui must be called first. Only declarative apps
+ * dispatch actions.
  */
 void zb_set_event_callback(zb_app_t *app, const char *widget_id,
                            zb_action_cb cb, void *userdata);
