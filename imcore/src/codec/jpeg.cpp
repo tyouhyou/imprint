@@ -76,6 +76,15 @@ int Image::write_jpeg_file(
         return 1;
     }
 
+    // the jpeg path is RGB-only (like the png version's 3/4 gate): a
+    // mis-declared component count would silently shift or pad rows
+    if (img_inf.color_components != 3)
+    {
+        LE << "JPEG write is RGB-only; color_components must be 3, got "
+           << static_cast<int>(img_inf.color_components) << ".";
+        return 5;
+    }
+
     // stb has no streaming writer: collect the rows first (RGB, 3 comp),
     // then hand the whole buffer to stbi_write_jpg.
     auto row_stride = img_width * 3;

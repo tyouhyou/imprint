@@ -16,6 +16,7 @@
  * targets keep the 5x7 bitmap path.
  */
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <cstdio>
@@ -151,6 +152,11 @@ int main(const int argc, const char **argv)
         }
         std::fclose(f);
     }
+
+    // the runtime table binary-searches by ch: sort and dedupe here so
+    // a generator regression cannot ship an unsearchable table
+    std::sort(units.begin(), units.end());
+    units.erase(std::unique(units.begin(), units.end()), units.end());
 
     std::vector<Entry> entries;
     std::vector<uint8_t> alpha;

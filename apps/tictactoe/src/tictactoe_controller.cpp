@@ -97,8 +97,10 @@ void TictactoeController::computer_turn()
         return;  // full board: the game-over flow already handled it
     }
     LD << "computer move: " << m.row << "," << m.col;
-    view_->board().set_mark(m.row, m.col, game_->get_computer());
+    // the model moves first; the board mirrors it (the human path's
+    // order) so a failed place_mark can never fork view and game
     game_->place_mark(m.row, m.col);
+    view_->board().set_mark(m.row, m.col, game_->get_computer());
     finish_after_move();
 }
 

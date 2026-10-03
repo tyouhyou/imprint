@@ -408,7 +408,10 @@ keeps only API-level supplements.
   debug console UI (ANSI cursor escapes) with raw printf — terminal UI output,
   not log messages; and `printlog` there plus the `std::printf` inside the
   linux `main_term`/`main_fb` log-handle lambdas are log *sinks* wired via
-  `Logging::set_log_handle` — the receiving end of the channel, not a bypass.
+  `Logging::set_log_handle` — the receiving end of the channel, not a bypass;
+  and the test battery (`test/`, `binding/test`) prints suite counters and
+  allocation-gate readings with `std::printf` — CI-parsed machine output, not
+  log messages (the "all tests passed" line is a documented contract).
 
 ### 3.1 V-5 composition widgets (ToggleSwitch / GaugeDial / Knob / TrendLine)
 

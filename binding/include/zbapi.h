@@ -44,7 +44,7 @@ enum
 
 /* called after every painted frame; see zb_set_painted_callback */
 typedef void (*zb_painted_cb)(void *userdata);
-/* level: zb::Logging_Level (0=debug .. 4=fatal) */
+/* level: 0=debug .. 4=fatal (the framework logging levels) */
 typedef void (*zb_log_cb)(int level, const char *message);
 
 /* ---- input types (must match zb::input::input_type) ---- */
@@ -148,7 +148,7 @@ const uint8_t *zb_buffer(zb_app_t *app, uint32_t *out_width, uint32_t *out_heigh
 int zb_buffer_bpp(void);
 
 /* pixel format of the framebuffer: one of the ZB_FORMAT_* values,
- * fixed at build time (batch K / D7) */
+ * fixed at build time */
 int zb_buffer_format(void);
 
 /* ABI version the linked library was built with (ZB_API_VERSION of its
