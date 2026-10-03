@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Game of Life · Imprint demos</title>
+<link rel="stylesheet" href="demo.css">
+<style>
+  #screen { width: 640px; max-width: calc(100vw - 72px); aspect-ratio: 4 / 3; height: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="mark" href="index.html">IMPRINT</a>
+    <nav class="nav"><a href="index.html">Demos</a><a href="https://github.com/tyouhyou/imprint">GitHub</a></nav>
+  </div>
+</header>
+
+<div class="demo wrap">
+  <div class="demo-label">Demoscene · life / plasma / stars</div>
+  <div style="text-align:center">
+    <div class="bezel"><div class="bezel-inner">
+      <canvas id="screen"></canvas>
+      <canvas id="overlay"></canvas>
+    </div></div>
+    <div id="status">loading module…</div>
+  </div>
+
+  <div class="tools">
+    <label><input type="checkbox" id="dmg"> show repaints</label>
+  </div>
+
+  <div class="chips">
+    <span class="chip"><b>TAP</b> toggles a cell</span>
+    <span class="chip"><b>STEP</b> one generation</span>
+    <span class="chip"><b>GUN</b> Gosper glider gun</span>
+    <span class="chip"><b>MODE</b> life → plasma → stars</span>
+  </div>
+
+  <p class="demo-note">
+    Imprint has no animation system — by contract. The app advances its state
+    inside <code>paint()</code> and reports damage, and the shell's frame loop
+    keeps it alive. Plasma and the starfield are pure functions of the frame
+    counter: frame 4096 renders the same pixels on a desktop window, a
+    Nintendo DS and this browser tab.
+  </p>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Imprint UI · C++17 · software-rasterized into this tab</span>
+    <span class="fine"><a href="index.html">all demos</a></span>
+  </div>
+</footer>
+
+<script>window.DEMO_CONFIG = { width: 320, height: 240 };</script>
+<script src="demo_common.js"></script>
+<script src="life.js"></script>
+</body>
+</html>

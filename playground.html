@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playground · Imprint demos</title>
+<link rel="stylesheet" href="demo.css">
+<style>
+  #screen { width: 640px; max-width: calc(100vw - 72px); aspect-ratio: 4 / 3; height: auto; }
+  .pg-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
+  .pg-tools button {
+    background: #16233a; color: var(--text);
+    border: 1px solid #263450; border-radius: 6px;
+    font-family: var(--mono); font-size: 12px;
+    padding: 6px 14px; cursor: pointer;
+  }
+  .pg-tools button:hover { border-color: var(--accent); color: var(--accent); }
+  .pg-tools .hint { font-family: var(--mono); font-size: 11px; color: var(--muted); }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="mark" href="index.html">IMPRINT</a>
+    <nav class="nav"><a href="index.html">Demos</a><a href="https://github.com/tyouhyou/imprint">GitHub</a></nav>
+  </div>
+</header>
+
+<div class="demo wrap">
+  <div class="demo-label">Playground · your design, one C++ renderer</div>
+
+  <div class="pg">
+    <div>
+      <div class="pg-tools">
+        <select id="examples"></select>
+        <button id="run">RUN ▶</button>
+        <span class="hint">paste any HTML design, hit RUN</span>
+      </div>
+      <textarea id="editor" spellcheck="false"></textarea>
+    </div>
+    <div style="text-align:center">
+      <div class="bezel"><div class="bezel-inner">
+        <canvas id="screen"></canvas>
+      </div></div>
+      <div id="status">loading module…</div>
+    </div>
+  </div>
+
+  <p class="demo-note">
+    What you see is not a browser rendering your HTML. The text is parsed by
+    a small whitelist engine inside the WebAssembly module, materialized into
+    a retained-mode widget tree, and drawn by the same CPU rasterizer that
+    ships on desktop and embedded targets. No DOM, no GPU, no timers.
+  </p>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Imprint UI · C++17 · software-rasterized into this tab</span>
+    <span class="fine"><a href="index.html">all demos</a></span>
+  </div>
+</footer>
+
+<script src="playground_designs.js"></script>
+<script>
+(function () {
+  "use strict";
+  var W = 320, H = 240, PIXELS = W * H * 4;
+
+  var canvas = document.getElementById("screen");
+  canvas.width = W; canvas.height = H;
+  var ctx = canvas.getContext("2d");
+  var imageData = ctx.createImageData(W, H);
+  var rgba = imageData.data;
+  var status = document.getElementById("status");
+
+  var app = null;
+  var zbInput = null, zbPaint = null, zbBuffer = null;
+  var wPtr = 0, hPtr = 0;
+  var lastLog = "";
+
+  function scale(e) {
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.floor((e.clientX - rect.left) * W / rect.width);
+    var y = Math.floor((e.clientY - rect.top) * H / rect.height);
+    return [Math.max(0, Math.min(W - 1, x)), Math.max(0, Math.min(H - 1, y))];
+  }
+  function send(type, x, y, key, ch, touchId) {
+    if (app && zbInput) zbInput(app, type, x | 0, y | 0, key | 0, ch | 0, touchId | 0);
+  }
+  canvas.addEventListener("mousedown", function (e) {
+    var p = scale(e); send(9, p[0], p[1], 0, 0, 0);
+  });
+  canvas.addEventListener("mousemove", function (e) {
+    if (e.buttons === 0) return;
+    var p = scale(e); send(11, p[0], p[1], 0, 0, 0);
+  });
+  window.addEventListener("mouseup", function (e) {
+    var p = scale(e); send(10, p[0], p[1], 0, 0, 0);
+  });
+  canvas.addEventListener("touchstart", touch, { passive: false });
+  canvas.addEventListener("touchmove", touch, { passive: false });
+  canvas.addEventListener("touchend", touch, { passive: false });
+  function touch(e) {
+    e.preventDefault();
+    var t = e.changedTouches[0];
+    var rect = canvas.getBoundingClientRect();
+    var x = Math.max(0, Math.min(W - 1, Math.floor((t.clientX - rect.left) * W / rect.width)));
+    var y = Math.max(0, Math.min(H - 1, Math.floor((t.clientY - rect.top) * H / rect.height)));
+    var type = e.type === "touchstart" ? 9 : e.type === "touchmove" ? 11 : 10;
+    send(type, x, y, 0, 0, t.identifier);
+  }
+
+  function present() {
+    var ptr = zbBuffer(app, wPtr, hPtr);
+    if (!ptr) return;
+    var src = Module.HEAPU8.subarray(ptr, ptr + PIXELS);
+    for (var i = 0, j = 0; i < PIXELS; i += 4, j += 4) {
+      rgba[j] = src[i + 2]; rgba[j + 1] = src[i + 1]; rgba[j + 2] = src[i]; rgba[j + 3] = 0xff;
+    }
+    ctx.putImageData(imageData, 0, 0);
+  }
+
+  function frame() {
+    if (app) { zbPaint(app); present(); }
+    requestAnimationFrame(frame);
+  }
+
+  function run() {
+    if (!Module.HEAPU8) return;
+    if (app) { Module.ccall("zb_app_destroy", null, ["number"], [app]); app = null; }
+    lastLog = "";
+    var text = document.getElementById("editor").value;
+    var bytes = new TextEncoder().encode(text);
+    var ptr = Module._malloc(bytes.length + 1);
+    Module.HEAPU8.set(bytes, ptr);
+    Module.HEAPU8[ptr + bytes.length] = 0;
+    app = Module.ccall("zb_app_create_from_ui", "number",
+      ["number", "number", "number", "number"], [ptr, 1, W, H]);
+    Module._free(ptr);
+    if (!app) {
+      status.textContent = "parse failed: " + (lastLog || "invalid design");
+      status.style.color = "#f66";
+    } else {
+      status.textContent = "rendered " + W + "x" + H;
+      status.style.color = "#6fe08a";
+    }
+  }
+
+  window.Module = {
+    onAbort: function (what) {
+      status.textContent = "aborted: " + what;
+      status.style.color = "#f66";
+    },
+    onRuntimeInitialized: function () {
+      zbInput = Module.cwrap("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"]);
+      zbPaint = Module.cwrap("zb_paint", null, ["number"]);
+      zbBuffer = Module.cwrap("zb_buffer", "number", ["number", "number", "number"]);
+      wPtr = Module._malloc(8); hPtr = Module._malloc(8);
+      var logCb = Module.addFunction(function (level, msg) {
+        var u8 = Module.HEAPU8, e = msg;
+        while (u8[e]) e++;
+        lastLog = new TextDecoder().decode(u8.subarray(msg, e));
+      }, "vip");
+      Module.ccall("zb_set_log_callback", null, ["number"], [logCb]);
+
+      // examples + editor
+      var sel = document.getElementById("examples");
+      var names = Object.keys(window.IMPRINT_DESIGNS);
+      for (var i = 0; i < names.length; i++) {
+        var o = document.createElement("option");
+        o.textContent = names[i];
+        sel.appendChild(o);
+      }
+      var editor = document.getElementById("editor");
+      editor.value = window.IMPRINT_DESIGNS[names[0]];
+      sel.addEventListener("change", function () {
+        editor.value = window.IMPRINT_DESIGNS[sel.value];
+        run();
+      });
+      document.getElementById("run").addEventListener("click", run);
+      status.textContent = "ready";
+      requestAnimationFrame(frame);
+      run();
+    }
+  };
+})();
+</script>
+<script src="playground.js"></script>
+</body>
+</html>

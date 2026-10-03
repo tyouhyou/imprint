@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tic-tac-toe · Imprint demos</title>
+<link rel="stylesheet" href="demo.css">
+<style>
+  #screen { width: 640px; max-width: calc(100vw - 72px); aspect-ratio: 4 / 3; height: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="mark" href="index.html">IMPRINT</a>
+    <nav class="nav"><a href="index.html">Demos</a><a href="https://github.com/tyouhyou/imprint">GitHub</a></nav>
+  </div>
+</header>
+
+<div class="demo wrap">
+  <div class="demo-label">Tic-tac-toe · minimax opponent</div>
+  <div style="text-align:center">
+    <div class="bezel"><div class="bezel-inner">
+      <canvas id="screen"></canvas>
+    </div></div>
+    <div id="status">loading module…</div>
+  </div>
+
+  <div class="chips">
+    <span class="chip"><b>PICK</b> difficulty + side</span>
+    <span class="chip"><b>TAP</b> a cell</span>
+    <span class="chip"><b>QUIT</b> ends the app</span>
+  </div>
+
+  <p class="demo-note">
+    The original story app: a custom <code>Board</code> widget, modal dialogs
+    for difficulty / side / result, and a minimax AI — the full MVC shape an
+    Imprint app is written in, driven by the same C ABI the Python and wasm
+    hosts use.
+  </p>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Imprint UI · C++17 · software-rasterized into this tab</span>
+    <span class="fine"><a href="index.html">all demos</a></span>
+  </div>
+</footer>
+
+<script src="main.js"></script>
+<script src="tictactoe.js"></script>
+</body>
+</html>
