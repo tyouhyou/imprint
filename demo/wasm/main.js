@@ -18,6 +18,9 @@
   var ZB_INPUT_TOUCH_MOVE = 11;
   var ZB_INPUT_KEY_DOWN = 12;
   var ZB_INPUT_KEY_UP = 13;
+  var ZB_INPUT_MOUSE_WHEEL = 7;
+  // ScrollPanel::wheel_step -- one notch = 32 px; delta > 0 is "up"
+  var WHEEL_STEP = 32;
 
   // key codes, must match ZB_KEY_* in zbapi.h (ASCII used verbatim)
   var ZB_KEY_BACKSPACE = 8, ZB_KEY_TAB = 9, ZB_KEY_ENTER = 13, ZB_KEY_ESCAPE = 27, ZB_KEY_SPACE = 32;
@@ -78,6 +81,16 @@
     var p = scale(e);
     send(ZB_INPUT_TOUCH_UP, p[0], p[1], 0, 0, 0);
   }
+  function onWheel(e) {
+    // browser: deltaY > 0 scrolls down; framework: delta > 0 scrolls up.
+    // Notch-normalize (deltas are typically multiples of ~100) so the
+    // framework sees whole wheel_step hops.
+    var notches = Math.round(e.deltaY / 100);
+    if (notches === 0 && e.deltaY !== 0) notches = e.deltaY > 0 ? 1 : -1;
+    e.preventDefault();
+    var p = scale(e);
+    send(ZB_INPUT_MOUSE_WHEEL, p[0], p[1], -notches * WHEEL_STEP, 0, 0);
+  }
   function onTouch(e) {
     e.preventDefault();
     var t = e.changedTouches[0];
@@ -137,6 +150,7 @@
   canvas.addEventListener("mousedown", onDown);
   canvas.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
+  canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("touchstart", onTouch, { passive: false });
   canvas.addEventListener("touchmove", onTouch, { passive: false });
   canvas.addEventListener("touchend", onTouch, { passive: false });

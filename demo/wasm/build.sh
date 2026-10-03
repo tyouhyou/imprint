@@ -2,7 +2,7 @@
 # Build a story app as a wasm demo inside the emscripten/emsdk container.
 # Expected layout: the repo is mounted at /src (project root = /src).
 #
-# Usage: build.sh [tictactoe|showcase|showcase_html]   (default: tictactoe)
+# Usage: build.sh [tictactoe|showcase|showcase_html|playground]  (default: tictactoe)
 set -e
 
 cd /src
@@ -37,8 +37,14 @@ FRAMEWORK_SRCS="
   imui/src/dispatcher.cpp
   imui/src/theme.cpp
   imui/src/ui_file.cpp
+  imui/src/ui_builder.cpp
+  imui/src/html.cpp
+  imui/src/scroll_panel.cpp
   binding/src/zbapi.cpp
 "
+
+# zb_app_create_from_ui is exported on every wasm story (the linker no
+# longer gc's it), so its parse path must link everywhere too
 
 case "$APP" in
 tictactoe)
@@ -64,8 +70,6 @@ showcase)
     # TTF (proportional text), which pulls the vendored stb_truetype TUs
     # into the framework sources
     APP_SRCS="
-      imui/src/ui_builder.cpp
-      imui/src/html.cpp
       imcore/src/text/stb_truetype_impl.cpp
       imcore/src/text/runtime_ttf_provider.cpp
       apps/showcase/src/app_maker.cpp
@@ -100,8 +104,6 @@ showcase_html)
     # minimal-closure precedent does not apply: ui_file.cpp is standalone,
     # html.cpp is not)
     APP_SRCS="
-      imui/src/ui_builder.cpp
-      imui/src/html.cpp
       apps/showcase_html/src/app_maker.cpp
       apps/showcase_html/src/showcase_html.cpp
     "
@@ -123,8 +125,21 @@ showcase_html)
         /src/assets/showcase_html/space.html
     EXTRA_INCLUDES="-I /tmp"
     ;;
+playground)
+    # the design-file playground (2026-10-03): no story UI of its own --
+    # the page drives zb_app_create_from_ui directly, re-creating the app
+    # on every edit. hello provides the make_app symbol zb_app_create
+    # links against (never called on this page); the parse path comes
+    # with the shared framework sources
+    APP_SRCS="
+      apps/hello/src/app_maker.cpp
+    "
+    APP_INCLUDE="/src/apps/hello/include"
+    EXPORT_NAME=createPlayground
+    EXTRA_INCLUDES=""
+    ;;
 *)
-    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html)" >&2
+    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground)" >&2
     exit 1
     ;;
 esac
@@ -157,7 +172,7 @@ em++ -std=c++17 -O2 \
   -I /src/binding/include \
   -I /src/third_party/stb \
   $EXTRA_INCLUDES \
-  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_malloc","_free"]' \
+  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_zb_app_create_from_ui","_zb_set_event_callback","_zb_widget_text","_zb_widget_set_text","_zb_buffer_bpp","_zb_buffer_format","_zb_version","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32","addFunction"]' \
   -s ENVIRONMENT=web \
   -s ALLOW_MEMORY_GROWTH=1 \
@@ -195,7 +210,7 @@ em++ -std=c++17 -O2 \
   $EXTRA_INCLUDES \
   -s MODULARIZE=1 -s EXPORT_NAME="$EXPORT_NAME" \
   -s ENVIRONMENT=node \
-  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_malloc","_free"]' \
+  -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_zb_app_create_from_ui","_zb_set_event_callback","_zb_widget_text","_zb_widget_set_text","_zb_buffer_bpp","_zb_buffer_format","_zb_version","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32","addFunction"]' \
   -s ALLOW_MEMORY_GROWTH=1 \
   -s ALLOW_TABLE_GROWTH=1 \
