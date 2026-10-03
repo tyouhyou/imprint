@@ -50,6 +50,7 @@ namespace zb::ui
         void add_child(std::unique_ptr<Widget> child)
         {
             child->parent = this;
+            child->bubble_shadow_reach();
             children.push_back(std::move(child));
             mark_layout_dirty();
         }

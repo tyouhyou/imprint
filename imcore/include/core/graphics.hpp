@@ -174,6 +174,14 @@ namespace zb::ui::core
 
 #pragma region draw and fill
 
+        /*
+         * Fills the WHOLE draw area (clipped to damage when on). The one
+         * primitive that ignores draw_area_offset: inside a ScrollPanel
+         * child (or any offset clip) it covers the full clip box, not the
+         * scrolled surface position — a fill meant to move with the
+         * offset content must be a fill_rect over that content's rect
+         * instead.
+         */
         void fill(const Color &colr);
 
         // TODO: draw with line thickness
@@ -600,8 +608,20 @@ namespace zb::ui::core
          * an opaque color this is byte-identical to per-pixel draw_pixel
          * and plot_aa(255) writes (alpha_blend returns front for a==255,
          * and the 16bpp binary path returns front for any alpha bit).
+         * `wobble=false` opts out of the S-2 sketch end-jitter: callers
+         * that already wobbled their own endpoints (draw_line) or that
+         * must stay FULL-mode in sketch (AA primitives, §9) pass false.
          */
-        void fill_span(int x1, int x2, int y, const Color &colr);
+        void fill_span(int x1, int x2, int y, const Color &colr,
+                       bool wobble = true);
+
+        /*
+         * S-2: draw_line without the sketch endpoint wobble — the seam
+         * draw_line_aa's axis-parallel delegation uses, so AA strokes
+         * stay FULL-mode in sketch (§9: AA primitives, text, images and
+         * fill() never wobble).
+         */
+        void draw_line_full(int x1, int y1, int x2, int y2, const Color &colr);
 
         /*
          * U-6: the single depth-tested write path — the same gates as

@@ -25,6 +25,7 @@ Options:
 import argparse
 import ctypes
 import os
+import struct
 import sys
 
 import pygame
@@ -102,6 +103,8 @@ def load_zbapi(path):
     lib.zb_buffer.restype = ctypes.POINTER(ctypes.c_uint8)
     lib.zb_set_painted_callback.argtypes = [
         ctypes.c_void_p, ctypes.CFUNCTYPE(None, ctypes.c_void_p), ctypes.c_void_p]
+    lib.zb_buffer_bpp.restype = ctypes.c_int
+    lib.zb_buffer_bpp.argtypes = []
     return lib
 
 
@@ -116,6 +119,36 @@ def bgra_to_rgba(data, length):
     out[2::4] = buf[0::4]
     out[3::4] = b"\xff" * (length // 4)
     return bytes(out)
+
+
+def rgb565_to_rgba(data, length):
+    """16bpp framebuffer: RGB565 little-endian words (the shells convert
+    at the presentation edge; this demo converts in python)."""
+    n = length // 2
+    words = struct.unpack_from("<%dH" % n, bytes(data[:length]))
+    out = bytearray(n * 4)
+    for i, v in enumerate(words):
+        out[i * 4 + 0] = ((v >> 11) & 0x1F) * 255 // 31
+        out[i * 4 + 1] = ((v >> 5) & 0x3F) * 255 // 63
+        out[i * 4 + 2] = (v & 0x1F) * 255 // 31
+        out[i * 4 + 3] = 0xFF
+    return bytes(out)
+
+
+def frame_rgba(lib, app, w, h):
+    """Reads the framebuffer after zb_paint and returns rgba bytes for
+    pygame. The bytes-per-pixel come from the build itself
+    (zb_buffer_bpp) -- a host that hardcodes *4 over-reads a 16bpp
+    buffer by 2x, which is exactly why the query exists (zbapi.h)."""
+    pixels = lib.zb_buffer(app, ctypes.byref(w), ctypes.byref(h))
+    if not pixels:
+        return None
+    bpp = lib.zb_buffer_bpp()
+    if bpp == 4:
+        return bgra_to_rgba(pixels, w.value * h.value * 4)
+    if bpp == 2:
+        return rgb565_to_rgba(pixels, w.value * h.value * 2)
+    raise SystemExit("frame_rgba: unsupported framebuffer bpp %d" % bpp)
 
 
 def feed_input(lib, app, event):
@@ -182,9 +215,8 @@ def main():
 
         # render one frame and present the framebuffer
         lib.zb_paint(app)
-        pixels = lib.zb_buffer(app, ctypes.byref(w), ctypes.byref(h))
-        if pixels:
-            rgba = bgra_to_rgba(pixels, w.value * h.value * 4)
+        rgba = frame_rgba(lib, app, w, h)
+        if rgba:
             surface = pygame.image.frombuffer(rgba, (w.value, h.value), "RGBA")
             screen.blit(surface, (0, 0))
         pygame.display.flip()

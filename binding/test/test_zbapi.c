@@ -18,6 +18,14 @@
 
 #include "zbapi.h"
 
+/* the smoke asserts on every build type: under NDEBUG the whole battery
+ * compiles away and the binary prints a false green (the "passed" line
+ * is unconditional). A Release configuration must not build this target
+ * at all -- configure Debug (or no build type) instead. */
+#ifdef NDEBUG
+#error "test_zbapi relies on assert(); build it without NDEBUG (Debug or no CMAKE_BUILD_TYPE)"
+#endif
+
 int painted_calls = 0;
 
 static void on_painted(void *userdata)

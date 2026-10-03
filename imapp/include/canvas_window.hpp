@@ -74,6 +74,12 @@ namespace zb::app
         // up to date when the shell presents the next frame
         void input(const zb::input::input_event &ev) noexcept
         {
+            // library-mode hosts may drive events before create() (or
+            // after a failed create): no-op, symmetric with paint()
+            if (root_ == nullptr)
+            {
+                return;
+            }
             if (dispatcher_.dispatch(*root_, ev))
             {
                 dirty_ = true;
@@ -105,13 +111,16 @@ namespace zb::app
          */
         std::unique_ptr<zb::ui::Widget> remove_from(zb::ui::Panel &panel, zb::ui::Widget *w)
         {
-            // report the removed subtree's old pixels while it is still
-            // in the tree (the damage bubbles to the root): with
-            // automatic layout off -- the default -- nobody re-lays the
-            // panel, and the last frame's pixels would stay on screen
+            // report the removed subtree's old pixels: walk_damage
+            // collects rects by descending from the root, so the rect
+            // must ride a widget that STAYS in the tree -- the surviving
+            // container (its bounds cover the departing child, mirroring
+            // clear_root_children marking root_). With automatic layout
+            // off -- the default -- nobody re-lays the panel, and the
+            // last frame's pixels would stay on screen
             if (w != nullptr)
             {
-                w->mark_dirty();
+                panel.mark_dirty();
             }
             dispatcher_.evict(w);
             return panel.remove_child(w);

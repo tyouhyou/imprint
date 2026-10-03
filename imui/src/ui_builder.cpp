@@ -21,6 +21,7 @@
 #include "widget.hpp"
 #include <cstdlib>
 #include <string>
+#include <unordered_set>
 namespace zb::ui
 {
     // the shared color resolver (declared in html.hpp, defined below at
@@ -1465,9 +1466,66 @@ namespace zb::ui
 
         // --- materialization --------------------------------------------
 
+        // binding state for one build() pass (IM-BLD-001): the sink is
+        // present only in the action-binding overload; the id set backs
+        // the duplicate-id warning (a duplicate is benign for binding
+        // since IM-BLD-001 but still a host-side action-mapping trap)
+        struct build_binder
+        {
+            const action_fn *sink = nullptr;
+            std::unordered_set<std::string> seen_ids;
+            int bound = 0;
+        };
+
+        // the concrete event per tag, beside the tag table (single home):
+        // the static_casts run only on the widget make_widget() created
+        // from this very node — no cross-node id lookup is involved, so
+        // the §4.3 no-RTTI discipline holds even for duplicate ids
+        void bind_action(Widget &w, const ui_node &n, const action_fn &sink, int &bound)
+        {
+            const std::string &t = n.type;
+            const std::string id = n.id;
+            if (t == "button")
+            {
+                static_cast<Button &>(w).clicked += [sink, id]() { sink(id); };
+                ++bound;
+            }
+            else if (t == "checkbox")
+            {
+                static_cast<Checkbox &>(w).changed += [sink, id](const bool) { sink(id); };
+                ++bound;
+            }
+            else if (t == "radio")
+            {
+                static_cast<RadioButton &>(w).changed += [sink, id]() { sink(id); };
+                ++bound;
+            }
+            else if (t == "toggle")
+            {
+                static_cast<ToggleSwitch &>(w).changed += [sink, id](const bool) { sink(id); };
+                ++bound;
+            }
+            else if (t == "slider")
+            {
+                static_cast<Slider &>(w).changed += [sink, id](const int) { sink(id); };
+                ++bound;
+            }
+            else if (t == "text_input")
+            {
+                static_cast<TextInput &>(w).submitted += [sink, id](const std::string &) { sink(id); };
+                ++bound;
+            }
+            else if (t == "list_box")
+            {
+                static_cast<ListBox &>(w).changed += [sink, id](const std::size_t) { sink(id); };
+                ++bound;
+            }
+        }
+
         // materializes `n` into `container`; `container_is_flex` picks
         // the add_child signature
-        void materialize(Widget &container, const bool container_is_flex, const ui_node &n)
+        void materialize(Widget &container, const bool container_is_flex, const ui_node &n,
+                         build_binder &binder)
         {
             bool is_flex = false;
             auto w = make_widget(n, &is_flex);
@@ -1496,6 +1554,19 @@ namespace zb::ui
                 as_panel(container)->add_child(std::move(w));
             }
 
+            if (!n.id.empty())
+            {
+                if (!binder.seen_ids.insert(n.id).second)
+                {
+                    LW << "ui_builder: duplicate id '" << n.id
+                       << "' in the document (the host action map binds one of them)";
+                }
+                if (binder.sink != nullptr)
+                {
+                    bind_action(*added, n, *binder.sink, binder.bound);
+                }
+            }
+
             // a leaf tag cannot host children: recursing would static_cast
             // it to a container (no RTTI) and write through a bogus
             // pointer -- drop the children instead (contract: leaf
@@ -1513,29 +1584,24 @@ namespace zb::ui
             {
                 for (const ui_node &c : n.children)
                 {
-                    materialize(*added, is_flex, c);
+                    materialize(*added, is_flex, c, binder);
                 }
             }
         }
 
-        // materialization probe (code-contract §4): does any node carry
-        // a tag the tag table knows? Init-path validation only — a
-        // throwaway widget per probed node, parse-time scale.
-        bool probe_materializes(const ui_node &n)
+        // materialization probe (code-contract §4): does the document
+        // materialize at least one widget? Init-path validation only — a
+        // throwaway widget per probed node, parse-time scale. Mirrors
+        // build()/materialize() exactly: the document root's own tag is
+        // documentation (never materialized itself — only its children
+        // land in the host), and an unknown tag below the root
+        // materializes nothing and discards its whole subtree, so a
+        // known tag under an unknown tag yields nothing (the ui_embed
+        // gate and the zb_app_create_from_ui create failure).
+        bool probe_materializes_child(const ui_node &n)
         {
             bool is_flex = false;
-            if (make_widget(n, &is_flex) != nullptr)
-            {
-                return true;
-            }
-            for (const ui_node &c : n.children)
-            {
-                if (probe_materializes(c))
-                {
-                    return true;
-                }
-            }
-            return false;
+            return make_widget(n, &is_flex) != nullptr;
         }
     }  // namespace
 
@@ -1791,7 +1857,7 @@ namespace zb::ui
         return true;
     }
 
-    Widget &build(Widget &host, const ui_node &root)
+    Widget &build_impl(Widget &host, const ui_node &root, build_binder &binder)
     {
         // the host is the real container: the root tag (panel/row/column)
         // is documentation; a row/column root configures the host as its
@@ -1847,75 +1913,36 @@ namespace zb::ui
         }
         for (const ui_node &c : root.children)
         {
-            materialize(host, host.is_flex_container(), c);
+            materialize(host, host.is_flex_container(), c, binder);
         }
         return host;
     }
 
-    // --- action binding (code-contract §4, P3) -------------------------
-    //
-    // the concrete event per tag lives here, beside make_widget's tag
-    // table: this file is the single home of the tag knowledge, so the
-    // static_casts below run only on widgets build() created from the
-    // same node (the §4.3 no-RTTI discipline). The sink receives the id
-    // only; typed payloads stay on the native events.
-
-    int bind_actions(Widget &root, const ui_node &node, const action_fn &sink)
+    Widget &build(Widget &host, const ui_node &root)
     {
-        int bound = 0;
-        if (!node.id.empty())
-        {
-            Widget *w = root.find_by_id(node.id);
-            if (w != nullptr)
-            {
-                const std::string &t = node.type;
-                const std::string id = node.id;
-                if (t == "button")
-                {
-                    static_cast<Button *>(w)->clicked += [sink, id]() { sink(id); };
-                    ++bound;
-                }
-                else if (t == "checkbox")
-                {
-                    static_cast<Checkbox *>(w)->changed += [sink, id](const bool) { sink(id); };
-                    ++bound;
-                }
-                else if (t == "radio")
-                {
-                    static_cast<RadioButton *>(w)->changed += [sink, id]() { sink(id); };
-                    ++bound;
-                }
-                else if (t == "toggle")
-                {
-                    static_cast<ToggleSwitch *>(w)->changed += [sink, id](const bool) { sink(id); };
-                    ++bound;
-                }
-                else if (t == "slider")
-                {
-                    static_cast<Slider *>(w)->changed += [sink, id](const int) { sink(id); };
-                    ++bound;
-                }
-                else if (t == "text_input")
-                {
-                    static_cast<TextInput *>(w)->submitted += [sink, id](const std::string &) { sink(id); };
-                    ++bound;
-                }
-                else if (t == "list_box")
-                {
-                    static_cast<ListBox *>(w)->changed += [sink, id](const std::size_t) { sink(id); };
-                    ++bound;
-                }
-            }
-        }
-        for (const ui_node &c : node.children)
-        {
-            bound += bind_actions(root, c, sink);
-        }
-        return bound;
+        build_binder binder;  // no sink: structure only
+        return build_impl(host, root, binder);
+    }
+
+    int build(Widget &host, const ui_node &root, const action_fn &sink)
+    {
+        build_binder binder;
+        binder.sink = &sink;
+        build_impl(host, root, binder);
+        return binder.bound;
     }
 
     bool materializes_widget(const ui_node &node)
     {
-        return probe_materializes(node);
+        // only the root's CHILDREN can materialize (the root tag itself
+        // is documentation, build() contract)
+        for (const ui_node &c : node.children)
+        {
+            if (probe_materializes_child(c))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 }  // namespace zb::ui

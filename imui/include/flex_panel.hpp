@@ -143,6 +143,7 @@ namespace zb::ui
                        const int basis_pct = 0)
         {
             child->parent = this;
+            child->bubble_shadow_reach();
             items.push_back({std::move(child), flex_grow, self, flex_shrink,
                              basis_px, basis_pct});
             mark_layout_dirty();

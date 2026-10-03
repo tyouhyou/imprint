@@ -22,6 +22,14 @@ namespace zb::shell
 {
     int run(zb::SharedPtr<zb::app::IApp> app, const run_options &options)
     {
+        // the XImage below maps the framebuffer as 32-bit TrueColor
+        // (§4.8: the internal format is presented as-is); in a COLOR_DEPTH=16
+        // build Xlib would read w*h*4 bytes out of a w*h*2 buffer
+        if (sizeof(zb::ui::core::Color) != 4)
+        {
+            throw zb::ui::error("the X11 shell presents the 32bpp internal layout only");
+        }
+
         Display *display = XOpenDisplay(nullptr);
         if (display == nullptr)
         {

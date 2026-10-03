@@ -30,7 +30,7 @@ import sys
 
 import pygame
 
-from myapp import bgra_to_rgba, default_lib, feed_input, load_zbapi
+from myapp import default_lib, feed_input, frame_rgba, load_zbapi
 
 # a design file: static structure + ids only -- behavior lives in the
 # Python callbacks below (the declarative boundary, docs/design-file.md)
@@ -134,9 +134,8 @@ def main():
                 feed_input(lib, app, event)
 
         lib.zb_paint(app)
-        pixels = lib.zb_buffer(app, ctypes.byref(w), ctypes.byref(h))
-        if pixels:
-            rgba = bgra_to_rgba(pixels, w.value * h.value * 4)
+        rgba = frame_rgba(lib, app, w, h)
+        if rgba:
             surface = pygame.image.frombuffer(rgba, (w.value, h.value), "RGBA")
             screen.blit(surface, (0, 0))
         pygame.display.flip()

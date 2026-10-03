@@ -62,10 +62,13 @@ if (r.status == zb::snap::check_result::status::missing)
 // status::mismatch also ships tests/baselines/main_view.actual.gif for diffing
 ```
 
-Commit the `.zbsnap` baselines; CI fails on any pixel drift and the mismatch
-artifact shows what changed. Baselines are valid per build configuration
-(code-contract §12.2). In-tree references: `test/test_snapshot.cpp` and the
-showcase recorder, which rides the same determinism.
+Baselines are valid per build configuration (code-contract §12.2) and are
+committed by the host app that owns them: the framework ships the
+record/check mechanism, it does not track baselines for you — Imprint's own
+CI pins determinism with the two-run `imprint-render` byte comparison
+(below), and `test/test_snapshot.cpp` exercises the record/check round-trip.
+In-tree reference for a host suite: the showcase recorder, which rides the
+same determinism.
 
 ## Headless by design
 
@@ -273,8 +276,11 @@ size (code-contract §11.1).
 | WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh showcase` produces the SIGNAL-ONE page as one self-contained `.js` (wasm embedded); includes a node smoke test |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
-Tests: `test/test_imui` — plain asserts, no test framework; run via
-`ctest -R test_imui` (or the binary) on desktop; skipped on NDS.
+Tests: `<build>/bin/test_imui` — a local `EXPECT` macro (NDEBUG-safe,
+no test framework); run via `ctest -R test_imui` (or the binary) on
+desktop; skipped on NDS. `binding/test/test_zbapi` additionally relies
+on `assert()` and must be built without `NDEBUG` (Debug or no build
+type).
 
 ## Window & presentation
 

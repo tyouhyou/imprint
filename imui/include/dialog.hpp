@@ -15,9 +15,12 @@ namespace zb::ui
      * panel sits centered on top of it. The frame is laid out manually:
      * title on top, buttons at the bottom, body filling the middle.
      *
-     * Modal input interception is handled by the input dispatcher, which
-     * must check is_open() before dispatching to the rest of the widget
-     * tree.
+     * Modal input confinement lives in the input dispatcher's `modal`
+     * pointer: the host (or Dialog::open) calls CanvasWindow::set_modal /
+     * InputDispatcher::set_modal with the dialog widget, and from then on
+     * presses, wheels, keys and in-flight press lifecycles only reach
+     * widgets inside that subtree (code-contract §6.1). The dispatcher
+     * has no Dialog knowledge and nothing to check `is_open()` on.
      *
      * Text rendering follows the Widget base class rules: no text is drawn
      * without a font, so the dialog works on embedded systems with the

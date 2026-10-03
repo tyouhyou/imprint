@@ -2,10 +2,14 @@
 # packaging + sanitizers) on the weekly schedule or manual dispatch.
 #
 # Discipline from the repo's build matrix (CONTEXT.md / README "Build"):
-#   - tests run in Debug only; Release distorts the allocation gates
-#   - optional features (USE_TTF_RUNTIME, USE_PNG, USE_JPEG) stay out of
-#     the Tier1/2 matrices; the NDS cross build and the non-atomic variant
-#     cover the rest
+#   - tests run in Debug only (or the default no-config build); Release
+#     distorts the allocation gates
+#   - USE_PNG / USE_JPEG run in Tier 2 (linux-codecs); USE_TTF_RUNTIME in
+#     Tier 2 (linux-ttf-runtime); the NDS cross build and the non-atomic
+#     variant cover the rest of the matrix
+#   - the gcc:13 container ships no python3: the font-subset generation
+#     (FONT_SUBSET, default ON) silently degrades to ASCII-only glyphs
+#     without it, so every Linux job installs python3 explicitly
 
 name: CI
 
@@ -31,7 +35,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       - name: Configure and build
         run: |
           cmake -S . -B build_ci
@@ -84,10 +88,28 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       - name: Configure, build, test (COLOR_DEPTH=16)
         run: |
           cmake -S . -B build_ci -DCOLOR_DEPTH=16
+          cmake --build build_ci -j"$(nproc)"
+          ./build_ci/bin/test_imui
+          ./build_ci/bin/test_zbapi
+
+  # L-5: the runtime TTF provider has zero behavioral coverage outside
+  # this job (wasm compiles it, nothing runs it): the runtime_ttf suite
+  # is compiled in only under USE_TTF_RUNTIME
+  linux-ttf-runtime:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
+      - name: Configure, build, test (USE_TTF_RUNTIME=ON)
+        run: |
+          cmake -S . -B build_ci -DUSE_TTF_RUNTIME=ON
           cmake --build build_ci -j"$(nproc)"
           ./build_ci/bin/test_imui
 
@@ -102,7 +124,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       - name: Configure, build, test (USE_NON_ATOMIC_PTR=ON + USE_INTEGER_GEOMETRY=ON)
         run: |
           cmake -S . -B build_ci -DUSE_NON_ATOMIC_PTR=ON -DUSE_INTEGER_GEOMETRY=ON
@@ -117,7 +139,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       - name: Configure, build, test (USE_PNG + USE_JPEG, vendored stb)
         run: |
           cmake -S . -B build_ci -DUSE_PNG=ON -DUSE_JPEG=ON
@@ -131,7 +153,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make libx11-dev
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3 libx11-dev
       # compile-only: the CI container has no X server
       - name: Configure and build (X11 backend)
         run: |
@@ -145,7 +167,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       # compile-only: the CI container has no /dev/fb0 (A-1: the FB
       # shell carries the presentation-seam row converter)
       - name: Configure and build (FB backend)
@@ -162,7 +184,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       - name: Configure and build (SIXEL backend)
         run: |
           cmake -S . -B build_ci -DIM_SHELL_BACKEND=SIXEL
@@ -242,7 +264,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Install build tools
-        run: apt-get update && apt-get install -y --no-install-recommends cmake make
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
       - name: Configure, build, test (AddressSanitizer)
         run: |
           cmake -S . -B build_ci \

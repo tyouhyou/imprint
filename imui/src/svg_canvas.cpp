@@ -4,6 +4,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include "text/bitmap_provider.hpp"
 #include "theme.hpp"
 
 namespace zb::ui
@@ -1293,7 +1294,57 @@ namespace zb::ui
             int baseline = static_cast<int>(ty);
             if (provider != nullptr)
             {
-                const int adv = provider->measure(t.text.data(), len).width;
+                // §2.4 applies at the svg seam too: the item-level
+                // provider is the run's main provider per code unit,
+                // uncovered units fall to the 5x7 bitmap provider, still
+                // missing units are skipped. The raw measure/write fast
+                // path dropped code units the TTF lacks (glyph index 0
+                // measures 0 and rasterizes empty) and mis-measured
+                // mixed-script runs; the widget seam behaves the same
+                // for the identical string.
+                bool all_covered = true;
+                for (int i = 0; i < len; ++i)
+                {
+                    if (!provider->covers(t.text[i]))
+                    {
+                        all_covered = false;
+                        break;
+                    }
+                }
+                if (all_covered)
+                {
+                    const int adv = provider->measure(t.text.data(), len).width;
+                    if (t.anchor == 1)
+                    {
+                        pen -= adv / 2;
+                    }
+                    else if (t.anchor == 2)
+                    {
+                        pen -= adv;
+                    }
+                    provider->write(area, t.text.data(), len, pen, baseline,
+                                    t.has_color ? t.color : theme().text);
+                    continue;
+                }
+                // mixed run: the chain per code unit (contiguous covered
+                // spans still batch per unit through the provider)
+                const BitmapProvider bitmap_fallback{};
+                const auto pick = [&](const char16_t ch) -> const GlyphProvider *
+                {
+                    if (provider->covers(ch))
+                    {
+                        return provider;
+                    }
+                    return bitmap_fallback.covers(ch) ? &bitmap_fallback : nullptr;
+                };
+                int adv = 0;
+                for (int i = 0; i < len; ++i)
+                {
+                    if (const GlyphProvider *p = pick(t.text[i]))
+                    {
+                        adv += p->measure(t.text.data() + i, 1).width;
+                    }
+                }
                 if (t.anchor == 1)
                 {
                     pen -= adv / 2;
@@ -1302,8 +1353,17 @@ namespace zb::ui
                 {
                     pen -= adv;
                 }
-                provider->write(area, t.text.data(), len, pen, baseline,
-                                t.has_color ? t.color : theme().text);
+                const core::Color col = t.has_color ? t.color : theme().text;
+                for (int i = 0; i < len; ++i)
+                {
+                    if (const GlyphProvider *p = pick(t.text[i]))
+                    {
+                        p->write(area, t.text.data() + i, 1, pen, baseline, col);
+                        pen += p->measure(t.text.data() + i, 1).width;
+                    }
+                    // an uncovered unit keeps the pen position (its slot
+                    // is empty; the string never reflows mid-run)
+                }
                 continue;
             }
             const int adv = advance_of(t.text.data(), len);

@@ -138,15 +138,24 @@ int Image::write_png_file(
 {
     auto img_width = img_inf.image_width;
     auto img_height = img_inf.image_height;
+    const auto comps = img_inf.color_components;
     if (img_width == 0 || img_height == 0)
     {
         LE << "PNG write request with zero width/height.";
         return 1;
     }
+    if (comps != 3 && comps != 4)
+    {
+        LE << "PNG write request with unsupported component count "
+           << static_cast<int>(comps) << " (3 = RGB, 4 = RGBA).";
+        return 5;
+    }
 
-    // stb has no streaming writer: collect the rows first (RGBA, 4 comp),
-    // then hand the whole buffer to stbi_write_png.
-    auto row_stride = img_width * 4;
+    // stb has no streaming writer: collect the rows first, then hand the
+    // whole buffer to stbi_write_png. The declared color_components (3 =
+    // RGB, 4 = RGBA) decides both the row stride and the encoded channel
+    // count -- the info fields are the row contract, not decoration.
+    auto row_stride = img_width * comps;
     std::vector<unsigned char> image_data((size_t)row_stride * img_height);
     std::vector<unsigned char> row(row_stride);
     for (uint32_t i = 0; i < img_height; i++)
@@ -170,7 +179,7 @@ int Image::write_png_file(
     }
     fclose(outfile);
 
-    if (0 == stbi_write_png(file_name.c_str(), (int)img_width, (int)img_height, 4, image_data.data(), (int)row_stride))
+    if (0 == stbi_write_png(file_name.c_str(), (int)img_width, (int)img_height, (int)comps, image_data.data(), (int)row_stride))
     {
         // stbi_failure_reason belongs to the READ side (stb_image); it
         // says nothing about a write failure, so it is not reported here

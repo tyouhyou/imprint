@@ -6,6 +6,7 @@ namespace zb::ui
     {
         frame = std::make_unique<Panel>();
         frame->parent = this;
+        frame->bubble_shadow_reach();
         frame->set_orientation(Panel::orientation::vertical);
 
         auto t = std::make_unique<Label>();

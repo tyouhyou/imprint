@@ -54,9 +54,10 @@ if (r.status == zb::snap::check_result::status::missing)
 // status::mismatch 时还会生成 tests/baselines/main_view.actual.gif 供人工比对
 ```
 
-把 `.zbsnap` 基线提交进仓库；CI 在任何像素漂移上失败，失配产物告诉你改了什么。
-基线按构建配置生效（code-contract §12.2）。仓库内参照：`test/test_snapshot.cpp`
-与 showcase 录制器——它骑的正是同一个确定性。
+基线按构建配置生效（code-contract §12.2），由拥有它们的宿主应用提交入库：
+框架只提供 record/check 机制，不替你维护基线——Imprint 自己的 CI 用
+`imprint-render` 两次渲染字节比对（见下）锁定确定性，`test/test_snapshot.cpp`
+验证 record/check 往返。宿主测试套件的参照：showcase 录制器，骑的正是同一个确定性。
 
 ## 天生无头
 
@@ -245,8 +246,10 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` 产出 SIGNAL-ONE 页面为单个自包含 `.js`（wasm 内嵌）；附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
-测试：`test/test_imui`——纯断言，无测试框架；桌面用 `ctest -R test_imui`
-（或直接运行二进制），NDS 跳过。
+测试：`<build>/bin/test_imui`——本地 `EXPECT` 宏（NDEBUG 安全，无测试框架）；
+桌面用 `ctest -R test_imui`（或直接运行二进制），NDS 跳过。
+`binding/test/test_zbapi` 另依赖 `assert()`，必须在无 `NDEBUG` 的构建下编译
+（Debug 或不设构建类型）。
 
 ## 窗口与呈现
 

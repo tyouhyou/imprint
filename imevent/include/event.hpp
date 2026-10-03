@@ -2,6 +2,7 @@
 #define EVENT_HPP
 
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <utility>
 #include <vector>
@@ -17,7 +18,7 @@ namespace zb::event
     /*
      * A publish/subscribe event with zero-allocation hot path.
      *
-     * Handlers are stored in a flat vector of (id, handler) pairs; invoke()
+     * Handlers are stored in a flat deque of (id, handler) pairs; invoke()
      * iterates by index so subscriptions made during invocation are not
      * called until the next invoke, and unsubscribing during invocation
      * only tombstones the entry (the id's std::function is cleared), which
@@ -241,7 +242,14 @@ namespace zb::event
         }
 
         using Entry = std::pair<uint32_t, EventHandler>;
-        std::vector<Entry> handlers;
+        // deque, not vector: sub() during an invocation (a documented-
+        // supported operation, §4.6 "defers the new handler to the next
+        // invoke") must not reallocate -- a vector's push_back move-
+        // constructs every entry, including the one whose operator()
+        // frame is executing right now, which is a use-after-free for
+        // any handler too large for std::function's SBO. push_back on a
+        // deque invalidates no references to existing elements.
+        std::deque<Entry> handlers;
         uint32_t next_id = 0;
         uint32_t invoke_depth = 0;
         std::vector<Subscription<TArgs...> *> attached_subscriptions;

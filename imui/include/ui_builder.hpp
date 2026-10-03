@@ -322,17 +322,22 @@ namespace zb::ui
     Widget &build(Widget &host, const ui_node &root);
 
     /*
-     * Action binding (code-contract §4, P3): walks the same ui_node IR
-     * build() materialized and, for every node carrying a non-empty id,
-     * subscribes that widget's primary action event to `sink(id)` — the
-     * concrete event per tag is chosen in ui_builder.cpp beside the tag
-     * table (button click, checkbox/toggle/radio/slider/list_box change,
-     * text_input submit). A binder, not a registry: the framework holds
-     * no id→handler map, the host maps ids on its side. Handlers live as
-     * long as the widget does. Returns the number of bound actions.
+     * Action binding (code-contract §4, P3): this build() overload
+     * materializes the descriptive tree AND, in the same pass, for every
+     * materialized node carrying a non-empty id subscribes that node's
+     * own widget's primary action event to `sink(id)` — the concrete
+     * event per tag is chosen in ui_builder.cpp beside the tag table
+     * (button click, checkbox/toggle/radio/slider/list_box change,
+     * text_input submit). Binding rides materialization so each sink
+     * attaches to the very widget that node created (the §4.3 no-RTTI
+     * discipline): there is no post-hoc id lookup that a duplicate id
+     * could reroute to a wrong-typed widget. A binder, not a registry:
+     * the framework holds no id→handler map, the host maps ids on its
+     * side. Handlers live as long as the widget does. Returns the number
+     * of bound actions.
      */
     using action_fn = std::function<void(const std::string &id)>;
-    int bind_actions(Widget &root, const ui_node &node, const action_fn &sink);
+    int build(Widget &host, const ui_node &root, const action_fn &sink);
 
     /*
      * Whether the node tree materializes at least one widget (any known

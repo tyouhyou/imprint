@@ -93,6 +93,14 @@ namespace zb::ui
         Widget *modal = nullptr;
         Widget *focus_target = nullptr;
 
+        // the widget whose on_input() is running right now (a press
+        // being claimed, or a wheel-bubble hop). The tree-mutation
+        // protocol (code-contract §6) lets a handler remove its own
+        // subtree through CanvasWindow::remove_from mid-callback; evict()
+        // clears this member too, so the dispatcher never re-installs
+        // or re-dereferences a widget its own handler just evicted
+        Widget *in_flight = nullptr;
+
         // where the current press started; a move only cancels the press
         // when the pointer left the target AND moved farther than slop
         // (touch panels jitter by a few pixels, which must not eat clicks)

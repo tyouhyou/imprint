@@ -762,6 +762,16 @@ namespace zb::ui
             s->spread =
                 static_cast<uint8_t>(spread < 0 ? 0 : (spread > 255 ? 255 : spread));
             s->c = c;
+            // keep the A-10 draw prune honest: the own pad grew, and the
+            // subtree reach is the max pad over the whole subtree
+            int l = 0, t = 0, r = 0, b = 0;
+            outer_shadow_pad(l, t, r, b);
+            if (const int reach = std::max(std::max(l, r), std::max(t, b));
+                reach > subtree_shadow_reach_)
+            {
+                subtree_shadow_reach_ = reach;
+            }
+            bubble_shadow_reach();
             mark_dirty();
         }
         void add_shadow_inset(const int ox, const int oy, const int blur,
@@ -1350,6 +1360,30 @@ namespace zb::ui
         int dirty_t_ = 0;
         int dirty_r_ = -1;
         int dirty_b_ = -1;
+
+        // A-10 prune support: the max outer-shadow pad (scalar, all
+        // directions) over this widget AND every descendant. The shadow
+        // pass clips to the whole surface, so a descendant's spill can
+        // legitimately land outside this widget's bounds -- the draw
+        // culling rect must grow by it, not by the own pad alone.
+        // Maintained on add_shadow_outer (bubbling the max up the parent
+        // chain) and re-bubbled when a subtree is attached under a new
+        // parent; monotone (shadows have no removal API), so it can only
+        // over-cull, never under-cull.
+        int subtree_shadow_reach_ = 0;
+
+        // re-bubbles the subtree's reach into the ancestor chain; called
+        // by add_shadow_outer and by the attach sites (the friend classes
+        // set `parent` directly)
+        void bubble_shadow_reach()
+        {
+            for (Widget *p = parent;
+                 p != nullptr && p->subtree_shadow_reach_ < subtree_shadow_reach_;
+                 p = p->parent)
+            {
+                p->subtree_shadow_reach_ = subtree_shadow_reach_;
+            }
+        }
 
         void mark_dirty_rect(const int x, const int y, const int w, const int h)
         {

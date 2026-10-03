@@ -262,5 +262,26 @@ int test_remove()
             EXPECT(kept == 2);
         }
 
+        // (IM-DMG-001) removal OUTSIDE the input path still reports the
+        // removed subtree's pixels: the rect rides the surviving
+        // container (walk_damage descends from the root, so a rect
+        // stored on the departing widget is unreachable after the
+        // detach and the pixels would stay on screen forever)
+        {
+            CanvasWindow w;
+            w.create(200, 150);
+            auto &root = w.root();
+            auto *b = mk_button(root, "vanishing", 40, 40);
+            w.paint();  // one clean frame first
+
+            auto out = remove_coordinated(w, root, b);
+            out.reset();
+            EXPECT(w.is_dirty());  // the removal itself owes a repaint
+            w.paint();
+            int x = 0, y = 0, rw = 0, rh = 0;
+            EXPECT(w.dirty_region(x, y, rw, rh));
+            EXPECT(rw > 0 && rh > 0);  // the region is not a blank frame
+        }
+
         return test::report("remove");
 }

@@ -522,8 +522,10 @@ satisfies. Changing any of these is an architecture change.
 | `USE_FONT_SIZE`           | OFF     | —             | plan 2: platform default system font at `TTF_PIXEL_SIZE` as the default glyph provider (hosts only; needs Python) |
 | `USE_TTF_RUNTIME`         | OFF     | OFF           | L-5: runtime TTF rasterization via vendored stb_truetype — `TtfFamily`, per-size providers, bounded glyph cache |
 | `LOGGING_DEBUG`           | OFF     | OFF           | defines `DEBUG` so the debug-level logs (LD) print; without it (or a Debug configuration) no debug logs are emitted in any build |
+| `IM_SHELL_BACKEND`        | X11     | NDS (FORCE)   | shell backend selection (X11 / FB / SIXEL / WIN / MAC / NDS) — configure-time, no runtime switching |
+| `ZBAPI_STATIC_LIBSTDCXX`  | OFF     | —             | links `libstdc++`/`libc++` statically into the zbapi shared library (escape hatch for hosts that ship their own libstdc++) |
 | `STORY`                   | tictactoe | —          | selects which demo app the shell links    |
-| `IMPRINT_WITH_TOOLS`      | ON (top level) / OFF (subproject) | — | configure-time gate: host tools (`ui_embed`, `html_embed`, `asset_gen`) |
+| `IMPRINT_WITH_TOOLS`      | ON (top level) / OFF (subproject) | — | configure-time gate: host tools (`ui_embed`, `html_embed`, `asset_gen`, `imprint_render`, `ttf_subset`) |
 | `IMPRINT_WITH_TESTS`      | ON (top level) / OFF (subproject) | — | configure-time gate: the test battery (implies the demo app libraries) |
 | `IMPRINT_WITH_DEMOS`      | ON (top level) / OFF (subproject) | — | configure-time gate: demo app libraries + `binding` + the `${STORY}` executable (framework mode, §3.2); implies tools when ON |
 
@@ -552,7 +554,8 @@ exactly what it always did.
 - The layer is deliberately **static**: no dynamic models (ListBox `ItemText`
   callbacks), no event wiring, no font/glyph content in the description.
 - The C-ABI materialization path (P3): `zb_app_create_from_ui` runs the
-  same parse → `build()` → `bind_actions` sequence inside the binding
+  same parse → `build(host, doc, sink)` sequence (action binding fused
+  into materialization, code-contract §4) inside the binding
   layer, so a foreign host (Python, a WASM plugin) drives a design-file
   UI through `zb_input` / `zb_paint` and receives action callbacks by
   id (§4.8). The static-structure-in-file boundary is unchanged: events

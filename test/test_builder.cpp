@@ -570,6 +570,70 @@ int test_builder()
         EXPECT(cp4.x == 7 && cp4.y == 7);
     }
 
+    // action binding rides materialization (code-contract §4, IM-BLD-001):
+    // each id binds the widget its own node created; a duplicate id binds
+    // BOTH widgets instead of routing through find_by_id (which would
+    // cast the first match to a possibly wrong type)
+    {
+        auto doc = column({
+            button("one").named("a").size(60, 20),
+            button("two").named("a").size(60, 20),
+        });
+        FlexPanel host;
+        host.set_size(100, 100);
+        std::vector<std::string> hits;
+        const int bound = build(host, doc,
+                                [&](const std::string &id) { hits.push_back(id); });
+        EXPECT(bound == 2);
+        host.layout();
+
+        InputDispatcher d;
+        d.dispatch(host, press_at(30, 10));
+        d.dispatch(host, release_at(30, 10));
+        d.dispatch(host, press_at(30, 30));
+        d.dispatch(host, release_at(30, 30));
+        EXPECT(hits.size() == 2);
+        EXPECT(hits[0] == "a" && hits[1] == "a");
+    }
+    {
+        // the wrong-type repro shape: a label and a button share one id.
+        // The label must stay untouched (no Button cast onto it), the
+        // button still gets its sink
+        auto doc = column({
+            label("x").named("a").size(60, 20),
+            button("y").named("a").size(60, 20),
+        });
+        FlexPanel host;
+        host.set_size(100, 100);
+        int fired = 0;
+        const int bound = build(host, doc, [&](const std::string &) { ++fired; });
+        EXPECT(bound == 1);
+        host.layout();
+        InputDispatcher d;
+        d.dispatch(host, press_at(30, 10));
+        d.dispatch(host, release_at(30, 10));
+        EXPECT(fired == 0);  // the label area: no action behind id "a"
+        d.dispatch(host, press_at(30, 30));
+        d.dispatch(host, release_at(30, 30));
+        EXPECT(fired == 1);  // the button: bound by its own node
+    }
+
+    // materializes_widget mirrors materialize() (IM-BLD-002): a known tag
+    // under an unknown NON-root tag yields nothing, while an unknown ROOT
+    // tag's children still materialize into the host (the root tag is
+    // documentation)
+    {
+        ui_node table;
+        table.type = "table";
+        table.children.push_back(button("ok").named("ok"));
+
+        auto nested = column({ui_node(table)});
+        EXPECT(!materializes_widget(nested));
+
+        // the same tree rooted AT the unknown tag: materializes
+        EXPECT(materializes_widget(table));
+    }
+
     return test::report("builder");
     }
 }

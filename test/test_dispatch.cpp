@@ -957,5 +957,113 @@ int test_dispatch()
         EXPECT(d.get_focus_target() == nullptr);
     }
 
+    // press first, THEN open the modal: the in-flight press must not
+    // deliver its release behind the open dialog (the click-through
+    // scenario — the modal contract, code-contract §6.1)
+    {
+        Panel root;
+        root.set_size(100, 100);
+
+        auto outer = std::make_unique<Button>();
+        outer->set_size(20, 20);
+        outer->set_position(0, 0);
+        int outer_clicks = 0;
+        outer->clicked += [&outer_clicks]() { ++outer_clicks; };
+
+        auto dlg = std::make_unique<Dialog>();
+        dlg->set_size(40, 40);
+        dlg->set_position(30, 30);
+        dlg->set_frame_size(40, 40);
+        dlg->set_button_size(20, 18);
+        dlg->open();
+        auto &ok = dlg->add_button("OK");
+        int ok_clicks = 0;
+        ok.clicked += [&ok_clicks]() { ++ok_clicks; };
+        auto *pdlg = dlg.get();
+
+        root.add_child(std::move(outer));
+        root.add_child(std::move(dlg));
+        pdlg->layout();
+
+        InputDispatcher d;
+
+        // press the outer button while no modal is set...
+        EXPECT(d.dispatch(root, press_at(10, 10)));
+        // ...the app opens a modal mid-press...
+        d.set_modal(pdlg);
+        // ...and the release must be cancelled, not fire behind the mask
+        d.dispatch(root, release_at(10, 10));
+        EXPECT(outer_clicks == 0);
+
+        // a later press on the (now covered) outer button is blocked
+        d.dispatch(root, press_at(10, 10));
+        d.dispatch(root, release_at(10, 10));
+        EXPECT(outer_clicks == 0);
+
+        // the dialog's own button still works
+        d.dispatch(root, press_at(45, 50));
+        d.dispatch(root, release_at(45, 50));
+        EXPECT(ok_clicks == 1);
+    }
+
+    // self-removal inside the claim path: a widget whose press handler
+    // evicts and DESTROYS itself (the sanctioned coordinated path, the
+    // owner dropping the returned unique_ptr) must not leave the
+    // dispatcher re-installing or re-dereferencing the freed pointer (§6,
+    // the in-flight claim handshake)
+    {
+        Panel root;
+        root.set_size(100, 100);
+        InputDispatcher d;
+
+        struct SelfRemoving : Widget
+        {
+            InputDispatcher *disp = nullptr;
+            Panel *host = nullptr;
+            bool *destroyed_flag = nullptr;
+            int presses = 0;
+
+            bool on_input(const zb::input::input_event &ev) override
+            {
+                if (ev.type == zb::input::input_type::mouse_left_down)
+                {
+                    ++presses;
+                    // remove self mid-callback and drop the ownership:
+                    // by the time on_input returns, this object is freed
+                    disp->evict(this);
+                    host->remove_child(this).reset();
+                    *destroyed_flag = true;
+                    return true;
+                }
+                return false;
+            }
+        };
+
+        auto w = std::make_unique<SelfRemoving>();
+        w->set_size(20, 20);
+        w->set_position(0, 0);
+        w->disp = &d;
+        w->host = &root;
+        auto *pw = w.get();
+        bool destroyed = false;
+        w->destroyed_flag = &destroyed;
+        root.add_child(std::move(w));
+
+        // the press is claimed; the handler destroyed the claim target
+        // (pre-fix the dispatcher stored it as pressed_target and
+        // dereferenced it again for the focus check)
+        EXPECT(d.dispatch(root, press_at(10, 10)));
+        EXPECT(pw->presses == 1);
+        EXPECT(destroyed);
+        pw = nullptr;  // the object is gone; nothing below may touch it
+
+        // the release is inert, and a fresh press must not walk a stale
+        // pointer (the dispatch-entry liveness probe touches
+        // pressed_target first when one is still installed)
+        EXPECT(!d.dispatch(root, release_at(10, 10)));
+        EXPECT(!d.dispatch(root, press_at(10, 10)));
+        EXPECT(!d.dispatch(root, release_at(10, 10)));
+    }
+
     return test::report("dispatch");
 }

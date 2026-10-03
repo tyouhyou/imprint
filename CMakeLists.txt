@@ -34,6 +34,10 @@ endif()
 # CMAKE_OBJCXX_COMPILE_OBJECT and the generate step fails
 if (APPLE)
     enable_language(OBJCXX)
+    # keep the Debug logging definition language-complete: -DDEBUG rides
+    # CMAKE_CXX_FLAGS_DEBUG above, which never reaches .mm TUs — the first
+    # LD in an AppKit TU would silently print nothing
+    set(CMAKE_OBJCXX_FLAGS_DEBUG "${CMAKE_OBJCXX_FLAGS_DEBUG} -DDEBUG")
 endif()
 
 set(IMAPPLIB imapp)
@@ -77,8 +81,12 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 
 # CTest root: enable_testing() must run in the top-level file for
-# add_test() in subdirectories to register (C8)
-enable_testing()
+# add_test() in subdirectories to register (C8). A subproject never
+# registers imprint tests (the IMPRINT_WITH_* gates default OFF), so
+# the consumer's own testing setup stays untouched.
+if (IMPRINT_IS_TOP_LEVEL)
+    enable_testing()
+endif()
 
 add_subdirectory(imutil)
 add_subdirectory(imcore)
@@ -113,7 +121,9 @@ endif()
 # include/imprint/<module>/include, matching the INSTALL_INTERFACE
 # generator expressions in the module files. The rules are inert on
 # targets that never install (NDS toolchain, framework-mode builds that
-# never run cmake --install).
+# never run cmake --install). Subproject mode never installs: see the
+# gate around the install rules below -- the add_subdirectory path
+# consumes the targets directly, no install round-trip.
 set(IMPRINT_INSTALL_TARGETS "")
 foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend)
     if (TARGET ${_imprint_target})
@@ -130,6 +140,11 @@ endif()
 if (TARGET imapp_snapshot)
     set_target_properties(imapp_snapshot PROPERTIES EXPORT_NAME snapshot)
 endif()
+# Subproject mode never installs: a consumer's `cmake --install` must
+# not ship ~7 imprint libraries into ITS prefix uninvited (ARCHITECTURE
+# §3.2: subprojects configure libraries only) -- the add_subdirectory
+# path consumes the targets directly, no install round-trip.
+if (IMPRINT_IS_TOP_LEVEL)
 install(TARGETS ${IMPRINT_INSTALL_TARGETS} EXPORT imprintTargets
     ARCHIVE DESTINATION lib
     LIBRARY DESTINATION lib
@@ -155,6 +170,7 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/imprintConfig.cmake
     ${CMAKE_CURRENT_BINARY_DIR}/imprintConfigVersion.cmake
     DESTINATION lib/cmake/imprint)
+endif()
 
 # A-22: the one composition point (framework mode, IMPRINT_WITH_DEMOS).
 # imshell provides shell_backend (the selected backend's usage

@@ -207,7 +207,8 @@ int FB::dispose()
         munmap(buf, screen_mem_len);
         buf = nullptr;
     }
-    if (ffb > 0)
+    // fd 0 is legal (a host may have closed stdin): the sentinel is -1
+    if (ffb >= 0)
     {
         close(ffb);
         ffb = -1;

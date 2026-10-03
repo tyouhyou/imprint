@@ -190,7 +190,9 @@ fragments + a full-code re-read); the rulings below supersede/extend the
     through the ABI when a real host needs it — the native per-widget
     events already carry the payloads for C++ consumers.*
   - **P4. Terminal graphics demo target** — landed 2026-09-26 (the
-    SIXEL backend, §11.3, Tier-2 compile job + pty smoke).
+    SIXEL backend, §11.3, Tier-2 compile job; the pty smoke was a
+    one-time local `script(1)` verification, not a CI gate — the
+    sixel/term_input logic itself is unit-tested from the battery).
     *Extension (unscheduled): the Kitty graphics protocol as a second
     presenter for the same input source.*
 - Business stance reconfirmed: port engagements first; external

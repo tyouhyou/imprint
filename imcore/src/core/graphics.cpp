@@ -566,6 +566,12 @@ void Graphics::draw_image(
     int start_y         // y coordinate in the graphic where starting to draw bitmap
 )
 {
+    // malformed view (rows would overlap, or no pixels): refuse to draw
+    // instead of reading past each row (same gate as the image_t overload)
+    if (img == nullptr || img_row_stride < img_width)
+    {
+        return;
+    }
     int sx, sy;
     for (int row = 0; row < img_height; row++)
     {
@@ -581,7 +587,7 @@ void Graphics::draw_image(
                 continue;
             if (sx >= imsize.width)
                 break;
-            draw_pixel(sx, sy, img[row * img_row_stride + col]);
+            draw_pixel(sx, sy, img[static_cast<int64_t>(row) * img_row_stride + col]);
         }
     }
 }
@@ -623,6 +629,10 @@ void Graphics::draw_image(
         draw_image(img, img_width, img_height, img_row_stride, start_x, start_y);
         return;
     }
+    if (img == nullptr || img_row_stride < img_width)
+    {
+        return;
+    }
     int sx, sy;
     for (int row = 0; row < img_height; row++)
     {
@@ -638,7 +648,7 @@ void Graphics::draw_image(
                 continue;
             if (sx >= imsize.width)
                 break;
-            const Color &src = img[row * img_row_stride + col];
+            const Color &src = img[static_cast<int64_t>(row) * img_row_stride + col];
             Color c{};
             c.set_r(static_cast<uint8_t>(src.r() * tint.r() / 0xFF));
             c.set_g(static_cast<uint8_t>(src.g() * tint.g() / 0xFF));
@@ -829,8 +839,11 @@ void Graphics::plot_aa(int x, int y, int coverage, const Color &colr)
     else
     {
         // binary alpha: coverage quantizes to plot/skip at half, so the
-        // stroke stays one pixel wide instead of doubling
-        if (coverage >= 128)
+        // stroke stays one pixel wide instead of doubling. A color with
+        // a zero alpha bit is a no-op, matching the aliased draw_pixel
+        // path (latent guard: no current caller passes a fully
+        // transparent color into the AA path)
+        if (coverage >= 128 && colr.a() != 0)
         {
             px = colr;
         }
@@ -878,7 +891,7 @@ int Graphics::sketch_jitter(const int v, const int salt)
     return static_cast<int>(h % 3u) - 1;
 }
 
-void Graphics::fill_span(int x1, int x2, int y, const Color &colr)
+void Graphics::fill_span(int x1, int x2, int y, const Color &colr, const bool wobble)
 {
     int left = x1 < x2 ? x1 : x2;
     int right = x1 < x2 ? x2 : x1;
@@ -892,8 +905,10 @@ void Graphics::fill_span(int x1, int x2, int y, const Color &colr)
     }
 
     // S-2: rough fill edges — the row span's ends wobble by +-1 px, so
-    // a filled shape's boundary is uneven (the interior stays flat)
-    if (render_mode_ == render_mode::sketch)
+    // a filled shape's boundary is uneven (the interior stays flat).
+    // Callers that already wobbled their own endpoints, or that must
+    // stay FULL-mode in sketch (AA primitives, §9), pass wobble=false
+    if (wobble && render_mode_ == render_mode::sketch)
     {
         sx0 += sketch_jitter(sx0, sy);
         sx1 += sketch_jitter(sx1, sy + 77);
@@ -965,18 +980,23 @@ void Graphics::draw_line(int x1, int y1, int x2, int y2, const Color &colr)
         x2 += sketch_jitter(x2, y2);
         y2 += sketch_jitter(y2, x2 + 101);
     }
+    draw_line_full(x1, y1, x2, y2, colr);
+}
 
+void Graphics::draw_line_full(int x1, int y1, int x2, int y2, const Color &colr)
+{
     // U-7: horizontal runs with an opaque color write one clamped span —
     // the Bresenham below plots every x of the row exactly once (plus
     // idempotent endpoint re-plots), so the direct write is byte-identical.
     // This is the per-column scene-rasterization hot path (U-7 / fps F9).
+    // No fill_span wobble here: the endpoints above are already final.
     if (y1 == y2)
     {
         const bool opaque = !alpha_enabled ||
                             (Color::per_channel_blend ? colr.a() >= 0xFF : colr.a() != 0);
         if (opaque)
         {
-            fill_span(x1, x2, y1, colr);
+            fill_span(x1, x2, y1, colr, false);
             return;
         }
     }
@@ -1750,7 +1770,9 @@ void Graphics::fill_round_rect_rotated(int x, int y, int w, int h, int radius, i
     {
         if (run_active)
         {
-            fill_span(run_start, end_col_inclusive, row, colr);
+            // the rotated solid is an alpha/AA path: FULL-mode in sketch,
+            // the interior runs must not wobble (§9)
+            fill_span(run_start, end_col_inclusive, row, colr, false);
             run_active = false;
         }
     };
@@ -2417,6 +2439,8 @@ void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr,
 {
     if (x1 == x2 || y1 == y2)
     {
+        // axis-parallel runs need no coverage; they go through the
+        // sketchless seam so AA strokes stay FULL-mode in sketch (§9)
         if (skip_first)
         {
             // the joint pixel belongs to the previous segment: step one
@@ -2428,14 +2452,14 @@ void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr,
             if (x1 == x2)
             {
                 const int step = y2 > y1 ? 1 : -1;
-                draw_line(x1, y1 + step, x2, y2, colr);
+                draw_line_full(x1, y1 + step, x2, y2, colr);
                 return;
             }
             const int step = x2 > x1 ? 1 : -1;
-            draw_line(x1 + step, y1, x2, y2, colr);
+            draw_line_full(x1 + step, y1, x2, y2, colr);
             return;
         }
-        draw_line(x1, y1, x2, y2, colr);  // axis-aligned runs need no coverage
+        draw_line_full(x1, y1, x2, y2, colr);
         return;
     }
 

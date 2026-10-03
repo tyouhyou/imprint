@@ -480,14 +480,18 @@ namespace zb::ui
         }
 
         // damage culling: outside the reported region the whole subtree
-        // is by definition invisible, skip the rasterizer entirely
+        // is by definition invisible, skip the rasterizer entirely.
+        // A-10: the shadow pass clips to the whole surface, so a
+        // descendant's outer shadow can legitimately land outside THIS
+        // widget's bounds -- the culling rect grows by the subtree's
+        // shadow reach, which is >= each own pad component by construction
         if (g.damage_on())
         {
             const auto abs = get_absolute_position();
-            int pl = 0, pt = 0, pr = 0, pb = 0;
-            outer_shadow_pad(pl, pt, pr, pb);
-            if (!g.damage_intersects(abs.x - pl, abs.y - pt,
-                                     size.width + pl + pr, size.height + pt + pb))
+            const int reach = subtree_shadow_reach_;
+            if (!g.damage_intersects(abs.x - reach, abs.y - reach,
+                                     size.width + 2 * reach,
+                                     size.height + 2 * reach))
             {
                 return;
             }

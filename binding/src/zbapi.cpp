@@ -17,6 +17,36 @@
 
 namespace
 {
+    // the C macros in zbapi.h are ABI: a mid-enum insertion on either
+    // side must be a compile error here, not silent rerouting of host
+    // input semantics (the values "must match" per zbapi.h comments —
+    // this pins it, same discipline as the input_event POD asserts)
+    static_assert(static_cast<int>(zb::input::input_type::mouse_left_down) == ZB_INPUT_MOUSE_LEFT_DOWN,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::input_type::mouse_wheel) == ZB_INPUT_MOUSE_WHEEL,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::input_type::touch_down) == ZB_INPUT_TOUCH_DOWN,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::input_type::touch_move) == ZB_INPUT_TOUCH_MOVE,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::input_type::key_down) == ZB_INPUT_KEY_DOWN,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::input_type::key_up) == ZB_INPUT_KEY_UP,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::input_type::pointer_delta) == ZB_INPUT_POINTER_DELTA,
+                  "zbapi.h input types drifted from zb::input::input_type");
+    static_assert(static_cast<int>(zb::input::key_code::backspace) == ZB_KEY_BACKSPACE &&
+                      static_cast<int>(zb::input::key_code::tab) == ZB_KEY_TAB &&
+                      static_cast<int>(zb::input::key_code::enter) == ZB_KEY_ENTER &&
+                      static_cast<int>(zb::input::key_code::escape) == ZB_KEY_ESCAPE &&
+                      static_cast<int>(zb::input::key_code::space) == ZB_KEY_SPACE &&
+                      static_cast<int>(zb::input::key_code::del) == ZB_KEY_DEL &&
+                      static_cast<int>(zb::input::key_code::up) == ZB_KEY_UP &&
+                      static_cast<int>(zb::input::key_code::down) == ZB_KEY_DOWN &&
+                      static_cast<int>(zb::input::key_code::left) == ZB_KEY_LEFT &&
+                      static_cast<int>(zb::input::key_code::right) == ZB_KEY_RIGHT,
+                  "zbapi.h key codes drifted from zb::input::key_code");
+
     /*
      * IApp adapter over a CanvasWindow for declarative apps (P3): the
      * story apps are IApp classes delegating to a CanvasWindow member
@@ -445,17 +475,15 @@ extern "C" zb_app_t *zb_app_create_from_ui(const char *ui_text, int is_html,
         {
             screen->set_background_color(page.background);
         }
-        // the ui_preview materialization path, single document
-        zb::ui::build(*screen, doc);
-        canvas->root().add_child(std::move(screen));
-
+        // the ui_preview materialization path, single document. The
+        // binding consults the host's registrations at fire time, so
+        // zb_set_event_callback order relative to this create is free;
+        // binding rides materialization, so each id attaches to the very
+        // widget its node created (no post-hoc find_by_id). The sink
+        // captures the app pointer BY VALUE, so the app must exist here.
         self = new zb_app();
-
-        // the binding consults the host's registrations at fire time, so
-        // zb_set_event_callback order relative to this create is free
         zb_app_t *sink_app = self;
-        zb::ui::bind_actions(
-            canvas->root(), doc,
+        const auto action_sink =
             [sink_app](const std::string &id)
             {
                 const auto it = sink_app->actions.find(id);
@@ -463,7 +491,9 @@ extern "C" zb_app_t *zb_app_create_from_ui(const char *ui_text, int is_html,
                 {
                     it->second.fn(id.c_str(), it->second.userdata);
                 }
-            });
+            };
+        zb::ui::build(*screen, doc, action_sink);
+        canvas->root().add_child(std::move(screen));
 
         self->app = adapter;
         self->ui = adapter.get();

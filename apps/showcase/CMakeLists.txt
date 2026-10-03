@@ -63,9 +63,11 @@ endif()
 add_custom_target(showcase_font_gen DEPENDS ${SHOWCASE_FONT_HEADER})
 add_dependencies(showcase_app showcase_font_gen)
 
-if (NOT IMCORE_HAS_TTF_RUNTIME)
+if (NOT USE_TTF_RUNTIME)
     # intended look needs proportional text; the build stays green with
-    # the 5x7 fallback (contract 2.4 documented degradation)
+    # the 5x7 fallback (contract 2.4 documented degradation). This reads
+    # the cache OPTION — IMCORE_HAS_TTF_RUNTIME is a compile definition
+    # (target property), never a CMake variable
     message(WARNING "showcase: configure -DUSE_TTF_RUNTIME=ON for the intended proportional-text look")
 endif()
 

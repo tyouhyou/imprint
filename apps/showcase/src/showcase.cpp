@@ -139,7 +139,11 @@ namespace zb::app::showcase
         window_->set_auto_layout(true);
         auto screen = std::make_unique<zb::ui::FlexPanel>();
         screen->set_size(static_cast<int>(w), static_cast<int>(h));
-        zb::ui::build(*screen, doc);
+        const auto on_module = [this](const std::string &id)
+        { set_text(status_, id + " toggled"); };
+        // binding rides materialization (code-contract 4): each id
+        // attaches to the widget its node created
+        zb::ui::build(*screen, doc, on_module);
         window_->root().add_child(std::move(screen));
 
         zb::ui::Widget &root = window_->root();
@@ -160,11 +164,8 @@ namespace zb::app::showcase
         {
             gain_->changed += [this](const int v) { update_gain(v); };
         }
-        const auto on_module = [this](const std::string &id)
-        { set_text(status_, id + " toggled"); };
-        zb::ui::bind_actions(root, doc, on_module);
 
-        // the three command buttons (bind_actions already gave them the
+        // the three command buttons (build() already gave them the
         // generic status sink; these are the real behaviors)
         if (auto *b = root.find_by_id("mode"))
         {

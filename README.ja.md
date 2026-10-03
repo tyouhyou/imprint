@@ -52,7 +52,7 @@ if (r.status == zb::snap::check_result::status::missing)
 // status::mismatch では tests/baselines/main_view.actual.gif も生成され差分確認に使えます
 ```
 
-`.zbsnap` ベースラインをコミットしてください。CI はどんなピクセルドリフトでも失敗し、ミスマッチ成果物が何が変わったかを見せます。ベースラインはビルド構成ごとに有効（code-contract §12.2）。リポジトリ内の参照：`test/test_snapshot.cpp` と、同じ決定論に乗っている showcase レコーダー。
+ベースラインはビルド構成ごとに有効（code-contract §12.2）で、それを所有するホストアプリがコミットします。フレームワークは record/check の仕組みを提供するだけで、ベースラインの管理は代行しません——Imprint 自身の CI は `imprint-render` の 2 回レンダリング逐バイト比較（下記）で決定論を固定し、`test/test_snapshot.cpp` が record/check の往復を検証します。ホストテストスイートの参照：同じ決定論に乗っている showcase レコーダー。
 
 ## ヘッドレス設計
 
@@ -204,7 +204,7 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 | WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` が SIGNAL-ONE ページを自己完結する単一 `.js` として生成（wasm 埋め込み済み）。node スモークテスト付き |
 | Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 
-テスト：`test/test_imui`——素の assert、テストフレームワークなし。デスクトップは `ctest -R test_imui`（またはバイナリ直実行）、NDS ではスキップ。
+テスト：`<build>/bin/test_imui`——ローカルの `EXPECT` マクロ（NDEBUG セーフ、テストフレームワークなし）。デスクトップは `ctest -R test_imui`（またはバイナリ直実行）、NDS ではスキップ。`binding/test/test_zbapi` は `assert()` に依存するため、`NDEBUG` なしの構成（Debug またはビルドタイプ未指定）でビルドしてください。
 
 ## ウィンドウと表示
 

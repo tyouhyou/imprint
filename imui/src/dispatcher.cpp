@@ -97,6 +97,14 @@ namespace zb::ui
         {
             modal = nullptr;
         }
+        // a claim or wheel-bubble hop in flight across the user callback:
+        // the dispatcher dereferences the widget again right after its
+        // on_input() returns, so the eviction must reach it too
+        if (in_flight != nullptr &&
+            (in_flight == w || in_flight->is_descendant_of(w)))
+        {
+            in_flight = nullptr;
+        }
     }
 
     bool InputDispatcher::focus_next(Widget &root, const bool forward)
@@ -263,12 +271,27 @@ namespace zb::ui
             // stops at the first claimer
             if (auto *t = pick_target(root, ev.x, ev.y))
             {
-                for (Widget *w = t; w != nullptr; w = w->parent)
+                for (Widget *w = t; w != nullptr;)
                 {
-                    if (w->on_input(ev))
+                    // the hop is read BEFORE the handler: a handler may
+                    // remove (or destroy) w mid-callback via the §6
+                    // tree-mutation protocol
+                    Widget *next = w->parent;
+                    in_flight = w;
+                    const bool claimed = w->on_input(ev);
+                    const bool evicted = in_flight == nullptr;
+                    in_flight = nullptr;
+                    if (claimed)
                     {
                         LD << "wheel claimed by widget";
                         return true;
+                    }
+                    if (evicted)
+                    {
+                        // w (or one of its ancestors) left the tree inside
+                        // its own handler: the captured chain is stale
+                        LD << "wheel bubble stopped: widget left the tree";
+                        return false;
                     }
                     // the bubble is confined to an open modal subtree
                     // (inclusive), mirroring the key path above: an
@@ -278,6 +301,7 @@ namespace zb::ui
                     {
                         break;
                     }
+                    w = next;
                 }
             }
             return false;
@@ -289,6 +313,17 @@ namespace zb::ui
         if (pressed_target != nullptr && !pressed_target->is_effectively_visible())
         {
             LD << "press cancelled: target not effectively visible";
+            pressed_target->on_cancel();
+            pressed_target = nullptr;
+        }
+        // modal confinement covers the whole press lifecycle: a press
+        // claimed BEFORE the modal opened must not receive moves or
+        // releases behind the dialog (the classic click-through) --
+        // cancel it like a mid-press hide
+        if (pressed_target != nullptr && modal != nullptr &&
+            !pressed_target->is_descendant_of(modal))
+        {
+            LD << "press cancelled: target outside the open modal";
             pressed_target->on_cancel();
             pressed_target = nullptr;
         }
@@ -306,19 +341,32 @@ namespace zb::ui
             }
 
             auto *t = pick_target(root, ev.x, ev.y);
-            if (t != nullptr && t->on_input(ev))
+            if (t != nullptr)
             {
-                pressed_target = t;
-                press_x = ev.x;
-                press_y = ev.y;
-                press_touch_id = ev.touch_id;
-                touch_outside_count = 0;
-                LD << "press claimed at " << ev.x << "," << ev.y;
-                if (t->is_focusable())
+                // claim handshake: evict() can reach the widget being
+                // claimed across its own user callback (a handler that
+                // removes its own subtree via CanvasWindow::remove_from)
+                in_flight = t;
+                const bool claimed = t->on_input(ev);
+                const bool evicted = in_flight == nullptr;
+                in_flight = nullptr;
+                if (claimed)
                 {
-                    set_focus(t);
+                    if (!evicted)
+                    {
+                        pressed_target = t;
+                        press_x = ev.x;
+                        press_y = ev.y;
+                        press_touch_id = ev.touch_id;
+                        touch_outside_count = 0;
+                        if (t->is_focusable())
+                        {
+                            set_focus(t);
+                        }
+                    }
+                    LD << "press claimed at " << ev.x << "," << ev.y;
+                    return true;
                 }
-                return true;
             }
             LD << "press NOT claimed at " << ev.x << "," << ev.y;
             return changed;
@@ -371,8 +419,11 @@ namespace zb::ui
                 // left the target, not when it entered a descendant)
                 const int dx = ev.x - press_x;
                 const int dy = ev.y - press_y;
+                // int64 squares: dx/dy come straight from the C-ABI event
+                // (untrusted int coordinates), dx*dx overflows int
                 const bool beyond_slop =
-                    dx * dx + dy * dy > press_slop * press_slop;
+                    static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy >
+                    static_cast<int64_t>(press_slop) * press_slop;
                 Widget *picked = pick_target(root, ev.x, ev.y);
                 // a nullptr pick (off-window, or a modal miss) is simply
                 // off target — do not dereference it

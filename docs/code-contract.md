@@ -1117,15 +1117,19 @@ instead of clipping**. What the offset does and does not touch:
   hot path); returns nullptr on miss. Event binding = materialize, fetch
   the Widget* by id, then subscribe via Event<> (the framework introduces
   no callback registry).
-- Action binding (P3, 2026-09-26): `bind_actions(root, node, sink)`
-  (declared in ui_builder.hpp) walks the same ui_node IR `build()`
-  materialized and, for every node carrying a non-empty id, subscribes
-  that widget's primary action event to `sink(id)` — the concrete
-  event per tag (button `clicked`; checkbox / toggle `changed`; radio
-  `changed`; slider `changed`; text_input `submitted`; list_box
-  `changed`) is chosen in ui_builder.cpp beside the tag table, the
-  single home of that knowledge (static_cast only on widgets `build()`
-  created from the same node — the §4.3 no-RTTI discipline). The sink
+- Action binding (P3, 2026-09-26; fused into materialization 2026-10-03):
+  `build(host, node, sink)` (the `int`-returning overload in
+  ui_builder.hpp) materializes the tree and, in the same pass, for every
+  materialized node carrying a non-empty id subscribes that node's own
+  widget's primary action event to `sink(id)` — the concrete event per
+  tag (button `clicked`; checkbox / toggle `changed`; radio `changed`;
+  slider `changed`; text_input `submitted`; list_box `changed`) is
+  chosen in ui_builder.cpp beside the tag table. Binding rides
+  materialization so each sink attaches to the very widget that node
+  created (the §4.3 no-RTTI discipline): there is no post-hoc id
+  lookup, so a duplicate id can never reroute a `static_cast` to a
+  wrong-typed widget (a duplicate id is warned about, and benign for
+  the framework — the host's id→callback map keeps one entry). The sink
   receives the id only; typed payloads stay on the native per-widget
   events for C++ consumers. This is a binder, not a registry: the
   framework still holds no id→handler map — a host maps ids to its own
@@ -1191,9 +1195,18 @@ dispatcher's raw pointers against dangling/UAF:
   that subtree never participated in input dispatch (no pressed/focus/
   modal pointer points into it); otherwise call
   `InputDispatcher::evict(widget)` first.
-- `evict` cleans the three pointers: pressed_target (delivers on_cancel
-  for an active press before clearing), focus_target (releases focus),
-  modal (including the case where the modal is inside the subtree).
+- `evict` cleans the dispatcher state pointers: pressed_target (delivers
+  on_cancel for an active press before clearing), focus_target (releases
+  focus), modal (including the case where the modal is inside the
+  subtree), and the in-flight claim (see below).
+- **Removing from inside a callback is safe through the coordinating
+  entry**: `evict` also reaches the dispatcher's in-flight claim — the
+  widget whose `on_input` is running right now (a press being claimed or
+  a wheel-bubble hop) — so a handler may call
+  `CanvasWindow::remove_from` on its own subtree, even on itself,
+  mid-callback; the dispatcher drops the claim instead of re-installing
+  or re-dereferencing it. The direct `remove_child` path is never safe
+  from inside a callback.
 - `remove_child` returns `std::unique_ptr<Widget>` (ownership transferred
   to the caller; nullptr if not found) **and resets `w->parent` to
   nullptr**; `clear_children()` detaches and destroys all.
@@ -1201,6 +1214,25 @@ dispatcher's raw pointers against dangling/UAF:
   twice returns nullptr.
 - Event subscriptions held by removed nodes unsubscribe safely during
   destruction.
+
+### 6.1 Modal confinement (`set_modal`)
+
+`CanvasWindow::set_modal(w)` / `InputDispatcher::set_modal(w)` set the
+dispatcher's `modal` pointer; `nullptr` clears it. While set:
+
+- presses can only be claimed inside the modal subtree (inclusive: the
+  modal widget itself is a valid target); the wheel bubble stops at the
+  modal; keyboard focus and navigation are confined to it;
+- a press claimed **before** the modal opened does not survive it: the
+  first subsequent event cancels it (`on_cancel`) instead of letting the
+  release fire behind the open dialog — a click handler that opens a
+  modal gets exactly one click;
+- an eviction that removes the modal drops the pointer (`evict`).
+
+`set_modal` is a plain pointer set: it cancels nothing and re-validates
+nothing by itself — the confinement is enforced at dispatch time, so the
+above holds no matter in which order `set_modal` and the press happen.
+`Dialog` does not call it; the host does (e.g. `apps/tictactoe`).
 
 ## 7. Layout protocol (batch J5 final)
 
@@ -1526,7 +1558,12 @@ obligations:
   (`test_dirty`'s overflow probes pin this in both directions). Any new
   feature letting children draw outside the parent's clip region (e.g.
   `overflow: visible`) must re-audit `Widget::draw`'s pruning in the same
-  change.
+  change. The P-2e outer-shadow pass is a documented exception to the
+  chain (it clips to the whole surface, so a descendant's spill can land
+  outside an ancestor's bounds): the prune compensates by expanding the
+  culling rect with `subtree_shadow_reach_` — the max outer-shadow pad
+  over the subtree, maintained on `add_shadow_outer` and re-bubbled at
+  every attach (monotone; it can only over-cull, never under-cull).
 
 ## 10. Theme (batch S1 contract — the Theme workstream; not backlog Batch S / not the rebuild observability "batch S1")
 
