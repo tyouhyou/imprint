@@ -325,6 +325,15 @@ fragments + a full-code re-read); the rulings below supersede/extend the
 - **B10-style constant C-ABI exports** (`zb_buffer_bpp` etc.): optional
   `try/catch` for file-wide no-exception-crossing style consistency;
   low priority, no throw path today.
+- **"One seed, three screens"** (from the 2026-10-03 gh-pages portal
+  round): the seedmap page's map rendered side by side from the same
+  seed on wasm + NDS + desktop, as a living determinism proof. Blocked
+  on the NDS build environment being up again; the generator itself is
+  already byte-deterministic (locked by the seedmap smoke).
+- **SIXEL terminal live recording**: a GIF of a P4-terminal shell
+  session recorded via `script(1)` pty, hosted on the portal next to
+  the wasm pages — shows the Linux SIXEL backend without a terminal
+  emulator dependency. Needs a recording pass, no framework change.
 
 ### Unscheduled Design Debt (Batch K Triage)
 

@@ -31,7 +31,7 @@ Imprint's own rasterizer — the same tree your C++ ships on every target.
 - **Pure CPU, zero dependencies** — no GPU, no OS GUI toolkit, no third-party rendering library
 - **One source tree, six targets** — desktop, sixel terminal, browser, Nintendo DS, same code
 - **Design-first** — screens described in HTML or `.ui`, validated and materialized at build time
-- **Absurdly small** — 583 KB single-file WebAssembly (font included); a Nintendo DS in 96 KB of VRAM
+- **Absurdly small** — ~650 KB single-file WebAssembly (font included); a Nintendo DS in 96 KB of VRAM
 - **Any language via C-ABI** — Python, WASM, anything that can call C gets the same protocol
 
 ## Non-goals
@@ -146,7 +146,7 @@ Measured footprints (Release builds of the showcase demo):
 
 | Target | Shipped footprint |
 |---|---|
-| WebAssembly | 583 KB single `.js` file — wasm and the Inter TTF embedded, runs from `file://` |
+| WebAssembly | 645 KB single `.js` file — wasm and the Inter TTF embedded, runs from `file://` |
 | Nintendo DS | 256×192 16-bpp framebuffer (96 KB VRAM); integer-only geometry and non-atomic refcounting options for libatomic-less toolchains |
 
 Retained-mode widgets: `Button`, `Label`, `Dialog`, `FlexPanel`, `ListBox`,
@@ -273,7 +273,7 @@ size (code-contract §11.1).
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
 | Terminal (SIXEL) | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | demo target: the same UI in a sixel terminal (WezTerm/foot/iTerm2), input via SGR mouse + keys; `IM_TERM_SIZE=WxH` resizes |
 | Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the SIGNAL-ONE ROM (it additionally needs the host-built `html_embed` and `bytes_embed`, passed as `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`), or `-DSTORY=showcase_html` for the HTML showcase (same, plus the host-built `html_embed` as `-DHTML_EMBED_EXECUTABLE=`) |
-| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh showcase` produces the SIGNAL-ONE page as one self-contained `.js` (wasm embedded); includes a node smoke test |
+| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh <story>` produces one self-contained `.js` per story (wasm embedded) — `showcase` (SIGNAL-ONE), `tictactoe`, `g2048`, `mines`, `life`, `seedmap`, `playground` (design-file editor host); includes a node smoke test (`demo/wasm/smoke.js <story>_mod.js`) |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
 Tests: `<build>/bin/test_imui` — a local `EXPECT` macro (NDEBUG-safe,
@@ -332,8 +332,14 @@ proportional look; the 5x7 bitmap fallback keeps non-TTF builds green.
   <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE recorded end to end: boots into live telemetry with the trend line advancing, a drag across the GAIN knob pulls the dB readout, the load gauge and the temp meter, MODE cycles three accent themes (cyan, amber, green), the module toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
 </p>
 
-**[Try it live in your browser](https://tyouhyou.github.io/imprint/)** — no
-server, no install: the wasm is embedded in the page.
+**[Try the demos live](https://tyouhyou.github.io/imprint/)** — a demo portal:
+every page is this framework compiled to WebAssembly, no server, no install
+(wasm embedded in the page). Besides SIGNAL-ONE: **2048** with a
+deterministic time-travel scrubber (rewind the whole input stream and replay
+it byte-exact), **Minesweeper**, a **Game of Life / plasma / starfield**
+demoscene page, a seed-driven **dungeon map** generator, and a design-file
+**playground** where you paste HTML and watch the C++ rasterizer draw it —
+plus a live repaint-rectangle visualization on every page.
 
 **Hello** (`-DSTORY=hello`) — the getting-started app: a label and a
 click-counting button; copy it to start your own app (see
@@ -344,7 +350,9 @@ buttons, layout and repaint-on-demand; the NDS build produces
 `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview`
 (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES`
 (space-separated paths; left/right keys switch documents) — pass `.ui` or
-HTML paths.
+HTML paths. Four more stories power the portal demos and build the same way:
+`g2048`, `mines`, `life`, `seedmap` (`-DSTORY=<name>`; they are also the
+wasm demo pages).
 
 | Windows | macOS | Linux (X11) | WebAssembly | Nintendo DS | Python host |
 |:---:|:---:|:---:|:---:|:---:|:---:|
