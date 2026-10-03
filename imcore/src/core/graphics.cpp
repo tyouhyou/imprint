@@ -572,22 +572,50 @@ void Graphics::draw_image(
     {
         return;
     }
-    int sx, sy;
-    for (int row = 0; row < img_height; row++)
+    // A-26: the per-pixel draw_pixel gate chain (offset / draw area /
+    // damage, plus the old surface-bounds scan) hoisted to one rect
+    // intersection, then a per-row walk with draw_pixel's write policy
+    // applied per pixel -- byte-identical to the per-pixel traversal,
+    // the same shape as draw_surface (U-8)
+    int64_t sx = start_x, sy = start_y;
+    if (draw_area_offset_enabled)
     {
-        sy = row + start_y;
-        if (sy < 0)
-            continue;
-        if (sy >= imsize.height)
-            break;
-        for (int col = 0; col < img_width; col++)
+        sx += draw_area_offset.x;
+        sy += draw_area_offset.y;
+    }
+    int col0 = static_cast<int>(std::max<int64_t>(sx, 0));
+    int col1 = static_cast<int>(std::min<int64_t>(sx + img_width - 1, imsize.width - 1));
+    int row0 = static_cast<int>(std::max<int64_t>(sy, 0));
+    int row1 = static_cast<int>(std::min<int64_t>(sy + img_height - 1, imsize.height - 1));
+    col0 = std::max(col0, draw_area.start_x);
+    col1 = std::min(col1, draw_area.end_x);
+    row0 = std::max(row0, draw_area.start_y);
+    row1 = std::min(row1, draw_area.end_y);
+    if (damage_on_)
+    {
+        col0 = std::max(col0, damage_l_);
+        col1 = std::min(col1, damage_r_ - 1);
+        row0 = std::max(row0, damage_t_);
+        row1 = std::min(row1, damage_b_ - 1);
+    }
+    if (col0 > col1 || row0 > row1)
+    {
+        return;
+    }
+    for (int row = row0; row <= row1; row++)
+    {
+        const Color *src = img + (row - sy) * img_row_stride + (col0 - sx);
+        Color *px = pixels + imsize.width * row + col0;
+        for (int i = col1 - col0; i >= 0; --i, ++src, ++px)
         {
-            sx = col + start_x;
-            if (sx < 0)
-                continue;
-            if (sx >= imsize.width)
-                break;
-            draw_pixel(sx, sy, img[static_cast<int64_t>(row) * img_row_stride + col]);
+            if (!alpha_enabled)
+            {
+                *px = *src;
+            }
+            else
+            {
+                *px = alpha_blend(*src, *px);
+            }
         }
     }
 }
@@ -633,38 +661,63 @@ void Graphics::draw_image(
     {
         return;
     }
-    int sx, sy;
-    for (int row = 0; row < img_height; row++)
+    // A-26: the same hoisted rect intersection as the plain path; the
+    // modulate math and draw_pixel's write policy stay per pixel and
+    // unchanged, so the walk is byte-identical
+    int64_t sx = start_x, sy = start_y;
+    if (draw_area_offset_enabled)
     {
-        sy = row + start_y;
-        if (sy < 0)
-            continue;
-        if (sy >= imsize.height)
-            break;
-        for (int col = 0; col < img_width; col++)
+        sx += draw_area_offset.x;
+        sy += draw_area_offset.y;
+    }
+    int col0 = static_cast<int>(std::max<int64_t>(sx, 0));
+    int col1 = static_cast<int>(std::min<int64_t>(sx + img_width - 1, imsize.width - 1));
+    int row0 = static_cast<int>(std::max<int64_t>(sy, 0));
+    int row1 = static_cast<int>(std::min<int64_t>(sy + img_height - 1, imsize.height - 1));
+    col0 = std::max(col0, draw_area.start_x);
+    col1 = std::min(col1, draw_area.end_x);
+    row0 = std::max(row0, draw_area.start_y);
+    row1 = std::min(row1, draw_area.end_y);
+    if (damage_on_)
+    {
+        col0 = std::max(col0, damage_l_);
+        col1 = std::min(col1, damage_r_ - 1);
+        row0 = std::max(row0, damage_t_);
+        row1 = std::min(row1, damage_b_ - 1);
+    }
+    if (col0 > col1 || row0 > row1)
+    {
+        return;
+    }
+    for (int row = row0; row <= row1; row++)
+    {
+        const Color *src = img + (row - sy) * img_row_stride + (col0 - sx);
+        Color *px = pixels + imsize.width * row + col0;
+        for (int i = col1 - col0; i >= 0; --i, ++src, ++px)
         {
-            sx = col + start_x;
-            if (sx < 0)
-                continue;
-            if (sx >= imsize.width)
-                break;
-            const Color &src = img[static_cast<int64_t>(row) * img_row_stride + col];
             Color c{};
-            c.set_r(static_cast<uint8_t>(src.r() * tint.r() / 0xFF));
-            c.set_g(static_cast<uint8_t>(src.g() * tint.g() / 0xFF));
-            c.set_b(static_cast<uint8_t>(src.b() * tint.b() / 0xFF));
+            c.set_r(static_cast<uint8_t>(src->r() * tint.r() / 0xFF));
+            c.set_g(static_cast<uint8_t>(src->g() * tint.g() / 0xFF));
+            c.set_b(static_cast<uint8_t>(src->b() * tint.b() / 0xFF));
             // alpha: a real weight at 32bpp; a binary gate at 16bpp (the
             // single alpha bit has no 8-bit weight to multiply -- an
             // 8-bit modulate there would clear every pixel's bit)
             if constexpr (Color::per_channel_blend)
             {
-                c.set_a(static_cast<uint8_t>(src.a() * tint.a() / 0xFF));
+                c.set_a(static_cast<uint8_t>(src->a() * tint.a() / 0xFF));
             }
             else
             {
-                c.set_a(static_cast<uint8_t>(tint.a() != 0 ? src.a() : 0));
+                c.set_a(static_cast<uint8_t>(tint.a() != 0 ? src->a() : 0));
             }
-            draw_pixel(sx, sy, c);
+            if (!alpha_enabled)
+            {
+                *px = c;
+            }
+            else
+            {
+                *px = alpha_blend(c, *px);
+            }
         }
     }
 }

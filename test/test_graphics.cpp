@@ -496,6 +496,67 @@ int test_graphics()
         EXPECT(test::pixel_at(*g, 4, 1) == core::Color::from(255, 128, 128).pixel);
     }
 
+    // A-26 row-walk draw_image: a partially offscreen blit copies exact
+    // words in the intersection and respects a stride wider than the row
+    // (2 rows x 4 used cols, stride 5: src[4] and src[9] are the gaps)
+    {
+        auto g = core::Graphics::make_ptr(8, 6);
+        g->fill(core::colors::Black);
+        g->enable_alpha(false);
+        const core::Color src[10] = {
+            core::Color::from(1, 2, 3, 255),   core::Color::from(4, 5, 6, 255),
+            core::Color::from(7, 8, 9, 255),   core::Color::from(10, 11, 12, 255),
+            core::colors::Black,                                                // row-0 gap
+            core::Color::from(13, 14, 15, 255), core::Color::from(16, 17, 18, 255),
+            core::Color::from(19, 20, 21, 255), core::Color::from(22, 23, 24, 255),
+            core::colors::Black                                                 // row-1 gap
+        };
+        g->draw_image(src, 4, 2, 5, -1, 3); // dest cols -1..2 map src cols 0..3
+        EXPECT(test::pixel_at(*g, 0, 3) == core::Color::from(4, 5, 6, 255).pixel);
+        EXPECT(test::pixel_at(*g, 1, 3) == core::Color::from(7, 8, 9, 255).pixel);
+        EXPECT(test::pixel_at(*g, 2, 3) == core::Color::from(10, 11, 12, 255).pixel);
+        EXPECT(test::pixel_at(*g, 0, 4) == core::Color::from(16, 17, 18, 255).pixel); // row 1 reads via stride
+        EXPECT(test::pixel_at(*g, 2, 4) == core::Color::from(22, 23, 24, 255).pixel);
+        EXPECT(test::pixel_at(*g, 3, 3) == core::colors::Black.pixel);  // beyond image width
+        EXPECT(test::pixel_at(*g, 0, 2) == core::colors::Black.pixel);  // above the blit
+        EXPECT(test::pixel_at(*g, 0, 5) == core::colors::Black.pixel);  // below the blit
+    }
+
+    // draw_image with translucent source pixels blends per pixel
+    // (32bpp per-channel blend only)
+    if (core::ImColor_Depth == 32)
+    {
+        auto g = core::Graphics::make_ptr(4, 2);
+        g->fill(core::colors::Red);
+        g->enable_alpha(true);
+        const core::Color src[2] = {core::Color::from(200, 40, 40, 128), core::colors::White};
+        g->draw_image(src, 2, 1, 2, 0, 0);
+        // translucent src over red: the alpha_blend reference
+        // r=(200*128+255*127)/255=227, g=b=(40*128)/255=20, a=255
+        EXPECT(test::pixel_at(*g, 0, 0) == core::Color::from(227, 20, 20, 255).pixel);
+        EXPECT(test::pixel_at(*g, 1, 0) == core::colors::White.pixel);  // opaque src overwrites
+    }
+
+    // draw_image hard-clips to the damage region (A-13), plain and tinted
+    {
+        auto g = core::Graphics::make_ptr(8, 4);
+        g->fill(core::colors::Black);
+        g->enable_alpha(false);
+        const core::Color src[12] = {core::colors::White, core::colors::White,
+                                     core::colors::White, core::colors::White,
+                                     core::colors::White, core::colors::White,
+                                     core::colors::White, core::colors::White,
+                                     core::colors::White, core::colors::White,
+                                     core::colors::White, core::colors::White};
+        g->set_damage(2, 0, 6, 4); // half-open: dest cols 2..5 blended
+        g->draw_image(src, 6, 2, 6, 0, 1);
+        EXPECT(test::pixel_at(*g, 2, 1) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 5, 2) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 1, 1) == core::colors::Black.pixel);  // outside damage
+        EXPECT(test::pixel_at(*g, 6, 1) == core::colors::Black.pixel);  // half-open right edge
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Black.pixel);  // above the blit
+    }
+
     // draw_line_aa: axis-aligned runs fall back to the exact plain line
     {
         auto g = core::Graphics::make_ptr(10, 10);

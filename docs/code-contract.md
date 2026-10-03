@@ -1414,7 +1414,12 @@ obligations:
   `draw_area` is closed; their single point of contact is the private
   predicate `damage_contains(x, y)` (`draw_pixel` uses it directly;
   `fill` clamps by the same boundaries then intersects, degenerating to
-  an early exit). `draw_image` (plain and tinted), `fill_gradient` and
+  an early exit). `draw_image` (plain and tinted) clamps to the same
+  boundaries at block granularity (the U-8 row-walk shape: one rect
+  intersection over surface/draw-area/damage bounds, then a per-row walk
+  applying `draw_pixel`'s write policy — direct word or `alpha_blend` —
+  per pixel; byte-identical to the per-pixel traversal);
+  `fill_gradient` and
   the round-rect pair all plot per-pixel through `draw_pixel`/`draw_line`
   and inherit the same clipping; the AA primitives (`draw_line_aa` /
   `draw_circle_aa` / `draw_arc_aa` / `fill_circle_aa` /
