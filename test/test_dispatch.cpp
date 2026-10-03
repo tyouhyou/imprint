@@ -1021,18 +1021,29 @@ int test_dispatch()
             InputDispatcher *disp = nullptr;
             Panel *host = nullptr;
             bool *destroyed_flag = nullptr;
-            int presses = 0;
+            // the count lives on the test's stack: the handler destroys
+            // this object mid-callback, so any member read afterwards
+            // (including from the test body) would be a use-after-free
+            int *press_count = nullptr;
 
             bool on_input(const zb::input::input_event &ev) override
             {
                 if (ev.type == zb::input::input_type::mouse_left_down)
                 {
-                    ++presses;
+                    ++*press_count;
+                    // hoist the stack pointers BEFORE the self-destruction:
+                    // once remove_child(this).reset() has freed this, the
+                    // handler body may not touch a single member (a member
+                    // read from freed memory is the UAF this scenario must
+                    // not itself contain)
+                    InputDispatcher *const self_disp = disp;
+                    Panel *const self_host = host;
+                    bool *const flag = destroyed_flag;
                     // remove self mid-callback and drop the ownership:
                     // by the time on_input returns, this object is freed
-                    disp->evict(this);
-                    host->remove_child(this).reset();
-                    *destroyed_flag = true;
+                    self_disp->evict(this);
+                    self_host->remove_child(this).reset();
+                    *flag = true;
                     return true;
                 }
                 return false;
@@ -1044,18 +1055,18 @@ int test_dispatch()
         w->set_position(0, 0);
         w->disp = &d;
         w->host = &root;
-        auto *pw = w.get();
         bool destroyed = false;
+        int presses = 0;
         w->destroyed_flag = &destroyed;
+        w->press_count = &presses;
         root.add_child(std::move(w));
 
         // the press is claimed; the handler destroyed the claim target
         // (pre-fix the dispatcher stored it as pressed_target and
         // dereferenced it again for the focus check)
         EXPECT(d.dispatch(root, press_at(10, 10)));
-        EXPECT(pw->presses == 1);
+        EXPECT(presses == 1);
         EXPECT(destroyed);
-        pw = nullptr;  // the object is gone; nothing below may touch it
 
         // the release is inert, and a fresh press must not walk a stale
         // pointer (the dispatch-entry liveness probe touches
