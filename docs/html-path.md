@@ -145,6 +145,7 @@ applies unchanged.
 | `toggle` | `toggle` | `checked` = presence |
 | `gauge` | `gauge` | `min` / `max` / `value` |
 | `knob` | `knob` | `min` / `max` / `step` / `value` |
+| `slider` | `slider` | `min` / `max` / `step` / `value`; interactive like the `.ui` path (drag / arrows / wheel, fires `changed` and the action binding) |
 | `trend` | `trend` | sized with `width` / `height` |
 | `meter` | `progress_bar` | degraded stand-in (HTML meter is a horizontal scalar); `min` / `max` / `value` |
 | `svg`, `vectordial` | `svg` | vector-dial subset (§SVG subset): `viewBox` + `line`/`text`/`rect`/`circle`/`ellipse`/`polyline`/`polygon` children; `g` folds its presentation attributes onto them; `vectordial` is the same widget under an instrument name (the alias costs one table row, the implementation is shared) |
@@ -156,7 +157,7 @@ applies unchanged.
 | `id` | any element | `find_by_id` handle (unquoted digits accepted, stored as decimal — the `.ui` rule) |
 | `style` | any element | inline declaration list, wins over every rule |
 | `class` | any element | drives `.class` selector matching (§`<style>` rule matching); multi-class lists split on whitespace |
-| `min` / `max` / `step` / `value` | gauge / knob / meter | range/value properties (full integers, negatives accepted; the widget clamps `value` into [`min`, `max`] and collapses a reversed range to a point; `step` stays a non-negative magnitude) |
+| `min` / `max` / `step` / `value` | gauge / knob / slider / meter | range/value properties (full integers, negatives accepted; the widget clamps `value` into [`min`, `max`] and collapses a reversed range to a point; `step` stays a non-negative magnitude) |
 | `checked` | checkbox / radio / toggle | boolean, by presence |
 | `group` | radio | radio group id (integer, any sign — equality-matched, never indexed) |
 | `viewBox` | svg / vectordial | four viewBox units (`minx miny w h`, space/comma separated, decimals round half away from zero); malformed, absent, or non-positive size = pixel units (coordinates map 1:1) |

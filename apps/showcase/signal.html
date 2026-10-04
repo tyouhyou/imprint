@@ -20,22 +20,22 @@
     border-radius: 4px;
     padding: 3px 9px;
   }
-  #radar::after {
+  #sweep::after {
     content: "";
     position: absolute;
     left: 50%;
     top: 50%;
+    bottom: 3%;
     width: 2px;
-    height: 46%;
     transform-origin: 50% 0%;
     transform: rotate(0deg);
-    background: linear-gradient(180deg, rgba(79,214,224,0) 0%, rgba(79,214,224,0.45) 60%, rgba(79,214,224,0.9) 100%);
+    background: rgba(79,214,224,0.8);
   }
 </style>
 </head>
 <body style="display:flex; flex-direction:column; width:100%; height:100%; background:#060911; font-size:11px; color:#c9d2df; margin:0">
 
-  <div style="display:flex; height:28px; padding:0 12px; align-items:center; background:linear-gradient(180deg,#18202f,#101623); border-bottom:1px solid #2a3345">
+  <div style="display:flex; height:24px; padding:0 12px; align-items:center; background:linear-gradient(180deg,#18202f,#101623); border-bottom:1px solid #2a3345">
     <p style="color:#4fd6e0; font-weight:bold; font-size:11px; letter-spacing:3px; margin:0">ISV EVENT-HORIZON</p>
     <p class="cap" style="margin:0 0 0 12px">FLAGSHIP BRIDGE · SIGNAL-ONE</p>
     <div style="flex:1"></div>
@@ -44,21 +44,22 @@
 
   <div style="display:flex; flex:1; padding:8px; gap:8px">
 
-    <div class="panel" style="width:25%; padding:8px; display:flex; flex-direction:column; align-items:center; gap:2px">
+    <div class="panel" style="width:29%; padding:8px; display:flex; flex-direction:column; gap:2px">
       <p class="cap">HEADING</p>
-      <gauge id="helm" min="0" max="359" value="0" style="width:88px; height:88px"></gauge>
+      <gauge id="helm" min="0" max="359" value="0" style="width:44px; height:44px"></gauge>
       <p id="headval" class="val" style="font-size:11px; color:#4fd6e0">HDG 000</p>
-      <p class="cap" style="margin-top:6px">THROTTLE</p>
+      <p class="cap" style="margin-top:4px">THROTTLE</p>
       <slider id="throttle" min="0" max="100" step="1" value="35" style="width:86%; height:16px"></slider>
       <p id="warpval" class="val" style="font-size:10px; color:#f0b243">WARP 1.8</p>
-      <p class="cap" style="margin-top:6px">BEARING · GALACTIC N</p>
-      <p id="brgval" style="font-size:9px; color:#8a93a5; margin:0">+000.0 MARK 0</p>
+      <p class="cap" style="margin-top:4px">BEARING · GALACTIC N</p>
+      <p id="brgval" style="font-size:9px; color:#8a93a5; margin:0">+000.0°</p>
     </div>
 
     <div style="flex:1; display:flex; flex-direction:column; gap:8px">
       <div class="panel" style="flex:1; padding:8px; display:flex; flex-direction:column; gap:2px">
         <p class="cap">SENSOR SWEEP · LONG RANGE</p>
-        <svg id="radar" viewBox="0 0 200 200" style="width:100%; height:62%; align-self:center">
+        <div id="sweep" style="position:relative; width:100%; height:64%; align-self:center">
+          <svg id="radar" viewBox="0 0 200 200" style="width:100%; height:100%">
           <circle cx="100" cy="100" r="96" fill="none" stroke="#1c2740" stroke-width="2"></circle>
           <circle cx="100" cy="100" r="72" fill="none" stroke="#182238" stroke-width="1"></circle>
           <circle cx="100" cy="100" r="48" fill="none" stroke="#182238" stroke-width="1"></circle>
@@ -71,30 +72,28 @@
           <circle cx="48" cy="58" r="2" fill="#c9d2df"></circle>
           <text x="12" y="16" font-size="9" fill="#5c6a80">SCAN 360</text>
         </svg>
+        </div>
       </div>
-      <div class="panel" style="height:34%; padding:8px 10px; display:flex; flex-direction:column; gap:2px">
+      <div class="panel" style="height:46%; padding:8px 10px; display:flex; flex-direction:column; gap:2px">
         <p class="cap">REACTOR OUTPUT · LIVE FEED</p>
-        <trend id="trend" style="width:100%; height:52px"></trend>
+        <trend id="trend" style="width:100%; height:62%"></trend>
       </div>
     </div>
 
-    <div class="panel" style="width:25%; padding:8px; display:flex; flex-direction:column; align-items:center; gap:2px">
+    <div class="panel" style="width:29%; padding:8px; display:flex; flex-direction:column; gap:2px">
       <p class="cap">REACTOR LOAD</p>
-      <gauge id="load" min="0" max="100" value="62" style="width:88px; height:88px"></gauge>
+      <gauge id="load" min="0" max="100" value="62" style="width:44px; height:44px"></gauge>
       <p id="loadval" class="val" style="font-size:11px; color:#4fd6e0">62%</p>
-      <p class="cap" style="margin-top:6px; width:100%">CORE TEMP</p>
       <meter id="temp" min="0" max="100" value="41" style="width:100%; height:8px"></meter>
-      <p id="tempval" style="font-size:9px; color:#8a93a5; margin:0">41°C · nominal</p>
-      <div style="flex:1"></div>
-      <p class="cap" style="width:100%">SYSTEMS</p>
-      <toggle id="modA" checked style="font-size:10px">SHIELDS</toggle>
-      <toggle id="modB" checked style="font-size:10px">LIFE SUPPORT</toggle>
-      <toggle id="modC" style="font-size:10px">AUX SENSORS</toggle>
+      <p id="tempval" style="font-size:9px; color:#8a93a5; margin:0">41°C nominal</p>
+      <toggle id="modA" checked style="font-size:9px">SHIELDS</toggle>
+        <toggle id="modB" checked style="font-size:9px">LIFE SUPPORT</toggle>
+        <toggle id="modC" style="font-size:9px">AUX SENSORS</toggle>
     </div>
 
   </div>
 
-  <div style="display:flex; height:28px; padding:0 10px; gap:6px; align-items:center; background:#0a0e18; border-top:1px solid #2a3345">
+  <div style="display:flex; height:24px; padding:0 10px; gap:6px; align-items:center; background:#0a0e18; border-top:1px solid #2a3345">
     <button id="alert" class="btn">ALERT</button>
     <button id="mode" class="btn">MODE</button>
     <button id="reset" class="btn">RESET</button>

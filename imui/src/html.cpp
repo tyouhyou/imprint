@@ -34,7 +34,7 @@ namespace zb::ui
             return t == "div" || t == "p" || t == "span" || t == "label" ||
                    t == "small" || t == "button" || t == "checkbox" || t == "radio" ||
                    t == "br" || t == "toggle" || t == "gauge" ||
-                   t == "knob" || t == "trend" || t == "meter" ||
+                   t == "knob" || t == "slider" || t == "trend" || t == "meter" ||
                    t == "svg" || t == "vectordial";
             // NOTE: line/text and the static geometry elements are
             // svg-context only (handled in handle_open while
@@ -4074,7 +4074,7 @@ namespace zb::ui
                 else if ((k == "min" || k == "max" || k == "step" ||
                           k == "value") &&
                          (n.type == "gauge" || n.type == "knob" ||
-                          n.type == "progress_bar"))
+                          n.type == "slider" || n.type == "progress_bar"))
                 {
                     // B3: the full integer grammar (negatives included)
                     // reaches the widgets, which clamp value into

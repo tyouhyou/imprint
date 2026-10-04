@@ -202,7 +202,7 @@ namespace zb::app::showcase
         mod_a_ = static_cast<zb::ui::ToggleSwitch *>(root.find_by_id("modA"));
         mod_b_ = static_cast<zb::ui::ToggleSwitch *>(root.find_by_id("modB"));
         mod_c_ = static_cast<zb::ui::ToggleSwitch *>(root.find_by_id("modC"));
-        radar_ = root.find_by_id("radar");
+        radar_ = root.find_by_id("sweep"); // the pseudo host above #radar
         headval_ = root.find_by_id("headval");
         warpval_ = root.find_by_id("warpval");
         brgval_ = root.find_by_id("brgval");
@@ -274,13 +274,19 @@ namespace zb::app::showcase
                 if (trend_ != nullptr)
                 {
                     trend_->clear();
+                    const int load = reactor_load();
+                    for (int i = 0; i < 48; ++i)
+                    {
+                        const int v = load + wave_at(i * 2) - 14;
+                        trend_->append(v < 0 ? 0 : (v > 100 ? 100 : v));
+                    }
                 }
                 apply_alert(false);
                 apply_mode(0);
                 update_throttle(kBootThrottle);
                 heading_ = 0;
                 frame_ = 0;
-                set_text(status_, "CONDITION GREEN");
+                set_text(status_, "BOOT STATE RESTORED");
             };
         }
 
@@ -344,12 +350,13 @@ namespace zb::app::showcase
                 std::snprintf(buf, sizeof(buf), "HDG %03d", heading_);
                 set_text(headval_, buf);
                 const int brg_x10 = (heading_ * 10) % 3600;
-                std::snprintf(buf, sizeof(buf), "+%03d.%d MARK 0",
+                std::snprintf(buf, sizeof(buf), "+%03d.%d\xc2\xb0",
                               brg_x10 / 10, brg_x10 % 10);
                 set_text(brgval_, buf);
             }
-            // the radar sweep needle: the design's ::after pseudo,
-            // re-specified per frame (paint-only box, no layout)
+            // the radar sweep needle: the design's ::after pseudo
+            // (a solid box -- rotation paints solid only), re-specified
+            // per frame with the pivot at the needle's top-center
             if (radar_ != nullptr)
             {
                 const zb::ui::Widget::pseudo_spec *sp = radar_->pseudo(1);
@@ -357,6 +364,10 @@ namespace zb::app::showcase
                 {
                     zb::ui::Widget::pseudo_spec spec = *sp;
                     spec.rot_ang = static_cast<int16_t>((frame_ * 3) % 360);
+                    spec.rot_ox = 50;
+                    spec.rot_ox_pct = 1;
+                    spec.rot_oy = 0;
+                    spec.rot_oy_pct = 0;
                     radar_->set_pseudo(1, spec);
                 }
             }
