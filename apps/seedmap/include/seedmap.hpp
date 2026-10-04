@@ -9,7 +9,8 @@
 namespace zb::app::seedmap
 {
     /*
-     * The map canvas: a 64x48 tile dungeon rendered at 4 px per tile.
+     * The map canvas: a 64x48 tile dungeon rendered at a runtime scale
+     * (classic tier: 4 px per tile).
      * Tiles: stone wall, floor, water, door, tree (scattered decor).
      */
     class MapCanvas : public zb::ui::Widget
@@ -28,7 +29,10 @@ namespace zb::app::seedmap
             tree
         };
 
-        MapCanvas();
+        MapCanvas(int scale);
+
+        int canvas_w() const noexcept { return kCols * scale_; }
+        int canvas_h() const noexcept { return kRows * scale_; }
 
         // hands in a fully generated map (the app owns the generator)
         void set_tile(int col, int row, unsigned char t);
@@ -42,6 +46,7 @@ namespace zb::app::seedmap
         void draw_at(zb::ui::core::Graphics &area) const override;
 
     private:
+        int scale_ = kScale;
         unsigned char tiles_[kRows][kCols] = {};
     };
 
@@ -104,6 +109,12 @@ namespace zb::app::seedmap
     private:
         static constexpr uint32_t kWidth = 320;
         static constexpr uint32_t kHeight = 240;
+        static constexpr int kHeaderH = 40;   // seed row + spacing
+
+        // canvas geometry, decided once in create_window
+        int scale_ = kScale;
+        int canvas_x_ = 32;
+        int canvas_y_ = kHeaderH;
 
         zb::SharedPtr<zb::app::CanvasWindow> window_;
         MapCanvas *canvas_ = nullptr;

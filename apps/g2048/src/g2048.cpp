@@ -8,9 +8,10 @@ using namespace zb::ui;
 
 namespace
 {
-    constexpr int kBoard = 140;          // 4 * 30 + 5 * 4
-    constexpr int kBoardX = 58;
-    constexpr int kBoardY = 44;
+    constexpr int clamp_i(const int v, const int lo, const int hi)
+    {
+        return v < lo ? lo : (v > hi ? hi : v);
+    }
 
     core::Color tile_bg(const int v)
     {
@@ -38,9 +39,11 @@ namespace
     }
 }
 
-Board2048::Board2048()
+Board2048::Board2048(const int cell, const int gap)
+    : cell_(cell), gap_(gap)
 {
-    set_size(kBoard, kBoard);
+    const int board = 4 * cell_ + 5 * gap_;
+    set_size(board, board);
     set_background_color(core::Color::from(0xBB, 0xAD, 0xA0));
 
     for (int r = 0; r < 4; ++r)
@@ -48,8 +51,18 @@ Board2048::Board2048()
         for (int c = 0; c < 4; ++c)
         {
             auto tile = std::make_unique<Label>();
-            tile->set_size(kCell, kCell);
-            tile->set_position(kGap + c * (kCell + kGap), kGap + r * (kCell + kGap));
+            tile->set_size(cell_, cell_);
+            tile->set_position(gap_ + c * (cell_ + gap_), gap_ + r * (cell_ + gap_));
+            // the value sits dead center of the tile (the default
+            // alignment parks it top-left, overflowing small tiles)
+            tile->set_h_align(Widget::h_align::center);
+            tile->set_v_align(Widget::v_align::center);
+            // scale the digits with the tile; skipped at the classic
+            // size so the design-minimum tier renders byte-identical
+            if (cell_ > 30)
+            {
+                tile->set_font_size(cell_ * 2 / 5);
+            }
             tiles_[r][c] = tile.get();
             add_child(std::move(tile));
         }
@@ -79,9 +92,9 @@ void Board2048::draw_at(core::Graphics &area) const
     {
         for (int c = 0; c < 4; ++c)
         {
-            const int x = kGap + c * (kCell + kGap);
-            const int y = kGap + r * (kCell + kGap);
-            area.fill_round_rect(x, y, x + kCell - 1, y + kCell - 1, 3,
+            const int x = gap_ + c * (cell_ + gap_);
+            const int y = gap_ + r * (cell_ + gap_);
+            area.fill_round_rect(x, y, x + cell_ - 1, y + cell_ - 1, 3,
                                  core::Color::from(0xCD, 0xC1, 0xB4));
         }
     }
@@ -96,6 +109,26 @@ void G2048::create_window(const uint32_t max_client_width,
 {
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
+
+    const int w = static_cast<int>(max_client_width);
+    const int h = static_cast<int>(max_client_height);
+
+    // Board geometry from the host buffer: tile size and gap scale the
+    // design-minimum ratios (integer math, round half up). At the classic
+    // 256x192 tier this reproduces the hardcoded 30px / gap-4 board at
+    // (58, 44) exactly; larger buffers grow the board toward its caps.
+    const int sw = w * 192;
+    const int sh = h * 256;
+    const int num = sw <= sh ? w : h;
+    const int den = sw <= sh ? 256 : 192;
+    cell_ = clamp_i((30 * num + den / 2) / den, 30, 72);
+    gap_ = clamp_i(cell_ / 8, 4, 9);
+    const int board = 4 * cell_ + 5 * gap_;
+    board_x_ = (w - board) / 2;
+    // flush under the header at the classic tier; once the spare room
+    // below is real, drift toward vertical centering
+    const int spare = h - kHeaderH - board;
+    board_y_ = kHeaderH + (spare > 16 ? (spare - 16) / 2 : 0);
 
     auto &root = window_->root();
 
@@ -116,19 +149,20 @@ void G2048::create_window(const uint32_t max_client_width,
     auto new_btn = std::make_unique<Button>();
     new_btn->set_text("NEW");
     new_btn->set_size(56, 22);
-    new_btn->set_position(190, 7);
+    new_btn->set_position(w - 66, 7);
     new_btn->clicked += [this] { new_game(); };
     root.add_child(std::move(new_btn));
 
-    auto board = std::make_unique<Board2048>();
-    board->set_position(kBoardX, kBoardY);
-    board_ = board.get();
-    root.add_child(std::move(board));
+    auto board_w = std::make_unique<Board2048>(cell_, gap_);
+    board_w->set_position(board_x_, board_y_);
+    board_ = board_w.get();
+    root.add_child(std::move(board_w));
 
     auto dlg = std::make_unique<Dialog>();
-    dlg->set_size(kWidth, kHeight);
-    dlg->set_frame_size(160, 92);
-    dlg->get_title().set_size(140, 20);
+    dlg->set_size(max_client_width, max_client_height);
+    const int frame_w = clamp_i(w / 2, 160, 300);
+    dlg->set_frame_size(frame_w, 92);
+    dlg->get_title().set_size(frame_w - 20, 20);
     dlg->get_title().set_h_align(Widget::h_align::center);
     dlg->set_button_size(64, 24);
     auto &again = dlg->add_button("AGAIN");

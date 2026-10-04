@@ -12,11 +12,13 @@ namespace zb::app::g2048
      * The 2048 board: a 4x4 grid of colored cells with the tile value
      * rendered by a child Label (framework text path, centered in the
      * cell). The app owns the game state; the board only mirrors it.
+     * Cell size is handed in by the app (derived from the host buffer);
+     * the classic tier is kGap 4 / kCell 30.
      */
     class Board2048 : public zb::ui::Panel
     {
     public:
-        Board2048();
+        Board2048(int cell, int gap);
 
         // mirrors one tile: value 0 hides the label; v > 2048 uses the
         // "beyond" palette entry
@@ -26,8 +28,8 @@ namespace zb::app::g2048
         void draw_at(zb::ui::core::Graphics &area) const override;
 
     private:
-        static constexpr int kGap = 4;
-        static constexpr int kCell = 30;
+        int cell_ = 30;
+        int gap_ = 4;
 
         zb::ui::Label *tiles_[4][4] = {};
     };
@@ -90,6 +92,13 @@ namespace zb::app::g2048
     private:
         static constexpr uint32_t kWidth = 256;
         static constexpr uint32_t kHeight = 192;
+        static constexpr int kHeaderH = 44;  // header row + spacing
+
+        // board geometry, decided once in create_window
+        int cell_ = 30;
+        int gap_ = 4;
+        int board_x_ = 58;
+        int board_y_ = kHeaderH;
 
         // pure game state (a replay re-derives all of it from the inputs)
         int grid_[4][4] = {};

@@ -8,10 +8,10 @@ using namespace zb::ui;
 
 namespace
 {
-    constexpr int kCanvasX = 32;
-    constexpr int kCanvasY = 40;
-    constexpr int kCanvasW = MapCanvas::kCols * MapCanvas::kScale;   // 256
-    constexpr int kCanvasH = MapCanvas::kRows * MapCanvas::kScale;   // 192
+    constexpr int clamp_i(const int v, const int lo, const int hi)
+    {
+        return v < lo ? lo : (v > hi ? hi : v);
+    }
 
     core::Color tile_color(const unsigned char t)
     {
@@ -26,9 +26,10 @@ namespace
     }
 }
 
-MapCanvas::MapCanvas()
+MapCanvas::MapCanvas(const int scale)
+    : scale_(scale)
 {
-    set_size(kCanvasW, kCanvasH);
+    set_size(canvas_w(), canvas_h());
     set_background_color(core::colors::Black);
 }
 
@@ -43,14 +44,14 @@ void MapCanvas::draw_at(core::Graphics &area) const
     {
         for (int c = 0; c < kCols; ++c)
         {
-            const int x = c * kScale;
-            const int y = r * kScale;
+            const int x = c * scale_;
+            const int y = r * scale_;
             const core::Color col = tile_color(tiles_[r][c]);
-            area.fill_rect(x, y, x + kScale - 1, y + kScale - 1, col);
+            area.fill_rect(x, y, x + scale_ - 1, y + scale_ - 1, col);
             // a 1px darker rim so walls read as blocks
             if (tiles_[r][c] == wall || tiles_[r][c] == water)
             {
-                area.draw_rect(x, y, x + kScale - 1, y + kScale - 1,
+                area.draw_rect(x, y, x + scale_ - 1, y + scale_ - 1,
                                core::Color::from(0x20, 0x24, 0x2C));
             }
         }
@@ -177,6 +178,18 @@ void Seedmap::create_window(const uint32_t max_client_width,
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
 
+    const int w = static_cast<int>(max_client_width);
+    const int h = static_cast<int>(max_client_height);
+
+    // Canvas scale from the host buffer, same derivation as life: the
+    // biggest whole-cell scale that fits under the seed row. At the
+    // classic 320x240 tier this is 4px tiles, canvas 256x192 at (32, 40)
+    // -- byte-identical to the old hardcoded layout.
+    const int fit = (w - 64) / MapCanvas::kCols < (h - kHeaderH - 8) / MapCanvas::kRows
+                        ? (w - 64) / MapCanvas::kCols
+                        : (h - kHeaderH - 8) / MapCanvas::kRows;
+    scale_ = clamp_i(fit, MapCanvas::kScale, 10);
+
     auto &root = window_->root();
 
     auto seed_box = std::make_unique<TextInput>();
@@ -202,8 +215,13 @@ void Seedmap::create_window(const uint32_t max_client_width,
     status_ = status.get();
     root.add_child(std::move(status));
 
-    auto canvas = std::make_unique<MapCanvas>();
-    canvas->set_position(kCanvasX, kCanvasY);
+    auto canvas = std::make_unique<MapCanvas>(scale_);
+    const int cw = canvas->canvas_w();
+    const int ch = canvas->canvas_h();
+    canvas_x_ = (w - cw) / 2;
+    canvas_y_ = kHeaderH + (h - kHeaderH - ch > 16 ? (h - kHeaderH - ch) / 2 - 8
+                                                   : 0);
+    canvas->set_position(canvas_x_, canvas_y_);
     canvas_ = canvas.get();
     root.add_child(std::move(canvas));
 

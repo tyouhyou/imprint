@@ -19,13 +19,17 @@ namespace zb::app::life
     class LifeCanvas : public zb::ui::Widget
     {
     public:
-        // pixel model: the colony lives on a 64x48 cell grid rendered
-        // at kScale px per cell
+        // pixel model: the colony lives on a 64x48 cell grid rendered at
+        // a runtime scale (classic tier: kScale px per cell); plasma and
+        // stars render per pixel over the whole canvas
         static constexpr int kCols = 64;
         static constexpr int kRows = 48;
         static constexpr int kScale = 4;
 
-        LifeCanvas();
+        LifeCanvas(int scale);
+
+        int canvas_w() const noexcept { return kCols * scale_; }
+        int canvas_h() const noexcept { return kRows * scale_; }
 
         // --- life ---
         void toggle_cell(int col, int row);
@@ -52,6 +56,7 @@ namespace zb::app::life
 
         bool cells_[kRows][kCols] = {};
         bool back_[kRows][kCols] = {};
+        int scale_ = kScale;
         unsigned frame_ = 0;
         int mode_ = life;
 
@@ -122,8 +127,12 @@ namespace zb::app::life
         static constexpr uint32_t kWidth = 320;
         static constexpr uint32_t kHeight = 240;
         static constexpr unsigned kFramesPerStep = 8;
-        static constexpr int kGenW = 44;   // generation label width
-        static constexpr int kGenH = 12;
+        static constexpr int kHeaderH = 40;   // button row + spacing
+
+        // canvas geometry, decided once in create_window
+        int scale_ = kScale;
+        int canvas_x_ = 32;
+        int canvas_y_ = kHeaderH;
 
         zb::SharedPtr<zb::app::CanvasWindow> window_;
         LifeCanvas *canvas_ = nullptr;

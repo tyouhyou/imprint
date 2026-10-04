@@ -7,17 +7,18 @@ using namespace zb::ui;
 
 namespace
 {
-    constexpr int kCanvasX = 32;
-    constexpr int kCanvasY = 40;
-    constexpr int kCanvasW = LifeCanvas::kCols * LifeCanvas::kScale;   // 256
-    constexpr int kCanvasH = LifeCanvas::kRows * LifeCanvas::kScale;   // 192
+    constexpr int clamp_i(const int v, const int lo, const int hi)
+    {
+        return v < lo ? lo : (v > hi ? hi : v);
+    }
 
     // sine-free plasma: two moving radial ramps + a diagonal wave, all in
     // fixed-point so the pixels are a pure function of the frame counter
-    unsigned char plasma_at(const int x, const int y, const unsigned t)
+    unsigned char plasma_at(const int x, const int y, const unsigned t,
+                            const int cw, const int ch)
     {
-        const int cx = x - (kCanvasW / 2);
-        const int cy = y - (kCanvasH / 2);
+        const int cx = x - (cw / 2);
+        const int cy = y - (ch / 2);
         const int r = cx * cx + cy * cy;
         const int w1 = (r >> 3) - static_cast<int>(t);
         const int w2 = ((x * 8 + y * 4) >> 3) + static_cast<int>(t) * 2;
@@ -27,9 +28,10 @@ namespace
     }
 }
 
-LifeCanvas::LifeCanvas()
+LifeCanvas::LifeCanvas(const int scale)
+    : scale_(scale)
 {
-    set_size(kCanvasW, kCanvasH);
+    set_size(canvas_w(), canvas_h());
     set_background_color(core::colors::Black);
 
     for (int i = 0; i < 64; ++i)
@@ -136,14 +138,16 @@ void LifeCanvas::step_life()
 
 void LifeCanvas::draw_at(core::Graphics &area) const
 {
+    const int cw = canvas_w();
+    const int ch = canvas_h();
     switch (mode_)
     {
     case plasma:
-        for (int y = 0; y < kCanvasH; ++y)
+        for (int y = 0; y < ch; ++y)
         {
-            for (int x = 0; x < kCanvasW; ++x)
+            for (int x = 0; x < cw; ++x)
             {
-                const unsigned char v = plasma_at(x, y, frame_ * 2u);
+                const unsigned char v = plasma_at(x, y, frame_ * 2u, cw, ch);
                 // a two-hue ramp: blue-green with a warm crest
                 const unsigned char r = v > 200 ? static_cast<unsigned char>(v - 200) : 0;
                 const unsigned char g = v > 128 ? static_cast<unsigned char>(v - 128) : v / 2;
@@ -157,9 +161,9 @@ void LifeCanvas::draw_at(core::Graphics &area) const
         {
             const int z = s.z - static_cast<int>(frame_ % 512u);
             const int zz = z <= 0 ? z + 512 : z;
-            const int x = kCanvasW / 2 + s.x * 128 / zz;
-            const int y = kCanvasH / 2 + s.y * 128 / zz;
-            if (x < 0 || x >= kCanvasW || y < 0 || y >= kCanvasH)
+            const int x = cw / 2 + s.x * 128 / zz;
+            const int y = ch / 2 + s.y * 128 / zz;
+            if (x < 0 || x >= cw || y < 0 || y >= ch)
             {
                 continue;
             }
@@ -170,7 +174,7 @@ void LifeCanvas::draw_at(core::Graphics &area) const
         }
         break;
     default:
-        // life: 4x4 cells on a dark grid
+        // life cells on a dark field, scale px per cell
         for (int r = 0; r < kRows; ++r)
         {
             for (int c = 0; c < kCols; ++c)
@@ -179,9 +183,9 @@ void LifeCanvas::draw_at(core::Graphics &area) const
                 {
                     continue;
                 }
-                const int x = c * kScale;
-                const int y = r * kScale;
-                area.fill_rect(x, y, x + kScale - 1, y + kScale - 1,
+                const int x = c * scale_;
+                const int y = r * scale_;
+                area.fill_rect(x, y, x + scale_ - 1, y + scale_ - 1,
                                core::Color::from(0x7F, 0xD4, 0x7F));
             }
         }
@@ -194,6 +198,18 @@ void Life::create_window(const uint32_t max_client_width,
 {
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
+
+    const int w = static_cast<int>(max_client_width);
+    const int h = static_cast<int>(max_client_height);
+
+    // Canvas scale from the host buffer: the biggest whole-cell scale
+    // that fits under the button row (integer math). At the classic
+    // 320x240 tier this comes out as 4px cells, canvas 256x192 at
+    // (32, 40) -- byte-identical to the old hardcoded layout.
+    const int fit = (w - 64) / LifeCanvas::kCols < (h - kHeaderH - 8) / LifeCanvas::kRows
+                        ? (w - 64) / LifeCanvas::kCols
+                        : (h - kHeaderH - 8) / LifeCanvas::kRows;
+    scale_ = clamp_i(fit, LifeCanvas::kScale, 10);
 
     auto &root = window_->root();
 
@@ -228,14 +244,19 @@ void Life::create_window(const uint32_t max_client_width,
     }
     play_btn_->set_text("PAUSE");
 
-    auto canvas = std::make_unique<LifeCanvas>();
-    canvas->set_position(kCanvasX, kCanvasY);
+    auto canvas = std::make_unique<LifeCanvas>(scale_);
+    const int cw = canvas->canvas_w();
+    const int ch = canvas->canvas_h();
+    canvas_x_ = (w - cw) / 2;
+    canvas_y_ = kHeaderH + (h - kHeaderH - ch > 16 ? (h - kHeaderH - ch) / 2 - 8
+                                                   : 0);
+    canvas->set_position(canvas_x_, canvas_y_);
     canvas_ = canvas.get();
     root.add_child(std::move(canvas));
 
     auto gen = std::make_unique<Label>();
     gen->set_size(64, 14);
-    gen->set_position(kCanvasX + kCanvasW - 68, kCanvasY + kCanvasH - 16);
+    gen->set_position(canvas_x_ + cw - 68, canvas_y_ + ch - 16);
     gen->set_text("GEN 0");
     gen->set_text_color(core::colors::White);
     gen_ = gen.get();
@@ -286,11 +307,12 @@ void Life::input(const zb::input::input_event &ev) noexcept
     if (ev.type == zb::input::input_type::touch_down)
     {
         // translate a tap into a colony cell
-        const int lx = ev.x - kCanvasX;
-        const int ly = ev.y - kCanvasY;
-        if (lx >= 0 && ly >= 0 && lx < kCanvasW && ly < kCanvasH)
+        const int lx = ev.x - canvas_x_;
+        const int ly = ev.y - canvas_y_;
+        if (lx >= 0 && ly >= 0 && lx < scale_ * LifeCanvas::kCols &&
+            ly < scale_ * LifeCanvas::kRows)
         {
-            canvas_->toggle_cell(lx / LifeCanvas::kScale, ly / LifeCanvas::kScale);
+            canvas_->toggle_cell(lx / scale_, ly / scale_);
             return;
         }
     }
