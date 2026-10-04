@@ -95,12 +95,12 @@ createModule({
           return buf[o] + buf[o + 1] + buf[o + 2];
         };
         const before = snapOf(app);
-        click(app, 128, 226);  // ABOUT
+        click(app, 206, 227);  // ABOUT (fourth footer button)
         const dimmed = snapOf(app);
         if (pxAt(before, 10, 120) === pxAt(dimmed, 10, 120)) {
           throw new Error("ABOUT overlay did not dim the console");
         }
-        click(app, 103, 156);  // CLOSE
+        click(app, 82, 198);  // CLOSE
         const restored = snapOf(app);
         if (pxAt(restored, 10, 120) !== pxAt(before, 10, 120)) {
           throw new Error("CLOSE did not restore the console");

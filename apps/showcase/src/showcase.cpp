@@ -291,8 +291,15 @@ namespace zb::app::showcase
         }
 
         // the ABOUT overlay is part of the design file (position:absolute,
-        // display:none at boot): behavior is visibility only
+        // display:none at boot): behavior is visibility only. Its size is
+        // the host buffer -- an absolute element's percent size does not
+        // resolve against the containing block, so hand it the buffer
+        // extent here (a resized buffer re-creates the app).
         about_overlay_ = root.find_by_id("about_overlay");
+        if (about_overlay_ != nullptr)
+        {
+            about_overlay_->set_size(static_cast<int>(w), static_cast<int>(h));
+        }
         if (auto *b = root.find_by_id("close_btn"))
         {
             static_cast<zb::ui::Button *>(b)->clicked += [this]()
