@@ -320,16 +320,19 @@ present 1:1; WASM/Python hosts scale host-side.
 **SIGNAL-ONE** (`-DSTORY=showcase`) — the console behind the footprints
 above, recorded end to end: the recorder drives the app through its public
 API with a fixed input script, so the GIF is byte-identical on every
-platform. The live telemetry feed advances one deterministic step per frame
-(the trend line is pure in the frame counter); the GAIN knob drives the dB
-readout, the load gauge and the temp meter; MODE cycles three accent themes
-(cyan / amber / green); ABOUT opens a declarative modal overlay; RESET
-restores the boot state. Text renders through the runtime-TTF path (Inter,
+platform. The flagship bridge of the ISV EVENT-HORIZON: the throttle
+slider drives warp, reactor load and core temp, the heading dial advances
+with the throttle, the radar sweep needle rotates per frame, the SHIELDS /
+LIFE SUPPORT / AUX SENSORS toggles feed the power draw, ALERT latches a red
+condition, MODE cycles three accent themes (cyan / amber / green), ABOUT
+opens a declarative modal overlay, RESET restores boot state. The UI is one
+HTML design file laid out in percents, so it scales with the host buffer.
+Text renders through the runtime-TTF path (Inter,
 packed by `bytes_embed`) — configure `-DUSE_TTF_RUNTIME=ON` for the intended
 proportional look; the 5x7 bitmap fallback keeps non-TTF builds green.
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE recorded end to end: boots into live telemetry with the trend line advancing, a drag across the GAIN knob pulls the dB readout, the load gauge and the temp meter, MODE cycles three accent themes (cyan, amber, green), the module toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
+  <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE flagship bridge recorded end to end: the trend line advances, the radar sweep needle rotates, the heading dial advances with the throttle, the throttle slider drives the reactor gauge and temp meter, MODE cycles three accent themes (cyan, amber, green), the system toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
 </p>
 
 **[Try the demos live](https://tyouhyou.github.io/imprint/)** — a demo portal:

@@ -124,9 +124,9 @@ int main(int argc, char **argv)
         frame(app);
     }
 
-    // 2: a real drag across the GAIN knob -- the dB readout, the load
-    // gauge and the temp meter all follow (the knob->readout linkage)
-    drag(app, win, "gain", 14, -10, 6);
+    // 2: a real drag across the throttle slider -- warp, the load gauge
+    // and the temp readout all follow (the throttle->readout linkage)
+    drag(app, win, "throttle", 48, 0, 14);
     for (int i = 0; i < 8; ++i)
     {
         frame(app);
@@ -147,10 +147,19 @@ int main(int argc, char **argv)
     click(app, win, "mode");  // back to cyan
     frame(app);
 
-    // 4: the module toggles flip (status line follows)
-    click(app, win, "modA");
+    // 4: ALERT latches the red condition, CANCEL clears it
+    click(app, win, "alert");
+    for (int i = 0; i < 10; ++i)
+    {
+        frame(app);
+    }
+    click(app, win, "alert");
     frame(app);
-    click(app, win, "modB");
+
+    // 4b: the system toggles flip (the reactor load follows)
+    click(app, win, "modC");
+    frame(app);
+    click(app, win, "modA");
     for (int i = 0; i < 6; ++i)
     {
         frame(app);
