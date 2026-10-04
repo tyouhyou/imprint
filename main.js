@@ -5,16 +5,47 @@
  * and presents the framebuffer. The C-ABI (zbapi.h) is exposed on the
  * Module via EXPORTED_FUNCTIONS / EXPORTED_RUNTIME_METHODS.
  *
- * The page declares the app's design size on the canvas element
- * (width/height attributes); the shell follows it.
+ * The page declares the app's MINIMUM design size on the canvas element
+ * (width/height attributes); the framebuffer is sized from the canvas's
+ * laid-out CSS box (times devicePixelRatio, capped at 2) so the software
+ * render is presented without a nearest-neighbor upscale, and the app is
+ * re-created when the viewport resizes.
  */
 (function () {
   "use strict";
 
   var canvas = document.getElementById("screen");
-  var W = parseInt(canvas.getAttribute("width"), 10) || 320; // framebuffer width  (COLOR_DEPTH=32, bgra32, 4 B/px)
-  var H = parseInt(canvas.getAttribute("height"), 10) || 240; // framebuffer height
+  var MIN_W = parseInt(canvas.getAttribute("width"), 10) || 320;
+  var MIN_H = parseInt(canvas.getAttribute("height"), 10) || 240;
+  var W = MIN_W, H = MIN_H; // framebuffer size, decided by decideSize()
   var PIXELS = W * H * 4;
+
+  // software-rasterizer frame budget (see demo_common.js for the twin)
+  var MAX_BUFFER_PIXELS = 1440 * 900;
+
+  function decideSize() {
+    var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    var rect = canvas.getBoundingClientRect();
+    var w = Math.round(Math.max(1, rect.width) * dpr);
+    var h = Math.round(Math.max(1, rect.height) * dpr);
+    if (w * h > MAX_BUFFER_PIXELS) {
+      var s = Math.sqrt(MAX_BUFFER_PIXELS / (w * h));
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+    }
+    return [Math.max(MIN_W, w), Math.max(MIN_H, h)];
+  }
+
+  function applySize(w, h) {
+    W = w;
+    H = h;
+    PIXELS = W * H * 4;
+    canvas.width = W;
+    canvas.height = H;
+    ctx = canvas.getContext("2d");
+    imageData = ctx.createImageData(W, H);
+    rgba = imageData.data;
+  }
 
   // input types, must match ZB_INPUT_* in zbapi.h
   var ZB_INPUT_TOUCH_DOWN = 9;
@@ -46,9 +77,7 @@
   canvas.height = H;
   var ctx = canvas.getContext("2d");
   var imageData = ctx.createImageData(W, H);
-  var rgba = imageData.data; // bgra -> rgba scratch buffer
-
-  var status = document.getElementById("status");
+  var rgba = imageData.data; // bgra -> rgba scratch buffer  var status = document.getElementById("status");
 
   var app = null;
   var closed = false; // app requested shutdown: stop driving input/paint
@@ -160,6 +189,43 @@
     requestAnimationFrame(frame);
   }
 
+  /* ---- app (re)creation: a resized buffer means a new app ---- */
+  function createApp() {
+    app = Module.ccall("zb_app_create", "number", ["number", "number"], [W, H]);
+    if (!app) {
+      status.textContent = "failed to create app";
+      return false;
+    }
+    var closedCb = Module.addFunction(function () {
+      // app-requested shutdown: only stop the frame loop -- this fires
+      // from inside zb_paint, destroying the app here would be
+      // use-after-free; wasm memory is reclaimed with the page
+      closed = true;
+      status.textContent = "app closed";
+      status.style.color = "#aaa";
+    }, "vi");
+    Module.ccall("zb_set_closed_callback", null, ["number", "number", "number"], [app, closedCb, 0]);
+    return true;
+  }
+
+  var resizeTimer = 0;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (!app || closed) return;
+      var s = decideSize();
+      if (s[0] === W && s[1] === H) return;
+      applySize(s[0], s[1]);
+      // the old app keeps its closed-callback table slot; the wasm
+      // memory is reclaimed with the page, so leaking one entry per
+      // resize is bounded and harmless in a demo shell
+      Module._zb_app_destroy(app);
+      closed = false;
+      if (!createApp()) return;
+      status.textContent = "ready — " + W + "×" + H + " @ " + PIXELS + " B/frame";
+    }, 300);
+  });
+
   /* ---- bind the C-ABI after the wasm runtime is ready ---- */
   function fail(msg) {
     status.textContent = msg;
@@ -172,11 +238,8 @@
       fail("aborted: " + what);
     },
     onRuntimeInitialized: function () {
-      app = Module.ccall("zb_app_create", "number", ["number", "number"], [W, H]);
-      if (!app) {
-        status.textContent = "failed to create app";
-        return;
-      }
+      applySize.apply(null, decideSize());
+      if (!createApp()) return;
       zbInput = Module.cwrap("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"]);
       zbPaint = Module.cwrap("zb_paint", null, ["number"]);
       zbBuffer = Module.cwrap("zb_buffer", "number", ["number", "number", "number"]);
@@ -185,16 +248,13 @@
       Module.HEAPU32[wPtr >> 2] = 0;
       Module.HEAPU32[hPtr >> 2] = 0;
 
-      // app-requested shutdown: stop the frame loop. The app is NOT
-      // destroyed here -- the callback fires from inside zb_paint,
-      // destroying it reentrantly would be use-after-free; wasm memory
-      // is reclaimed with the page.
-      var closedCb = Module.addFunction(function () {
-        closed = true;
-        status.textContent = "app closed";
-        status.style.color = "#aaa";
-      }, "vi");
-      Module.ccall("zb_set_closed_callback", null, ["number", "number", "number"], [app, closedCb, 0]);
+      // the app is authoritative on its own size (an app may clamp);
+      // resync the present path if the buffer differs from the request
+      var ptr = zbBuffer(app, wPtr, hPtr);
+      if (ptr) {
+        var aw = Module.HEAPU32[wPtr >> 2], ah = Module.HEAPU32[hPtr >> 2];
+        if (aw && ah && (aw !== W || ah !== H)) applySize(aw, ah);
+      }
 
       status.textContent = "ready — " + W + "×" + H + " @ " + PIXELS + " B/frame";
       requestAnimationFrame(frame);

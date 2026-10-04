@@ -8,6 +8,13 @@
  *   <script src="demo_common.js"></script>
  *   <script src="g2048.js"></script>
  *
+ * width/height are the app's MINIMUM design size: the framebuffer is
+ * sized from the canvas's laid-out CSS box (times devicePixelRatio, capped
+ * at 2), so the software render is presented without a nearest-neighbor
+ * upscale and the app builds a bigger layout when the viewport allows.
+ * The app is re-created on viewport resize (a resized buffer means a new
+ * app; time-travel pages replay the recorded stream, coordinates rescaled).
+ *
  * The host owns the frame loop (requestAnimationFrame), samples input and
  * presents the framebuffer. Two demo-only tools ride on the framework's
  * contracts, neither needs framework changes:
@@ -23,9 +30,50 @@
   "use strict";
 
   var CFG = window.DEMO_CONFIG || {};
-  var W = CFG.width;
-  var H = CFG.height;
+  var MIN_W = CFG.width || 256;
+  var MIN_H = CFG.height || 192;
+
+  var canvas = document.getElementById("screen");
+  var W = MIN_W, H = MIN_H; // framebuffer size, decided by decideSize()
   var PIXELS = W * H * 4;
+
+  // software-rasterizer frame budget: above this many buffer pixels the
+  // requested size is scaled down proportionally (full-frame repaints
+  // stay real-time even on 4K hidpi screens)
+  var MAX_BUFFER_PIXELS = 1440 * 900;
+
+  /* Buffer size from the canvas's laid-out CSS box. The page declares the
+   * display size in CSS (width + aspect-ratio); dpr (capped at 2) sharpens
+   * text on hidpi; the result never goes below the app's design minimum. */
+  function decideSize() {
+    var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
+    var rect = canvas.getBoundingClientRect();
+    var w = Math.round(Math.max(1, rect.width) * dpr);
+    var h = Math.round(Math.max(1, rect.height) * dpr);
+    if (w * h > MAX_BUFFER_PIXELS) {
+      var s = Math.sqrt(MAX_BUFFER_PIXELS / (w * h));
+      w = Math.round(w * s);
+      h = Math.round(h * s);
+    }
+    return [Math.max(MIN_W, w), Math.max(MIN_H, h)];
+  }
+
+  /* re-allocate everything that depends on the buffer size */
+  function applySize(w, h) {
+    W = w;
+    H = h;
+    PIXELS = W * H * 4;
+    canvas.width = W;
+    canvas.height = H;
+    ctx = canvas.getContext("2d");
+    imageData = ctx.createImageData(W, H);
+    rgba = imageData.data;
+    if (overlay) {
+      overlay.width = W;
+      overlay.height = H;
+    }
+    prevFrame = null;
+  }
 
   // input types, must match ZB_INPUT_* in zbapi.h
   var ZB_INPUT_TOUCH_DOWN = 9;
@@ -54,20 +102,11 @@
     Escape: ZB_KEY_ESCAPE
   };
 
-  var canvas = document.getElementById("screen");
-  canvas.width = W;
-  canvas.height = H;
-  var ctx = canvas.getContext("2d");
-  var imageData = ctx.createImageData(W, H);
-  var rgba = imageData.data;
+  var ctx = null, imageData = null, rgba = null;
 
   // damage-overlay canvas sits exactly over #screen
   var overlay = document.getElementById("overlay");
   var octx = overlay ? overlay.getContext("2d") : null;
-  if (overlay) {
-    overlay.width = W;
-    overlay.height = H;
-  }
   var dmgToggle = document.getElementById("dmg");
   var prevFrame = null; // previous frame copy for the repaint diff
 
@@ -83,6 +122,9 @@
   /* ---- time travel: the recorded input stream ---- */
   var recording = [];
   var scrubbing = false;
+  // buffer size the recording's touch coordinates were sampled at; a
+  // replay into a resized app maps them into the new coordinate space
+  var recordedW = MIN_W, recordedH = MIN_H;
 
   function scale(e) {
     var rect = canvas.getBoundingClientRect();
@@ -107,11 +149,17 @@
     }
   }
 
-  function replay(n) {
+  function replayFrom(n, srcW, srcH) {
+    var sx = srcW === W ? 1 : W / srcW;
+    var sy = srcH === H ? 1 : H / srcH;
     for (var i = 0; i < n && i < recording.length; i++) {
       var e = recording[i];
-      rawSend(e[0], e[1], e[2], e[3], e[4], e[5]);
+      rawSend(e[0], Math.round(e[1] * sx), Math.round(e[2] * sy), e[3], e[4], e[5]);
     }
+  }
+
+  function replay(n) {
+    replayFrom(n, recordedW, recordedH);
   }
 
   function recreateApp() {
@@ -119,6 +167,8 @@
     closed = false;
     app = Module.ccall("zb_app_create", "number", ["number", "number"], [W, H]);
     rawSend(0, 0, 0, 0, 0, 0); // no-op: keeps the ABI warm, no recording
+    recordedW = W;
+    recordedH = H;
     paintNow();
   }
 
@@ -272,6 +322,33 @@
     });
   }
 
+  /* ---- viewport resize: new buffer -> new app ---- */
+  var resizeTimer = 0;
+  window.addEventListener("resize", function () {
+    clearTimeout(resizeTimer);
+    resizeTimer = setTimeout(function () {
+      if (!app || closed) return;
+      var s = decideSize();
+      if (s[0] === W && s[1] === H) return;
+      applySize(s[0], s[1]);
+      if (CFG.timeTravel && recording.length > 0) {
+        // a resize is just another prefix-of-input-stream state: rebuild
+        // and replay the whole recording; the events were sampled at the
+        // pre-resize buffer, so replay maps their coordinates explicitly
+        var srcW = recordedW, srcH = recordedH;
+        scrubbing = true;
+        recreateApp();
+        replayFrom(recording.length, srcW, srcH);
+        scrubbing = false;
+      } else {
+        recording.length = 0;
+        recreateApp();
+      }
+      updateTimeline(true);
+      status.textContent = "ready — " + W + "x" + H;
+    }, 300);
+  });
+
   function fail(msg) {
     status.textContent = msg;
     status.style.color = "#f66";
@@ -280,6 +357,7 @@
   window.Module = {
     onAbort: function (what) { fail("aborted: " + what); },
     onRuntimeInitialized: function () {
+      applySize.apply(null, decideSize());
       app = Module.ccall("zb_app_create", "number", ["number", "number"], [W, H]);
       if (!app) { status.textContent = "failed to create app"; return; }
       zbInput = Module.cwrap("zb_input", null, ["number", "number", "number", "number", "number", "number", "number"]);
@@ -296,6 +374,16 @@
         status.style.color = "#aaa";
       }, "vi");
       Module.ccall("zb_set_closed_callback", null, ["number", "number", "number"], [app, closedCb, 0]);
+
+      // the app is authoritative on its own size (an app may clamp);
+      // resync the present path if the buffer differs from the request
+      var ptr = zbBuffer(app, wPtr, hPtr);
+      if (ptr) {
+        var aw = Module.HEAPU32[wPtr >> 2], ah = Module.HEAPU32[hPtr >> 2];
+        if (aw && ah && (aw !== W || ah !== H)) applySize(aw, ah);
+      }
+      recordedW = W;
+      recordedH = H;
 
       status.textContent = "ready — " + W + "x" + H;
       updateTimeline(true);
