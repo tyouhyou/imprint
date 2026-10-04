@@ -283,14 +283,16 @@ letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/P
 
 **SIGNAL-ONE**（`-DSTORY=showcase`）——足迹数字背后的那台控制台，端到端实录：
 录制器经公开 API 以固定输入脚本驱动应用，所以 GIF 在所有平台上字节级一致。
-实时遥测每帧前进一个确定步（趋势线是帧计数器的纯函数）；GAIN 旋钮驱动 dB
-读数、负载仪表与温度表；MODE 在三种强调主题间循环（青/琥珀/绿）；ABOUT 打开
-声明式模态遮罩；RESET 恢复启动状态。文本走运行时 TTF 路径（Inter，由
+ISV EVENT-HORIZON 旗舰舰桥：推进器滑杆驱动曲速、反应堆负载与堆芯温度，
+航向表随推进器前进，雷达扫描针逐帧旋转，SHIELDS / LIFE / AUX 系统开关
+改变功率分配，ALERT 锁定红色警戒，MODE 在三种强调主题间循环（青/琥珀/绿），
+ABOUT 打开声明式模态遮罩，RESET 恢复启动状态。UI 是一份 HTML 设计稿，
+布局以百分比书写，随宿主缓冲尺寸缩放。文本走运行时 TTF 路径（Inter，由
 `bytes_embed` 打包）——配置 `-DUSE_TTF_RUNTIME=ON` 以获得设计所见的比例字体
 观感；5x7 位图兜底让非 TTF 构建保持全绿。
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="端到端实录的 SIGNAL-ONE：启动进入实时遥测（趋势线推进）、横拖 GAIN 旋钮带动 dB 读数、负载仪表与温度表、MODE 循环三种强调主题（青、琥珀、绿）、模块开关翻转、ABOUT 打开模态遮罩并由 CLOSE 关闭、RESET 恢复启动状态">
+  <img src="assets/showcase/showcase.gif" width="480" alt="端到端实录的 SIGNAL-ONE 旗舰舰桥：趋势线推进、雷达扫描针旋转、航向表随推进器前进、推进器滑杆驱动反应堆负载与温度、MODE 循环三种强调主题（青、琥珀、绿）、系统开关翻转、ALERT 锁定红色警戒、ABOUT 打开模态遮罩并由 CLOSE 关闭、RESET 恢复启动状态">
 </p>
 
 **[在浏览器里直接试](https://tyouhyou.github.io/imprint/)**——无需服务器、
