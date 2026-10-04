@@ -92,7 +92,7 @@
     line-height: 0;
   }
   canvas#screen {
-    width: 640px; max-width: calc(100vw - 72px);
+    width: min(880px, calc(100vw - 72px));
     aspect-ratio: 4 / 3; height: auto;
     image-rendering: pixelated; image-rendering: crisp-edges;
     background: #060a12;
@@ -189,13 +189,14 @@
     <div id="status">loading module…</div>
   </div>
   <div class="chips">
-    <span class="chip"><b>DRAG</b> the gain knob</span>
+    <span class="chip"><b>DRAG</b> the throttle</span>
+    <span class="chip"><b>ALERT</b> latches red condition</span>
+    <span class="chip"><b>SYSTEMS</b> toggles feed the reactor</span>
     <span class="chip"><b>MODE</b> cycles three themes</span>
-    <span class="chip"><b>ABOUT</b> opens the overlay</span>
-    <span class="chip"><b>RESET</b> restores defaults</span>
+    <span class="chip"><b>RESET</b> restores boot state</span>
   </div>
   <p class="demo-note">
-    There is no HTML engine in this page. The console is a 320×240 framebuffer
+    There is no HTML engine in this page. The console is a deterministic framebuffer sized to your viewport
     drawn by the same C++ renderer that ships on desktop and embedded targets,
     compiled to WebAssembly and presented on a <code>&lt;canvas&gt;</code>.
     The console itself <em>is designed in</em> an HTML file — ids, tags,

@@ -77,7 +77,9 @@
   canvas.height = H;
   var ctx = canvas.getContext("2d");
   var imageData = ctx.createImageData(W, H);
-  var rgba = imageData.data; // bgra -> rgba scratch buffer  var status = document.getElementById("status");
+  var rgba = imageData.data; // bgra -> rgba scratch buffer
+
+  var status = document.getElementById("status");
 
   var app = null;
   var closed = false; // app requested shutdown: stop driving input/paint
