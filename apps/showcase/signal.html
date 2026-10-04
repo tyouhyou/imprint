@@ -44,7 +44,7 @@
 
   <div style="display:flex; flex:1; padding:8px; gap:8px">
 
-    <div class="panel" style="width:29%; padding:8px; display:flex; flex-direction:column; gap:2px">
+    <div class="panel" style="width:32%; padding:8px; display:flex; flex-direction:column; gap:2px">
       <p class="cap">HEADING</p>
       <gauge id="helm" min="0" max="359" value="0" style="width:44px; height:44px"></gauge>
       <p id="headval" class="val" style="font-size:11px; color:#4fd6e0">HDG 000</p>
@@ -57,7 +57,7 @@
 
     <div style="flex:1; display:flex; flex-direction:column; gap:8px">
       <div class="panel" style="flex:1; padding:8px; display:flex; flex-direction:column; gap:2px">
-        <p class="cap">SENSOR SWEEP · LONG RANGE</p>
+        <p class="cap">SENSOR SWEEP</p>
         <div id="sweep" style="position:relative; width:100%; height:64%; align-self:center">
           <svg id="radar" viewBox="0 0 200 200" style="width:100%; height:100%">
           <circle cx="100" cy="100" r="96" fill="none" stroke="#1c2740" stroke-width="2"></circle>
@@ -75,20 +75,26 @@
         </div>
       </div>
       <div class="panel" style="height:46%; padding:8px 10px; display:flex; flex-direction:column; gap:2px">
-        <p class="cap">REACTOR OUTPUT · LIVE FEED</p>
+        <p class="cap">REACTOR OUTPUT</p>
         <trend id="trend" style="width:100%; height:62%"></trend>
       </div>
     </div>
 
-    <div class="panel" style="width:29%; padding:8px; display:flex; flex-direction:column; gap:2px">
+    <div class="panel" style="width:32%; padding:8px; display:flex; flex-direction:column; gap:2px">
       <p class="cap">REACTOR LOAD</p>
       <gauge id="load" min="0" max="100" value="62" style="width:44px; height:44px"></gauge>
       <p id="loadval" class="val" style="font-size:11px; color:#4fd6e0">62%</p>
       <meter id="temp" min="0" max="100" value="41" style="width:100%; height:8px"></meter>
       <p id="tempval" style="font-size:9px; color:#8a93a5; margin:0">41°C nominal</p>
-      <toggle id="modA" checked style="font-size:9px">SHIELDS</toggle>
-        <toggle id="modB" checked style="font-size:9px">LIFE SUPPORT</toggle>
-        <toggle id="modC" style="font-size:9px">AUX SENSORS</toggle>
+      <div style="display:flex; width:100%; align-items:center; gap:6px">
+        <toggle id="modA" checked></toggle><span style="font-size:9px">SHIELDS</span>
+      </div>
+      <div style="display:flex; width:100%; align-items:center; gap:6px">
+        <toggle id="modB" checked></toggle><span style="font-size:9px">LIFE SUPPORT</span>
+      </div>
+      <div style="display:flex; width:100%; align-items:center; gap:6px">
+        <toggle id="modC"></toggle><span style="font-size:9px">AUX SENSORS</span>
+      </div>
     </div>
 
   </div>

@@ -121,8 +121,8 @@ void G2048::create_window(const uint32_t max_client_width,
     const int sh = h * 256;
     const int num = sw <= sh ? w : h;
     const int den = sw <= sh ? 256 : 192;
-    cell_ = clamp_i((30 * num + den / 2) / den, 30, 72);
-    gap_ = clamp_i(cell_ / 8, 4, 9);
+    cell_ = clamp_i((30 * num + den / 2) / den, 30, 100);
+    gap_ = clamp_i(cell_ / 8, 4, 12);
     const int board = 4 * cell_ + 5 * gap_;
     board_x_ = (w - board) / 2;
     // flush under the header at the classic tier; once the spare room
@@ -131,10 +131,12 @@ void G2048::create_window(const uint32_t max_client_width,
     board_y_ = kHeaderH + (spare > 16 ? (spare - 16) / 2 : 0);
 
     auto &root = window_->root();
+    root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
 
     auto score = std::make_unique<Label>();
     score->set_size(104, 20);
     score->set_position(8, 8);
+    score->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     score->set_text("SCORE 0");
     score_label_ = score.get();
     root.add_child(std::move(score));
@@ -142,12 +144,14 @@ void G2048::create_window(const uint32_t max_client_width,
     auto best = std::make_unique<Label>();
     best->set_size(70, 20);
     best->set_position(112, 8);
+    best->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     best->set_text("BEST 0");
     best_label_ = best.get();
     root.add_child(std::move(best));
 
     auto new_btn = std::make_unique<Button>();
     new_btn->set_text("NEW");
+    new_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     new_btn->set_size(56, 22);
     new_btn->set_position(w - 66, 7);
     new_btn->clicked += [this] { new_game(); };

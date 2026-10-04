@@ -149,16 +149,21 @@ void Mines::create_window(const uint32_t max_client_width,
     board_y_ = kHeaderH;
 
     auto &root = window_->root();
+    // blend with the dark demo portal (the buffer is viewport-sized, so
+    // the old all-white page would glare)
+    root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
 
     auto status = std::make_unique<Label>();
     status->set_size(110, 20);
     status->set_position(8, 6);
+    status->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     status->set_text("MINES 10");
     status_ = status.get();
     root.add_child(std::move(status));
 
     auto flag_btn = std::make_unique<Button>();
     flag_btn->set_text("FLAG");
+    flag_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     flag_btn->set_size(52, 22);
     flag_btn->set_position(w - 134, 5);
     flag_btn->clicked += [this]
@@ -171,6 +176,7 @@ void Mines::create_window(const uint32_t max_client_width,
 
     auto reset_btn = std::make_unique<Button>();
     reset_btn->set_text("NEW");
+    reset_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     reset_btn->set_size(52, 22);
     reset_btn->set_position(w - 74, 5);
     reset_btn->clicked += [this] { new_game(); };

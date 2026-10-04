@@ -191,6 +191,7 @@ void Seedmap::create_window(const uint32_t max_client_width,
     scale_ = clamp_i(fit, MapCanvas::kScale, 10);
 
     auto &root = window_->root();
+    root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
 
     auto seed_box = std::make_unique<TextInput>();
     seed_box->set_text("imprint");
@@ -203,6 +204,7 @@ void Seedmap::create_window(const uint32_t max_client_width,
 
     auto draw_btn = std::make_unique<Button>();
     draw_btn->set_text("DRAW");
+    draw_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     draw_btn->set_size(56, 22);
     draw_btn->set_position(136, 8);
     sub_draw_ = draw_btn->clicked.subscribe([this] { generate(); });

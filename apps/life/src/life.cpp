@@ -212,6 +212,7 @@ void Life::create_window(const uint32_t max_client_width,
     scale_ = clamp_i(fit, LifeCanvas::kScale, 10);
 
     auto &root = window_->root();
+    root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
 
     struct btn_spec
     {
@@ -232,6 +233,7 @@ void Life::create_window(const uint32_t max_client_width,
     {
         auto b = std::make_unique<Button>();
         b->set_text(kBtns[i].text);
+        b->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
         b->set_size(kBtns[i].w, 22);
         b->set_position(kBtns[i].x, 8);
         if (kBtns[i].slot)

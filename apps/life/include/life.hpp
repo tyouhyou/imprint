@@ -130,7 +130,7 @@ namespace zb::app::life
         static constexpr int kHeaderH = 40;   // button row + spacing
 
         // canvas geometry, decided once in create_window
-        int scale_ = kScale;
+        int scale_ = LifeCanvas::kScale;
         int canvas_x_ = 32;
         int canvas_y_ = kHeaderH;
 

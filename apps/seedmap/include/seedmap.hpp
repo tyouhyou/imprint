@@ -112,7 +112,7 @@ namespace zb::app::seedmap
         static constexpr int kHeaderH = 40;   // seed row + spacing
 
         // canvas geometry, decided once in create_window
-        int scale_ = kScale;
+        int scale_ = MapCanvas::kScale;
         int canvas_x_ = 32;
         int canvas_y_ = kHeaderH;
 
