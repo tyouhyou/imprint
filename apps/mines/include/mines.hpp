@@ -8,19 +8,29 @@
 
 namespace zb::app::mines
 {
-    constexpr int kCells = 9;
-    constexpr int kCell = 14;
+    /*
+     * Classic tier (the kWidth x kHeight design minimum) is the 9x9 /
+     * 14px-cell field; larger host buffers grow the cell count (the cell
+     * itself only grows to kMaxCellPx, capped at kMaxCells). The grid is
+     * square, derived from the space left after the header row, so the
+     * same formula reproduces the classic tier exactly at 256x192.
+     */
+    constexpr int kMinCells = 9;
+    constexpr int kMaxCells = 32;
+    constexpr int kCell = 14;      // classic cell size (design minimum tier)
+    constexpr int kMaxCellPx = 22; // cell size cap on large screens
     constexpr int kGap = 1;
 
     /*
-     * The minefield: a 9x9 grid of cells drawn by the board (covered /
-     * flagged / revealed states); revealed numbers render through child
-     * Labels (framework text path). The app owns the game state.
+     * The minefield: a cols x rows grid of cells drawn by the board
+     * (covered / flagged / revealed states); revealed numbers render
+     * through child Labels (framework text path, centered in the cell).
+     * The app owns the game state.
      */
     class MinesBoard : public zb::ui::Panel
     {
     public:
-        MinesBoard();
+        MinesBoard(int cols, int rows, int cell, int gap);
 
         // cell = 0..8 number (0 = blank), -1 covered, -2 flag, -3 mine,
         // -4 wrong flag, -5 boom
@@ -30,8 +40,12 @@ namespace zb::app::mines
         void draw_at(zb::ui::core::Graphics &area) const override;
 
     private:
-        zb::ui::Label *tiles_[kCells][kCells] = {};
-        int state_[kCells][kCells] = {};   // the last value handed to set_cell
+        int cols_ = 0;
+        int rows_ = 0;
+        int cell_ = 0;
+        int gap_ = 0;
+        zb::ui::Label *tiles_[kMaxCells][kMaxCells] = {};
+        int state_[kMaxCells][kMaxCells] = {}; // the last value handed to set_cell
     };
 
     /*
@@ -39,7 +53,8 @@ namespace zb::app::mines
      * flag mode (the wasm glue sends no right-click, so the mode button
      * is the touch path too). Mine placement comes from a fixed-seed LCG
      * re-rolled on the first reveal (excluding that cell), so a replay of
-     * the same input stream plays the same field.
+     * the same input stream plays the same field. The field geometry is
+     * decided once in create_window from the host buffer size.
      */
     class Mines : public IApp
     {
@@ -93,7 +108,7 @@ namespace zb::app::mines
     private:
         static constexpr uint32_t kWidth = 256;
         static constexpr uint32_t kHeight = 192;
-        static constexpr int kMines = 10;
+        static constexpr int kHeaderH = 30; // status/button row height
 
         enum state : int
         {
@@ -102,11 +117,20 @@ namespace zb::app::mines
             lost
         };
 
-        // board state; covered[i] / mine[i] / flagged[i] as r * 9 + c
-        bool mine_[kCells * kCells] = {};
-        bool flagged_[kCells * kCells] = {};
-        bool covered_[kCells * kCells] = {};
-        int adjacent_[kCells * kCells] = {};
+        // field geometry, decided once in create_window
+        int cols_ = kMinCells;
+        int rows_ = kMinCells;
+        int cell_ = kCell;
+        int gap_ = kGap;
+        int board_x_ = 0;
+        int board_y_ = kHeaderH;
+        int mines_ = 10;
+
+        // board state; covered_[i] etc. indexed r * cols_ + c
+        bool mine_[kMaxCells * kMaxCells] = {};
+        bool flagged_[kMaxCells * kMaxCells] = {};
+        bool covered_[kMaxCells * kMaxCells] = {};
+        int adjacent_[kMaxCells * kMaxCells] = {};
         state state_ = playing;
         bool placed_ = false;   // mines placed on first reveal
         int flags_ = 0;
