@@ -1,4 +1,4 @@
-# SIGNAL-ONE showcase (redesigned 2026-09-26): the UI is one HTML
+# ORION NX-07 showcase (redesigned 2026-10-05): the UI is one HTML
 # design file materialized through the declarative layer; behavior in
 # showcase.cpp. Build-time steps follow the showcase_html precedent:
 # html_embed packs (and validates) the design document, bytes_embed
@@ -10,8 +10,8 @@ target_include_directories(showcase_app
 
 # the design document: build-time validation with the same parser
 # (contract 5.3); NDS cross builds hand in a host-built html_embed
-set(SHOWCASE_DOC "${CMAKE_CURRENT_SOURCE_DIR}/signal.html")
-set(SHOWCASE_HTML_HEADER ${CMAKE_CURRENT_BINARY_DIR}/showcase_signal.gen.hpp)
+set(SHOWCASE_DOC "${CMAKE_CURRENT_SOURCE_DIR}/orion.html")
+set(SHOWCASE_HTML_HEADER ${CMAKE_CURRENT_BINARY_DIR}/showcase_orion.gen.hpp)
 if (NDS_PLATFORM)
     set(HTML_EMBED_EXECUTABLE "" CACHE FILEPATH
         "Host-built html_embed executable for embedded showcase builds")
@@ -31,8 +31,8 @@ else()
         DEPENDS html_embed ${SHOWCASE_DOC}
         VERBATIM)
 endif()
-add_custom_target(showcase_signal_gen DEPENDS ${SHOWCASE_HTML_HEADER})
-add_dependencies(showcase_app showcase_signal_gen)
+add_custom_target(showcase_orion_gen DEPENDS ${SHOWCASE_HTML_HEADER})
+add_dependencies(showcase_app showcase_orion_gen)
 target_include_directories(showcase_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
 # the Inter blob for runtime-TTF text (USE_TTF_RUNTIME): packed on every

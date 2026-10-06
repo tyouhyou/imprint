@@ -1,12 +1,13 @@
 /*
- * S4 frame recorder, SIGNAL-ONE tour: drives the showcase app through
- * its public API (IApp::input + CanvasWindow paint) and writes the
- * frames as a GIF. Shell-less by design -- CanvasWindow owns the
- * framebuffer directly, the same host-drives-everything contract the
- * automation suite uses. Deterministic: one step per input event, the
- * tour is a fixed script, the GIF is byte-identical across platforms.
+ * S4 frame recorder, ORION NX-07 command-deck tour:
+ * drives the showcase app through its public API (IApp::input +
+ * CanvasWindow paint) and writes the frames as a GIF. Shell-less by
+ * design -- CanvasWindow owns the framebuffer directly, the same
+ * host-drives-everything contract the automation suite uses.
+ * Deterministic: one step per input event, the tour is a fixed script,
+ * the GIF is byte-identical across platforms.
  *
- * Usage: showcase_gif [out.gif] [--png out.png]   (320x240)
+ * Usage: showcase_gif [out.gif] [--png out.png]   (800x600)
  * --png also dumps the FINAL frame as PNG (USE_PNG builds).
  */
 
@@ -24,6 +25,12 @@
 
 namespace
 {
+    // the ORION deck is a dense desktop-console design: it needs the
+    // wide tier (the browser sizes the buffer from the viewport; the
+    // 320x240 embedded tier clips the side columns by design)
+    constexpr int kW = 800;
+    constexpr int kH = 600;
+
     using namespace zb::app::showcase;
     using zb::input::input_event;
     using zb::input::input_type;
@@ -39,7 +46,7 @@ namespace
         app.paint();
         const auto *pixels = static_cast<const zb::ui::core::Color *>(
             app.window()->data());
-        g_frames.emplace_back(pixels, pixels + 320 * 240);
+        g_frames.emplace_back(pixels, pixels + kW * kH);
     }
 
     input_event touch_ev(const input_type type, const int x, const int y)
@@ -112,74 +119,58 @@ int main(int argc, char **argv)
     }
 
     Showcase app;
-    app.create_window(320, 240);
+    app.create_window(kW, kH);
     auto &win = *static_cast<zb::app::CanvasWindow *>(app.window().get());
     std::printf("gif_record: %ux%u buffer\n",
                 static_cast<unsigned>(win.width()), static_cast<unsigned>(win.height()));
 
-    // 1: boot -- the live telemetry feed animates the trend on its own
-    // (one wave step per frame, pure in the frame counter)
+    // 1: boot -- the sweep needle, mission clock and event stream step
+    // on their own (pure in the frame counter)
     for (int i = 0; i < 24; ++i)
     {
         frame(app);
     }
 
-    // 2: a real drag across the throttle slider -- warp, the load gauge
-    // and the temp readout all follow (the throttle->readout linkage)
-    drag(app, win, "throttle", 48, 0, 14);
+    // 2: a real drag across the ENGINES slider -- velocity, core temp,
+    // fuel and the propulsion gauges all follow (the sync() linkage)
+    drag(app, win, "engine", 40, 0, 12);
     for (int i = 0; i < 8; ++i)
     {
         frame(app);
     }
 
-    // 3: MODE cycles the accent theme (cyan -> amber -> green); one
-    // click per theme, a short hold on each
-    click(app, win, "mode");
+    // 3: SHIELD SURGE pushes the shield bus +18; a YAW and a PITCH
+    // nudge the helm (each toasts)
+    click(app, win, "boost");
+    frame(app);
+    click(app, win, "mv_yaw_r");
+    for (int i = 0; i < 8; ++i)
+    {
+        frame(app);
+    }
+    click(app, win, "mv_pitch_u");
     for (int i = 0; i < 10; ++i)
     {
         frame(app);
     }
-    click(app, win, "mode");
-    for (int i = 0; i < 10; ++i)
+
+    // 4: FAULT INJECT degrades the hull / core / segment labels
+    click(app, win, "fault");
+    for (int i = 0; i < 12; ++i)
     {
         frame(app);
     }
-    click(app, win, "mode");  // back to cyan
+    click(app, win, "fault");
     frame(app);
 
-    // 4: ALERT latches the red condition, CANCEL clears it
-    click(app, win, "alert");
-    for (int i = 0; i < 10; ++i)
+    // 5: STAR MAP opens the galactic navigator modal; CLOSE dismisses
+    click(app, win, "ship_map");
+    for (int i = 0; i < 16; ++i)
     {
-        frame(app);
-    }
-    click(app, win, "alert");
-    frame(app);
-
-    // 4b: the system toggles flip (the reactor load follows)
-    click(app, win, "modC");
-    frame(app);
-    click(app, win, "modA");
-    for (int i = 0; i < 6; ++i)
-    {
-        frame(app);
-    }
-
-    // 5: ABOUT opens the modal; a click on CLOSE dismisses it
-    click(app, win, "about");
-    for (int i = 0; i < 14; ++i)
-    {
-        frame(app);  // hold on the modal
+        frame(app);  // hold on the map
     }
     click(app, win, "close_btn");
     for (int i = 0; i < 6; ++i)
-    {
-        frame(app);
-    }
-
-    // 6: RESET restores the boot state -- the closing money shot
-    click(app, win, "reset");
-    for (int i = 0; i < 20; ++i)
     {
         frame(app);
     }
@@ -193,7 +184,7 @@ int main(int argc, char **argv)
     const zb::ui::GifPalette pal = builder.palette(256);
     std::printf("gif_record: palette %zu colors\n", pal.count);
 
-    zb::ui::GifWriter writer(out_path, 320, 240, 5, pal);
+    zb::ui::GifWriter writer(out_path, kW, kH, 5, pal);
     for (const auto &f : g_frames)
     {
         writer.add_frame(f.data());

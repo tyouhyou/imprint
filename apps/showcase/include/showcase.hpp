@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <memory>
+#include <string>
 
 #include "canvas_window.hpp"
 #include "gauge_dial.hpp"
@@ -9,21 +10,30 @@
 #include "progress_bar.hpp"
 #include "slider.hpp"
 #include "toggle_switch.hpp"
-#include "trend_line.hpp"
 
 namespace zb::app::showcase
 {
     /*
-     * SIGNAL-ONE flagship bridge (the ISV EVENT-HORIZON console): the UI
-     * is one HTML design file (signal.html, packed by html_embed)
-     * materialized through the declarative layer; the behavior lives in
-     * this C++ class. A deterministic ship simulation is stepped purely
-     * from the frame counter and the input stream: the throttle slider
-     * drives warp / reactor load / core temp, the heading advances with
-     * the throttle, the radar sweep needle rotates per frame (the
-     * design's ::after pseudo re-specified through set_pseudo), the
-     * system toggles feed the power draw, ALERT latches a red condition,
-     * MODE cycles the accent themes, RESET restores boot state.
+     * ORION NX-07 console: the command deck (design/
+     * starship_console.html translated onto the declarative subset as
+     * orion.html, packed by html_embed). The behavior lives in this C++
+     * class as a deterministic ship simulation stepped purely from the
+     * frame counter and the input stream (the F-2 app-side pattern --
+     * no timers, no RNG):
+     *
+     *   - the four power sliders recompute the derived readouts (core
+     *     temp, velocity, fuel, bus load, available power, the four
+     *     propulsion gauges) through the design's sync() formulas in
+     *     integer arithmetic;
+     *   - the maneuver buttons (and the WASD/QE keys) nudge heading and
+     *     altitude, SPACE brakes the engines, M toggles the star-map
+     *     modal, ESC closes it;
+     *   - FAULT INJECT degrades hull/core/segment labels, ABORT arms the
+     *     protocol modal and zeroes the engines;
+     *   - the mission clock ticks off frames, the radar sweep needle
+     *     rotates (the design's ::after pseudo re-specified through
+     *     set_pseudo), the event stream and the command toast cycle
+     *     deterministically.
      *
      * Text renders through the runtime TTF family when the build carries
      * IMCORE_HAS_TTF_RUNTIME (the packed Inter blob); otherwise the 5x7
@@ -45,14 +55,10 @@ namespace zb::app::showcase
                            void *buffer) override;
 
         zb::SharedPtr<IWindow> window() noexcept override { return window_; }
-        void input(const zb::input::input_event &ev) noexcept override
-        {
-            window_->input(ev);
-        }
+        void input(const zb::input::input_event &ev) noexcept override;
 
-        // one frame: advance the simulation first (the F-2 app-side
-        // pattern -- pure function of the frame counter and the input
-        // stream, no timers), then render
+        // one frame: advance the simulation first (pure function of the
+        // frame counter and the input stream), then render
         void paint() noexcept override;
 
         [[nodiscard]] bool is_dirty() const noexcept override
@@ -81,46 +87,133 @@ namespace zb::app::showcase
             return window_->closed.subscribe(h);
         }
 
+        // the design's sync(): every derived readout from the four power
+        // sliders (public so the tests can drive it directly)
+        void sync_power();
+
     private:
         void build_ui(uint32_t width, uint32_t height);
         void install_font();
-        void apply_theme(const zb::ui::core::Color &accent);
-        void apply_mode(int index);
-        void apply_alert(bool on);
-        void update_throttle(int value);
-        void update_systems();
-        void show_about();
-        // current reactor load from the throttle + the online systems
-        [[nodiscard]] int reactor_load() const;
+        void bind_button(const char *id, void (Showcase::*slot)());
+
+        // command slots (buttons + the key bindings route here)
+        void on_auto();
+        void on_ship_map();
+        void on_fault();
+        void on_abort();
+        void on_scan();
+        void on_lock();
+        void on_laser();
+        void on_torpedo();
+        void on_point();
+        void on_boost();
+        void on_yaw_l();
+        void on_yaw_r();
+        void on_pitch_u();
+        void on_pitch_d();
+        void on_roll_l();
+        void on_roll_r();
+        void on_strafe_l();
+        void on_strafe_r();
+        void on_close_modal();
+        void maneuver(const char *what, int heading_nudge_x10, int alt_nudge);
+
+        // command feedback
+        void toast(const char *msg);
+        // severity: ok / warn / bad; tag: the stream's channel label
+        // (CORE, THERM, NAV, ...)
+        void log_line(const char *severity, const char *tag, const char *msg);
+        void render_log();
+        void show_modal(const char *title, const char *text);
+        void hide_modal();
+
+        // the design's sync() formulas, integer arithmetic
+        [[nodiscard]] int coolant() const;
+        [[nodiscard]] int temp_k() const;
+        [[nodiscard]] int velocity_x1000() const;
+        [[nodiscard]] int fuel_x10() const;
+        [[nodiscard]] int load_x10() const;
+        [[nodiscard]] int avail_x10() const;
+        [[nodiscard]] std::string mission_clock() const;
 
         zb::SharedPtr<zb::app::CanvasWindow> window_;
-        zb::ui::Widget *about_overlay_ = nullptr;
 
         // handles into the materialized tree (the design file declares
         // the tags; this class reads them back through find_by_id)
-        zb::ui::GaugeDial *helm_ = nullptr;
-        zb::ui::GaugeDial *load_ = nullptr;
-        zb::ui::ProgressBar *temp_ = nullptr;
-        zb::ui::TrendLine *trend_ = nullptr;
-        zb::ui::Slider *throttle_ = nullptr;
-        zb::ui::ToggleSwitch *mod_a_ = nullptr;
-        zb::ui::ToggleSwitch *mod_b_ = nullptr;
-        zb::ui::ToggleSwitch *mod_c_ = nullptr;
-        zb::ui::Button *alert_btn_ = nullptr;
-        zb::ui::Widget *radar_ = nullptr;
-        zb::ui::Widget *headval_ = nullptr;
-        zb::ui::Widget *warpval_ = nullptr;
-        zb::ui::Widget *brgval_ = nullptr;
-        zb::ui::Widget *loadval_ = nullptr;
-        zb::ui::Widget *tempval_ = nullptr;
+        zb::ui::Slider *react_ = nullptr;
+        zb::ui::Slider *shield_ = nullptr;
+        zb::ui::Slider *weapons_ = nullptr;
+        zb::ui::Slider *engine_ = nullptr;
+        zb::ui::ToggleSwitch *ion_sw_ = nullptr;
+        zb::ui::ToggleSwitch *grav_sw_ = nullptr;
+        zb::ui::ToggleSwitch *vent_sw_ = nullptr;
+        zb::ui::GaugeDial *g_react_ = nullptr;
+        zb::ui::GaugeDial *g_thrust_ = nullptr;
+        zb::ui::GaugeDial *g_shield_ = nullptr;
+        zb::ui::GaugeDial *g_cool_ = nullptr;
+        zb::ui::ProgressBar *vel_bar_ = nullptr;
+        zb::ui::ProgressBar *hull_bar_ = nullptr;
+        zb::ui::ProgressBar *temp_bar_ = nullptr;
+        zb::ui::ProgressBar *fuel_bar_ = nullptr;
+        zb::ui::Widget *mission_ = nullptr;
+        zb::ui::Widget *link_ = nullptr;
+        zb::ui::Widget *avail_ = nullptr;
+        zb::ui::Widget *loadpct_ = nullptr;
+        zb::ui::Widget *react_v_ = nullptr;
+        zb::ui::Widget *shield_v_ = nullptr;
+        zb::ui::Widget *weapon_v_ = nullptr;
+        zb::ui::Widget *engine_v_ = nullptr;
+        zb::ui::Widget *gv_[4] = {nullptr, nullptr, nullptr, nullptr};
+        zb::ui::Widget *velocity_ = nullptr;
+        zb::ui::Widget *vel_text_ = nullptr;
+        zb::ui::Widget *hull_v_ = nullptr;
+        zb::ui::Widget *temp_v_ = nullptr;
+        zb::ui::Widget *fuel_v_ = nullptr;
+        zb::ui::Widget *heading_rd_ = nullptr;
+        zb::ui::Widget *coherence_ = nullptr;
+        zb::ui::Widget *flux_ = nullptr;
+        zb::ui::Widget *core_tag_ = nullptr;
+        zb::ui::Widget *segment_label_ = nullptr;
         zb::ui::Widget *status_ = nullptr;
-        zb::ui::Widget *fps_ = nullptr;
+        zb::ui::Widget *sweep_ = nullptr;   // the needle pseudo host
+        zb::ui::Widget *modal_ = nullptr;
+        zb::ui::Widget *modal_title_ = nullptr;
+        zb::ui::Widget *modal_text_ = nullptr;
+        zb::ui::Widget *toast_ = nullptr;
+        zb::ui::Widget *toast_tx_ = nullptr;
+        struct LogLine
+        {
+            zb::ui::Widget *t = nullptr;  // time stamp
+            zb::ui::Widget *k = nullptr;  // kind (color carries severity)
+            zb::ui::Widget *m = nullptr;  // message
+        };
+        LogLine log_[8] = {};
 
+        // the event-stream ring (rendered into the fixed l0..l7 rows)
+        struct LogEntry
+        {
+            std::string time;
+            std::string kind;
+            std::string msg;
+            int severity = 0;  // 0 ok / 1 warn / 2 bad
+        };
+        LogEntry entries_[8];
+
+        // ship state (boot values from the design document)
         int frame_ = 0;
-        int mode_ = 0;
-        bool alert_ = false;
-        int heading_ = 0;
-        int throttle_val_ = 35;
+        int mission_s_ = 48 * 60 + 12;
+        int heading_x10_ = 2746;  // 274.6 deg
+        int alt_x1000_ = 31;      // 0.031 G
+        int hull_x10_ = 968;      // 96.8 %
+        bool damaged_ = false;
+        bool locked_ = false;
+        bool autopilot_ = true;
+        bool point_on_ = true;
+        bool modal_open_ = false;
+        int scan_frames_ = 0;     // DEEP SCAN link-busy countdown
+        int toast_frames_ = 0;    // toast visibility countdown
+        int log_next_ = 0;        // next periodic stream entry
+        int drift_acc_ = 0;       // heading drift accumulator
         bool ui_ready_ = false;
     };
 }
