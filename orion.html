@@ -92,7 +92,9 @@
     line-height: 0;
   }
   canvas#screen {
-    width: min(880px, calc(100vw - 72px));
+    /* fill the maximized viewport at 4:3; 1310x986 is the largest
+     * 4:3 box inside main.js's 1440x900 frame budget */
+    width: min(calc(100vw - 72px), calc((100vh - 260px) * 4 / 3), 1310px);
     aspect-ratio: 4 / 3; height: auto;
     image-rendering: pixelated; image-rendering: crisp-edges;
     background: #060a12;

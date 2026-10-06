@@ -26,8 +26,26 @@
   function decideSize() {
     var dpr = Math.max(1, Math.min(window.devicePixelRatio || 1, 2));
     var rect = canvas.getBoundingClientRect();
-    var w = Math.round(Math.max(1, rect.width) * dpr);
-    var h = Math.round(Math.max(1, rect.height) * dpr);
+    var dw = rect.width, dh = rect.height;
+    // If the page's CSS sizing never took effect (an engine without
+    // min()/aspect-ratio leaves the canvas at its intrinsic attribute
+    // size), derive the display box from the viewport and the declared
+    // aspect instead -- the buffer must track the window, not stay at
+    // the minimum and be upscaled by the stylesheet.
+    var cs = getComputedStyle(canvas);
+    if ((parseFloat(cs.width) <= MIN_W || parseFloat(cs.height) <= MIN_H) &&
+        window.innerWidth > MIN_W + 48) {
+      var aspect = MIN_W / MIN_H;
+      dw = Math.min(window.innerWidth - 48, (window.innerHeight - 160) * aspect);
+      dh = dw / aspect;
+      if (dw < MIN_W) { dw = MIN_W; dh = MIN_H; }
+      // keep engines that applied only half the CSS (width but no
+      // aspect-ratio) from squashing the taller buffer on screen
+      canvas.style.width = Math.round(dw) + "px";
+      canvas.style.height = Math.round(dh) + "px";
+    }
+    var w = Math.round(Math.max(1, dw) * dpr);
+    var h = Math.round(Math.max(1, dh) * dpr);
     if (w * h > MAX_BUFFER_PIXELS) {
       var s = Math.sqrt(MAX_BUFFER_PIXELS / (w * h));
       w = Math.round(w * s);
