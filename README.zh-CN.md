@@ -103,7 +103,7 @@ Windows、Linux（X11 / framebuffer）、macOS（AppKit）、WebAssembly、任�
 跑的都是同一棵控件树。终端也是一等目标：在任何支持 sixel 的终端（WezTerm、
 foot、iTerm2）里，同一棵树渲染成 SIXEL 图形，输入走 SGR 鼠标 + 键盘——完全
 不需要窗口系统。**[在浏览器里直接试](https://tyouhyou.github.io/imprint/)**——
-SIGNAL-ONE 编译成 WebAssembly，经与桌面 shell 相同的 C-ABI 呈现。
+ORION NX-07 指挥舱编译成 WebAssembly，经与桌面 shell 相同的 C-ABI 呈现。
 
 ## 设计优先
 
@@ -111,8 +111,8 @@ SIGNAL-ONE 编译成 WebAssembly，经与桌面 shell 相同的 C-ABI 呈现。
 `.ui` 语法；两者都物化成你的 C++ 所构建的那棵完全相同的控件树（HTML 路径是
 `html` / `vectordial` 子集：布局、标签、控件、矢量表盘——不是 web 引擎）。
 文件在构建期校验并打包：非法文件让 `ui_embed` 直接构建失败，任何目标从
-C 数组加载结果。开篇的 SIGNAL-ONE 正是这条路径：85 行 HTML 设计文件 +
-266 行 C++ 行为代码。交互式预览任意设计文件：
+C 数组加载结果。开篇的 ORION 正是这条路径：396 行 HTML 设计文件 +
+768 行 C++ 行为代码。交互式预览任意设计文件：
 
 ```
 UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
@@ -242,8 +242,8 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 支持输入的后端 |
 | Linux（framebuffer） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 仅显示；交互请用 X11 |
 | 终端（SIXEL） | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | demo 目标：同一个 UI 跑在 sixel 终端里（WezTerm/foot/iTerm2），SGR 鼠标 + 键盘输入；`IM_TERM_SIZE=WxH` 调整尺寸 |
-| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 SIGNAL-ONE ROM（还需传入宿主构建的 `html_embed` 与 `bytes_embed`：`-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`），或 `-DSTORY=showcase_html` 构建 HTML showcase（同上，另需宿主构建的 `html_embed`：`-DHTML_EMBED_EXECUTABLE=`） |
-| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` 产出 SIGNAL-ONE 页面为单个自包含 `.js`（wasm 内嵌）；附带 node 冒烟测试 |
+| 任天堂 DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | 产出 `build/build_nds/bin/tictactoe.nds`；加 `-DSTORY=showcase` 构建 ORION NX-07 ROM（还需传入宿主构建的 `html_embed` 与 `bytes_embed`：`-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`），或 `-DSTORY=showcase_html` 构建 HTML showcase（同上，另需宿主构建的 `html_embed`：`-DHTML_EMBED_EXECUTABLE=`） |
+| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` 产出 ORION NX-07 页面为单个自包含 `.js`（wasm 内嵌）；附带 node 冒烟测试 |
 | Python | 先构建 `binding` 动态库，再 `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame 宿主 |
 
 测试：`<build>/bin/test_imui`——本地 `EXPECT` 宏（NDEBUG 安全，无测试框架）；
@@ -281,18 +281,19 @@ letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/P
 
 ## 示例
 
-**SIGNAL-ONE**（`-DSTORY=showcase`）——足迹数字背后的那台控制台，端到端实录：
+**ORION NX-07**（`-DSTORY=showcase`）——足迹数字背后的那座指挥舱，端到端实录：
 录制器经公开 API 以固定输入脚本驱动应用，所以 GIF 在所有平台上字节级一致。
-ISV EVENT-HORIZON 旗舰舰桥：推进器滑杆驱动曲速、反应堆负载与堆芯温度，
-航向表随推进器前进，雷达扫描针逐帧旋转，SHIELDS / LIFE / AUX 系统开关
-改变功率分配，ALERT 锁定红色警戒，MODE 在三种强调主题间循环（青/琥珀/绿），
-ABOUT 打开声明式模态遮罩，RESET 恢复启动状态。UI 是一份 HTML 设计稿，
-布局以百分比书写，随宿主缓冲尺寸缩放。文本走运行时 TTF 路径（Inter，由
-`bytes_embed` 打包）——配置 `-DUSE_TTF_RUNTIME=ON` 以获得设计所见的比例字体
-观感；5x7 位图兜底让非 TTF 构建保持全绿。
+勘测船 ORION 的指挥舱：四条功率分配滑杆联动反应堆/护盾/武器/引擎仪表，
+离子/重力/散热开关改变负载，扫描仪指针逐帧旋转，WASDQE（或 TACTICAL
+MANEUVER 按钮）执行偏航/俯仰/滚转并推动航向读数，DEEP SCAN 扫描链路状态，
+STAR MAP 打开银河导航模态（M 键），FAULT INJECT 把 Q-core 压力写进事件日志，
+ABORT 将座舱切换到逃生协议。UI 是一份 HTML 设计稿，布局以百分比书写，
+随宿主缓冲尺寸缩放。文本走运行时 TTF 路径（Inter，由 `bytes_embed` 打包）
+——配置 `-DUSE_TTF_RUNTIME=ON` 以获得设计所见的比例字体观感；5x7 位图兜底
+让非 TTF 构建保持全绿。
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="端到端实录的 SIGNAL-ONE 旗舰舰桥：趋势线推进、雷达扫描针旋转、航向表随推进器前进、推进器滑杆驱动反应堆负载与温度、MODE 循环三种强调主题（青、琥珀、绿）、系统开关翻转、ALERT 锁定红色警戒、ABOUT 打开模态遮罩并由 CLOSE 关闭、RESET 恢复启动状态">
+  <img src="assets/showcase/showcase.gif" width="480" alt="端到端实录的 ORION NX-07 指挥舱：扫描仪指针旋转、功率滑杆拖动并联动仪表、系统开关翻转、机动按钮推动航向读数、DEEP SCAN 扫描链路状态、STAR MAP 导航模态打开并由 CLOSE 关闭、事件日志按严重级别着色滚动">
 </p>
 
 **[在浏览器里直接试](https://tyouhyou.github.io/imprint/)**——无需服务器、

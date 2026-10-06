@@ -6,7 +6,7 @@ const DIR = path.dirname(OUT);
 const NAME = path.basename(OUT).replace(/_mod\.js$/, "");
 const IS_SHOWCASE = NAME.indexOf("showcase") === 0;
 
-// screen sizes: the SIGNAL-ONE / showcase_html / life / seedmap canvases
+// screen sizes: the ORION / showcase_html / life / seedmap canvases
 // design at 320x240; tictactoe and the portal games stay 256x192
 const SIZES = {
     showcase: [320, 240],
@@ -84,30 +84,32 @@ createModule({
       const ZK_LEFT = 258, ZK_UP = 256, ZK_RIGHT = 259, ZK_DOWN = 257;
 
       if (IS_SHOWCASE) {
-        // SIGNAL-ONE: the ABOUT overlay round trip. Click ABOUT (bottom
-        // bar) -- the declarative overlay dims the console; click CLOSE
-        // -- the frame returns. Pixel (10,120) sits in the left panel
-        // margin: static across frames (the desktop battery probes the
-        // same pixel), so the live-feed telemetry cannot confound the
-        // comparison, and it dims with the overlay.
+        // ORION NX-07: the STAR MAP modal round trip, keyboard-driven
+        // ('m' toggles per the design's KEYS hint) so the smoke needs no
+        // pixel coordinates -- picking inside a clipped flex container
+        // would depend on layout details the smoke should not encode.
+        // Pixel (10,120) sits in the left panel margin: static across
+        // frames (the desktop battery probes the same pixel), so the
+        // live telemetry cannot confound the comparison, and the modal's
+        // full-screen rgba(1,3,8,0.72) veil dims it while open.
         const pxAt = function (buf, x, y) {
           const o = (y * W + x) * 4;
           return buf[o] + buf[o + 1] + buf[o + 2];
         };
         const before = snapOf(app);
-        click(app, 206, 227);  // ABOUT (fourth footer button)
+        keyDown(app, 0, 109);  // 'm' -> STAR MAP modal opens
         const dimmed = snapOf(app);
         if (pxAt(before, 10, 120) === pxAt(dimmed, 10, 120)) {
-          throw new Error("ABOUT overlay did not dim the console");
+          throw new Error("STAR MAP modal did not dim the console");
         }
-        click(app, 82, 198);  // CLOSE
+        keyDown(app, 0, 109);  // 'm' again -> modal closes
         const restored = snapOf(app);
         if (pxAt(restored, 10, 120) !== pxAt(before, 10, 120)) {
-          throw new Error("CLOSE did not restore the console");
+          throw new Error("modal close did not restore the console");
         }
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
-        console.log("showcase about overlay: ok");
+        console.log("showcase star-map modal: ok");
         console.log("SMOKE TEST OK");
         process.exit(0);
       }

@@ -62,7 +62,7 @@ tictactoe)
     EXTRA_INCLUDES=""
     ;;
 showcase)
-    # SIGNAL-ONE (2026-09-26): the UI is one HTML design file; html_embed
+    # ORION NX-07 (2026-10-05): the UI is one HTML design file; html_embed
     # packs and validates it natively (the same-parser validator, the
     # showcase_html precedent -- html.cpp is not standalone, so the
     # native validator compiles the full imui/imcore closure), and
@@ -89,7 +89,7 @@ showcase)
         /src/imcore/src/text/bitmap_provider.cpp \
         /src/imcore/src/text/text_image.cpp \
         -o /tmp/html_embed
-    /tmp/html_embed /tmp/showcase_signal.gen.hpp /src/apps/showcase/signal.html
+    /tmp/html_embed /tmp/showcase_orion.gen.hpp /src/apps/showcase/orion.html
     g++ -std=c++17 -O2 /src/tools/bytes_embed.cpp -o /tmp/bytes_embed
     /tmp/bytes_embed /tmp/showcase_font.gen.hpp showcase_font \
         /src/assets/fonts/Inter-Regular.ttf

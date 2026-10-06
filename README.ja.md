@@ -82,11 +82,11 @@ if (r.status == zb::snap::check_result::status::missing)
 
 ![showcase_html は linux、nds、wasm 上に](assets/showcase/montage.png)
 
-Windows、Linux（X11 / フレームバッファ）、macOS（AppKit）、WebAssembly、ニンテンドーDS、すべてが同じウィジェットツリーを走らせます。ターミナルも第一級ターゲットです：sixel 対応ターミナル（WezTerm、foot、iTerm2）なら、同じツリーが SIXEL グラフィックスとして描画され、入力は SGR マウス + キーボード——ウィンドウシステムはまったく要りません。**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)**——SIGNAL-ONE を WebAssembly にコンパイルしたもので、デスクトップシェルと同じ C-ABI 経由で表示されます。
+Windows、Linux（X11 / フレームバッファ）、macOS（AppKit）、WebAssembly、ニンテンドーDS、すべてが同じウィジェットツリーを走らせます。ターミナルも第一級ターゲットです：sixel 対応ターミナル（WezTerm、foot、iTerm2）なら、同じツリーが SIXEL グラフィックスとして描画され、入力は SGR マウス + キーボード——ウィンドウシステムはまったく要りません。**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)**——ORION NX-07 コマンドデッキを WebAssembly にコンパイルしたもので、デスクトップシェルと同じ C-ABI 経由で表示されます。
 
 ## デザインファースト
 
-画面は *HTML でデザインします*——id、タグ、スタイルで、ウィジェットコードはゼロ——あるいはコンパクトな `.ui` 文法で。どちらも、あなたの C++ が作るのとまったく同じウィジェットツリーに実体化します（HTML パスは `html` / `vectordial` サブセット：レイアウト、ラベル、コントロール、ベクターダイアル——Web エンジンではありません）。ファイルはビルド時に検証・パックされます：不正なファイルは `ui_embed` がビルドを失敗させ、どのターゲットも結果を C 配列からロードします。冒頭の SIGNAL-ONE もまさにこの経路：85 行の HTML デザインファイル + 266 行の C++ 振る舞いコード。デザインファイルはインタラクティブにプレビューできます：
+画面は *HTML でデザインします*——id、タグ、スタイルで、ウィジェットコードはゼロ——あるいはコンパクトな `.ui` 文法で。どちらも、あなたの C++ が作るのとまったく同じウィジェットツリーに実体化します（HTML パスは `html` / `vectordial` サブセット：レイアウト、ラベル、コントロール、ベクターダイアル——Web エンジンではありません）。ファイルはビルド時に検証・パックされます：不正なファイルは `ui_embed` がビルドを失敗させ、どのターゲットも結果を C 配列からロードします。冒頭の ORION もまさにこの経路：396 行の HTML デザインファイル + 768 行の C++ 振る舞いコード。デザインファイルはインタラクティブにプレビューできます：
 
 ```
 UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
@@ -200,8 +200,8 @@ target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backen
 | Linux（X11） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | 入力対応バックエンド |
 | Linux（フレームバッファ） | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | 表示のみ。操作は X11 で |
 | ターミナル（SIXEL） | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | デモターゲット：同じ UI が sixel ターミナルで動く（WezTerm/foot/iTerm2）。SGR マウス + キーボード入力。`IM_TERM_SIZE=WxH` でサイズ変更 |
-| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` で SIGNAL-ONE ROM をビルド（ホスト製の `html_embed` と `bytes_embed` を `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=` で渡す必要あり）、または `-DSTORY=showcase_html` で HTML ショーケース（同様に、ホスト製の `html_embed` を `-DHTML_EMBED_EXECUTABLE=` で追加） |
-| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` が SIGNAL-ONE ページを自己完結する単一 `.js` として生成（wasm 埋め込み済み）。node スモークテスト付き |
+| ニンテンドーDS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | `build/build_nds/bin/tictactoe.nds` を生成。`-DSTORY=showcase` で ORION NX-07 ROM をビルド（ホスト製の `html_embed` と `bytes_embed` を `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=` で渡す必要あり）、または `-DSTORY=showcase_html` で HTML ショーケース（同様に、ホスト製の `html_embed` を `-DHTML_EMBED_EXECUTABLE=` で追加） |
+| WebAssembly | `demo/wasm/build.sh`（docker emscripten） | `build.sh showcase` が ORION NX-07 ページを自己完結する単一 `.js` として生成（wasm 埋め込み済み）。node スモークテスト付き |
 | Python | `binding` 共有ライブラリをビルドしてから `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame ホスト |
 
 テスト：`<build>/bin/test_imui`——ローカルの `EXPECT` マクロ（NDEBUG セーフ、テストフレームワークなし）。デスクトップは `ctest -R test_imui`（またはバイナリ直実行）、NDS ではスキップ。`binding/test/test_zbapi` は `assert()` に依存するため、`NDEBUG` なしの構成（Debug またはビルドタイプ未指定）でビルドしてください。
@@ -239,10 +239,10 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 
 ## デモ
 
-**SIGNAL-ONE**（`-DSTORY=showcase`）——上のフットプリントの数字の元になったコンソール、エンドツーエンド記録：レコーダーが公開 API 経由で固定の入力スクリプトによりアプリを駆動するため、GIF はすべてのプラットフォームでバイト単位で同一です。ISV EVENT-HORIZON 旗艦ブリッジ：スロットルスライダーがワープ・リアクター負荷・コア温度を駆動し、ヘディングダイヤルはスロットルに応じて進み、レーダースイープ針はフレームごとに回転し、SHIELDS / LIFE / AUX システムトグルは電力配分に反映され、ALERT は赤色警報をラッチし、MODE は 3 つのアクセントテーマ（シアン/アンバー/グリーン）を循環し、ABOUT は宣言的モーダルオーバーレイを開き、RESET が起動状態に戻します。UI は 1 枚の HTML デザインファイルで、レイアウトはパーセント指定——ホストバッファに合わせて拡縮します。テキストはランタイム TTF パス（Inter、`bytes_embed` でパック）——意図したプロポーショナルフォントの見た目には `-DUSE_TTF_RUNTIME=ON` を設定。5x7 ビットマップフォールバックが非 TTF ビルドもグリーンのまま保ちます。
+**ORION NX-07**（`-DSTORY=showcase`）——上のフットプリントの数字の元になったコマンドデッキ、エンドツーエンド記録：レコーダーが公開 API 経由で固定の入力スクリプトによりアプリを駆動するため、GIF はすべてのプラットフォームでバイト単位で同一です。調査船 ORION のコマンドデッキ：4 本の電力配分スライダーがリアクター/シールド/兵装/エンジンのゲージを駆動し、イオン/重力/ベントのトグルが負荷をシフトし、スキャナスイープ針はフレームごとに回転し、WASDQE（または TACTICAL MANEUVER ボタン）のヨー/ピッチ/ロールがヘディング読み取りを動かし、DEEP SCAN がリンク状態を掃引し、STAR MAP が銀河ナビゲーターのモーダルを開き（M キー）、FAULT INJECT が Q-core のストレスをイベントログに書き込み、ABORT が脱出プロトコルに切り替えます。UI は 1 枚の HTML デザインファイルで、レイアウトはパーセント指定——ホストバッファに合わせて拡縮します。テキストはランタイム TTF パス（Inter、`bytes_embed` でパック）——意図したプロポーショナルフォントの見た目には `-DUSE_TTF_RUNTIME=ON` を設定。5x7 ビットマップフォールバックが非 TTF ビルドもグリーンのまま保ちます。
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="エンドツーエンドで記録した SIGNAL-ONE 旗艦ブリッジ：トレンドラインが進み、レーダースイープ針が回転し、ヘディングダイヤルがスロットルに応じて進み、スロットルスライダーがリアクターゲージと温度メーターを駆動し、MODE が 3 つのアクセントテーマ（シアン、アンバー、グリーン）を循環、システムトグルが反転、ALERT が赤色警報をラッチし、ABOUT でモーダルオーバーレイを開いて CLOSE で閉じ、RESET で起動状態に戻る">
+  <img src="assets/showcase/showcase.gif" width="480" alt="エンドツーエンドで記録した ORION NX-07 コマンドデッキ：スキャナスイープ針が回転し、電力スライダーがドラッグされてゲージを駆動し、システムトグルが反転し、マニューバボタンがヘディング読み取りを動かし、DEEP SCAN がリンク状態を掃引し、STAR MAP ナビゲーターモーダルが開いて CLOSE で閉じ、イベントログが重要度別の色で流れる">
 </p>
 
 **[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)**——サーバーもインストールも不要：wasm はページに埋め込み済みです。

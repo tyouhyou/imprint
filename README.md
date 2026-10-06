@@ -122,8 +122,9 @@ Nintendo DS all run the same widget tree. The terminal is a first-class
 target too: on any sixel-capable terminal (WezTerm, foot, iTerm2) the same
 tree renders as SIXEL graphics with SGR mouse and keyboard input — no
 windowing system at all. **[Try it live in your
-browser](https://tyouhyou.github.io/imprint/)** — SIGNAL-ONE compiled to
-WebAssembly, presented through the same C-ABI a desktop shell uses.
+browser](https://tyouhyou.github.io/imprint/)** — the ORION NX-07 command
+deck compiled to WebAssembly, presented through the same C-ABI a desktop
+shell uses.
 
 ## Design-first
 
@@ -132,8 +133,8 @@ the compact `.ui` grammar; both materialize into the exact widget tree your
 C++ builds (the HTML path is an `html` / `vectordial` subset: layout,
 labels, controls, vector dials — not a web engine). Files are validated and
 packed at build time: `ui_embed` fails the build on invalid files, and any
-target loads the result from a C array. SIGNAL-ONE, the console at the top,
-is an 85-line HTML design file plus 266 lines of C++ behavior. Preview any
+target loads the result from a C array. ORION, the command deck at the top,
+is a 396-line HTML design file plus 768 lines of C++ behavior. Preview any
 design file interactively:
 
 ```
@@ -272,8 +273,8 @@ size (code-contract §11.1).
 | Linux (X11) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=X11 && cmake --build build/build_linux` | input-capable backend |
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
 | Terminal (SIXEL) | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | demo target: the same UI in a sixel terminal (WezTerm/foot/iTerm2), input via SGR mouse + keys; `IM_TERM_SIZE=WxH` resizes |
-| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the SIGNAL-ONE ROM (it additionally needs the host-built `html_embed` and `bytes_embed`, passed as `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`), or `-DSTORY=showcase_html` for the HTML showcase (same, plus the host-built `html_embed` as `-DHTML_EMBED_EXECUTABLE=`) |
-| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh <story>` produces one self-contained `.js` per story (wasm embedded) — `showcase` (SIGNAL-ONE), `tictactoe`, `g2048`, `mines`, `life`, `seedmap`, `playground` (design-file editor host); includes a node smoke test (`demo/wasm/smoke.js <story>_mod.js`) |
+| Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the ORION NX-07 ROM (it additionally needs the host-built `html_embed` and `bytes_embed`, passed as `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`), or `-DSTORY=showcase_html` for the HTML showcase (same, plus the host-built `html_embed` as `-DHTML_EMBED_EXECUTABLE=`) |
+| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh <story>` produces one self-contained `.js` per story (wasm embedded) — `showcase` (ORION NX-07), `tictactoe`, `g2048`, `mines`, `life`, `seedmap`, `playground` (design-file editor host); includes a node smoke test (`demo/wasm/smoke.js <story>_mod.js`) |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host |
 
 Tests: `<build>/bin/test_imui` — a local `EXPECT` macro (NDEBUG-safe,
@@ -317,27 +318,28 @@ present 1:1; WASM/Python hosts scale host-side.
 
 ## Demo
 
-**SIGNAL-ONE** (`-DSTORY=showcase`) — the console behind the footprints
+**ORION NX-07** (`-DSTORY=showcase`) — the command deck behind the footprints
 above, recorded end to end: the recorder drives the app through its public
 API with a fixed input script, so the GIF is byte-identical on every
-platform. The flagship bridge of the ISV EVENT-HORIZON: the throttle
-slider drives warp, reactor load and core temp, the heading dial advances
-with the throttle, the radar sweep needle rotates per frame, the SHIELDS /
-LIFE SUPPORT / AUX SENSORS toggles feed the power draw, ALERT latches a red
-condition, MODE cycles three accent themes (cyan / amber / green), ABOUT
-opens a declarative modal overlay, RESET restores boot state. The UI is one
-HTML design file laid out in percents, so it scales with the host buffer.
-Text renders through the runtime-TTF path (Inter,
+platform. The deck of the survey ship ORION: four power-distribution
+sliders feed the reactor/shield/weapon/engine gauges, the ion/grav/vent
+toggles shift the load, the scanner sweep needle rotates per frame,
+WASDQE (or the TACTICAL MANEUVER buttons) yaws/pitches/rolls the ship and
+steers the heading readout, DEEP SCAN sweeps the link status, the STAR MAP
+opens the galactic navigator modal (M key), FAULT INJECT stresses the
+Q-core into the event log, ABORT dims the deck to the escape protocol.
+The UI is one HTML design file laid out in percents, so it scales with the
+host buffer. Text renders through the runtime-TTF path (Inter,
 packed by `bytes_embed`) — configure `-DUSE_TTF_RUNTIME=ON` for the intended
 proportional look; the 5x7 bitmap fallback keeps non-TTF builds green.
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="SIGNAL-ONE flagship bridge recorded end to end: the trend line advances, the radar sweep needle rotates, the heading dial advances with the throttle, the throttle slider drives the reactor gauge and temp meter, MODE cycles three accent themes (cyan, amber, green), the system toggles flip, ABOUT opens the modal overlay and CLOSE dismisses it, RESET restores the boot state">
+  <img src="assets/showcase/showcase.gif" width="480" alt="ORION NX-07 command deck recorded end to end: the scanner sweep needle rotates, the power sliders drag and feed the gauges, the system toggles flip, the maneuver buttons steer the heading readout, DEEP SCAN sweeps the link status, the STAR MAP navigator modal opens and CLOSE dismisses it, the event log streams severity-colored entries">
 </p>
 
 **[Try the demos live](https://tyouhyou.github.io/imprint/)** — a demo portal:
 every page is this framework compiled to WebAssembly, no server, no install
-(wasm embedded in the page). Besides SIGNAL-ONE: **2048** with a
+(wasm embedded in the page). Besides ORION NX-07: **2048** with a
 deterministic time-travel scrubber (rewind the whole input stream and replay
 it byte-exact), **Minesweeper**, a **Game of Life / plasma / starfield**
 demoscene page, a seed-driven **dungeon map** generator, and a design-file
