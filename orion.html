@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Signal-One console · Imprint demos</title>
+<title>Orion NX-07 command deck · Imprint demos</title>
 <style>
   :root {
     --bg: #0a0e16;
@@ -11,7 +11,7 @@
     --line: #1e2938;
     --text: #c9d3e0;
     --muted: #7d89a0;
-    --accent: #4fd6e0;
+    --accent: #50f4ff;
     --amber: #f0b243;
     --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
     --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
@@ -46,7 +46,7 @@
   .mark::before {
     content: ""; width: 11px; height: 11px;
     background: var(--accent);
-    box-shadow: 0 0 10px rgba(79,214,224,0.55);
+    box-shadow: 0 0 10px rgba(80,244,255,0.55);
   }
   .nav a {
     font-family: var(--mono); font-size: 12px;
@@ -83,7 +83,7 @@
     border: 1px solid #263450;
     box-shadow:
       0 24px 60px rgba(0,0,0,0.55),
-      0 0 42px rgba(79,214,224,0.10),
+      0 0 42px rgba(80,244,255,0.10),
       inset 0 1px 0 rgba(255,255,255,0.04);
   }
   .bezel-inner {
@@ -181,7 +181,7 @@
 </div>
 
 <div class="demo wrap">
-  <div class="demo-label">Live demo · Signal-One console</div>
+  <div class="demo-label">Live demo · Orion NX-07 command deck</div>
   <div style="text-align:center">
     <div class="bezel"><div class="bezel-inner">
       <canvas id="screen" width="320" height="240"></canvas>
@@ -189,17 +189,17 @@
     <div id="status">loading module…</div>
   </div>
   <div class="chips">
-    <span class="chip"><b>DRAG</b> the throttle</span>
-    <span class="chip"><b>ALERT</b> latches red condition</span>
-    <span class="chip"><b>SYSTEMS</b> toggles feed the reactor</span>
-    <span class="chip"><b>MODE</b> cycles three themes</span>
-    <span class="chip"><b>RESET</b> restores boot state</span>
+    <span class="chip"><b>DRAG</b> the four power sliders</span>
+    <span class="chip"><b>WASDQE</b> yaw · pitch · roll</span>
+    <span class="chip"><b>STAR MAP</b> opens the navigator (M key)</span>
+    <span class="chip"><b>DEEP SCAN</b> sweeps the link status</span>
+    <span class="chip"><b>FAULT INJECT</b> stresses the Q-core</span>
   </div>
   <p class="demo-note">
-    There is no HTML engine in this page. The console is a deterministic framebuffer sized to your viewport
+    There is no HTML engine in this page. The command deck is a deterministic framebuffer sized to your viewport
     drawn by the same C++ renderer that ships on desktop and embedded targets,
     compiled to WebAssembly and presented on a <code>&lt;canvas&gt;</code>.
-    The console itself <em>is designed in</em> an HTML file — ids, tags,
+    The deck itself <em>is designed in</em> an HTML file — ids, tags,
     styles — which Imprint compiles into a widget tree at build time; at
     runtime only C++ and pixels remain.
   </p>
@@ -237,7 +237,7 @@
 <footer>
   <div class="wrap">
     <span>
-      The console above is the <a href="https://github.com/tyouhyou/imprint/tree/main/apps/showcase">apps/showcase</a>
+      The deck above is the <a href="https://github.com/tyouhyou/imprint/tree/main/apps/showcase">apps/showcase</a>
       story — C++ plus one HTML design file — running unmodified.
     </span>
     <span class="fine">
