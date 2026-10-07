@@ -42,9 +42,8 @@ namespace zb::app::showcase
      *     set_pseudo), the event stream and the command toast cycle
      *     deterministically;
      *   - the flight recorder keeps every input event with its frame
-     *     number: seed + that stream IS the save game -- replaying it
-     *     reproduces the framebuffer byte-for-byte (proven in
-     *     test_showcase).
+     *     number: replaying the session's seed + stream reproduces the
+     *     framebuffer byte-for-byte (proven in test_showcase).
      *
      * Text renders through the runtime TTF family when the build carries
      * IMCORE_HAS_TTF_RUNTIME (the packed Inter blob); otherwise the 5x7
@@ -132,7 +131,8 @@ namespace zb::app::showcase
         void on_point();
         void on_boost();
         void on_yaw_l();
-        void on_yaw_r();        void on_pitch_u();
+        void on_yaw_r();
+        void on_pitch_u();
         void on_pitch_d();
         void on_roll_l();
         void on_roll_r();
@@ -309,9 +309,11 @@ namespace zb::app::showcase
         int mk_vx_[3] = {}, mk_vy_[3] = {};
 
         // the flight recorder: every input event with the frame it
-        // arrived on. Seed + this stream is the whole save game; the
-        // end-screen checksum lets players compare runs. Bounded: past
-        // the cap the recorder stops (and says so once in the log).
+        // arrived on. Replay the session's seed + this stream and the
+        // framebuffer reproduces byte-for-byte (proven in
+        // test_showcase); restarts are part of the session, so the
+        // recorder spans them. Bounded: past the cap the recorder
+        // stops (and says so once in the log).
         static constexpr int kReplayCap = 4096;
         std::vector<zb::input::input_event> rec_;
         std::vector<uint32_t> rec_frame_;
