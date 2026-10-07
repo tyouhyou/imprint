@@ -24,6 +24,19 @@ namespace zb::app::showcase
         constexpr int kToastFrames = 84;   // ~1.4 s at 60 fps
         constexpr int kScanFrames = 54;    // DEEP SCAN link-busy window
 
+        // ---- LONG RANGE constants ----
+        constexpr int kPirateLegFrames = 480;   // pirate closes 100 -> 0
+        constexpr int kEncounterFrames = 360;   // debris / ion-storm length
+        constexpr int kFuelWarn = 200;          // 20%: engines cap at 40
+
+        const char *kNodes[5] = {"LYRA-09", "CASS-22", "TALOS RIFT",
+                                 "VEGA GATE", "KEPLER-442B"};
+        const char *kHazards[4] = {"QUIET TRANSIT", "DEBRIS FIELD",
+                                   "PIRATE PATROL", "ION STORM"};
+        const char *kRoutes[6] = {"COREWARD SPUR", "RIMWARD DRIFT",
+                                  "SHADOW LANE", "HIGH PASS", "DUST RUN",
+                                  "BRIGHT CHANNEL"};
+
         // deterministic wave: a triangle, pure in the frame counter
         // (no timers, no RNG -- the F-2 app-side pattern)
         int wave_at(int frame)
@@ -97,14 +110,6 @@ namespace zb::app::showcase
                               react_->get_value() * 150 + 50) /
                                  100,
                        0, 995);
-    }
-
-    int Showcase::fuel_x10() const
-    {
-        // x100 under the hood: 83.4% - engine trim - weapon draw
-        const int f = 8340 - (engine_->get_value() - 72) * 6 -
-                      (weapons_->get_value() * 18) / 10;
-        return clamp_i(f / 10, 220, 834);
     }
 
     int Showcase::load_x10() const
@@ -195,12 +200,21 @@ namespace zb::app::showcase
         set_text(vel_text_, vel >= 950 ? "approaching corridor limit"
                                        : "cruise corridor stable");
 
-        const int fuel = fuel_x10();
-        std::snprintf(buf, sizeof(buf), "%d.%d%%", fuel / 10, fuel % 10);
+        // fuel and hull are stateful game resources (LONG RANGE)
+        std::snprintf(buf, sizeof(buf), "%d.%d%%", fuel_x10_ / 10,
+                      fuel_x10_ % 10);
         set_text(fuel_v_, buf);
         if (fuel_bar_ != nullptr)
         {
-            fuel_bar_->set_value(fuel / 10);
+            fuel_bar_->set_value(fuel_x10_ / 10);
+        }
+
+        std::snprintf(buf, sizeof(buf), "%d.%d%%", hull_x10_ / 10,
+                      hull_x10_ % 10);
+        set_text(hull_v_, buf);
+        if (hull_bar_ != nullptr)
+        {
+            hull_bar_->set_value(hull_x10_ / 10);
         }
 
         const int load = load_x10();
@@ -275,6 +289,16 @@ namespace zb::app::showcase
             modal_->set_visible(true);
         }
         modal_open_ = true;
+        // the route buttons only ever show for a pending course choice
+        // (open_map re-shows them); every other modal hides them
+        if (opt_a_ != nullptr)
+        {
+            opt_a_->set_visible(false);
+        }
+        if (opt_b_ != nullptr)
+        {
+            opt_b_->set_visible(false);
+        }
         // the toast paints above the modal backdrop (later sibling);
         // retire it so it can never intercept the modal's own clicks
         if (toast_ != nullptr)
@@ -362,6 +386,14 @@ namespace zb::app::showcase
         modal_text_ = root.find_by_id("modal_text");
         toast_ = root.find_by_id("toast");
         toast_tx_ = root.find_by_id("toast_tx");
+        sector_ = root.find_by_id("sector");
+        ship_mk_ = root.find_by_id("ship_mk");
+        for (int i = 0; i < 4; ++i)
+        {
+            char id[8];
+            std::snprintf(id, sizeof(id), "mk%d", i);
+            mk_[i] = root.find_by_id(id);
+        }
         for (int i = 0; i < kLogLines; ++i)
         {
             char id[8];
@@ -413,6 +445,12 @@ namespace zb::app::showcase
         bind_button("mv_strafe_l", &Showcase::on_strafe_l);
         bind_button("mv_strafe_r", &Showcase::on_strafe_r);
         bind_button("close_btn", &Showcase::on_close_modal);
+        // LONG RANGE: the star map's route and seed buttons
+        bind_button("opt_a", &Showcase::on_route_a);
+        bind_button("opt_b", &Showcase::on_route_b);
+        bind_button("seed_a", &Showcase::on_seed_a);
+        bind_button("seed_b", &Showcase::on_seed_b);
+        bind_button("seed_c", &Showcase::on_seed_c);
 
         // the modal overlay and the toast are absolutely positioned in
         // the design; an absolute element's percent size does not
@@ -457,6 +495,20 @@ namespace zb::app::showcase
         }
         render_log();
 
+        // boot the LONG RANGE voyage: leg 1's course comes rolled from
+        // the default seed so the deck is playable immediately
+        opt_a_ = root.find_by_id("opt_a");
+        opt_b_ = root.find_by_id("opt_b");
+        if (opt_a_ != nullptr)
+        {
+            opt_a_->set_visible(false);
+        }
+        if (opt_b_ != nullptr)
+        {
+            opt_b_->set_visible(false);
+        }
+        start_run(7);
+
         sync_power();
     }
 
@@ -472,13 +524,7 @@ namespace zb::app::showcase
                  autopilot_ ? "autopilot engaged" : "manual guidance engaged");
     }
 
-    void Showcase::on_ship_map()
-    {
-        show_modal("GALACTIC NAVIGATOR // LYRA-09",
-                   "Route A \xc2\xb7 minimum thermal load \xc2\xb7 arrival "
-                   "window 17d 06h \xc2\xb7 confidence 99.2%");
-        log_line("ok", "NAV", "galactic navigator opened");
-    }
+    void Showcase::on_ship_map() { open_map(); }
 
     void Showcase::on_fault()
     {
@@ -582,10 +628,695 @@ namespace zb::app::showcase
 
     void Showcase::on_close_modal() { hide_modal(); }
 
-    // ---- keyboard bindings (the design's KEYS hint line) ----
+    // ---- LONG RANGE: a deterministic voyage in four legs ----
+
+    uint32_t Showcase::lcg()
+    {
+        // the classic linear congruential generator (Numerical Recipes
+        // constants): the whole voyage is a pure function of the seed
+        rng_ = rng_ * 1664525u + 1013904223u;
+        return rng_ >> 8;  // 24 usable bits per roll
+    }
+
+    int Showcase::eff_engine() const
+    {
+        const int e = engine_ != nullptr ? engine_->get_value() : 0;
+        return fuel_x10_ < kFuelWarn ? (e < 40 ? e : 40) : e;
+    }
+
+    uint32_t Showcase::recorder_hash() const
+    {
+        // FNV-1a over the recorded stream (the end-screen checksum
+        // players compare to prove two runs played out identically)
+        uint32_t h = 2166136261u;
+        const auto mix = [&h](uint32_t v)
+        {
+            for (int i = 0; i < 4; ++i)
+            {
+                h ^= v & 0xffu;
+                h *= 16777619u;
+                v >>= 8;
+            }
+        };
+        mix(seed_);
+        mix(static_cast<uint32_t>(rec_.size()));
+        mix(static_cast<uint32_t>(frame_));
+        for (const auto &ev : rec_)
+        {
+            mix(static_cast<uint32_t>(ev.type));
+            mix(static_cast<uint32_t>(ev.x));
+            mix(static_cast<uint32_t>(ev.y));
+            mix(static_cast<uint32_t>(ev.key));
+            mix(static_cast<uint32_t>(ev.ch));
+        }
+        return h;
+    }
+
+    void Showcase::start_run(uint32_t seed)
+    {
+        seed_ = seed;
+        rng_ = seed;
+        // a re-roll from the seed chips may land while a modal is up
+        hide_modal();
+        phase_ = Phase::Cruise;
+        node_ = 0;
+        fuel_x10_ = 834;
+        hull_x10_ = 968;
+        pod_charges_ = 2;
+        route_pending_ = false;
+        fuel_warned_ = false;
+        cur_kind_ = EncounterKind::Quiet;
+        shield_pool_x10_ = 640;
+        pirate_hp_ = 0;
+        // leg 1's course rolls immediately so the deck is playable at boot
+        reroll_routes();
+        cur_kind_ = opt_kind_[0];
+        leg_left_ = opt_dist_[0];
+        set_text(sector_, kNodes[0]);
+        set_text(status_, "ALL SYSTEMS NOMINAL");
+        sync_power();
+        char buf[48];
+        std::snprintf(buf, sizeof(buf), "long-range cruise engaged \xc2\xb7 seed %u",
+                      seed_);
+        log_line("ok", "NAV", buf);
+        update_markers();
+    }
+
+    void Showcase::reroll_routes()
+    {
+        // the route table is a pure function of (seed, sector): the
+        // rolls live on their own derived stream, so what the previous
+        // leg was like -- hits taken, rocks shot -- cannot shift the
+        // courses on offer (a seed always maps to the same voyage map)
+        uint32_t rs = seed_ * 2654435761u +
+                      static_cast<uint32_t>(node_) * 40503u + 7u;
+        const auto roll = [&rs]() -> uint32_t
+        {
+            rs = rs * 1664525u + 1013904223u;
+            return rs >> 8;
+        };
+        for (int i = 0; i < 2; ++i)
+        {
+            opt_kind_[i] = static_cast<EncounterKind>(roll() % 4);
+            opt_dist_[i] = 700 + static_cast<int>(roll() % 500);
+            opt_name_[i] = kRoutes[roll() % 6];
+        }
+    }
+
+    void Showcase::open_map()
+    {
+        char buf[160];
+        if (phase_ == Phase::Cruise)
+        {
+            std::snprintf(buf, sizeof(buf),
+                          "STAR MAP // %s", kNodes[node_]);
+            show_modal(buf, "");
+            if (route_pending_)
+            {
+                std::snprintf(buf, sizeof(buf),
+                              "LEG %d OF 4 \xc2\xb7 fuel %d.%d%% \xc2\xb7 hull "
+                              "%d.%d%% \xc2\xb7 choose the transit route",
+                              node_ + 1, fuel_x10_ / 10, fuel_x10_ % 10,
+                              hull_x10_ / 10, hull_x10_ % 10);
+                set_text(modal_text_, buf);
+                if (opt_a_ != nullptr)
+                {
+                    std::snprintf(buf, sizeof(buf), "A \xc2\xb7 %s \xc2\xb7 %s",
+                                  opt_name_[0].c_str(),
+                                  kHazards[static_cast<int>(opt_kind_[0])]);
+                    set_text(opt_a_, buf);
+                    opt_a_->set_visible(true);
+                }
+                if (opt_b_ != nullptr)
+                {
+                    std::snprintf(buf, sizeof(buf), "B \xc2\xb7 %s \xc2\xb7 %s",
+                                  opt_name_[1].c_str(),
+                                  kHazards[static_cast<int>(opt_kind_[1])]);
+                    set_text(opt_b_, buf);
+                    opt_b_->set_visible(true);
+                }
+            }
+            else
+            {
+                set_text(modal_text_, "course already laid in \xc2\xb7 the ship "
+                                      "is under way");
+            }
+        }
+        else if (phase_ == Phase::Encounter)
+        {
+            std::snprintf(buf, sizeof(buf), "STAR MAP // %s", kNodes[node_]);
+            show_modal(buf, "");
+            std::snprintf(buf, sizeof(buf),
+                          "transit in progress \xc2\xb7 %s \xc2\xb7 the "
+                          "helm and weapons are live",
+                          kHazards[static_cast<int>(kind_)]);
+            set_text(modal_text_, buf);
+        }
+        else
+        {
+            // Arrived / Lost: the map becomes the voyage recap
+            show_modal(phase_ == Phase::Arrived
+                           ? "STAR MAP // VOYAGE COMPLETE"
+                           : "STAR MAP // VOYAGE LOST",
+                       "");
+            std::snprintf(buf, sizeof(buf),
+                          "%s \xc2\xb7 seed %u \xc2\xb7 hull %d.%d%% \xc2\xb7 "
+                          "fuel %d.%d%% \xc2\xb7 clock %s \xc2\xb7 FLIGHT "
+                          "RECORDER: %d events \xc2\xb7 checksum %08X",
+                          phase_ == Phase::Arrived
+                              ? "Kepler-442B orbit reached"
+                              : "the ORION was lost in transit",
+                          seed_, hull_x10_ / 10, hull_x10_ % 10,
+                          fuel_x10_ / 10, fuel_x10_ % 10,
+                          mission_clock().c_str(), static_cast<int>(rec_.size()),
+                          recorder_hash());
+            set_text(modal_text_, buf);
+        }
+        log_line("ok", "NAV", "star map opened");
+    }
+
+    void Showcase::choose_route(int which)
+    {
+        if (!route_pending_ || phase_ != Phase::Cruise)
+        {
+            return;
+        }
+        cur_kind_ = opt_kind_[which];
+        leg_left_ = opt_dist_[which];
+        route_pending_ = false;
+        hide_modal();
+        set_text(status_, "ALL SYSTEMS NOMINAL");
+        toast("COURSE LAID IN");
+        log_line("ok", "NAV",
+                 ("course: " + opt_name_[which] + " \xc2\xb7 " +
+                  kHazards[static_cast<int>(cur_kind_)])
+                     .c_str());
+    }
+
+    void Showcase::arrive_at_node()
+    {
+        ++node_;
+        if (node_ >= 4)
+        {
+            end_game(true);
+            return;
+        }
+        set_text(sector_, kNodes[node_]);
+        route_pending_ = true;
+        // fresh courses for the new sector: the derived stream makes
+        // the offering a pure function of (seed, sector)
+        reroll_routes();
+        set_text(status_, "AWAITING COURSE");
+        log_line("ok", "NAV",
+                 ("sector reached: " + std::string(kNodes[node_])).c_str());
+        toast("SECTOR REACHED // CHOOSE NEXT JUMP");
+        open_map();
+    }
+
+    void Showcase::start_encounter(EncounterKind kind)
+    {
+        phase_ = Phase::Encounter;
+        kind_ = kind;
+        enc_left_ = kind == EncounterKind::Pirate ? kPirateLegFrames
+                                                  : kEncounterFrames;
+        if (autopilot_)
+        {
+            autopilot_ = false;
+            log_line("warn", "NAV", "autopilot disengaged \xc2\xb7 manual "
+                                    "guidance required");
+        }
+        ship_px_ = 50;
+        ship_py_ = 50;
+        ship_roll_ = 0;
+        hit_cd_ = 0;
+        cannon_cd_ = 0;
+        switch (kind)
+        {
+        case EncounterKind::Debris:
+            for (int i = 0; i < 3; ++i)
+            {
+                mk_x_[i] = static_cast<int>(lcg() % 100);
+                mk_y_[i] = static_cast<int>(lcg() % 100);
+                mk_vx_[i] = 1 + static_cast<int>(lcg() % 3);
+                mk_vy_[i] = 1 + static_cast<int>(lcg() % 2);
+                if ((lcg() & 1) != 0)
+                {
+                    mk_vx_[i] = -mk_vx_[i];
+                }
+                if ((lcg() & 1) != 0)
+                {
+                    mk_vy_[i] = -mk_vy_[i];
+                }
+            }
+            break;
+        case EncounterKind::Pirate:
+            pirate_hp_ = 6;
+            pirate_dist_ = 100;
+            pirate_shot_cd_ = 150;
+            shield_pool_x10_ = clamp_i(shield_->get_value() * 10, 100, 1000);
+            break;
+        case EncounterKind::IonStorm:
+            for (int i = 0; i < 3; ++i)
+            {
+                mk_x_[i] = static_cast<int>(lcg() % 100);
+                mk_y_[i] = static_cast<int>(lcg() % 100);
+                mk_vx_[i] = mk_y_[i] % 3 - 1;
+                mk_vy_[i] = mk_x_[i] % 3 - 1;
+            }
+            break;
+        default:
+            break;
+        }
+        set_text(link_, "CONTACT");
+        set_text(status_, kHazards[static_cast<int>(kind)]);
+        toast("CONTACT // EVADE OR ENGAGE");
+        log_line("bad", "SCAN",
+                 ("transit hazard: " + std::string(kHazards[static_cast<int>(kind)])).c_str());
+        update_markers();
+    }
+
+    void Showcase::finish_encounter()
+    {
+        phase_ = Phase::Cruise;
+        update_markers();
+        set_text(link_, "STABLE");
+        arrive_at_node();
+    }
+
+    void Showcase::damage_hull(int amount_x10, const char *tag,
+                               const char *why)
+    {
+        hull_x10_ = clamp_i(hull_x10_ - amount_x10, 0, 968);
+        sync_power();
+        log_line("bad", tag, why);
+        if (hull_x10_ <= 0)
+        {
+            end_game(false);
+        }
+    }
+
+    void Showcase::end_game(bool won)
+    {
+        phase_ = won ? Phase::Arrived : Phase::Lost;
+        update_markers();
+        set_text(link_, won ? "DOCKED" : "LOST");
+        set_text(status_, won ? "ARRIVAL CONFIRMED" : "SHIP LOST");
+        char buf[224];
+        std::snprintf(buf, sizeof(buf),
+                      "%s \xc2\xb7 seed %u \xc2\xb7 hull %d.%d%% \xc2\xb7 fuel "
+                      "%d.%d%% \xc2\xb7 clock %s \xc2\xb7 FLIGHT RECORDER: %d "
+                      "events \xc2\xb7 checksum %08X",
+                      won ? "KEPLER-442B ORBIT REACHED. The long cruise is "
+                            "over; the deck stands down."
+                          : "HULL COLLAPSE. The ORION breaks up in transit; "
+                            "the recorder buoy carries the log home.",
+                      seed_, hull_x10_ / 10, hull_x10_ % 10, fuel_x10_ / 10,
+                      fuel_x10_ % 10, mission_clock().c_str(),
+                      static_cast<int>(rec_.size()), recorder_hash());
+        show_modal(won ? "ARRIVAL // KEPLER-442B" : "SHIP LOST", buf);
+        log_line(won ? "ok" : "bad", "NAV",
+                 won ? "voyage complete" : "ship lost in transit");
+    }
+
+    void Showcase::update_markers()
+    {
+        const bool enc = phase_ == Phase::Encounter;
+        if (ship_mk_ != nullptr)
+        {
+            ship_mk_->set_visible(enc);
+            if (enc)
+            {
+                ship_mk_->set_abs_offset(0, ship_px_, true);
+                ship_mk_->set_abs_offset(1, ship_py_, true);
+            }
+        }
+        const bool rocks = enc && kind_ == EncounterKind::Debris;
+        const bool dust = enc && kind_ == EncounterKind::IonStorm;
+        for (int i = 0; i < 3; ++i)
+        {
+            if (mk_[i] == nullptr)
+            {
+                continue;
+            }
+            mk_[i]->set_visible(rocks || dust);
+            if (rocks || dust)
+            {
+                mk_[i]->set_abs_offset(0, clamp_i(mk_x_[i], 0, 98), true);
+                mk_[i]->set_abs_offset(1, clamp_i(mk_y_[i], 0, 98), true);
+            }
+        }
+        if (mk_[3] != nullptr)
+        {
+            const bool show = enc && kind_ == EncounterKind::Pirate;
+            mk_[3]->set_visible(show);
+            if (show)
+            {
+                mk_[3]->set_abs_offset(
+                    0, clamp_i(50 + pirate_dist_ * 45 / 100, 0, 98), true);
+                mk_[3]->set_abs_offset(1, 50, true);
+            }
+        }
+    }
+
+    void Showcase::step_game()
+    {
+        if (phase_ == Phase::Cruise)
+        {
+            step_cruise();
+        }
+        else if (phase_ == Phase::Encounter)
+        {
+            step_encounter();
+        }
+    }
+
+    void Showcase::step_cruise()
+    {
+        // fuel burns once per second of cruising (engines + housekeeping)
+        if ((frame_ % 60) == 0)
+        {
+            const int burn = 2 + eff_engine() / 40;
+            fuel_x10_ = fuel_x10_ > burn ? fuel_x10_ - burn : 0;
+            if (fuel_x10_ < kFuelWarn && !fuel_warned_)
+            {
+                fuel_warned_ = true;
+                toast("FUEL CRITICAL");
+                log_line("warn", "FUEL",
+                         "reserve below 20% \xc2\xb7 engines capped at 40%");
+            }
+        }
+        if (leg_left_ > 0)
+        {
+            // throttle-scaled progress: ~4 units/frame at full burn,
+            // so a 1000-unit leg cruises for seconds and the
+            // encounters, not the transits, own the clock
+            leg_left_ -= eff_engine() / 24;
+            if (leg_left_ <= 0)
+            {
+                leg_left_ = 0;
+                if (cur_kind_ == EncounterKind::Quiet)
+                {
+                    log_line("ok", "NAV", "quiet transit \xc2\xb7 no contacts");
+                    arrive_at_node();
+                }
+                else
+                {
+                    start_encounter(cur_kind_);
+                }
+            }
+        }
+    }
+
+    void Showcase::step_encounter()
+    {
+        if (cannon_cd_ > 0)
+        {
+            --cannon_cd_;
+        }
+        if (hit_cd_ > 0)
+        {
+            --hit_cd_;
+        }
+        if (ship_roll_ > 0)
+        {
+            --ship_roll_;
+        }
+        if (enc_left_ > 0)
+        {
+            --enc_left_;
+        }
+
+        if (kind_ == EncounterKind::Debris)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                mk_x_[i] += mk_vx_[i];
+                mk_y_[i] += mk_vy_[i];
+                if (mk_x_[i] < 0 || mk_x_[i] > 100)
+                {
+                    mk_vx_[i] = -mk_vx_[i];
+                    mk_x_[i] = clamp_i(mk_x_[i], 0, 100);
+                }
+                if (mk_y_[i] < 0 || mk_y_[i] > 100)
+                {
+                    mk_vy_[i] = -mk_vy_[i];
+                    mk_y_[i] = clamp_i(mk_y_[i], 0, 100);
+                }
+                if (hit_cd_ == 0)
+                {
+                    const int r = ship_roll_ > 0 ? 4 : 7;
+                    const int dx = mk_x_[i] - ship_px_;
+                    const int dy = mk_y_[i] - ship_py_;
+                    if (dx > -r && dx < r && dy > -r && dy < r)
+                    {
+                        damage_hull(30 + static_cast<int>(lcg() % 40), "SCAN",
+                                    "micro-debris impact");
+                        if (phase_ != Phase::Encounter)
+                        {
+                            return;  // the hit ended the voyage
+                        }
+                        hit_cd_ = 45;
+                        // the rock breaks up; a fresh one drifts in
+                        mk_x_[i] = (lcg() & 1) != 0 ? 100 : 0;
+                        mk_y_[i] = static_cast<int>(lcg() % 100);
+                    }
+                }
+            }
+        }
+        else if (kind_ == EncounterKind::Pirate)
+        {
+            pirate_dist_ = enc_left_ * 100 / kPirateLegFrames;
+            if ((frame_ % 60) == 0)
+            {
+                // the capacitor regens off the shield bus (~3%/s at 64%)
+                shield_pool_x10_ = clamp_i(
+                    shield_pool_x10_ + shield_->get_value() / 2, 0, 1000);
+            }
+            if (pirate_dist_ < 45 && --pirate_shot_cd_ <= 0)
+            {
+                pirate_shot_cd_ = 90;
+                const int shot = 160 + static_cast<int>(lcg() % 80);
+                if (shield_pool_x10_ >= shot)
+                {
+                    shield_pool_x10_ -= shot;
+                    log_line("warn", "DEF", "shields absorbed a salvo");
+                }
+                else
+                {
+                    const int pierce = shot - shield_pool_x10_;
+                    shield_pool_x10_ = 0;
+                    damage_hull(pierce, "WPN",
+                                "pirate salvo pierced the shields");
+                    if (phase_ != Phase::Encounter)
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+        else if (kind_ == EncounterKind::IonStorm)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                mk_x_[i] = clamp_i(mk_x_[i] + mk_vx_[i], 0, 100);
+                mk_y_[i] = clamp_i(mk_y_[i] + mk_vy_[i], 0, 100);
+            }
+            if ((frame_ % 60) == 0)
+            {
+                // the storm rides +130 K on the core (enough to breach
+                // the 860 K overtemperature line at cruise settings)
+                // unless thermal venting is open (+30 K)
+                const bool venting =
+                    vent_sw_ != nullptr && vent_sw_->is_checked();
+                const int t = temp_k() + (venting ? 30 : 130);
+                char buf[16];
+                std::snprintf(buf, sizeof(buf), "%d K", t);
+                set_text(temp_v_, buf);
+                if (temp_bar_ != nullptr)
+                {
+                    temp_bar_->set_value(clamp_i((t - 520) / 5, 22, 100));
+                }
+                if (t > 860)
+                {
+                    damage_hull(15, "THERM",
+                                "core overtemperature inside the storm");
+                    if (phase_ != Phase::Encounter)
+                    {
+                        return;
+                    }
+                }
+            }
+        }
+
+        if (enc_left_ == 0)
+        {
+            if (kind_ == EncounterKind::Pirate && pirate_hp_ > 0)
+            {
+                damage_hull(100, "WPN", "pirate ram as the chase ended");
+                if (phase_ != Phase::Encounter)
+                {
+                    return;
+                }
+            }
+            finish_encounter();
+        }
+        else
+        {
+            update_markers();
+        }
+    }
+
+    void Showcase::fire_cannon()
+    {
+        if (phase_ != Phase::Encounter)
+        {
+            toast("NO TARGET SOLUTION");
+            return;
+        }
+        if (cannon_cd_ > 0)
+        {
+            toast("CANNON RECHARGING");
+            return;
+        }
+        const int w = weapons_ != nullptr ? weapons_->get_value() : 0;
+        if (w < 15)
+        {
+            toast("WEAPONS BUS OFFLINE");
+            log_line("warn", "WPN",
+                     "pulse cannon needs the weapons bus at 15%");
+            return;
+        }
+        cannon_cd_ = 45;
+        if (kind_ == EncounterKind::Pirate)
+        {
+            pirate_hp_ -= w >= 55 ? 2 : 1;
+            if (pirate_hp_ <= 0)
+            {
+                fuel_x10_ = clamp_i(fuel_x10_ + 80, 0, 834);
+                toast("PIRATE DESTROYED");
+                log_line("ok", "WPN",
+                         "pirate destroyed \xc2\xb7 salvage recovered +8%");
+                finish_encounter();
+                return;
+            }
+            toast("DIRECT HIT");
+            log_line("ok", "WPN", "pulse cannon hit confirmed");
+        }
+        else if (kind_ == EncounterKind::Debris)
+        {
+            // fragment the closest rock; it respawns at the rim
+            int best = 0;
+            int best_d = 1 << 30;
+            for (int i = 0; i < 3; ++i)
+            {
+                const int d = (mk_x_[i] - ship_px_) * (mk_x_[i] - ship_px_) +
+                              (mk_y_[i] - ship_py_) * (mk_y_[i] - ship_py_);
+                if (d < best_d)
+                {
+                    best_d = d;
+                    best = i;
+                }
+            }
+            mk_x_[best] = (lcg() & 1) != 0 ? 100 : 0;
+            mk_y_[best] = static_cast<int>(lcg() % 100);
+            mk_vx_[best] = 1 + static_cast<int>(lcg() % 3);
+            if ((lcg() & 1) != 0)
+            {
+                mk_vx_[best] = -mk_vx_[best];
+            }
+            toast("ROCK FRAGMENTED");
+            log_line("ok", "WPN", "rock fragmented by the pulse cannon");
+        }
+        else
+        {
+            toast("NO TARGET SOLUTION");
+        }
+    }
+
+    void Showcase::launch_pod()
+    {
+        if (phase_ != Phase::Encounter)
+        {
+            toast("NO TARGET SOLUTION");
+            return;
+        }
+        if (pod_charges_ <= 0)
+        {
+            toast("POD RACKS EMPTY");
+            return;
+        }
+        --pod_charges_;
+        if (kind_ == EncounterKind::Pirate)
+        {
+            pirate_hp_ -= 4;
+            if (pirate_hp_ <= 0)
+            {
+                fuel_x10_ = clamp_i(fuel_x10_ + 80, 0, 834);
+                toast("PIRATE DESTROYED");
+                log_line("ok", "WPN",
+                         "kinetic pod kill \xc2\xb7 salvage recovered +8%");
+                finish_encounter();
+                return;
+            }
+            toast("POD IMPACT");
+            log_line("bad", "WPN", "kinetic pod impact confirmed");
+        }
+        else if (kind_ == EncounterKind::Debris)
+        {
+            for (int i = 0; i < 3; ++i)
+            {
+                mk_x_[i] = (lcg() & 1) != 0 ? 100 : 0;
+                mk_y_[i] = static_cast<int>(lcg() % 100);
+            }
+            toast("FIELD CLEARED");
+            log_line("ok", "WPN", "kinetic pod dispersed the rock field");
+        }
+        else
+        {
+            toast("NO TARGET SOLUTION");
+        }
+    }
+
+    // ---- keyboard + pointer bindings (the design's KEYS hint line) ----
 
     void Showcase::input(const zb::input::input_event &ev) noexcept
     {
+        // the flight recorder: seed + this stream replays the run
+        if (rec_.size() < static_cast<size_t>(kReplayCap))
+        {
+            rec_.push_back(ev);
+            rec_frame_.push_back(static_cast<uint32_t>(frame_));
+        }
+        else if (!rec_full_)
+        {
+            rec_full_ = true;
+            LW << "showcase: flight recorder full, recording stopped";
+        }
+
+        // helm steering by pointer: a touch drag, or a mouse drag on
+        // the scope (touch covers the wasm host, where the page maps
+        // mouse input to the touch ABI)
+        if (ev.type == zb::input::input_type::touch_move ||
+            (ev.type == zb::input::input_type::mouse_move && drag_active_))
+        {
+            if (phase_ == Phase::Encounter && sweep_ != nullptr &&
+                sweep_->get_size().width > 0)
+            {
+                const auto p = sweep_->get_absolute_position();
+                const auto s = sweep_->get_size();
+                ship_px_ = clamp_i(((ev.x - p.x) * 100) / s.width, 4, 96);
+                ship_py_ = clamp_i(((ev.y - p.y) * 100) / s.height, 4, 96);
+            }
+        }
+        if (ev.type == zb::input::input_type::mouse_left_down)
+        {
+            drag_active_ = true;
+        }
+        if (ev.type == zb::input::input_type::mouse_left_up)
+        {
+            drag_active_ = false;
+        }
+
         if (ev.type == zb::input::input_type::key_down)
         {
             // printable keys arrive as `ch` (lowercase ASCII, U-1);
@@ -593,22 +1324,69 @@ namespace zb::app::showcase
             switch (ev.ch)
             {
             case 'w':
-                on_pitch_u();
+                if (phase_ == Phase::Encounter)
+                {
+                    ship_py_ = clamp_i(ship_py_ - 5, 4, 96);
+                }
+                else
+                {
+                    on_pitch_u();
+                }
                 break;
             case 's':
-                on_pitch_d();
+                if (phase_ == Phase::Encounter)
+                {
+                    ship_py_ = clamp_i(ship_py_ + 5, 4, 96);
+                }
+                else
+                {
+                    on_pitch_d();
+                }
                 break;
             case 'a':
-                on_yaw_l();
+                if (phase_ == Phase::Encounter)
+                {
+                    ship_px_ = clamp_i(ship_px_ - 5, 4, 96);
+                }
+                else
+                {
+                    on_yaw_l();
+                }
                 break;
             case 'd':
-                on_yaw_r();
+                if (phase_ == Phase::Encounter)
+                {
+                    ship_px_ = clamp_i(ship_px_ + 5, 4, 96);
+                }
+                else
+                {
+                    on_yaw_r();
+                }
                 break;
             case 'q':
-                on_roll_l();
-                break;
             case 'e':
-                on_roll_r();
+                if (phase_ == Phase::Encounter)
+                {
+                    ship_roll_ = 45;  // evasive profile ~0.75 s
+                    toast("EVASIVE PROFILE");
+                }
+                else
+                {
+                    if (ev.ch == 'q')
+                    {
+                        on_roll_l();
+                    }
+                    else
+                    {
+                        on_roll_r();
+                    }
+                }
+                break;
+            case 'f':
+                fire_cannon();
+                break;
+            case 'g':
+                launch_pod();
                 break;
             case 'm':
                 if (modal_open_)
@@ -642,115 +1420,140 @@ namespace zb::app::showcase
 
     // ---- frame stepping ----
 
+    void Showcase::advance_frame()
+    {
+        ++frame_;
+
+        // LONG RANGE: one simulation step per frame; the voyage
+        // pauses whenever the star map (or any modal) is open
+        if (!modal_open_)
+        {
+            step_game();
+        }
+
+        // the radar sweep needle: the design's ::after pseudo (a
+        // solid box -- rotation paints solid only), re-specified per
+        // frame with the pivot at the needle's top-center (~1.5
+        // deg/frame, the design's 4 s sweep)
+        if (sweep_ != nullptr)
+        {
+            const zb::ui::Widget::pseudo_spec *sp = sweep_->pseudo(1);
+            if (sp != nullptr)
+            {
+                zb::ui::Widget::pseudo_spec spec = *sp;
+                spec.rot_ang =
+                    static_cast<int16_t>((frame_ * 3) / 2 % 360);
+                spec.rot_ox = 50;
+                spec.rot_ox_pct = 1;
+                spec.rot_oy = 0;
+                spec.rot_oy_pct = 0;
+                sweep_->set_pseudo(1, spec);
+            }
+        }
+
+        // the mission clock + the quantum-core wobble, one tick per
+        // second of frames
+        if ((frame_ % 60) == 0)
+        {
+            ++mission_s_;
+            set_text(mission_, mission_clock());
+            const int coh = 985 + wave_at(frame_ / 60) - 14;
+            char buf[40];
+            std::snprintf(buf, sizeof(buf), "phase coherence %d.%d%%",
+                          coh / 10, coh % 10);
+            set_text(coherence_, buf);
+            const int flux = 418 + wave_at(frame_ / 30) - 14;
+            std::snprintf(buf, sizeof(buf),
+                          "flux %d.%02d PW \xc2\xb7 jitter 0.02",
+                          flux / 100, flux % 100);
+            set_text(flux_, buf);
+        }
+
+        // DEEP SCAN busy window on the LINK readout
+        if (scan_frames_ > 0 && --scan_frames_ == 0)
+        {
+            set_text(link_, "STABLE");
+        }
+
+        // the toast retires itself
+        if (toast_frames_ > 0 && --toast_frames_ == 0)
+        {
+            if (toast_ != nullptr)
+            {
+                toast_->set_visible(false);
+            }
+        }
+
+        // the deterministic event stream: one entry every ~8 s
+        if ((frame_ % 480) == 0)
+        {
+            static const struct
+            {
+                const char *kind;
+                const char *tag;
+                const char *msg;
+            } kStream[] = {
+                {"ok", "NAV", "route checksum verified"},
+                {"warn", "THERM", "thermal compensation recalculated"},
+                {"ok", "CORE", "quantum phase trim complete"},
+                {"warn", "ENV", "dust density +2.4%"},
+                {"ok", "COMMS", "relay handshake accepted"},
+                {"bad", "SCAN", "micro-debris contact classified"},
+            };
+            const auto &e = kStream[log_next_ % 6];
+            ++log_next_;
+            log_line(e.kind, e.tag, e.msg);
+        }
+
+        // the helm drifts with the engines (faster engines, faster
+        // drift; a pure function of the ship state; cruising only --
+        // in an encounter the scope markers own the helm)
+        if (phase_ == Phase::Cruise && engine_ != nullptr &&
+            engine_->get_value() > 0)
+        {
+            drift_acc_ += engine_->get_value();
+            if (drift_acc_ >= 2160)
+            {
+                drift_acc_ = 0;
+                heading_x10_ = (heading_x10_ + 1) % 3600;
+            }
+        }
+        else
+        {
+            drift_acc_ = 0;
+        }
+        if ((frame_ % 8) == 0 && heading_rd_ != nullptr)
+        {
+            // short on purpose: the nav row shares its flex line with
+            // the DEEP SCAN / LOCK buttons, and content that overflows
+            // the row box is unpickable (containers clip hit-testing
+            // to their own rect)
+            char buf[96];
+            std::snprintf(buf, sizeof(buf),
+                          "HDG %d.%d \xc2\xb7 ALT 0.0%dG",
+                          heading_x10_ / 10, heading_x10_ % 10,
+                          alt_x1000_);
+            set_text(heading_rd_, buf);
+        }
+    }
+
+    void Showcase::fast_forward(const int frames)
+    {
+        if (!ui_ready_)
+        {
+            return;
+        }
+        for (int i = 0; i < frames; ++i)
+        {
+            advance_frame();
+        }
+    }
+
     void Showcase::paint() noexcept
     {
         if (ui_ready_)
         {
-            ++frame_;
-
-            // the radar sweep needle: the design's ::after pseudo (a
-            // solid box -- rotation paints solid only), re-specified per
-            // frame with the pivot at the needle's top-center (~1.5
-            // deg/frame, the design's 4 s sweep)
-            if (sweep_ != nullptr)
-            {
-                const zb::ui::Widget::pseudo_spec *sp = sweep_->pseudo(1);
-                if (sp != nullptr)
-                {
-                    zb::ui::Widget::pseudo_spec spec = *sp;
-                    spec.rot_ang =
-                        static_cast<int16_t>((frame_ * 3) / 2 % 360);
-                    spec.rot_ox = 50;
-                    spec.rot_ox_pct = 1;
-                    spec.rot_oy = 0;
-                    spec.rot_oy_pct = 0;
-                    sweep_->set_pseudo(1, spec);
-                }
-            }
-
-            // the mission clock + the quantum-core wobble, one tick per
-            // second of frames
-            if ((frame_ % 60) == 0)
-            {
-                ++mission_s_;
-                set_text(mission_, mission_clock());
-                const int coh = 985 + wave_at(frame_ / 60) - 14;
-                char buf[40];
-                std::snprintf(buf, sizeof(buf), "phase coherence %d.%d%%",
-                              coh / 10, coh % 10);
-                set_text(coherence_, buf);
-                const int flux = 418 + wave_at(frame_ / 30) - 14;
-                std::snprintf(buf, sizeof(buf),
-                              "flux %d.%02d PW \xc2\xb7 jitter 0.02",
-                              flux / 100, flux % 100);
-                set_text(flux_, buf);
-            }
-
-            // DEEP SCAN busy window on the LINK readout
-            if (scan_frames_ > 0 && --scan_frames_ == 0)
-            {
-                set_text(link_, "STABLE");
-            }
-
-            // the toast retires itself
-            if (toast_frames_ > 0 && --toast_frames_ == 0)
-            {
-                if (toast_ != nullptr)
-                {
-                    toast_->set_visible(false);
-                }
-            }
-
-            // the deterministic event stream: one entry every ~8 s
-            if ((frame_ % 480) == 0)
-            {
-                static const struct
-                {
-                    const char *kind;
-                    const char *tag;
-                    const char *msg;
-                } kStream[] = {
-                    {"ok", "NAV", "route checksum verified"},
-                    {"warn", "THERM", "thermal compensation recalculated"},
-                    {"ok", "CORE", "quantum phase trim complete"},
-                    {"warn", "ENV", "dust density +2.4%"},
-                    {"ok", "COMMS", "relay handshake accepted"},
-                    {"bad", "SCAN", "micro-debris contact classified"},
-                };
-                const auto &e = kStream[log_next_ % 6];
-                ++log_next_;
-                log_line(e.kind, e.tag, e.msg);
-            }
-
-            // the helm drifts with the engines (faster engines, faster
-            // drift; a pure function of the ship state)
-            if (engine_ != nullptr && engine_->get_value() > 0)
-            {
-                drift_acc_ += engine_->get_value();
-                if (drift_acc_ >= 2160)
-                {
-                    drift_acc_ = 0;
-                    heading_x10_ = (heading_x10_ + 1) % 3600;
-                }
-            }
-            else
-            {
-                drift_acc_ = 0;
-            }
-            if ((frame_ % 8) == 0 && heading_rd_ != nullptr)
-            {
-                // short on purpose: the nav row shares its flex line with
-                // the DEEP SCAN / LOCK buttons, and content that overflows
-                // the row box is unpickable (containers clip hit-testing
-                // to their own rect)
-                char buf[96];
-                std::snprintf(buf, sizeof(buf),
-                              "HDG %d.%d \xc2\xb7 ALT 0.0%dG",
-                              heading_x10_ / 10, heading_x10_ % 10,
-                              alt_x1000_);
-                set_text(heading_rd_, buf);
-            }
-
+            advance_frame();
             window_->invalidate();
         }
         window_->paint();

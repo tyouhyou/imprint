@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <memory>
 #include <string>
+#include <vector>
 
 #include "canvas_window.hpp"
 #include "gauge_dial.hpp"
@@ -17,23 +18,33 @@ namespace zb::app::showcase
      * ORION NX-07 console: the command deck (design/
      * starship_console.html translated onto the declarative subset as
      * orion.html, packed by html_embed). The behavior lives in this C++
-     * class as a deterministic ship simulation stepped purely from the
-     * frame counter and the input stream (the F-2 app-side pattern --
-     * no timers, no RNG):
+     * class as LONG RANGE, a deterministic voyage game stepped purely
+     * from the frame counter and the input stream (the F-2 app-side
+     * pattern -- no timers, no wall clock; all randomness flows through
+     * a seedable LCG):
      *
      *   - the four power sliders recompute the derived readouts (core
-     *     temp, velocity, fuel, bus load, available power, the four
+     *     temp, velocity, bus load, available power, the four
      *     propulsion gauges) through the design's sync() formulas in
-     *     integer arithmetic;
-     *   - the maneuver buttons (and the WASD/QE keys) nudge heading and
-     *     altitude, SPACE brakes the engines, M toggles the star-map
-     *     modal, ESC closes it;
-     *   - FAULT INJECT degrades hull/core/segment labels, ABORT arms the
-     *     protocol modal and zeroes the engines;
+     *     integer arithmetic; fuel and hull are stateful game resources;
+     *   - LONG RANGE: fly LYRA-09 -> KEPLER-442b in four legs. Each leg
+     *     is chosen in the star-map modal (two routes with different
+     *     hazards, rolled from the seed) and cruised by engine power;
+     *     the transit hazard is played out on the tactical scope:
+     *     debris fields are dodged with the helm (WASD, the mouse drag
+     *     or a finger) or fragmented with the pulse cannon, pirates are
+     *     shot down before they close to firing range, ion storms are
+     *     survived by venting heat. Seeds 7/42/2026 in the map restart
+     *     the whole voyage;
+     *   - FAULT INJECT / ABORT / DEEP SCAN keep their deck roles;
      *   - the mission clock ticks off frames, the radar sweep needle
      *     rotates (the design's ::after pseudo re-specified through
      *     set_pseudo), the event stream and the command toast cycle
-     *     deterministically.
+     *     deterministically;
+     *   - the flight recorder keeps every input event with its frame
+     *     number: seed + that stream IS the save game -- replaying it
+     *     reproduces the framebuffer byte-for-byte (proven in
+     *     test_showcase).
      *
      * Text renders through the runtime TTF family when the build carries
      * IMCORE_HAS_TTF_RUNTIME (the packed Inter blob); otherwise the 5x7
@@ -60,6 +71,19 @@ namespace zb::app::showcase
         // one frame: advance the simulation first (pure function of the
         // frame counter and the input stream), then render
         void paint() noexcept override;
+
+        // test seam (the sync_power() precedent): advance the simulation
+        // n frames without rendering -- the state machine, the clock and
+        // the recorder move exactly as they would under n paint() calls;
+        // the next paint() renders whatever state was reached. The
+        // voyage takes thousands of frames and the -O0 test builds pay
+        // real rasterization cost per paint, so the state-driven tests
+        // cross the long legs through here.
+        void fast_forward(int frames);
+
+        // start (or restart) the voyage on a seed: the seed chips and
+        // the tests share this entry point
+        void start_run(uint32_t seed);
 
         [[nodiscard]] bool is_dirty() const noexcept override
         {
@@ -108,14 +132,19 @@ namespace zb::app::showcase
         void on_point();
         void on_boost();
         void on_yaw_l();
-        void on_yaw_r();
-        void on_pitch_u();
+        void on_yaw_r();        void on_pitch_u();
         void on_pitch_d();
         void on_roll_l();
         void on_roll_r();
         void on_strafe_l();
         void on_strafe_r();
         void on_close_modal();
+        // star-map route choices and the seed chips
+        void on_route_a() { choose_route(0); }
+        void on_route_b() { choose_route(1); }
+        void on_seed_a() { start_run(7); }
+        void on_seed_b() { start_run(42); }
+        void on_seed_c() { start_run(2026); }
         void maneuver(const char *what, int heading_nudge_x10, int alt_nudge);
 
         // command feedback
@@ -127,11 +156,46 @@ namespace zb::app::showcase
         void show_modal(const char *title, const char *text);
         void hide_modal();
 
+        // ---- LONG RANGE voyage game (seed-deterministic) ----
+        enum class Phase : uint8_t
+        {
+            Cruise,
+            Encounter,
+            Arrived,
+            Lost
+        };
+        enum class EncounterKind : uint8_t
+        {
+            Quiet,
+            Debris,
+            Pirate,
+            IonStorm
+        };
+        void reroll_routes();
+        void open_map();
+        void choose_route(int which);
+        void arrive_at_node();
+        void start_encounter(EncounterKind kind);
+        void finish_encounter();
+        void fire_cannon();
+        void launch_pod();
+        void damage_hull(int amount_x10, const char *tag, const char *why);
+        void end_game(bool won);
+        void update_markers();
+        // engine power the ship can actually spend (fuel-critical caps it)
+        [[nodiscard]] int eff_engine() const;
+        [[nodiscard]] uint32_t lcg();
+        [[nodiscard]] uint32_t recorder_hash() const;
+        void step_game();
+        void step_cruise();
+        void step_encounter();
+        // the per-frame simulation paint() runs before rendering
+        void advance_frame();
+
         // the design's sync() formulas, integer arithmetic
         [[nodiscard]] int coolant() const;
         [[nodiscard]] int temp_k() const;
         [[nodiscard]] int velocity_x1000() const;
-        [[nodiscard]] int fuel_x10() const;
         [[nodiscard]] int load_x10() const;
         [[nodiscard]] int avail_x10() const;
         [[nodiscard]] std::string mission_clock() const;
@@ -215,5 +279,51 @@ namespace zb::app::showcase
         int log_next_ = 0;        // next periodic stream entry
         int drift_acc_ = 0;       // heading drift accumulator
         bool ui_ready_ = false;
+
+        // ---- LONG RANGE state ----
+        Phase phase_ = Phase::Cruise;
+        EncounterKind cur_kind_ = EncounterKind::Quiet;  // this leg's hazard
+        EncounterKind kind_ = EncounterKind::Quiet;      // live encounter
+        EncounterKind opt_kind_[2] = {};                 // routes on offer
+        int opt_dist_[2] = {};                           // leg length, units (~4/frame @ e=100)
+        std::string opt_name_[2];                        // route names on offer
+        uint32_t rng_ = 0;                               // LCG state
+        uint32_t seed_ = 7;
+        int node_ = 0;            // 0..4 along LYRA-09 -> KEPLER-442b
+        int leg_left_ = 0;        // cruise distance left before the hazard
+        int enc_left_ = 0;        // frames left in the encounter
+        int fuel_x10_ = 834;      // stateful (the design's fuel gauge)
+        int shield_pool_x10_ = 640;
+        int cannon_cd_ = 0;       // pulse-cannon recharge frames
+        int hit_cd_ = 0;          // i-frames after a hit
+        int ship_roll_ = 0;       // evasive-profile frames (Q/E)
+        int pod_charges_ = 2;
+        int pirate_hp_ = 0;
+        int pirate_dist_ = 0;     // 100 (far) .. 0 (on top of us)
+        int pirate_shot_cd_ = 0;
+        int ship_px_ = 50, ship_py_ = 50;  // helm marker, % of the scope
+        bool route_pending_ = false;       // a course must be chosen
+        bool fuel_warned_ = false;
+        // rocks (debris) / dust (ion storm), % of the scope
+        int mk_x_[3] = {}, mk_y_[3] = {};
+        int mk_vx_[3] = {}, mk_vy_[3] = {};
+
+        // the flight recorder: every input event with the frame it
+        // arrived on. Seed + this stream is the whole save game; the
+        // end-screen checksum lets players compare runs. Bounded: past
+        // the cap the recorder stops (and says so once in the log).
+        static constexpr int kReplayCap = 4096;
+        std::vector<zb::input::input_event> rec_;
+        std::vector<uint32_t> rec_frame_;
+        bool rec_full_ = false;
+
+        // markers inside the tactical scope (px-sized absolute dots,
+        // repositioned per frame; scoped static svg contacts stay put)
+        zb::ui::Widget *sector_ = nullptr;
+        zb::ui::Widget *ship_mk_ = nullptr;
+        zb::ui::Widget *mk_[4] = {};  // 0..2 rocks/dust, 3 the pirate
+        zb::ui::Widget *opt_a_ = nullptr;  // star-map route buttons
+        zb::ui::Widget *opt_b_ = nullptr;
+        bool drag_active_ = false;    // mouse-drag helm steering
     };
 }

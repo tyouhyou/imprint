@@ -55,7 +55,7 @@
     </div>
     <div style="flex:1; display:flex; justify-content:center; gap:16px; align-items:center">
       <div style="display:flex; gap:4px"><span style="font-size:8px; letter-spacing:1px; color:#64899b">MISSION</span><span id="mission" style="font-size:9px; color:#50f4ff">00:48:12</span></div>
-      <div style="display:flex; gap:4px"><span style="font-size:8px; letter-spacing:1px; color:#64899b">SECTOR</span><span style="font-size:9px; color:#50f4ff">LYRA-09</span></div>
+      <div style="display:flex; gap:4px"><span style="font-size:8px; letter-spacing:1px; color:#64899b">SECTOR</span><span id="sector" style="font-size:9px; color:#50f4ff">LYRA-09</span></div>
       <div style="display:flex; gap:4px"><span style="font-size:8px; letter-spacing:1px; color:#64899b">LINK</span><span id="link" style="font-size:9px; color:#50f4ff">STABLE</span></div>
     </div>
     <div style="display:flex; gap:6px">
@@ -136,7 +136,7 @@
           <button id="mv_strafe_l" class="btn" style="flex:1">STRAFE L</button>
           <button id="mv_strafe_r" class="btn" style="flex:1">STRAFE R</button>
         </div>
-        <p class="micro">KEYS <b>WASD</b> PITCH/YAW · <b>Q/E</b> ROLL · <b>SPACE</b> BRAKE · <b>M</b> MAP</p>
+        <p class="micro">KEYS <b>WASD</b> HELM · <b>Q/E</b> ROLL · <b>F/G</b> FIRE · <b>M</b> MAP</p>
       </div>
 
       <div class="panel" style="padding:8px; display:flex; flex-direction:column; gap:5px">
@@ -189,8 +189,15 @@
               <text x="190" y="184" font-size="7" fill="#668a9b" text-anchor="end">CONTACTS 07</text>
               <text x="100" y="96" font-size="11" fill="#bdebf3" text-anchor="middle" letter-spacing="3">VECTOR LOCK</text>
               <text x="100" y="108" font-size="7" fill="#638391" text-anchor="middle">GNC SOLUTION LIVE</text>
-            </svg>
-          </div>
+          </svg>
+          <!-- LONG RANGE contacts: px-sized absolute dots repositioned
+               per frame by the app (left/top as % of this ring) -->
+          <div id="mk0" style="position:absolute; left:20%; top:30%; width:7px; height:7px; border-radius:50%; background:#e8fbff; display:none"></div>
+          <div id="mk1" style="position:absolute; left:70%; top:60%; width:7px; height:7px; border-radius:50%; background:#ffd16a; display:none"></div>
+          <div id="mk2" style="position:absolute; left:40%; top:80%; width:7px; height:7px; border-radius:50%; background:#e8fbff; display:none"></div>
+          <div id="mk3" style="position:absolute; left:88%; top:50%; width:9px; height:9px; border-radius:50%; background:#ff5f79; display:none"></div>
+          <div id="ship_mk" style="position:absolute; left:50%; top:50%; width:11px; height:11px; border:1px solid #50f4ff; border-radius:50%; background:rgba(80,244,255,0.18); display:none"></div>
+        </div>
         </div>
         <div style="display:flex; flex-direction:column; gap:4px; border-top:1px solid rgba(80,244,255,0.14); padding-top:6px">
           <div style="display:flex; flex-direction:column; gap:1px">
@@ -384,6 +391,15 @@
         <text x="230" y="52" font-size="8" fill="#ff9aa9">KEPLER-442b</text>
       </svg>
       <p id="modal_text" style="font-size:8px; color:#7393a1; line-height:12px; margin:0">Route A · minimum thermal load · arrival window 17d 06h · confidence 99.2%</p>
+      <div style="display:flex; gap:6px; width:100%">
+        <button id="opt_a" class="btn" style="flex:1">ROUTE A</button>
+        <button id="opt_b" class="btn btnwarn" style="flex:1">ROUTE B</button>
+      </div>
+      <div style="display:flex; gap:6px; width:100%">
+        <button id="seed_a" class="btn" style="flex:1">SEED 7</button>
+        <button id="seed_b" class="btn" style="flex:1">SEED 42</button>
+        <button id="seed_c" class="btn" style="flex:1">SEED 2026</button>
+      </div>
     </div>
   </div>
 
