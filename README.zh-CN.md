@@ -26,7 +26,7 @@ Imprint UI 是一个面向 C++17 的确定性 UI 运行时：用自己的软件�
 - **纯 CPU，零依赖** — 不需要 GPU、OS GUI 工具包、第三方渲染库
 - **一份源码树，六个目标** — 桌面、SIXEL 终端、浏览器、NDS，同一份代码
 - **设计优先** — 界面用 HTML 或 `.ui` 描述，构建期校验并物化
-- **小到离谱** — 583 KB 单文件 WebAssembly（连字体都内嵌）；NDS 跑在 96 KB VRAM 里
+- **小到离谱** — 705 KB 单文件 WebAssembly（连字体都内嵌）；NDS 跑在 96 KB VRAM 里
 - **任意语言，经 C-ABI** — Python、WASM、任何能调 C 的语言，同一套协议
 
 ## 非目标
@@ -111,8 +111,8 @@ ORION NX-07 指挥舱编译成 WebAssembly，经与桌面 shell 相同的 C-ABI 
 `.ui` 语法；两者都物化成你的 C++ 所构建的那棵完全相同的控件树（HTML 路径是
 `html` / `vectordial` 子集：布局、标签、控件、矢量表盘——不是 web 引擎）。
 文件在构建期校验并打包：非法文件让 `ui_embed` 直接构建失败，任何目标从
-C 数组加载结果。开篇的 ORION 正是这条路径：396 行 HTML 设计文件 +
-768 行 C++ 行为代码。交互式预览任意设计文件：
+C 数组加载结果。开篇的 ORION 正是这条路径：412 行 HTML 设计文件 +
+约 1600 行 C++ 行为代码。交互式预览任意设计文件：
 
 ```
 UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html -DSTORY=ui_preview -DIM_SHELL_BACKEND=FB && cmake --build build/build_html
@@ -124,7 +124,7 @@ UI_PREVIEW_FILES="assets/designs/imprint_console.html" cmake -B build/build_html
 
 | 目标 | 交付足迹 |
 |---|---|
-| WebAssembly | 583 KB 单 `.js` 文件——wasm 与 Inter TTF 一并内嵌，`file://` 直开 |
+| WebAssembly | 705 KB 单 `.js` 文件——wasm 与 Inter TTF 一并内嵌，`file://` 直开 |
 | 任天堂 DS | 256×192 16bpp 帧缓冲（96 KB VRAM）；纯整数几何与非原子引用计数选项，适配没有 libatomic 的工具链 |
 
 保留模式控件：`Button`、`Label`、`Dialog`、`FlexPanel`、`ListBox`、
@@ -283,17 +283,21 @@ letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/P
 
 **ORION NX-07**（`-DSTORY=showcase`）——足迹数字背后的那座指挥舱，端到端实录：
 录制器经公开 API 以固定输入脚本驱动应用，所以 GIF 在所有平台上字节级一致。
-勘测船 ORION 的指挥舱：四条功率分配滑杆联动反应堆/护盾/武器/引擎仪表，
-离子/重力/散热开关改变负载，扫描仪指针逐帧旋转，WASDQE（或 TACTICAL
-MANEUVER 按钮）执行偏航/俯仰/滚转并推动航向读数，DEEP SCAN 扫描链路状态，
-STAR MAP 打开银河导航模态（M 键），FAULT INJECT 把 Q-core 压力写进事件日志，
+勘测船 ORION 的指挥舱上运行着 **LONG RANGE**——一场确定性星际航行：四条功率
+分配滑杆联动反应堆/护盾/武器/引擎仪表，星图（M 键）为每段航程提供两条航线——
+安静星域、碎片带（用舵轮闪避：WASD 或手指拖拽，或用脉冲炮轰碎岩石：F 键）、
+海盗巡逻（在他们逼近开火前击沉，G 键发射动能舱）与离子风暴（在堆芯过热前打开
+热排放）。用种子芯片（7 / 42 / 2026）从 LYRA-09 飞到 KEPLER-442B；抵达画面上
+的飞行记录仪校验和证明：同一种子 + 同一输入 = 字节级一致的重放。指挥舱本体
+保留控制台职能：扫描仪指针逐帧旋转，WASDQE（或 TACTICAL MANEUVER 按钮）推动
+航向读数，DEEP SCAN 扫描链路状态，FAULT INJECT 把 Q-core 压力写进事件日志，
 ABORT 将座舱切换到逃生协议。UI 是一份 HTML 设计稿，布局以百分比书写，
 随宿主缓冲尺寸缩放。文本走运行时 TTF 路径（Inter，由 `bytes_embed` 打包）
 ——配置 `-DUSE_TTF_RUNTIME=ON` 以获得设计所见的比例字体观感；5x7 位图兜底
 让非 TTF 构建保持全绿。
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="端到端实录的 ORION NX-07 指挥舱：扫描仪指针旋转、功率滑杆拖动并联动仪表、系统开关翻转、机动按钮推动航向读数、DEEP SCAN 扫描链路状态、STAR MAP 导航模态打开并由 CLOSE 关闭、事件日志按严重级别着色滚动">
+  <img src="assets/showcase/showcase.gif" width="480" alt="ORION NX-07 指挥舱游玩 LONG RANGE 航程：星图给出航线选择，碎片带逼近、舵轮在岩石间穿行直到脉冲炮轰碎一块，CASS-22 航线选择打开，离子风暴把堆芯烤到过热直到热排放开启，扫描仪、滑杆与事件日志全程滚动">
 </p>
 
 **[在浏览器里直接试](https://tyouhyou.github.io/imprint/)**——无需服务器、

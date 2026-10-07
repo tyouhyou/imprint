@@ -31,7 +31,7 @@ Imprint's own rasterizer — the same tree your C++ ships on every target.
 - **Pure CPU, zero dependencies** — no GPU, no OS GUI toolkit, no third-party rendering library
 - **One source tree, six targets** — desktop, sixel terminal, browser, Nintendo DS, same code
 - **Design-first** — screens described in HTML or `.ui`, validated and materialized at build time
-- **Absurdly small** — ~650 KB single-file WebAssembly (font included); a Nintendo DS in 96 KB of VRAM
+- **Absurdly small** — ~705 KB single-file WebAssembly (font included); a Nintendo DS in 96 KB of VRAM
 - **Any language via C-ABI** — Python, WASM, anything that can call C gets the same protocol
 
 ## Non-goals
@@ -134,7 +134,7 @@ C++ builds (the HTML path is an `html` / `vectordial` subset: layout,
 labels, controls, vector dials — not a web engine). Files are validated and
 packed at build time: `ui_embed` fails the build on invalid files, and any
 target loads the result from a C array. ORION, the command deck at the top,
-is a 396-line HTML design file plus 768 lines of C++ behavior. Preview any
+is a 412-line HTML design file plus ~1,600 lines of C++ behavior. Preview any
 design file interactively:
 
 ```
@@ -147,7 +147,7 @@ Measured footprints (Release builds of the showcase demo):
 
 | Target | Shipped footprint |
 |---|---|
-| WebAssembly | 645 KB single `.js` file — wasm and the Inter TTF embedded, runs from `file://` |
+| WebAssembly | 705 KB single `.js` file — wasm and the Inter TTF embedded, runs from `file://` |
 | Nintendo DS | 256×192 16-bpp framebuffer (96 KB VRAM); integer-only geometry and non-atomic refcounting options for libatomic-less toolchains |
 
 Retained-mode widgets: `Button`, `Label`, `Dialog`, `FlexPanel`, `ListBox`,
@@ -321,20 +321,27 @@ present 1:1; WASM/Python hosts scale host-side.
 **ORION NX-07** (`-DSTORY=showcase`) — the command deck behind the footprints
 above, recorded end to end: the recorder drives the app through its public
 API with a fixed input script, so the GIF is byte-identical on every
-platform. The deck of the survey ship ORION: four power-distribution
-sliders feed the reactor/shield/weapon/engine gauges, the ion/grav/vent
-toggles shift the load, the scanner sweep needle rotates per frame,
-WASDQE (or the TACTICAL MANEUVER buttons) yaws/pitches/rolls the ship and
-steers the heading readout, DEEP SCAN sweeps the link status, the STAR MAP
-opens the galactic navigator modal (M key), FAULT INJECT stresses the
-Q-core into the event log, ABORT dims the deck to the escape protocol.
+platform. The deck of the survey ship ORION carries **LONG RANGE**, a
+deterministic voyage game: four power-distribution sliders feed the
+reactor/shield/weapon/engine gauges, and the star map (M key) offers two
+transit routes per leg — quiet space, debris fields (dodge with the helm,
+WASD or a finger drag, or fragment the rocks with the pulse cannon, F),
+pirate patrols (shoot them down before they close, G drops a kinetic pod)
+and ion storms (open thermal venting before the core overheats). Fly
+LYRA-09 to KEPLER-442B on the seed chips (7 / 42 / 2026); the flight
+recorder checksum at the arrival screen proves the same seed and the same
+inputs play out byte-identically. The deck itself keeps its console roles:
+the scanner sweep needle rotates per frame, WASDQE (or the TACTICAL
+MANEUVER buttons) steer the heading readout, DEEP SCAN sweeps the link
+status, FAULT INJECT stresses the Q-core into the event log, ABORT dims the
+deck to the escape protocol.
 The UI is one HTML design file laid out in percents, so it scales with the
 host buffer. Text renders through the runtime-TTF path (Inter,
 packed by `bytes_embed`) — configure `-DUSE_TTF_RUNTIME=ON` for the intended
 proportional look; the 5x7 bitmap fallback keeps non-TTF builds green.
 
 <p>
-  <img src="assets/showcase/showcase.gif" width="480" alt="ORION NX-07 command deck recorded end to end: the scanner sweep needle rotates, the power sliders drag and feed the gauges, the system toggles flip, the maneuver buttons steer the heading readout, DEEP SCAN sweeps the link status, the STAR MAP navigator modal opens and CLOSE dismisses it, the event log streams severity-colored entries">
+  <img src="assets/showcase/showcase.gif" width="480" alt="ORION NX-07 command deck playing the LONG RANGE voyage: the star map offers the transit routes, a debris field closes in and the helm weaves the ship between rocks until the pulse cannon fragments one, the CASS-22 course choice opens, an ion storm overheats the core until thermal venting clicks on, and the scanner sweep, sliders and event log keep cycling throughout">
 </p>
 
 **[Try the demos live](https://tyouhyou.github.io/imprint/)** — a demo portal:
