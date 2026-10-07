@@ -109,7 +109,7 @@ namespace zb::app::seedmap
     private:
         static constexpr uint32_t kWidth = 320;
         static constexpr uint32_t kHeight = 240;
-        static constexpr int kHeaderH = 40;   // seed row + spacing
+        static constexpr int kHeaderH = 40;   // seed row + spacing (x u)
 
         // canvas geometry, decided once in create_window
         int scale_ = MapCanvas::kScale;
@@ -126,6 +126,7 @@ namespace zb::app::seedmap
 
         unsigned state_ = 0;
 
+        void install_font();
         [[nodiscard]] unsigned next_rand();
         void generate();
         void place_room(int x, int y, int w, int h);

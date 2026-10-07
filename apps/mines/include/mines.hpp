@@ -14,6 +14,10 @@ namespace zb::app::mines
      * itself only grows to kMaxCellPx, capped at kMaxCells). The grid is
      * square, derived from the space left after the header row, so the
      * same formula reproduces the classic tier exactly at 256x192.
+     *
+     * Header and dialog metrics scale with the host buffer (u = h/200,
+     * the g2048 ui-scale), so the web tier at 800x600 gets readable
+     * text; at the classic tier u == 1 and the layout is unchanged.
      */
     constexpr int kMinCells = 9;
     constexpr int kMaxCells = 32;
@@ -49,12 +53,13 @@ namespace zb::app::mines
     };
 
     /*
-     * Minesweeper demo app. Left click / tap reveals, FLAG toggles the
-     * flag mode (the wasm glue sends no right-click, so the mode button
-     * is the touch path too). Mine placement comes from a fixed-seed LCG
-     * re-rolled on the first reveal (excluding that cell), so a replay of
-     * the same input stream plays the same field. The field geometry is
-     * decided once in create_window from the host buffer size.
+     * Minesweeper demo app. Left click / tap reveals, right click flags
+     * (the wasm glue maps browser button 2 to ZB_INPUT_MOUSE_RIGHT_DOWN;
+     * the touch path has no flagging). Mine placement comes from a
+     * fixed-seed LCG re-rolled on the first reveal (excluding that
+     * cell), so a replay of the same input stream plays the same field.
+     * The field geometry is decided once in create_window from the host
+     * buffer size.
      */
     class Mines : public IApp
     {
@@ -144,14 +149,12 @@ namespace zb::app::mines
         zb::SharedPtr<zb::app::CanvasWindow> window_;
         MinesBoard *board_ = nullptr;
         zb::ui::Label *status_ = nullptr;
-        zb::ui::Button *flag_btn_ = nullptr;
         zb::ui::Dialog *end_dialog_ = nullptr;
-        bool flag_mode_ = false;
 
-        event::Subscription<> sub_flag_;
         event::Subscription<> sub_again_;
         event::Subscription<> sub_quit_;
 
+        void install_font();
         void new_game();
         void place_mines(int safe_cell);
         [[nodiscard]] int lcg_rand();

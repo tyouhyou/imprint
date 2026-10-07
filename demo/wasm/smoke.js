@@ -174,23 +174,38 @@ createModule({
         click(app, 68, 38);
         const after = snapOf(app);
         if (same(before, after)) throw new Error("first reveal did not change the field");
-        // revealed number cells carry digits in the number fg palette
-        // (1=32+80+192, 2=27+122+46, 3=192+48+40) -- proves the child
-        // Labels render through the draw_at override
-        let digitPx = 0;
-        for (let i = 0; i < after.length; i += 4) {
-          const s = after[i] + after[i + 1] + after[i + 2];
-          if (s === 304 || s === 195 || s === 280) digitPx++;
+        // revealed number cells carry digit ink -- pixels inside the
+        // field box that are none of the flat slot colors (covered
+        // AE/C0/CF, revealed D6/E2/EB, border 6E/7F/8D, board bg
+        // 7B/8A/97). The runtime-TTF digits antialias, so the ink count
+        // is checked against the slot palette, not exact glyph colors
+        // (proves the child Labels render through the draw_at override)
+        const inkAt = function (buf) {
+          let n = 0;
+          for (let y = 30; y < 166; ++y) {
+            for (let x = 60; x < 196; ++x) {
+              const o = (y * W + x) * 4;
+              const s = buf[o] + buf[o + 1] + buf[o + 2];
+              if (s !== 413 && s !== 753 && s !== 394 && s !== 412) n++;
+            }
+          }
+          return n;
+        };
+        if (inkAt(after) < 8) {
+          throw new Error("no digit ink visible after reveal");
         }
-        if (digitPx < 8) {
-          throw new Error("no number digits visible after reveal (" + digitPx + " px)");
-        }
-        // FLAG toggles the mode button caption
-        click(app, 148, 16);   // FLAG button
-        const flagged = snapOf(app);
-        click(app, 148, 16);
-        if (same(flagged, snapOf(app))) throw new Error("FLAG toggle did not repaint");
-        console.log("mines: reveal + flag toggle ok");
+        // right-click (ZB_INPUT_MOUSE_RIGHT_DOWN=4) flags the first cell
+        // in place; a second right-click unflags it (the browser maps
+        // mouse button 2 onto this family)
+        const fresh = Module._zb_app_create(W, H);
+        const pristine = snapOf(fresh);
+        input(fresh, 4, 68, 38, 0, 0, 0);
+        const flagged = snapOf(fresh);
+        if (same(pristine, flagged)) throw new Error("right-click did not flag");
+        input(fresh, 4, 68, 38, 0, 0, 0);
+        if (!same(pristine, snapOf(fresh))) throw new Error("second right-click did not unflag");
+        Module._zb_app_destroy(fresh);
+        console.log("mines: reveal + right-click flag ok");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
@@ -198,18 +213,32 @@ createModule({
       }
 
       if (NAME === "life") {
-        // the animation advances off the paint loop: the colony (gun) is
-        // live, so two snapshots a few generations apart must differ
+        // plasma is the default scene and paints continuously as a pure
+        // function of the frame counter
+        const p1 = snapOf(app);
+        const p2 = snapOf(app);
+        if (same(p1, p2)) throw new Error("plasma does not advance per paint");
+        // the LIFE button (third in the row) switches to the colony and
+        // seeds the glider gun; the colony cells render in the exact
+        // green 0x7FD47F (channel sum 466), which neither plasma nor the
+        // starfield produces in quantity
+        const greenAt = function (buf) {
+          let n = 0;
+          for (let i = 0; i < buf.length; i += 4) {
+            if (buf[i] + buf[i + 1] + buf[i + 2] === 466) n++;
+          }
+          return n;
+        };
+        click(app, 162, 19);   // LIFE button (128..180 @ u=1)
         const a = snapOf(app);
         for (let i = 0; i < 16; i++) paint(app);  // two colony steps
         const b = snapOf(app);
         if (same(a, b)) throw new Error("life colony did not evolve across paints");
-        // plasma mode paints continuously as a pure function of the frame
-        click(app, 246, 19);   // MODE -> plasma
-        const p1 = snapOf(app);
-        const p2 = snapOf(app);
-        if (same(p1, p2)) throw new Error("plasma does not advance per paint");
-        console.log("life: colony evolves, plasma advances");
+        if (greenAt(b) < 40) throw new Error("no green colony pixels (" + greenAt(b) + ")");
+        // back to PLASMA: the green colony disappears
+        click(app, 42, 19);
+        if (greenAt(snapOf(app)) > 10) throw new Error("PLASMA did not replace the colony");
+        console.log("life: plasma advances, colony evolves");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
@@ -224,14 +253,14 @@ createModule({
         const MAP_Y = 40 * W * 4;
         const sameMap = function (a, b) { return same(a.subarray(MAP_Y), b.subarray(MAP_Y)); };
         const before = snapOf(app);
-        click(app, 164, 19);   // DRAW (same seed)
+        click(app, 130, 19);   // DRAW (same seed)
         if (!sameMap(before, snapOf(app))) {
           throw new Error("same seed produced a different map");
         }
         // a different seed produces a different map
-        click(app, 68, 19);    // focus the seed box
+        click(app, 53, 19);    // focus the seed box
         keyDown(app, 122, 122);  // 'z' lands at the caret
-        click(app, 164, 19);   // DRAW
+        click(app, 130, 19);   // DRAW
         if (sameMap(before, snapOf(app))) throw new Error("new seed did not change the map");
         console.log("seedmap: same seed byte-identical, new seed differs");
         Module._zb_app_destroy(app);

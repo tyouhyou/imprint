@@ -70,9 +70,12 @@ namespace zb::app::life
     };
 
     /*
-     * Game of Life / plasma / starfield demo app. The colony advances
-     * every kFramesPerStep paints; taps toggle cells; the buttons are the
-     * classic life controls plus the mode switch.
+     * Game of Life / plasma / starfield demo app. Three direct mode
+     * buttons -- PLASMA, STARS, LIFE -- show the matching scene right
+     * away (default plasma); the LIFE mode seeds the glider gun and
+     * advances it on the paint loop, taps toggle cells. Header and label
+     * metrics scale with the host buffer (u = h/200, the g2048
+     * ui-scale); at the classic tier u == 1.
      */
     class Life : public IApp
     {
@@ -127,7 +130,7 @@ namespace zb::app::life
         static constexpr uint32_t kWidth = 320;
         static constexpr uint32_t kHeight = 240;
         static constexpr unsigned kFramesPerStep = 8;
-        static constexpr int kHeaderH = 40;   // button row + spacing
+        static constexpr int kHeaderH = 40;   // button row + spacing (x u)
 
         // canvas geometry, decided once in create_window
         int scale_ = LifeCanvas::kScale;
@@ -137,19 +140,15 @@ namespace zb::app::life
         zb::SharedPtr<zb::app::CanvasWindow> window_;
         LifeCanvas *canvas_ = nullptr;
         zb::ui::Label *gen_ = nullptr;
-        zb::ui::Button *play_btn_ = nullptr;
-        bool playing_ = true;
+        zb::ui::Button *mode_btns_[3] = {};   // PLASMA / STARS / LIFE
+        int mode_ = 1;                        // default plasma
         unsigned frames_ = 0;
         unsigned generation_ = 0;
-        int mode_ = 0;
 
-        event::Subscription<> subs_[5];
+        event::Subscription<> subs_[3];
 
-        void on_play();
-        void on_step();
-        void on_clear();
-        void on_gun();
-        void on_mode();
+        void install_font();
+        void on_mode(int m);
     };
 }  // namespace zb::app::life
 

@@ -3,6 +3,10 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+#include "mines_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
+#endif
+
 using namespace zb::app::mines;
 using namespace zb::ui;
 
@@ -54,6 +58,9 @@ MinesBoard::MinesBoard(const int cols, const int rows, const int cell, const int
             // box overflows a 14px cell)
             tile->set_h_align(Widget::h_align::center);
             tile->set_v_align(Widget::v_align::center);
+            // digit size grows with the cell (no-op below the runtime
+            // TTF build -- the documented bitmap degradation)
+            tile->set_font_size(cell_ * 3 / 5);
             tiles_[r][c] = tile.get();
             add_child(std::move(tile));
         }
@@ -117,14 +124,34 @@ void MinesBoard::draw_at(core::Graphics &area) const
     Panel::draw_at(area);
 }
 
+void Mines::install_font()
+{
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    if (zb::ui::has_font_family())
+    {
+        return;
+    }
+    // function-level static: the family must outlive every paint (the
+    // showcase install_font shape)
+    static const zb::ui::TtfFamily family =
+        zb::ui::TtfFamily::from_memory(mines_font, mines_font_len);
+    zb::ui::set_font_family(family);
+#endif
+}
+
 void Mines::create_window(const uint32_t max_client_width,
                           const uint32_t max_client_height, void *buffer)
 {
+    install_font();
+
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
 
     const int w = static_cast<int>(max_client_width);
     const int h = static_cast<int>(max_client_height);
+    // ui scale from the host buffer (the g2048 shape): header, dialog and
+    // fonts multiply by it; the classic tier keeps u == 1
+    const int u = clamp_i(h / 200, 1, 8);
 
     // Field geometry, decided once from the host buffer size. The classic
     // tier (kWidth x kHeight) must come out as the 9x9 / 14px field; both
@@ -137,16 +164,17 @@ void Mines::create_window(const uint32_t max_client_width,
     cell_ = clamp_i((kCell * num + den / 2) / den, kCell, kMaxCellPx);
     int cells = clamp_i((kMinCells * num + den / 2) / den, kMinCells, kMaxCells);
     // the square field must also fit the vertical budget under the header
-    const int vfit = (h - kHeaderH - 8) / (cell_ + kGap);
+    const int vfit = (h - kHeaderH * u - 8) / (cell_ + kGap);
     cells = clamp_i(cells, kMinCells, clamp_i(vfit, kMinCells, kMaxCells));
     cols_ = cells;
     rows_ = cells;
     gap_ = kGap;
     mines_ = clamp_i(cols_ * rows_ * 12 / 100, 10, 99);
 
+    const int header_h = kHeaderH * u;
     const int field = field_px(cols_, cell_, gap_);
     board_x_ = (w - field) / 2;
-    board_y_ = kHeaderH;
+    board_y_ = header_h;
 
     auto &root = window_->root();
     // blend with the dark demo portal (the buffer is viewport-sized, so
@@ -154,31 +182,20 @@ void Mines::create_window(const uint32_t max_client_width,
     root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
 
     auto status = std::make_unique<Label>();
-    status->set_size(110, 20);
-    status->set_position(8, 6);
+    status->set_size(110 * u, 20 * u);
+    status->set_position(8 * u, 6 * u);
     status->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
+    status->set_font_size(7 * u);
     status->set_text("MINES 10");
     status_ = status.get();
     root.add_child(std::move(status));
 
-    auto flag_btn = std::make_unique<Button>();
-    flag_btn->set_text("FLAG");
-    flag_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
-    flag_btn->set_size(52, 22);
-    flag_btn->set_position(w - 134, 5);
-    flag_btn->clicked += [this]
-    {
-        flag_mode_ = !flag_mode_;
-        flag_btn_->set_text(flag_mode_ ? "DIG" : "FLAG");
-    };
-    flag_btn_ = flag_btn.get();
-    root.add_child(std::move(flag_btn));
-
     auto reset_btn = std::make_unique<Button>();
     reset_btn->set_text("NEW");
     reset_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
-    reset_btn->set_size(52, 22);
-    reset_btn->set_position(w - 74, 5);
+    reset_btn->set_size(52 * u, 22 * u);
+    reset_btn->set_position(w - 62 * u, 5 * u);
+    reset_btn->set_font_size(7 * u);
     reset_btn->clicked += [this] { new_game(); };
     root.add_child(std::move(reset_btn));
 
@@ -189,15 +206,22 @@ void Mines::create_window(const uint32_t max_client_width,
 
     auto dlg = std::make_unique<Dialog>();
     dlg->set_size(max_client_width, max_client_height);
-    const int frame_w = clamp_i(w / 2, 160, 300);
-    dlg->set_frame_size(frame_w, 92);
-    dlg->get_title().set_size(frame_w - 20, 20);
+    const int frame_w = clamp_i(w / 2, 160 * u, 300 * u);
+    dlg->set_frame_size(frame_w, 92 * u);
+    dlg->get_title().set_size(frame_w - 20, 20 * u);
     dlg->get_title().set_h_align(Widget::h_align::center);
-    dlg->set_button_size(64, 24);
+    dlg->get_title().set_font_size(8 * u);
+    dlg->set_button_size(64 * u, 24 * u);
     auto &again = dlg->add_button("AGAIN");
+    again.set_font_size(7 * u);
     sub_again_ = again.clicked.subscribe([this] { new_game(); close_end_dialog(); });
     auto &quit = dlg->add_button("QUIT");
+    quit.set_font_size(7 * u);
     sub_quit_ = quit.clicked.subscribe([this] { if (window_) window_->close(); });
+    // Dialog::open() only flips visibility: the frame geometry is only
+    // computed by layout(), so build-time layout is required (the
+    // tictactoe/g2048 dialog shape)
+    dlg->layout();
     dlg->close();
     end_dialog_ = dlg.get();
     root.add_child(std::move(dlg));
@@ -225,8 +249,6 @@ void Mines::new_game()
     flags_ = 0;
     moves_ = 0;
     boom_ = -1;
-    flag_mode_ = false;
-    flag_btn_->set_text("FLAG");
     seed_ = 20260101u;
     refresh_board();
     refresh_status();
@@ -445,14 +467,20 @@ void Mines::input(const zb::input::input_event &ev) noexcept
         const int cell = cell_at(ev.x, ev.y);
         if (cell >= 0)
         {
-            if (flag_mode_)
-            {
-                toggle_flag(cell);
-            }
-            else
-            {
-                reveal(cell);
-            }
+            reveal(cell);
+            return;
+        }
+    }
+    else if (ev.type == zb::input::input_type::mouse_right_down &&
+             !(end_dialog_ && end_dialog_->is_open()))
+    {
+        // right click flags in place (the browser maps button 2 to
+        // ZB_INPUT_MOUSE_RIGHT_DOWN; the dispatcher ignores the right
+        // family, so this is the only consumer)
+        const int cell = cell_at(ev.x, ev.y);
+        if (cell >= 0)
+        {
+            toggle_flag(cell);
             return;
         }
     }

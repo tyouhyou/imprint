@@ -2,6 +2,10 @@
 
 #include <cstdio>
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+#include "life_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
+#endif
+
 using namespace zb::app::life;
 using namespace zb::ui;
 
@@ -11,6 +15,10 @@ namespace
     {
         return v < lo ? lo : (v > hi ? hi : v);
     }
+
+    // button row order (PLASMA / STARS / LIFE) -> LifeCanvas::mode enum
+    // {life=0, plasma=1, stars=2}: presentation order, not enum order
+    constexpr int kModeOf[3] = {1, 2, 0};
 
     // sine-free plasma: two moving radial ramps + a diagonal wave, all in
     // fixed-point so the pixels are a pure function of the frame counter
@@ -193,23 +201,44 @@ void LifeCanvas::draw_at(core::Graphics &area) const
     }
 }
 
+void Life::install_font()
+{
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    if (zb::ui::has_font_family())
+    {
+        return;
+    }
+    // function-level static: the family must outlive every paint (the
+    // showcase install_font shape)
+    static const zb::ui::TtfFamily family =
+        zb::ui::TtfFamily::from_memory(life_font, life_font_len);
+    zb::ui::set_font_family(family);
+#endif
+}
+
 void Life::create_window(const uint32_t max_client_width,
                          const uint32_t max_client_height, void *buffer)
 {
+    install_font();
+
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
 
     const int w = static_cast<int>(max_client_width);
     const int h = static_cast<int>(max_client_height);
+    // ui scale from the host buffer (the g2048 shape): header, label and
+    // fonts multiply by it; the classic tier keeps u == 1
+    const int u = clamp_i(h / 200, 1, 8);
+    const int header_h = kHeaderH * u;
 
     // Canvas scale from the host buffer: the biggest whole-cell scale
     // that fits under the button row (integer math). At the classic
     // 320x240 tier this comes out as 4px cells, canvas 256x192 at
     // (32, 40) -- byte-identical to the old hardcoded layout.
-    const int fit = (w - 64) / LifeCanvas::kCols < (h - kHeaderH - 8) / LifeCanvas::kRows
+    const int fit = (w - 64) / LifeCanvas::kCols < (h - header_h - 8) / LifeCanvas::kRows
                         ? (w - 64) / LifeCanvas::kCols
-                        : (h - kHeaderH - 8) / LifeCanvas::kRows;
-    scale_ = clamp_i(fit, LifeCanvas::kScale, 10);
+                        : (h - header_h - 8) / LifeCanvas::kRows;
+    scale_ = clamp_i(fit, LifeCanvas::kScale, 12);
 
     auto &root = window_->root();
     root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
@@ -217,98 +246,77 @@ void Life::create_window(const uint32_t max_client_width,
     struct btn_spec
     {
         const char *text;
-        int x;
         int w;
-        Button **slot;
-        void (Life::*handler)();
     };
-    static const btn_spec kBtns[] = {
-        {"PAUSE", 8, 52, &play_btn_, &Life::on_play},
-        {"STEP", 64, 52, nullptr, &Life::on_step},
-        {"CLEAR", 120, 52, nullptr, &Life::on_clear},
-        {"GUN", 176, 44, nullptr, &Life::on_gun},
-        {"MODE", 224, 44, nullptr, &Life::on_mode},
-    };
-    for (int i = 0; i < 5; ++i)
+    static const btn_spec kBtns[3] = {{"PLASMA", 68}, {"STARS", 60}, {"LIFE", 52}};
+    int bx = 8 * u;
+    for (int i = 0; i < 3; ++i)
     {
         auto b = std::make_unique<Button>();
         b->set_text(kBtns[i].text);
         b->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
-        b->set_size(kBtns[i].w, 22);
-        b->set_position(kBtns[i].x, 8);
-        if (kBtns[i].slot)
-        {
-            *kBtns[i].slot = b.get();
-        }
-        const auto handler = kBtns[i].handler;
-        subs_[i] = b->clicked.subscribe([this, handler] { (this->*handler)(); });
+        b->set_size(kBtns[i].w * u, 22 * u);
+        b->set_position(bx, 8 * u);
+        b->set_font_size(7 * u);
+        subs_[i] = b->clicked.subscribe([this, i] { on_mode(i); });
+        mode_btns_[i] = b.get();
         root.add_child(std::move(b));
+        bx += (kBtns[i].w + 8) * u;
     }
-    play_btn_->set_text("PAUSE");
 
     auto canvas = std::make_unique<LifeCanvas>(scale_);
     const int cw = canvas->canvas_w();
     const int ch = canvas->canvas_h();
     canvas_x_ = (w - cw) / 2;
-    canvas_y_ = kHeaderH + (h - kHeaderH - ch > 16 ? (h - kHeaderH - ch) / 2 - 8
+    canvas_y_ = header_h + (h - header_h - ch > 16 ? (h - header_h - ch) / 2 - 8
                                                    : 0);
     canvas->set_position(canvas_x_, canvas_y_);
     canvas_ = canvas.get();
     root.add_child(std::move(canvas));
 
     auto gen = std::make_unique<Label>();
-    gen->set_size(64, 14);
-    gen->set_position(canvas_x_ + cw - 68, canvas_y_ + ch - 16);
-    gen->set_text("GEN 0");
-    gen->set_text_color(core::colors::White);
+    gen->set_size(64 * u, 14 * u);
+    gen->set_position(canvas_x_ + cw - 68 * u, canvas_y_ + ch - 16 * u);
+    gen->set_text("PLASMA");
+    gen->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
+    gen->set_font_size(7 * u);
     gen_ = gen.get();
     root.add_child(std::move(gen));
 
-    canvas_->stamp_glider_gun();
+    // plasma is the default scene: button 0 is PLASMA (canvas mode 1)
+    on_mode(0);
 }
 
-void Life::on_play()
+void Life::on_mode(int btn)
 {
-    playing_ = !playing_;
-    play_btn_->set_text(playing_ ? "PAUSE" : "PLAY");
-}
-
-void Life::on_step()
-{
-    canvas_->step_life();
-    ++generation_;
-    char buf[24];
-    std::snprintf(buf, sizeof(buf), "GEN %u", generation_);
-    gen_->set_text(buf);
-}
-
-void Life::on_clear()
-{
-    canvas_->clear_life();
-    generation_ = 0;
-    gen_->set_text("GEN 0");
-}
-
-void Life::on_gun()
-{
-    canvas_->stamp_glider_gun();
-    generation_ = 0;
-    gen_->set_text("GEN 0");
-}
-
-void Life::on_mode()
-{
-    // cycles life -> plasma -> stars; generation only makes sense for life
-    mode_ = (mode_ + 1) % 3;
+    // direct scene switch (PLASMA / STARS / LIFE); entering LIFE seeds
+    // the glider gun so the colony is alive immediately
+    mode_ = kModeOf[btn];
     canvas_->set_mode(mode_);
-    gen_->set_text(mode_ == 0 ? "GEN" : mode_ == 1 ? "PLASMA" : "STARS");
+    for (int i = 0; i < 3; ++i)
+    {
+        // the active scene's button glows warm
+        mode_btns_[i]->set_text_color(i == btn
+                                          ? core::Color::from(0xff, 0xb1, 0x43)
+                                          : core::Color::from(0xc9, 0xd3, 0xe0));
+    }
+    if (mode_ == 0)
+    {
+        canvas_->stamp_glider_gun();
+        generation_ = 0;
+        gen_->set_text("GEN 0");
+    }
+    else
+    {
+        gen_->set_text(mode_ == 1 ? "PLASMA" : "STARS");
+    }
 }
 
 void Life::input(const zb::input::input_event &ev) noexcept
 {
-    if (ev.type == zb::input::input_type::touch_down)
+    if (ev.type == zb::input::input_type::touch_down && mode_ == 0)
     {
-        // translate a tap into a colony cell
+        // translate a tap into a colony cell (life mode only)
         const int lx = ev.x - canvas_x_;
         const int ly = ev.y - canvas_y_;
         if (lx >= 0 && ly >= 0 && lx < scale_ * LifeCanvas::kCols &&
@@ -328,16 +336,13 @@ void Life::paint() noexcept
 {
     ++frames_;
     canvas_->set_frame(frames_);
-    if (playing_)
+    if (mode_ == 0 && (frames_ % kFramesPerStep) == 0)
     {
-        if ((frames_ % kFramesPerStep) == 0)
-        {
-            canvas_->step_life();
-            ++generation_;
-            char buf[24];
-            std::snprintf(buf, sizeof(buf), "GEN %u", generation_);
-            gen_->set_text(buf);
-        }
+        canvas_->step_life();
+        ++generation_;
+        char buf[24];
+        std::snprintf(buf, sizeof(buf), "GEN %u", generation_);
+        gen_->set_text(buf);
     }
     // the animation must own its repaint: without an invalidate the shell
     // stops after the tree settles and the demo freezes
