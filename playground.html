@@ -6,7 +6,7 @@
 <title>Playground · Imprint demos</title>
 <link rel="stylesheet" href="demo.css">
 <style>
-  #screen { width: 640px; max-width: calc(100vw - 72px); aspect-ratio: 4 / 3; height: auto; }
+  #screen { width: 720px; max-width: calc(100vw - 72px); aspect-ratio: 5 / 4; height: auto; }
   .pg-tools { display: flex; gap: 10px; align-items: center; margin-bottom: 10px; }
   .pg-tools button {
     background: #16233a; color: var(--text);
@@ -28,14 +28,14 @@
 </header>
 
 <div class="demo wrap">
-  <div class="demo-label">Playground · your design, one C++ renderer</div>
+  <div class="demo-label">Playground · an HTML design file, rendered by C++</div>
 
   <div class="pg">
     <div>
       <div class="pg-tools">
         <select id="examples"></select>
         <button id="run">RUN ▶</button>
-        <span class="hint">paste any HTML design, hit RUN</span>
+        <span class="hint">edit the design file, hit RUN — C++ rebuilds the UI</span>
       </div>
       <textarea id="editor" spellcheck="false"></textarea>
     </div>
@@ -48,10 +48,13 @@
   </div>
 
   <p class="demo-note">
-    What you see is not a browser rendering your HTML. The text is parsed by
-    a small whitelist engine inside the WebAssembly module, materialized into
-    a retained-mode widget tree, and drawn by the same CPU rasterizer that
-    ships on desktop and embedded targets. No DOM, no GPU, no timers.
+    This is <b>not</b> a browser preview of your HTML. The HTML is only a
+    <b>design file</b>: the C++ program compiled to WebAssembly reads it,
+    parses the whitelist subset into a retained-mode widget tree, and
+    draws every pixel with its own software rasterizer — the same engine
+    that ships on desktop and embedded targets. No DOM, no CSS cascade,
+    no GPU. Edit the design, press RUN, and the C++ side rebuilds the
+    widgets and re-rasterizes the 800×640 framebuffer.
   </p>
 </div>
 
@@ -66,7 +69,7 @@
 <script>
 (function () {
   "use strict";
-  var W = 320, H = 240, PIXELS = W * H * 4;
+  var W = 800, H = 640, PIXELS = W * H * 4;
 
   var canvas = document.getElementById("screen");
   canvas.width = W; canvas.height = H;

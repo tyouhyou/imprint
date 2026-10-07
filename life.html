@@ -20,7 +20,7 @@
 </header>
 
 <div class="demo wrap">
-  <div class="demo-label">Demoscene · life / plasma / stars</div>
+  <div class="demo-label">Demoscene · three scenes, one button each</div>
   <div style="text-align:center">
     <div class="bezel"><div class="bezel-inner">
       <canvas id="screen"></canvas>
@@ -34,18 +34,22 @@
   </div>
 
   <div class="chips">
-    <span class="chip"><b>TAP</b> toggles a cell</span>
-    <span class="chip"><b>STEP</b> one generation</span>
-    <span class="chip"><b>GUN</b> Gosper glider gun</span>
-    <span class="chip"><b>MODE</b> life → plasma → stars</span>
+    <span class="chip"><b>PLASMA</b> color field (default)</span>
+    <span class="chip"><b>STARS</b> starfield fly-through</span>
+    <span class="chip"><b>LIFE</b> glider-gun colony</span>
+    <span class="chip"><b>TAP</b> toggles a cell (in LIFE)</span>
   </div>
 
   <p class="demo-note">
-    Imprint has no animation system — by contract. The app advances its state
-    inside <code>paint()</code> and reports damage, and the shell's frame loop
-    keeps it alive. Plasma and the starfield are pure functions of the frame
-    counter: frame 4096 renders the same pixels on a desktop window, a
-    Nintendo DS and this browser tab.
+    Not a game — a demoscene toy with three scenes. Pick one with the three
+    buttons: <b>PLASMA</b> is a color field, <b>STARS</b> flies through a
+    starfield, and <b>LIFE</b> runs Conway's Game of Life seeded with a
+    Gosper glider gun (tap the grid to toggle cells). Imprint has no
+    animation system — by contract. The app advances its state inside
+    <code>paint()</code> and reports damage, and the shell's frame loop
+    keeps it alive. Plasma and the starfield are pure functions of the
+    frame counter: frame 4096 renders the same pixels on a desktop window,
+    a Nintendo DS and this browser tab.
   </p>
 </div>
 
@@ -56,7 +60,7 @@
   </div>
 </footer>
 
-<script>window.DEMO_CONFIG = { width: 320, height: 240 };</script>
+<script>window.DEMO_CONFIG = { width: 800, height: 600 };</script>
 <script src="demo_common.js"></script>
 <script src="life.js"></script>
 </body>

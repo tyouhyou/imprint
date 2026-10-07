@@ -34,17 +34,19 @@
   </div>
 
   <div class="chips">
-    <span class="chip"><b>TYPE</b> any seed</span>
-    <span class="chip"><b>ENTER</b> / <b>DRAW</b> regenerates</span>
+    <span class="chip"><b>HOW TO PLAY</b> type any text as a seed, press DRAW (or ENTER)</span>
+    <span class="chip"><b>SAME SEED</b> = same map, always</span>
     <span class="chip"><b>MAP #N</b> is the fingerprint</span>
   </div>
 
   <p class="demo-note">
-    The seed text is hashed (FNV-1a) and drives a fixed LCG; the generator
-    carves rooms, corridors and trees into a 64×48 tile grid. The same seed
-    draws the same framebuffer bytes <em>everywhere</em> — the status line
-    shows the map fingerprint, so you can compare this tab against the
-    desktop and NDS builds byte for byte.
+    A seed is just a word: the text you type is hashed (FNV-1a) and drives a
+    fixed LCG; the generator carves rooms, corridors and trees into a 64×48
+    tile grid. Type a different word, press <b>DRAW</b>, and a different map
+    appears — type the same word again and the exact same map comes back.
+    The same seed draws the same framebuffer bytes <em>everywhere</em> — the
+    status line shows the map fingerprint, so you can compare this tab
+    against the desktop and NDS builds byte for byte.
   </p>
 </div>
 
@@ -55,7 +57,7 @@
   </div>
 </footer>
 
-<script>window.DEMO_CONFIG = { width: 320, height: 240 };</script>
+<script>window.DEMO_CONFIG = { width: 800, height: 600 };</script>
 <script src="demo_common.js"></script>
 <script src="seedmap.js"></script>
 </body>

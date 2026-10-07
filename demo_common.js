@@ -76,6 +76,8 @@
   }
 
   // input types, must match ZB_INPUT_* in zbapi.h
+  var ZB_INPUT_MOUSE_RIGHT_DOWN = 4;
+  var ZB_INPUT_MOUSE_RIGHT_UP = 5;
   var ZB_INPUT_TOUCH_DOWN = 9;
   var ZB_INPUT_TOUCH_UP = 10;
   var ZB_INPUT_TOUCH_MOVE = 11;
@@ -275,6 +277,15 @@
   }
   function onDown(e) {
     var p = scale(e);
+    // button 2 is the right mouse button: send the ZB_INPUT_MOUSE_RIGHT_*
+    // family instead of a touch (the minesweeper flags with it; other
+    // apps ignore the right family). Keep the stream recorded so time
+    // travel replays it faithfully.
+    if (e.button === 2) {
+      e.preventDefault();
+      send(ZB_INPUT_MOUSE_RIGHT_DOWN, p[0], p[1], 0, 0, 0);
+      return;
+    }
     send(ZB_INPUT_TOUCH_DOWN, p[0], p[1], 0, 0, 0);
   }
   function onMove(e) {
@@ -284,6 +295,10 @@
   }
   function onUp(e) {
     var p = scale(e);
+    if (e.button === 2) {
+      send(ZB_INPUT_MOUSE_RIGHT_UP, p[0], p[1], 0, 0, 0);
+      return;
+    }
     send(ZB_INPUT_TOUCH_UP, p[0], p[1], 0, 0, 0);
   }
   function onTouch(e) {
@@ -308,6 +323,7 @@
   canvas.addEventListener("mousedown", onDown);
   canvas.addEventListener("mousemove", onMove);
   window.addEventListener("mouseup", onUp);
+  canvas.addEventListener("contextmenu", function (e) { e.preventDefault(); });
   canvas.addEventListener("wheel", onWheel, { passive: false });
   canvas.addEventListener("touchstart", onTouch, { passive: false });
   canvas.addEventListener("touchmove", onTouch, { passive: false });
