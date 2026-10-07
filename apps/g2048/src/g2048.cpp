@@ -3,6 +3,10 @@
 #include <cstdio>
 #include <cstring>
 
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+#include "g2048_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
+#endif
+
 using namespace zb::app::g2048;
 using namespace zb::ui;
 
@@ -57,12 +61,9 @@ Board2048::Board2048(const int cell, const int gap)
             // alignment parks it top-left, overflowing small tiles)
             tile->set_h_align(Widget::h_align::center);
             tile->set_v_align(Widget::v_align::center);
-            // scale the digits with the tile; skipped at the classic
-            // size so the design-minimum tier renders byte-identical
-            if (cell_ > 30)
-            {
-                tile->set_font_size(cell_ * 2 / 5);
-            }
+            // scale the digits with the tile (a no-op without the
+            // runtime-TTF text path, code-contract §2.4)
+            tile->set_font_size(cell_ * 2 / 5);
             tiles_[r][c] = tile.get();
             add_child(std::move(tile));
         }
@@ -104,14 +105,37 @@ void Board2048::draw_at(core::Graphics &area) const
     Panel::draw_at(area);
 }
 
+void G2048::install_font()
+{
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    if (zb::ui::has_font_family())
+    {
+        return;
+    }
+    // from_memory borrows: the packed blob has static storage and
+    // outlives the family (the showcase install_font shape)
+    static const zb::ui::TtfFamily family =
+        zb::ui::TtfFamily::from_memory(g2048_font, g2048_font_len);
+    zb::ui::set_font_family(family);
+#endif
+}
+
 void G2048::create_window(const uint32_t max_client_width,
                           const uint32_t max_client_height, void *buffer)
 {
+    install_font();
+
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
 
     const int w = static_cast<int>(max_client_width);
     const int h = static_cast<int>(max_client_height);
+
+    // Chrome scale: 1 at the classic 256x192 tier, 3 at the 800x600
+    // tier the gh-pages page designs for, capping so absurd buffers
+    // stay sane. All header/dialog pixel metrics derive from it.
+    const int u = clamp_i(h / 200, 1, 8);
+    swipe_px_ = 12 * u;
 
     // Board geometry from the host buffer: tile size and gap scale the
     // design-minimum ratios (integer math, round half up). At the classic
@@ -127,23 +151,26 @@ void G2048::create_window(const uint32_t max_client_width,
     board_x_ = (w - board) / 2;
     // flush under the header at the classic tier; once the spare room
     // below is real, drift toward vertical centering
-    const int spare = h - kHeaderH - board;
-    board_y_ = kHeaderH + (spare > 16 ? (spare - 16) / 2 : 0);
+    const int header_h = kHeaderH * u;
+    const int spare = h - header_h - board;
+    board_y_ = header_h + (spare > 16 * u ? (spare - 16 * u) / 2 : 0);
 
     auto &root = window_->root();
     root.set_background_color(core::Color::from(0x0d, 0x14, 0x20));
 
     auto score = std::make_unique<Label>();
-    score->set_size(104, 20);
-    score->set_position(8, 8);
+    score->set_size(104 * u, 20 * u);
+    score->set_position(8 * u, 8 * u);
+    score->set_font_size(7 * u);
     score->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     score->set_text("SCORE 0");
     score_label_ = score.get();
     root.add_child(std::move(score));
 
     auto best = std::make_unique<Label>();
-    best->set_size(70, 20);
-    best->set_position(112, 8);
+    best->set_size(70 * u, 20 * u);
+    best->set_position(112 * u, 8 * u);
+    best->set_font_size(7 * u);
     best->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
     best->set_text("BEST 0");
     best_label_ = best.get();
@@ -151,9 +178,10 @@ void G2048::create_window(const uint32_t max_client_width,
 
     auto new_btn = std::make_unique<Button>();
     new_btn->set_text("NEW");
+    new_btn->set_font_size(7 * u);
     new_btn->set_text_color(core::Color::from(0xc9, 0xd3, 0xe0));
-    new_btn->set_size(56, 22);
-    new_btn->set_position(w - 66, 7);
+    new_btn->set_size(56 * u, 22 * u);
+    new_btn->set_position(w - 66 * u, 7 * u);
     new_btn->clicked += [this] { new_game(); };
     root.add_child(std::move(new_btn));
 
@@ -164,17 +192,25 @@ void G2048::create_window(const uint32_t max_client_width,
 
     auto dlg = std::make_unique<Dialog>();
     dlg->set_size(max_client_width, max_client_height);
-    const int frame_w = clamp_i(w / 2, 160, 300);
-    dlg->set_frame_size(frame_w, 92);
-    dlg->get_title().set_size(frame_w - 20, 20);
+    const int frame_w = clamp_i(w / 2, 160 * u, 300 * u);
+    dlg->set_frame_size(frame_w, 92 * u);
+    dlg->get_title().set_size(frame_w - 20, 20 * u);
     dlg->get_title().set_h_align(Widget::h_align::center);
-    dlg->set_button_size(64, 24);
+    dlg->get_title().set_font_size(8 * u);
+    dlg->set_button_size(64 * u, 24 * u);
     auto &again = dlg->add_button("AGAIN");
+    again.set_font_size(7 * u);
     sub_again_ = again.clicked.subscribe([this] { new_game(); close_end_dialog(); });
     auto &cont = dlg->add_button("CONTINUE");
+    cont.set_font_size(7 * u);
     sub_cont_ = cont.clicked.subscribe([this] { close_end_dialog(); });
     auto &quit = dlg->add_button("QUIT");
+    quit.set_font_size(7 * u);
     sub_quit_ = quit.clicked.subscribe([this] { if (window_) window_->close(); });
+    // compute the frame/title/button geometry up front (the tictactoe
+    // pattern): open() only flips visibility, it never runs layout(), so
+    // a dialog laid out lazily would draw its frame at the default (0,0)
+    dlg->layout();
     dlg->close();
     end_dialog_ = dlg.get();
     root.add_child(std::move(dlg));
@@ -392,7 +428,7 @@ void G2048::input(const zb::input::input_event &ev) noexcept
         down_x_ = -1;
         const int adx = dx > 0 ? dx : -dx;
         const int ady = dy > 0 ? dy : -dy;
-        if (adx >= 12 || ady >= 12)
+        if (adx >= swipe_px_ || ady >= swipe_px_)
         {
             const bool horizontal = adx >= ady;
             const bool moved = horizontal ? move(0, dx > 0 ? 1 : -1)

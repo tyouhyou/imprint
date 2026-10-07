@@ -148,6 +148,22 @@ g2048|mines|life|seedmap)
     APP_INCLUDE="/src/apps/${APP}/include"
     EXPORT_NAME="create$(echo "${APP}" | sed 's/^\(.\)/\U\1/')"
     EXTRA_INCLUDES=""
+    if [ "$APP" = "g2048" ]; then
+        # the 2048 page scales header/dialog text with the buffer
+        # (runtime TTF, the showcase shape): pull in the stb_truetype
+        # TUs and pack the Inter blob. IMCORE_HAS_TTF_RUNTIME is the
+        # compile definition the headers check (USE_TTF_RUNTIME is only
+        # the CMake option name -- build.sh must pass the former)
+        APP_SRCS="$APP_SRCS
+          imcore/src/text/stb_truetype_impl.cpp
+          imcore/src/text/runtime_ttf_provider.cpp
+        "
+        g++ -std=c++17 -O2 /src/tools/bytes_embed.cpp -o /tmp/bytes_embed
+        /tmp/bytes_embed /tmp/g2048_font.gen.hpp g2048_font \
+            /src/assets/fonts/Inter-Regular.ttf
+        EXTRA_INCLUDES="-I /tmp"
+        EXTRA_DEFS="-DIMCORE_HAS_TTF_RUNTIME"
+    fi
     ;;
 *)
     echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap)" >&2

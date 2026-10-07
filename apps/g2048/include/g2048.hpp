@@ -92,13 +92,17 @@ namespace zb::app::g2048
     private:
         static constexpr uint32_t kWidth = 256;
         static constexpr uint32_t kHeight = 192;
-        static constexpr int kHeaderH = 44;  // header row + spacing
+        static constexpr int kHeaderH = 44;  // header row + spacing, × ui scale
 
         // board geometry, decided once in create_window
         int cell_ = 30;
         int gap_ = 4;
         int board_x_ = 58;
         int board_y_ = kHeaderH;
+
+        // swipe threshold in buffer px, fixed by create_window for the
+        // app lifetime (12 at the classic tier, scaling with the chrome)
+        int swipe_px_ = 12;
 
         // pure game state (a replay re-derives all of it from the inputs)
         int grid_[4][4] = {};
@@ -125,6 +129,7 @@ namespace zb::app::g2048
         event::Subscription<> sub_cont_;
         event::Subscription<> sub_quit_;
 
+        void install_font();
         void new_game();
         void spawn_tile();
         // returns true when anything moved
