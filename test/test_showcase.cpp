@@ -14,7 +14,6 @@
 #include <cstdlib>
 #include <memory>
 #include <string>
-#include <utility>
 
 #include "canvas_window.hpp"
 #include "gauge_dial.hpp"
@@ -457,17 +456,15 @@ int test_showcase()
         EXPECT(ship_mk->is_visible());
         EXPECT(mk0->is_visible());
         const int hull_before = pct_of(text_of(vapp, "hull_v"));
-        const auto xy = [&](const char *id) -> std::pair<int, int>
-        {
-            auto *m = vroot.find_by_id(id);
-            if (m == nullptr)
-            {
-                return {0, 0};
-            }
-            const auto p = m->get_absolute_position();
-            return {p.x, p.y};
-        };
-        const char *const mk_ids[3] = {"mk0", "mk1", "mk2"};
+        // the helm works in the game's own unit space (percent of the scope
+        // box -- the same units the WASD keys, the pointer drag and the
+        // collision radius share), so the loop steers off the app's
+        // scope state and not off the marker rects: the rects are that
+        // state's pixel projection, and at the 320x240 tiers the scope
+        // box is only a handful of pixels across (the runtime-TTF line
+        // boxes take the height), so the old 3 px dead zone was a third
+        // of the whole scope -- the helm never left the middle and no
+        // impact ever landed
         for (int i = 0; i < 200; ++i)
         {
             if (pct_of(text_of(vapp, "hull_v")) < hull_before)
@@ -475,14 +472,17 @@ int test_showcase()
                 break;
             }
             vapp.paint();  // one sim frame + a layout pass for the rects
-            const auto ship = xy("ship_mk");
-            int best = 0;
-            long best_d = 1 << 30;
-            for (int k = 0; k < 3; ++k)
+            const auto scope = vapp.scope_state();
+            if (scope.count == 0)
             {
-                const auto r = xy(mk_ids[k]);
-                const long dx = r.first - ship.first;
-                const long dy = r.second - ship.second;
+                break;  // the encounter ended (or was never a drifting one)
+            }
+            int best = 0;
+            long best_d = 1L << 30;
+            for (int k = 0; k < scope.count; ++k)
+            {
+                const long dx = scope.x[k] - scope.ship_x;
+                const long dy = scope.y[k] - scope.ship_y;
                 const long d = dx * dx + dy * dy;
                 if (d < best_d)
                 {
@@ -490,25 +490,46 @@ int test_showcase()
                     best = k;
                 }
             }
-            const auto r = xy(mk_ids[best]);
-            if (r.first - ship.first > 3)
+            // the helm steps 5 units a press and the impact radius is
+            // 7: close each axis to within 2, dominant axis first
+            const int dx = scope.x[best] - scope.ship_x;
+            const int dy = scope.y[best] - scope.ship_y;
+            if (dx > 2)
             {
                 press_char(vapp, 'd');
             }
-            else if (r.first - ship.first < -3)
+            else if (dx < -2)
             {
                 press_char(vapp, 'a');
             }
-            else if (r.second - ship.second > 3)
+            else if (dy > 2)
             {
                 press_char(vapp, 's');
             }
-            else if (r.second - ship.second < -3)
+            else if (dy < -2)
             {
                 press_char(vapp, 'w');
             }
         }
         EXPECT(pct_of(text_of(vapp, "hull_v")) < hull_before);
+        // the impact above proves the helm keys moved the ship (the collision
+        // runs in the same unit space); this pins the rendering half of
+        // that path -- the marker follows the scope box on every tier
+        // (percent offsets against the containing block), however small
+        // the box gets
+        vapp.paint();
+        {
+            auto *scope = vroot.find_by_id("scope_ring");
+            EXPECT(scope != nullptr);
+            if (scope != nullptr)
+            {
+                const auto sp = scope->get_absolute_position();
+                const auto ss = scope->get_size();
+                const auto mp = ship_mk->get_absolute_position();
+                EXPECT(mp.x >= sp.x && mp.y >= sp.y &&
+                       mp.x <= sp.x + ss.width && mp.y <= sp.y + ss.height);
+            }
+        }
         // the pulse cannon fragments a rock (weapons bus at 22% >= 15)
         press_char(vapp, 'f');
         EXPECT(text_of(vapp, "toast_tx") == "ROCK FRAGMENTED");

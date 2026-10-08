@@ -84,6 +84,26 @@ namespace zb::app::showcase
         // the tests share this entry point
         void start_run(uint32_t seed);
 
+        // test seam (the fast_forward() precedent): where the ship and
+        // the drifting contacts sit on the scope, in the game's OWN unit
+        // space -- percent of the scope box, which is what the helm keys,
+        // the pointer drag and the collision radius all work in. The
+        // rendered marker rects are this state's pixel projection, and
+        // the projection is coarse at the 320x240 tiers (the scope box
+        // lands around 16 px on the bitmap font and 10 px under runtime
+        // TTF, where taller line boxes take the height), so a test must
+        // steer off this state, not off get_absolute_position().
+        struct ScopeState
+        {
+            static constexpr int kMax = 3;  // mk_x_ / mk_y_ below
+            int ship_x = 50;
+            int ship_y = 50;
+            int count = 0;  // live drifting contacts (debris / storm)
+            int x[kMax] = {};
+            int y[kMax] = {};
+        };
+        [[nodiscard]] ScopeState scope_state() const;
+
         [[nodiscard]] bool is_dirty() const noexcept override
         {
             return window_->is_dirty();
@@ -305,8 +325,8 @@ namespace zb::app::showcase
         bool route_pending_ = false;       // a course must be chosen
         bool fuel_warned_ = false;
         // rocks (debris) / dust (ion storm), % of the scope
-        int mk_x_[3] = {}, mk_y_[3] = {};
-        int mk_vx_[3] = {}, mk_vy_[3] = {};
+        int mk_x_[ScopeState::kMax] = {}, mk_y_[ScopeState::kMax] = {};
+        int mk_vx_[ScopeState::kMax] = {}, mk_vy_[ScopeState::kMax] = {};
 
         // the flight recorder: every input event with the frame it
         // arrived on. Replay the session's seed + this stream and the

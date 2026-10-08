@@ -978,6 +978,24 @@ namespace zb::app::showcase
         }
     }
 
+    Showcase::ScopeState Showcase::scope_state() const
+    {
+        ScopeState s;
+        s.ship_x = ship_px_;
+        s.ship_y = ship_py_;
+        s.count = phase_ == Phase::Encounter &&
+                          (kind_ == EncounterKind::Debris ||
+                           kind_ == EncounterKind::IonStorm)
+                      ? ScopeState::kMax
+                      : 0;
+        for (int i = 0; i < ScopeState::kMax; ++i)
+        {
+            s.x[i] = mk_x_[i];
+            s.y[i] = mk_y_[i];
+        }
+        return s;
+    }
+
     void Showcase::step_game()
     {
         if (phase_ == Phase::Cruise)
