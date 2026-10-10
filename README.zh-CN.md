@@ -95,9 +95,13 @@ UTF-8 文本内置 5x7 位图字形兜底（按源码字符串自动子集化）
 
 ## 一份源码树，六个目标
 
-同一份设计文件 showcase——桌面、任天堂 DS、浏览器：
+同一份设计文件 showcase——桌面与浏览器：
 
-![showcase_html 在 linux、nds、wasm 上](assets/showcase/montage.png)
+![showcase_html 在 linux、wasm 上](assets/showcase/montage.png)
+
+> 这张拼图早于 ORION NX-07 重构——里面那块 DS 面板是旧界面（它当年放得下 256×192）。
+> 当前的设计文件按桌面尺寸排版，在任天堂 DS 上会被裁切——详见 ARCHITECTURE §5；
+> DS 的 demo 请用 `tictactoe`。
 
 Windows、Linux（X11 / framebuffer）、macOS（AppKit）、WebAssembly、任天堂 DS
 跑的都是同一棵控件树。终端也是一等目标：在任何支持 sixel 的终端（WezTerm、

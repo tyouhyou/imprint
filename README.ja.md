@@ -78,9 +78,13 @@ if (r.status == zb::snap::check_result::status::missing)
 
 ## 1 つのソースツリー、6 つのターゲット
 
-同じデザインファイルの showcase——デスクトップ、ニンテンドーDS、ブラウザ：
+同じデザインファイルの showcase——デスクトップとブラウザ：
 
-![showcase_html は linux、nds、wasm 上に](assets/showcase/montage.png)
+![showcase_html は linux、wasm 上に](assets/showcase/montage.png)
+
+> この画像は ORION NX-07 への刷新以前のデッキです（DS のパネルも当時のもの。256×192 に
+> 収まっていた時代）。現在のデザインファイルはデスクトップ向けの画布サイズで組んでおり、
+> ニンテンドーDS では切り取られます——ARCHITECTURE §5 を参照。DS 用のデモは `tictactoe`。
 
 Windows、Linux（X11 / フレームバッファ）、macOS（AppKit）、WebAssembly、ニンテンドーDS、すべてが同じウィジェットツリーを走らせます。ターミナルも第一級ターゲットです：sixel 対応ターミナル（WezTerm、foot、iTerm2）なら、同じツリーが SIXEL グラフィックスとして描画され、入力は SGR マウス + キーボード——ウィンドウシステムはまったく要りません。**[ブラウザでそのまま試す](https://tyouhyou.github.io/imprint/)**——ORION NX-07 コマンドデッキを WebAssembly にコンパイルしたもので、デスクトップシェルと同じ C-ABI 経由で表示されます。
 

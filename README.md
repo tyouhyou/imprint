@@ -113,9 +113,14 @@ options for libatomic-less toolchains, zero-allocation hot paths.
 
 ## One source tree, six targets
 
-The same design-file showcase — desktop, Nintendo DS, browser:
+The same design-file showcase — desktop and browser:
 
-![showcase_html on linux, nds, wasm](assets/showcase/montage.png)
+![showcase_html on linux and wasm](assets/showcase/montage.png)
+
+> The montage predates the ORION NX-07 redesign — its DS panel is that
+> older deck, which did fit 256×192. The current design file targets a
+> desktop-sized canvas and is clipped on the Nintendo DS; see
+> ARCHITECTURE §5, and use `tictactoe` as the DS demo story.
 
 Windows, Linux (X11 / framebuffer), macOS (AppKit), WebAssembly and the
 Nintendo DS all run the same widget tree. The terminal is a first-class
