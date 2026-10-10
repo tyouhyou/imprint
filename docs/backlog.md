@@ -207,9 +207,10 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   - *P4 extension (unscheduled): the Kitty graphics protocol as a
     second presenter for the same input source.*
 - Business stance reconfirmed: port engagements first; external
-  consumability is itself the revenue enabler.
-- Still deferred from 09-06: landing page assembled from existing
-  assets with a "tell us about your device" intake.
+  consumability is itself the revenue enabler. The 09-06 landing page +
+  "tell us about your device" intake is closed: the portal at
+  `tyouhyou.github.io/imprint/` is the landing page, and lead handling
+  is operator state, not roadmap.
 
 ## 1. Architecture Backlog
 
