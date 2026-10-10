@@ -173,7 +173,8 @@ int test_render_mode()
         EXPECT(test::pixel_at(z, 0, 0) == White.pixel);
     }
 
-    // sketch is reserved (S-2) and renders as FULL for now
+    // sketch: fill_rect keeps its rough edges (the row-span ends wobble by
+    // +-1 px); the interior stays flat, so the center pixel is exact
     {
         Graphics g(20, 20, nullptr);
         g.fill(White);

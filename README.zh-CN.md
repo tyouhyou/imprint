@@ -24,7 +24,7 @@ Imprint UI 是一个面向 C++17 的确定性 UI 运行时：用自己的软件�
 - **天生无头** — 脚本完全替代用户：不需要显示器、不需要 Xvfb、不需要 sleep
 - **为 AI agent 而生** — agent 写完界面，自己驱动、自己逐像素验证
 - **纯 CPU，零依赖** — 不需要 GPU、OS GUI 工具包、第三方渲染库
-- **一份源码树，六个目标** — 桌面、SIXEL 终端、浏览器、NDS，同一份代码
+- **一份源码树，六个目标** — Windows、Linux（X11/FB）、macOS、SIXEL 终端、浏览器、NDS
 - **设计优先** — 界面用 HTML 或 `.ui` 描述，构建期校验并物化
 - **小到离谱** — 705 KB 单文件 WebAssembly（连字体都内嵌）；NDS 跑在 96 KB VRAM 里
 - **任意语言，经 C-ABI** — Python、WASM、任何能调 C 的语言，同一套协议

@@ -120,6 +120,51 @@ int test_text()
     {
         EXPECT(utf8_to_utf16(nullptr).empty());
         EXPECT(utf8_to_utf16("").empty());
+        EXPECT(utf8_to_utf16(nullptr, 4).empty());
+        EXPECT(utf8_to_utf16("abc", 0).empty());
+    }
+
+    // bounded slice decoding (W-4): a sequence truncated by the slice end
+    // is reported invalid on the lead byte, and no byte at or past `end`
+    // is ever read -- the packed-bytes form (no NUL terminator)
+    {
+        const char buf[] = "\xE4\xB8";  // 2 bytes + the literal's NUL
+        const char *end = buf + 2;
+        const char *p = buf;
+        EXPECT(decode_utf8_next(p, end) == 0xFFFD);
+        EXPECT(p == buf + 1);  // consumed exactly one byte
+        EXPECT(decode_utf8_next(p, end) == 0xFFFD);
+        EXPECT(p == end);
+        // exhausted: returns U+FFFD without advancing, so a `p < end`
+        // loop terminates
+        EXPECT(decode_utf8_next(p, end) == 0xFFFD);
+        EXPECT(p == end);
+        // end <= p is the same exhausted state
+        const char *q = buf;
+        EXPECT(decode_utf8_next(q, buf) == 0xFFFD);
+        EXPECT(q == buf);
+    }
+
+    // bounded slice: embedded NULs are ordinary bytes, not terminators
+    {
+        const char buf[] = "A\x00\xC3\xA9";
+        const auto u16 = utf8_to_utf16(buf, 4);
+        EXPECT(u16.size() == 3);
+        if (u16.size() == 3)
+        {
+            EXPECT(u16[0] == u'A');
+            EXPECT(u16[1] == 0);
+            EXPECT(u16[2] == 0xE9);
+        }
+    }
+
+    // bounded slice: a 4-byte sequence cut short at the last byte
+    {
+        const char buf[] = "\xF0\x9F\x98";  // missing the 4th byte
+        const char *end = buf + 3;
+        const char *p = buf;
+        EXPECT(decode_utf8_next(p, end) == 0xFFFD);
+        EXPECT(p == buf + 1);
     }
 
     // mixed multibyte text round-trips to the right code units
@@ -130,6 +175,8 @@ int test_text()
         expected += 0xE9;
         expected += 0x4E2D;
         EXPECT(u16 == expected);
+        // the counted form of the same text agrees
+        EXPECT(utf8_to_utf16("A\xC3\xA9\xE4\xB8\xAD", 6) == expected);
     }
 
     // BitmapProvider: coverage and metrics

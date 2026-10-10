@@ -41,6 +41,68 @@ int test_runtime_ttf()
         EXPECT(threw);
     }
 
+    // borrowed-buffer length validation (W-5): a buffer that does not contain
+    // the sfnt tables it declares must be rejected before the parser reads
+    // it, not discovered halfway through
+    {
+        std::vector<unsigned char> font;
+        std::FILE *f = std::fopen(IM_TEST_RUNTIME_TTF_FONT, "rb");
+        EXPECT(f != nullptr);
+        if (f != nullptr)
+        {
+            std::fseek(f, 0, SEEK_END);
+            const long n = std::ftell(f);
+            std::fseek(f, 0, SEEK_SET);
+            if (n > 0)
+            {
+                font.resize(static_cast<size_t>(n));
+                const size_t got = std::fread(font.data(), 1, font.size(), f);
+                EXPECT(got == font.size());
+                font.resize(got);
+            }
+            std::fclose(f);
+        }
+        EXPECT(!font.empty());
+
+        // every truncation below the real length is rejected — including
+        // one that still spans a complete-looking header
+        bool threw = false;
+        try
+        {
+            const auto ok = TtfFamily::from_memory(font.data(), font.size());
+            (void)ok;
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(!threw);
+
+        threw = false;
+        try
+        {
+            const auto cut = TtfFamily::from_memory(font.data(), font.size() / 2);
+            (void)cut;
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+
+        threw = false;
+        try
+        {
+            const auto cut = TtfFamily::from_memory(font.data(), 24);
+            (void)cut;
+        }
+        catch (const std::exception &)
+        {
+            threw = true;
+        }
+        EXPECT(threw);
+    }
+
     TtfFamily family = TtfFamily::from_file(IM_TEST_RUNTIME_TTF_FONT);
 
     // per-size providers: equal px is the same instance, all sizes share

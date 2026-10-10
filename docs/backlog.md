@@ -86,9 +86,9 @@ image build. Consumer-side, not a new C-ABI surface at this stage.
 
 Follow-ups from the 2026-10-03 full-repo audit (`reports/review-1.md`,
 local-only). Verified real, deferred by operator ruling; each entry states
-the decision it is waiting on. Fixed the same day: the P0/P1 set, the P2
-majority, and the audit's own "housekeeping" quick wins (history in
-`git log`).
+the decision it is waiting on. Fixed since: the P0/P1 set, the P2
+majority, the audit's housekeeping quick wins, and W-4/W-5/W-6/W-13
+(2026-10-10; history in `git log`).
 
 - **W-1 (IM-RAS-002). Arc shape depends on alpha**: a translucent arc
   (0<a<0xFF) takes the exact-chord octant scan, so its silhouette changes
@@ -102,15 +102,6 @@ majority, and the audit's own "housekeeping" quick wins (history in
   so Space can never activate the focused widget on the SIXEL target**.
   The fix is a translator behavior change needing a fresh NDS/SIXEL
   verification pass; bundle with the next melonDS re-verify.
-- **W-4 (IM-TXT-003). `decode_utf8_next` has no end bound** though the
-  header advertises slice use — 1-byte over-read. Fix needs an end-pointer
-  parameter (API shape change across text call sites).
-- **W-5 (IM-TXT-004). `TtfFamilyState::size` written, never read;
-  `from_memory` lacks length validation.** Small provider cleanup.
-- **W-6 (IM-TXT-006). Negative glyph advances poison the
-  `advance_cache_` -1 sentinel** — permanent cache miss plus a negative
-  centering offset. Fix is a clamp at the provider/cache boundary;
-  rendering-byte implications confined to fonts with negative advances.
 - **W-7 (IM-BLD-007). `demo/wasm/build.sh` hand-maintains its source
   list** (stale vs. `imui/CMakeLists.txt`, different font-subset inputs).
   Currently sufficient (the smoke passes); regenerating the list needs a
@@ -123,8 +114,9 @@ majority, and the audit's own "housekeeping" quick wins (history in
   installed-package smoke is Linux-only** — the Windows install path
   (classic LNK2038) is unverified. Needs a Windows CI runner decision.
 - **W-10 (IM-BLD-011). The ASan job does not instrument the
-  shared-library link line; no UBSan job exists.** Add a UBSan Tier-3
-  variant and fix the shared-link sanitizers when touching CI next.
+  shared-library link line.** (Its UBSan half landed 2026-10-03 — the
+  Tier-3 `asan` job now runs ASan+UBSan.) Waiting on: a CI touch to
+  add the shared-link sanitizer flags.
 - **W-11 (IM-BLD-013). `asset_gen` is built by every configuration and
   consumed by nothing; committed PNG/GIF assets have no documented
   regeneration path.** Waiting on: wire asset_gen, drop it, or document
@@ -133,14 +125,8 @@ majority, and the audit's own "housekeeping" quick wins (history in
   runs Debug"** — no Linux CI job sets a build type, so `DEBUG` is
   undefined there. Waiting on: add `-DCMAKE_BUILD_TYPE=Debug` to the
   Linux jobs vs. amend §8's premise.
-- **W-13 (IM-DOC-005). Eight documentation drift items**: getting-started
-  duplicates README build commands and mis-describes the showcase pages;
-  ARCHITECTURE §2 omits `ScrollPanel` from the imui widget list;
-  `design-file.md` root rule omits `scroll_panel`; a stale "sketch renders
-  as FULL for now" comment; README's "six targets" claim names four. Pure
-  doc fixes — take together in one docs pass.
-- **W-14 (IM-HOST-003 remainder). Shell/ABI hardening, seven sub-items**:
-  X11 `Display` leak on a late-throwing init path; `run_win` assigns
+- **W-14 (IM-HOST-003 remainder). Shell/ABI hardening, six sub-items**
+  (the X11 `Display` guard landed 2026-10-03): `run_win` assigns
   global `g_app` before a throwing `CreateWindowEx`; the C-ABI
   `catch(...)` handlers log via the allocating `LE` path (OOM can throw
   out of `extern "C"`); shell `main`s catch only `zb::ui::error`; no DPI
@@ -327,9 +313,9 @@ fragments + a full-code re-read); the rulings below supersede/extend the
   low priority, no throw path today.
 - **"One seed, three screens"** (from the 2026-10-03 gh-pages portal
   round): the seedmap page's map rendered side by side from the same
-  seed on wasm + NDS + desktop, as a living determinism proof. Blocked
-  on the NDS build environment being up again; the generator itself is
-  already byte-deterministic (locked by the seedmap smoke).
+  seed on wasm + NDS + desktop, as a living determinism proof. The
+  generator is already byte-deterministic (locked by the seedmap smoke);
+  what remains is the NDS capture and the portal wiring.
 - **SIXEL terminal live recording**: a GIF of a P4-terminal shell
   session recorded via `script(1)` pty, hosted on the portal next to
   the wasm pages — shows the Linux SIXEL backend without a terminal

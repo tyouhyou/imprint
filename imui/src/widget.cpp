@@ -1264,6 +1264,15 @@ namespace zb::ui
             return advance_cache_;
         }
         advance_cache_ = advance_of(text_.data(), static_cast<int>(text_.size()));
+        // clamp at the cache boundary too: a provider reporting a negative
+        // advance would store it and collide with the -1 "not computed"
+        // sentinel (a permanent cache miss on every later call). The
+        // providers shipped here clamp already; this keeps the invariant
+        // true for any GlyphProvider (W-6)
+        if (advance_cache_ < 0)
+        {
+            advance_cache_ = 0;
+        }
         return advance_cache_;
     }
 

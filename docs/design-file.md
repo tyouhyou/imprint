@@ -114,8 +114,8 @@ form parses identically from text.
 ## Root handling
 
 - A document with exactly one top-level container (`panel`/`column`/
-  `row`) returns that node directly; its container properties
-  (`spacing`, `padding`, `wrap`) apply to the build host.
+  `row`/`scroll_panel`) returns that node directly; its container
+  properties (`spacing`, `padding`, `wrap`) apply to the build host.
 - Otherwise a pseudo-root `type="root"` wraps the top-level nodes; its
   children are materialized into the host one by one.
 

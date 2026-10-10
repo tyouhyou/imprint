@@ -29,7 +29,7 @@ Imprint's own rasterizer — the same tree your C++ ships on every target.
 - **Headless by design** — a script fully replaces the user: no display, no Xvfb, no sleeps
 - **Made for AI agents** — an agent writes a screen, drives it, and verifies its own work pixel-by-pixel
 - **Pure CPU, zero dependencies** — no GPU, no OS GUI toolkit, no third-party rendering library
-- **One source tree, six targets** — desktop, sixel terminal, browser, Nintendo DS, same code
+- **One source tree, six targets** — Windows, Linux (X11/FB), macOS, sixel terminal, browser, Nintendo DS
 - **Design-first** — screens described in HTML or `.ui`, validated and materialized at build time
 - **Absurdly small** — ~705 KB single-file WebAssembly (font included); a Nintendo DS in 96 KB of VRAM
 - **Any language via C-ABI** — Python, WASM, anything that can call C gets the same protocol

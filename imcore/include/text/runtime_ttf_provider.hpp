@@ -29,8 +29,15 @@ namespace zb::ui
         // reads and owns a copy of the font bytes
         static TtfFamily from_file(const char *path,
                                    size_t cache_budget = kDefaultCacheBudget);
-        // the zero-copy form for ROM-packed blobs: the caller's buffer
-        // must outlive the family
+        /*
+         * The zero-copy form for ROM-packed blobs. `bytes` must stay
+         * readable for `n` bytes for the whole lifetime of the family and
+         * of every provider handed out from it — the provider keeps a
+         * non-owning pointer into it. `n` must be the true length: it is
+         * checked against the sfnt envelope the buffer declares (header
+         * plus its table directory) before the parser touches anything,
+         * and a buffer that fails throws zb::ui::error.
+         */
         static TtfFamily from_memory(const unsigned char *bytes, size_t n,
                                      size_t cache_budget = kDefaultCacheBudget);
 
@@ -54,8 +61,9 @@ namespace zb::ui
         TtfFamily &operator=(const TtfFamily &) = default;
 
     private:
-        // parses and validates the font (throws zb::ui::error); a
-        // non-null `borrowed` wins over the owned copy
+        // validates the buffer envelope, parses the font (both throw
+        // zb::ui::error); a non-null `borrowed` wins over the owned copy
+        // and `borrowed_n` must be its true readable length
         static TtfFamily make(std::vector<unsigned char> owned,
                               const unsigned char *borrowed, size_t borrowed_n,
                               size_t cache_budget);

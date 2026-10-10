@@ -186,10 +186,12 @@ default when you build the tree by hand):
 
 Layouts can also be written as `.ui` design files — a tiny text format
 packed and validated at build time, then loaded from a C array on any
-target (no filesystem needed, NDS included). The showcase's two pages are
-built this way; `tools/examples/menu.ui` is a minimal example. Preview any
-`.ui` file interactively with the `ui_preview` story (command in the
-README's Build table), and read `docs/design-file.md` for the grammar.
+target (no filesystem needed, NDS included). The showcase story is built
+the same way from its HTML design file (the HTML subset materializes into
+the same widget tree); `tools/examples/menu.ui` is a minimal `.ui`
+example. Preview any `.ui` file interactively with the `ui_preview` story
+(command in the README's Build table), and read `docs/design-file.md` for
+the grammar.
 
 ## Where to go next
 

@@ -18,15 +18,20 @@ namespace zb::ui
         // rasterizer validates (tools/ttf_subset.cpp)
         constexpr int kMinPixelSize = 1;
         constexpr int kMaxPixelSize = 128;
+
+        // smallest plausible sfnt input: the 12-byte offset table plus
+        // one 16-byte table-directory record. stb_truetype takes no
+        // length, so a caller buffer shorter than its table directory
+        // makes it read past the end -- we reject before it does (W-5).
+        constexpr size_t kMinFontBytes = 12 + 16;
     }  // namespace
 
     struct TtfFamilyState
     {
-        // from_file keeps its copy here; from_memory leaves this empty
-        // and points data at the caller's buffer
+        // from_file keeps its copy here; from_memory points `data` at the
+        // caller's buffer (validated by sfnt_envelope_ok before the parse)
         std::vector<unsigned char> owned;
         const unsigned char *data = nullptr;
-        int size = 0;
         stbtt_fontinfo info = {};
         size_t budget = TtfFamily::kDefaultCacheBudget;
 
@@ -58,13 +63,72 @@ namespace zb::ui
 
     namespace
     {
+        // sfnt integers are big-endian
+        unsigned be16(const unsigned char *d, const size_t at)
+        {
+            return (static_cast<unsigned>(d[at]) << 8) | static_cast<unsigned>(d[at + 1]);
+        }
+
+        unsigned long long be32(const unsigned char *d, const size_t at)
+        {
+            return (static_cast<unsigned long long>(be16(d, at)) << 16) | be16(d, at + 2);
+        }
+
+        /*
+         * Envelope check for a font buffer (W-5). stb_truetype takes no
+         * length: it reads the offset table, then seeks to whatever
+         * offset each table record declares. A caller buffer shorter than
+         * that — or one whose records point outside it — would be read
+         * out of bounds before any validity answer comes back. Validate
+         * the whole sfnt envelope ourselves first: the header, the table
+         * directory, and every table's [offset, offset+length) span.
+         */
+        bool sfnt_envelope_ok(const unsigned char *d, const size_t n)
+        {
+            if (d == nullptr || n < kMinFontBytes)
+            {
+                return false;
+            }
+            const int offset = stbtt_GetFontOffsetForIndex(d, 0);
+            if (offset < 0)
+            {
+                return false;
+            }
+            const size_t base = static_cast<size_t>(offset);
+            if (base + 12 > n)
+            {
+                return false;
+            }
+            const size_t num_tables = be16(d, base + 4);
+            if (base + 12 + num_tables * 16 > n)
+            {
+                return false;  // the directory itself runs past the end
+            }
+            for (size_t i = 0; i < num_tables; ++i)
+            {
+                const size_t rec = base + 12 + i * 16;
+                const auto table_off = be32(d, rec + 8);
+                const auto table_len = be32(d, rec + 12);
+                // 64-bit sums: a record can declare offsets near 2^32
+                if (table_off + table_len > static_cast<unsigned long long>(n))
+                {
+                    return false;
+                }
+            }
+            return true;
+        }
+
         int glyph_index(const TtfFamilyState &s, const char16_t ch)
         {
             return stbtt_FindGlyphIndex(&s.info, ch);
         }
 
         // the pre-rounded advance of one code unit; never rasterizes
-        // (measure only needs metrics)
+        // (measure only needs metrics). A font may declare a negative
+        // advance (italic kerning, some CJK fonts): clamp at the provider
+        // boundary so the widget advance cache never receives a negative
+        // total -- that would collide with its -1 "not computed" sentinel
+        // (permanent cache miss) and push the pen backwards (W-6).
         int advance_px(const TtfFamilyState &s, const float scale, const char16_t ch)
         {
             const int g = glyph_index(s, ch);
@@ -75,7 +139,8 @@ namespace zb::ui
             int adv = 0;
             int lsb = 0;
             stbtt_GetGlyphHMetrics(&s.info, g, &adv, &lsb);
-            return static_cast<int>(std::llround(static_cast<float>(adv) * scale));
+            const long long px = std::llround(static_cast<float>(adv) * scale);
+            return px > 0 ? static_cast<int>(px) : 0;
         }
 
         const TtfFamilyState::GlyphEntry *find_entry(const TtfFamilyState &s,
@@ -183,17 +248,16 @@ namespace zb::ui
         TtfFamily out;
         out.state_ = zb::make_shared<TtfFamilyState>();
         out.state_->owned = std::move(owned);
-        if (borrowed != nullptr)
-        {
-            out.state_->data = borrowed;
-            out.state_->size = static_cast<int>(borrowed_n);
-        }
-        else
-        {
-            out.state_->data = out.state_->owned.data();
-            out.state_->size = static_cast<int>(out.state_->owned.size());
-        }
+        out.state_->data = borrowed != nullptr ? borrowed : out.state_->owned.data();
         out.state_->budget = cache_budget;
+        // the buffer length is a precondition, not a stored field: the sfnt
+        // envelope check runs on every init path (W-5), so a buffer whose
+        // declared tables run past it never reaches the parser
+        const size_t n = borrowed != nullptr ? borrowed_n : out.state_->owned.size();
+        if (!sfnt_envelope_ok(out.state_->data, n))
+        {
+            throw error("TtfFamily: not a parseable TrueType font (buffer does not contain the sfnt tables it declares)");
+        }
         const int offset = stbtt_GetFontOffsetForIndex(out.state_->data, 0);
         if (offset < 0 || !stbtt_InitFont(&out.state_->info, out.state_->data, offset))
         {
@@ -209,6 +273,9 @@ namespace zb::ui
         {
             throw error("TtfFamily: empty font buffer");
         }
+        // the length is the caller's claim about how far `bytes` is
+        // readable; sfnt_envelope_ok() inside make() checks it against what
+        // the buffer itself declares before any parser reads it (W-5)
         return make({}, bytes, n, cache_budget);
     }
 

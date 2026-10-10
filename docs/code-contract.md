@@ -126,6 +126,18 @@ same-shaped `Font::error` type left the codebase with the FreeType path
   text providers.
 - `imcore` does not depend on `imui`; conversion at the widget layer is
   just "decode → append to the u16 buffer".
+- **Two input bounds, because "UTF-8 string" is two shapes.** The
+  `const char*` overloads are NUL-terminated: conversion stops at the
+  first NUL (the C-string convention — an embedded NUL ends the text, it
+  is not preserved as a code unit). Text that is *not* NUL-terminated
+  (packed design-file bytes, a string-view field) must use the counted
+  overloads — `utf8_to_utf16(p, len)` and `decode_utf8_next(p, end)`,
+  where `end` is the exclusive read bound the decoder never reaches or
+  passes. A sequence truncated by the bound is reported as U+FFFD on its
+  lead byte, exactly like any other invalid byte; decoding an exhausted
+  bound returns U+FFFD *without* advancing, so `while (p < end)` loops
+  terminate. The unbounded form is not a shorthand for "any buffer": it
+  stops at the first NUL it meets and reads no further.
 
 ### 2.4 Dual glyph providers (landed)
 
@@ -234,10 +246,21 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   this seam and adds no new provider interface.
 - **Sources**: `TtfFamily::from_file(path)` owns a copy of the font
   bytes; `from_memory(bytes, n)` **borrows** — the caller's buffer must
-  outlive the family (the ROM-blob case; build-time packing follows the
-  `ui_embed`/`asset_gen` precedent and is condition-triggered like V-4
-  until a real embedded use case appears). A font stb_truetype cannot
-  parse throws `zb::ui::error` at construction.
+  stay readable for `n` bytes and outlive the family (the ROM-blob case;
+  build-time packing follows the `ui_embed`/`asset_gen` precedent and is
+  condition-triggered like V-4 until a real embedded use case appears).
+  A font stb_truetype cannot parse throws `zb::ui::error` at
+  construction. Because the parser takes no length, `n` is validated
+  against the sfnt envelope the buffer itself declares (offset table plus
+  its whole table directory) *before* any parse reads memory; a buffer too
+  short for its own directory is rejected the same way as unparseable,
+  never read past.
+- **Advances are non-negative**: a font may declare a negative advance
+  (italic kerning, some CJK fonts). The runtime provider clamps it to 0 at
+  the provider boundary, and `Widget::text_advance()` clamps its cached
+  total the same way — a negative width would collide with the advance
+  cache's `-1` "not computed" sentinel and make every later call a cache
+  miss, and would offset centering the wrong way.
 - **Ownership (the family is the anchor)**: a provider is *not
   self-sustaining* — it borrows the shared family state (a refcounted
   provider would close a reference cycle with the family's per-size
