@@ -11,13 +11,16 @@ set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello sh
 # build-time tooling and builds for every target.
 add_subdirectory(tictactoe)
 add_subdirectory(hello)
-# the gh-pages demo-portal apps (2026-10-03): no build-time tooling,
-# build for every target (the hello rule)
-add_subdirectory(g2048)
-add_subdirectory(mines)
-add_subdirectory(life)
-add_subdirectory(seedmap)
+# The gh-pages demo-portal apps (2026-10-03): desktop + wasm only. They
+# gained a build-time bytes_embed step for the web tier's runtime-TTF text
+# (2026-10-07), and bytes_embed is a host tool the top level does not
+# build under the NDS toolchain. They have no NDS ROM story, so they stay
+# out of cross builds entirely — the same rule ui_preview follows below.
 if (NOT NDS_PLATFORM)
+    add_subdirectory(g2048)
+    add_subdirectory(mines)
+    add_subdirectory(life)
+    add_subdirectory(seedmap)
     add_subdirectory(ui_preview)
 endif()
 if (NOT NDS_PLATFORM OR STORY STREQUAL "showcase")

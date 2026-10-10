@@ -19,7 +19,13 @@ elseif(NDS_PLATFORM)
     # framework-mode main (code-contract §11.3)
     set(build_src main.cpp arm9_packing.cpp)
     set(APPSRCDIR ${CMAKE_CURRENT_SOURCE_DIR}/src/nds)
-    set(build_inc ${LIBNDS}/include ${DEVKITPRO}/calico/include ${CMAKE_CURRENT_SOURCE_DIR}/include/nds)
+    # the in-source NDS header dir must carry BUILD_INTERFACE: shell_backend
+    # is in the P1.5 install/export set, and CMake rejects a source-dir path
+    # in INTERFACE_INCLUDE_DIRECTORIES at generate time -- which broke every
+    # NDS configure after 4bc1b72. The libnds/calico entries are outside
+    # the source tree and need no genex.
+    set(build_inc ${LIBNDS}/include ${DEVKITPRO}/calico/include
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include/nds>)
     set(build_lib nds9 calico_ds9)
     set(NDS_LIBDIR ${LIBNDS}/lib ${DEVKITPRO}/calico/lib)
 elseif(APPLE)
