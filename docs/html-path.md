@@ -130,6 +130,15 @@ applies unchanged.
 | Element nesting deeper than 32 | **LW warning (first occurrence per parse) + the deeper subtree dropped**, exactly like an off-whitelist element — the converter/text-inheritance/destructor recursions walk the built depth, and the embedded stack is small |
 | `<body>` not at the document top (inside a dropped subtree, a built container, or a repeated occurrence) | **LW warning + skipped**; only a top-level `<body>` (directly or through the `html`/`head` boilerplate chain) re-roots, and only the first one feeds the page box |
 
+Every **LW** row above is an authoring error, not a permission, and
+`html_embed` treats it as one: pass 1 installs a log handler (the logging
+channel drops every message when none is set — see `imutil/logging.hpp`),
+mirrors each warning onto stderr, and **exits non-zero if the document
+produced any**. A design file therefore cannot reach an embedded header
+while carrying a silently-ignored declaration. The runtime keeps its
+tolerant behavior (warn + degrade) for documents loaded from outside a
+build; this rule governs the build-time gate only.
+
 ## Whitelist — elements
 
 | Element | `ui_node` tag | Notes |

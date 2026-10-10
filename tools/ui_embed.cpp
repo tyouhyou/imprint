@@ -31,11 +31,35 @@
 #include <string>
 #include <vector>
 
+#include "logging.hpp"
 #include "ui_builder.hpp"
 #include "ui_file.hpp"
 
 namespace
 {
+    // The logging channel has no default handler: Logging::log() drops
+    // the message when s_log_handler is empty. Without installing one the
+    // parser's tolerance warnings vanish and pass 1 validates silently —
+    // the failure mode this tool exists to prevent. Mirror them onto
+    // stderr, count them, and fail the build on a non-zero count
+    // (code-contract 5.3).
+    int g_warnings = 0;
+
+    void install_log_mirror(const char *tool)
+    {
+        zb::Logging::set_log_handle(
+            [tool](const zb::Logging_Level level, const std::string &message) {
+                if (!zb::Logging::suppressed(zb::Logging_Level::warn) &&
+                    level >= zb::Logging_Level::warn)
+                {
+                    ++g_warnings;
+                }
+                std::fprintf(stderr, "%s: %s: %s\n", tool,
+                             level >= zb::Logging_Level::error ? "error" : "warning",
+                             message.c_str());
+            });
+    }
+
     // "main menu.ui" -> main_menu_ui
     std::string symbol_of(const std::string &name)
     {
@@ -100,6 +124,8 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    install_log_mirror("ui_embed");
+
     const std::vector<std::string> inputs(argv + 2, argv + argc);
 
     // pass 1: validate every document with the library parser — the
@@ -123,6 +149,16 @@ int main(int argc, char **argv)
                          ok_read ? "document yields no widget" : "cannot read file");
             return 1;
         }
+    }
+
+    if (g_warnings > 0)
+    {
+        std::fprintf(stderr,
+                     "ui_embed: %d parser warning(s) — the document parses but "
+                     "carries constructs the renderer ignores; fix the document "
+                     "or add the construct to the grammar\n",
+                     g_warnings);
+        return 1;
     }
 
     // pass 2: emit the header

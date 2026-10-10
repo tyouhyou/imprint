@@ -30,10 +30,36 @@
 #include <vector>
 
 #include "html.hpp"
+#include "logging.hpp"
 #include "ui_builder.hpp"
 
 namespace
 {
+    // The logging channel has no default handler: Logging::log() drops
+    // the message when s_log_handler is empty. Without installing one,
+    // every tolerance warning the parser emits (off-whitelist element or
+    // declaration, malformed value, dropped subtree) is discarded and the
+    // build-time validation reports nothing — the failure mode this tool
+    // exists to prevent. Mirror warnings onto stderr and count them; pass
+    // 1 exits non-zero when the count is non-zero (docs/html-path.md
+    // "Tolerance", code-contract 5.3).
+    int g_warnings = 0;
+
+    void install_log_mirror(const char *tool)
+    {
+        zb::Logging::set_log_handle(
+            [tool](const zb::Logging_Level level, const std::string &message) {
+                if (!zb::Logging::suppressed(zb::Logging_Level::warn) &&
+                    level >= zb::Logging_Level::warn)
+                {
+                    ++g_warnings;
+                }
+                std::fprintf(stderr, "%s: %s: %s\n", tool,
+                             level >= zb::Logging_Level::error ? "error" : "warning",
+                             message.c_str());
+            });
+    }
+
     // "command center.html" -> command_center_html
     std::string symbol_of(const std::string &name)
     {
@@ -98,6 +124,8 @@ int main(int argc, char **argv)
         return 2;
     }
 
+    install_log_mirror("html_embed");
+
     const std::vector<std::string> inputs(argv + 2, argv + argc);
 
     // pass 1: validate every document with the library parser — the
@@ -122,6 +150,20 @@ int main(int argc, char **argv)
                          ok_read ? "document yields no widget" : "cannot read file");
             return 1;
         }
+    }
+
+    // a document that parsed but produced warnings is still drift: every
+    // LW row in the tolerance table means a declaration the renderer
+    // ignored. Fail the build rather than embed it.
+    if (g_warnings > 0)
+    {
+        std::fprintf(stderr,
+                     "html_embed: %d parser warning(s) — the document parses "
+                     "but carries constructs the renderer ignores (see "
+                     "docs/html-path.md \"Tolerance\"); fix the document or "
+                     "add the construct to the whitelist\n",
+                     g_warnings);
+        return 1;
     }
 
     // pass 2: emit the header
