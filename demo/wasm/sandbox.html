@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SANDBOX · 粒子沙盘</title>
+<style>
+  body {
+    margin: 0;
+    padding: 24px 16px;
+    background: #14100c;
+    color: #f2e6d0;
+    font-family: sans-serif;
+    text-align: center;
+  }
+  h1 { font-size: 20px; color: #ffb454; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen {
+    width: min(880px, calc(100vw - 32px));
+    aspect-ratio: 800 / 520;
+    height: auto;
+    background: #1a1310;
+    border: 1px solid #3a2e22;
+    border-radius: 6px;
+  }
+  #status { margin-top: 8px; font-size: 13px; color: #9a866e; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #c9b899; }
+  .chips { margin: 14px auto 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1px solid #3a2e22;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #ffb454;
+    background: #241b15;
+  }
+</style>
+</head>
+<body>
+
+<h1>SANDBOX · 粒子沙盘</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+
+<div class="chips">
+  <span class="chip">沙沉</span>
+  <span class="chip">油浮</span>
+  <span class="chip">火燃</span>
+  <span class="chip">酸蚀</span>
+  <span class="chip">岩浆成石</span>
+</div>
+
+<p class="hint">
+  怎么玩：沙沉水面、油浮于水、火点燃油、酸腐蚀墙体、岩浆遇水成石。
+  整场模拟是确定性的：同样的输入流永远得到同样的世界。
+</p>
+
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="sandbox.js"></script>
+</body>
+</html>
