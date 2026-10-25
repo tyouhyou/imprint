@@ -38,6 +38,7 @@ other target uses the desktop defaults.
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
 | `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
 | `imapp_snapshot` | Optional snapshot helper (`zb::snap`, header-only): frame hash + baseline record/check + GIF/PNG dumps — the deterministic-test story (code-contract §12) | INTERFACE | `imapp` |
+| `imraster` | Optional software-3D raster core (`zb::raster`, absorbed from the fps validation consumer, §4.12): `Canvas` (span primitives, src-over blend, sky mask, per-column/per-pixel depth, tent upscale), camera/box raster, per-pixel triangle mesh path (`MeshBuf` with self-healing winding, `draw_mesh`, caller-injected `MeshPaint`) — the 3D viewport's pixel producer, hand-off stays `draw_surface` | STATIC (optional, `IMPRINT_WITH_IMRASTER` §4.9) | `imcore` (pixel traits) |
 | `apps/<story>_app` | Demo app implementing `make_app()` (the only place app code lives)                 | STATIC       | `imapp_canvas`                      |
 | `imshell` | Platform shells (win / linux-x11 / linux-fb / mac / nds), each owning its main loop. Shared A-2 seams in `shell/`: `region_to_present` + `dirty_coalescer` (what to present), `feed_input` (input tail), per-platform translators (`win_input`, `x11_input`). Library-mode host loop: `shell/run.hpp` + the `shell_hostloop` library expose `zb::shell::run(app, options)` — the platform loop, callable from a user's own `main` (every target except NDS; §3.2). Pure provider: no story code, no executable of its own | `shell_common` (STATIC) + `shell_hostloop` (STATIC, non-NDS) + `shell_backend` (INTERFACE usage requirements; backend main sources exported to the top level) | `imapp`, `iminput`, `<platform libs>` |
 | `binding` | `zbapi` C-ABI shared library + C smoke test                                                | SHARED       | `imapp`, `<story>_app`              |
@@ -552,6 +553,7 @@ satisfies. Changing any of these is an architecture change.
 | Option                    | Default | NDS toolchain | Meaning                                   |
 |---------------------------|---------|---------------|-------------------------------------------|
 | `COLOR_DEPTH`             | 32      | 16 (FORCE)    | bits per pixel; 16 = embedded only        |
+| `RGB_MODEL` / `ENDIAN`    | — (platform default) | — | explicit 32bpp pixel-model override for the whole tree; the default resolves per platform (bgra32+le on Win/mac, argb32+be on UNIX — both expand to the same `{b,g,r,a}` byte order, A-11), 16bpp always abgr/1555. The override must name a combo `pixel_traits.hpp` provides (e.g. `rgba32`+`le`, what the 3D raster module requires) |
 | `USE_INTEGER_GEOMETRY`    | OFF     | ON (FORCE)    | integer circle/ellipse bounds + arc trig lookup (no FPU)    |
 | `USE_NON_ATOMIC_PTR`      | OFF     | ON (FORCE)    | non-atomic `SharedPtr` refcount (no libatomic) |
 | `USE_PNG` / `USE_JPEG` | OFF | OFF    | optional features; codecs are vendored stb |
@@ -567,6 +569,7 @@ satisfies. Changing any of these is an architecture change.
 | `IMPRINT_WITH_TESTS`      | ON (top level) / OFF (subproject) | — | configure-time gate: the test battery (implies the demo app libraries) |
 | `IMPRINT_WITH_DEMOS`      | ON (top level) / OFF (subproject) | — | configure-time gate: demo app libraries + `binding` + the `${STORY}` executable (framework mode, §3.2); implies tools when ON |
 | `IMPRINT_WITH_SHELL`      | ON (top level) / OFF (subproject) | — | configure-time gate: the platform shell (`shell_common` / `shell_hostloop` / `shell_backend` + the backend mains); OFF keeps the platform's packages (X11) out of a headless consumer (§3.2) |
+| `IMPRINT_WITH_IMRASTER`   | OFF     | OFF (FORCE)   | the optional 3D raster module (`zb::raster`, §4.12); configure-time error unless the build resolves to 32bpp `RGB_MODEL=rgba32` + `ENDIAN=le` |
 | `IMPRINT_WARNINGS`        | ON      | —             | the project's per-compiler warning set (`cmake/imprint-warnings.cmake`): `-Wall -Wextra -Wpedantic` + format/shadow/cast family (and C++-only `-Wold-style-cast`, `-Wnon-virtual-dtor`, …) for gcc/clang/apple-clang/emscripten, `/W4 /permissive-` for MSVC; vendored headers stay out via `SYSTEM` includes |
 | `IMPRINT_WERROR`          | ON (top level) / OFF (subproject) | — | promote that set to errors (`-Werror` / `/WX`); off as a subproject so a consumer's newer compiler cannot fail their build on a diagnostic we have not seen |
 
@@ -630,6 +633,45 @@ contract, not an add-on:
   deterministic frame order, and the observable painted signal.
   Automation suites are consumers of this contract.
 
+### 4.12 Optional 3D raster module (`imraster`)
+
+Absorbed 2026-10-25 from the fps validation consumer (its repo-local
+`imraster/`; the absorption was that consumer's R20 proposal). Namespace
+`zb::raster`. The module is the 3D viewport's **pixel producer**: it
+renders into its own packed-word buffers and hands the finished block to
+the framework in one `draw_surface` call (U-8, §4.4) — it is not a second
+UI stack and carries no `zbapi` surface.
+
+Boundary contracts (normative; the module's headers carry the same rules):
+
+1. **No look of its own.** The tone curve (256-entry LUT), palettes and
+   fog colors are injected per paint (`BoxPaint`/`FaceShade`/`MeshPaint::tone`,
+   `nullptr` = identity). An unlit pixel resolves to the exact injected
+   part color.
+2. **No entities.** Capsules, spheres, triangles, part ids and a lighting
+   model; skeletons, poses and kits stay consumer-side (`MeshBuf` is the
+   only input shape).
+3. **Frozen arithmetic.** Every expression was measured and
+   pixel-golden-blessed upstream (fps phases 1–8), and the fps golden
+   frames remain the upstream regression baseline. An intentional
+   arithmetic change re-pins those goldens in the fps repo first and
+   lands here with that reason in the commit message.
+
+Pixel model: the packed-word arithmetic bakes `RGB_MODEL=rgba32` +
+`ENDIAN=le` at 32bpp (r in the low byte, a in the high byte — the
+src-over fast paths address the word lanes directly); `pixel.hpp`
+static_asserts it and `IMPRINT_WITH_IMRASTER` enforces the same condition
+at configure time (§4.9). Every other pixel model — including all default
+desktop models and the 16bpp embedded ones — configures the module out.
+
+Operational properties: pure CPU, integer math, no wall clock. The draw
+paths keep per-frame scratch in file-scope statics (the wasm 64 KB stack
+discipline), so the module is **single-threaded and non-reentrant** —
+consistent with the no-multi-threaded-rendering ruling (§5). Packaging:
+the `imprint::imraster` alias exists for in-tree/add_subdirectory
+consumption; the module is **not installed/exported** yet — that waits
+for a library-mode consumer and A-28's feature inventory.
+
 ## 5. Known limitations (public)
 
 - The macOS AppKit shell (A-20) is verified behaviorally only on the
@@ -639,6 +681,10 @@ contract, not an add-on:
   HiDPI backing scale shows a smaller physical image).
 - 16bpp builds are embedded-only: the desktop shells and DIB/XImage present
   assume 32bpp; a desktop `COLOR_DEPTH=16` build is compile/test-only.
+- The `imraster` module (§4.12) is 32bpp `rgba32`/`le`-only: its `raster`
+  test suite runs in the raster battery configuration, not in the standard
+  desktop battery, and the module configures out of 16bpp/embedded builds
+  entirely.
 - The Linux framebuffer shell has **no input source** (no keyboard/pointer);
   use the X11 backend for interactive desktop use.
 - The terminal (SIXEL) shell is a demo target: every paint writes a full

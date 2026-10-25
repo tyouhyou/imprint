@@ -2005,3 +2005,34 @@ encoding evolve without silently re-baselining.
 - The helper performs no driving: the caller feeds `input`/`paint` and
   calls it at a frame boundary (after `paint`, before the next
   `input`) — the §4.11 contract stays with the driver.
+
+## 13. Optional 3D raster module (`zb::raster`)
+
+Status: optional (`IMPRINT_WITH_IMRASTER`, ARCHITECTURE §4.9/§4.12). No
+C-ABI surface — every §9/§4.8-adjacent export is unchanged by its
+presence — and it is not in the install/export set yet (A-28's feature
+inventory records the packaging decision when a library-mode consumer
+appears).
+
+- The API contract lives in the module's headers
+  (`imraster/include/imraster/*.hpp`): the comment blocks are the
+  documentation, absorbed verbatim from the fps repo. The three boundary
+  rules (no look of its own / no entities / `draw_surface` hand-off) are
+  normative there and in ARCHITECTURE §4.12.
+- Pixel model: compiles only under 32bpp `RGB_MODEL=rgba32` +
+  `ENDIAN=le` — `pixel.hpp` static_asserts it (§4.12 there). The test
+  suite rides `test_imui` as the `raster` suite, present only in builds
+  with the module (`IMPRINT_TEST_IMRASTER` define; the
+  `IMCORE_HAS_TTF_RUNTIME` suite pattern).
+- Failure model: no error paths of its own — container growth may throw
+  `std::bad_alloc` like the rest of the tree (§1); everything else is a
+  contract violation to be caught by the module's own checks (the
+  self-healing winding needs an out-of-face reference point; the builders
+  carry count contracts).
+- Concurrency: none. Single-threaded and non-reentrant; the draw paths
+  keep per-frame scratch in file-scope statics (the wasm 64 KB stack
+  discipline, ARCHITECTURE §4.12).
+- Determinism: pure CPU integer math, no wall clock, no hidden cross-frame
+  state beyond the documented scratch statics — two calls with the same
+  inputs produce the same pixels (the fps golden frames pin this
+  upstream).

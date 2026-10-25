@@ -14,10 +14,20 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **A-26. imcore primitive throughput** — the open item is ② (SIMD
-   inner loops); its decision point is the fps re-measure (fps first
-   migrates to `build(host, node, sink)`).
-2. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
+1. **A-29. fps consumption-report absorption** — R1 (zero-copy
+   `draw_surface` alias) first, then R6 (deterministic frame contract),
+   R8 (input deltas), then re-evaluate R12/R13 against the absorbed
+   `imraster` module; each item contract-first (§1 A-29).
+2. **A-26. imcore primitive throughput** — the open item is ② (SIMD
+   inner loops); its decision point is a 1080p-class consumer
+   re-measure against the R1 zero-copy build. fps is paused (2026-10-24
+   ruling); when it resumes it rebuilds against current imprint anyway
+   (the deleted-`bind_actions` migration folds into that), and any
+   1080p wasm consumer can carry the measurement. Method: the fps A/B
+   discipline (interleaved, rotating arm order, min-of-N, null A/B for
+   host resolution — fps IMPRINT-RUNTIME R15/R18), never
+   `cpu.pressure`.
+3. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
    items stay trigger-gated. Batch G's P1–P4 roadmap is landed
    (2026-09-26 through 2026-10-01; history in `git log`).
@@ -345,9 +355,9 @@ rationale in `reports/audit-2026-10-15.md` §5.
   blend/modulate arithmetic itself (fill 5.2 ms, `draw_image` 6.9 ms,
   tinted 13.1 ms per half/full-screen unit) — exactly the SIMD
   territory. wasm simd128 first (where 1080p consumers run), then
-  desktop SSE2/NEON. **Trigger:** the fps re-measure (fps must first
-  migrate off the deleted `bind_actions` API to
-  `build(host, node, sink)`) shows the 1080p frame budget still missed.
+  desktop SSE2/NEON. **Trigger:** a 1080p-class consumer re-measure
+  against the R1 zero-copy build (fps paused 2026-10-24; the method is
+  the fps A/B discipline, fps IMPRINT-RUNTIME R15/R18 — see §0 item 2).
 - **Deferred within ①:** diagonal `draw_line` gate hoisting — the
   Bresenham walk is inherently per-pixel (15 ms per 1920 lines locally)
   and not the fps bottleneck; revisit only if fps evidence says
@@ -433,6 +443,48 @@ rationale in `reports/audit-2026-10-15.md` §5.
   arises (the NDS HTML slowness is already on record); the
   gating-mechanism decision waits for a second target or a measured
   size/runtime win.
+
+### A-29. fps consumption-report absorption (Phase 2; added 2026-10-25)
+
+- Source: the fps repo's consumer reports (`docs/IMPRINT-RUNTIME.md`
+  R-items; `docs/IMPRINT-3D.md` supply list). **Phase 1 landed with the
+  `imraster` module** (ARCHITECTURE §4.12) — that closes R20. The other
+  supply items (texture/mip chain, tone/Atmosphere, WorldMesh cache,
+  asset pipeline) stay documented as fps-side pointers, not absorbed —
+  no imprint consumer today. **R7 is already closed**: the U-6 depth
+  plane (`draw_line_depth`/`fill_triangle_depth`, `test_depth_fill`)
+  postdates the fps report's pinned snapshot (797878b).
+- Agreed order (2026-10-25 user ruling), each item contract-first and
+  independently verifiable:
+  1. **R1 zero-copy alias** — `draw_surface` (U-8, code-contract §9)
+     copies the whole frame (~8.29 MB at 1080p, ~1.56 ms, pure-memcpy
+     speed): let the consumer alias its buffer into the lib or hand a
+     "unchanged this frame" hint; U-8 semantics unchanged, damage
+     accounting unchanged. fps measured it as the largest single
+     recoverable item in a 1080p budget.
+  2. **R6 deterministic frame contract** — a host-injectable fixed step
+     or a "repaint without advancing" call. Today pixel-regression
+     consumers can only pin a sim-frozen frame (fps's goldens live on
+     the boot frame for exactly this reason).
+  3. **R8 input_event deltas** — relative pointer motion + stable
+     platform-independent codes for printable keys (down/up pairing;
+     "hold to move" needs it). POD shape change = architecture change
+     (ARCHITECTURE §4.2): all shells + both demo hosts move together.
+  4. **Re-evaluate R12/R13 against the absorbed module** — imraster's
+     `Canvas` already ships the consumer-side answer (a full-resolution
+     surface beside the low-res grid; `mark_sky` coverage + per-column
+     wall spans, maintained by recording instead of clearing). Decide
+     whether runtime-side primitives (a full-res composite callback
+     between scene resolve and UI; a coverage query) are still wanted,
+     or the items close as "solved consumer-side".
+- Not absorbed, deliberately: audio (no imprint facility — product
+  decision if ever), fps sim/UI/level content (load-side meat, not
+  library), fps-side unratified art rulings (C12/C14, thin walls — they
+  stay in fps's backlog). fps is paused (2026-10-24): its verification
+  matrix re-runs when it resumes; closure of each R item follows its
+  channel discipline (`IMPRINT-RUNTIME.md` moves closed items to its
+  "已闭环" table once fps verifies against an imprint snapshot that has
+  the change).
 
 ### Deferred this round (recorded, not blocking)
 
