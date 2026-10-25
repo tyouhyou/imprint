@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEQ-303 · music maker</title>
+<style>
+  body {
+    margin: 0;
+    padding: 24px 16px;
+    background: #14100c;
+    color: #f2e6d0;
+    font-family: sans-serif;
+    text-align: center;
+  }
+  h1 { font-size: 20px; color: #ffb454; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen {
+    width: min(880px, calc(100vw - 32px));
+    aspect-ratio: 800 / 520;
+    height: auto;
+    background: #1a1310;
+    border: 1px solid #3a2e22;
+    border-radius: 6px;
+  }
+  #status { margin-top: 8px; font-size: 13px; color: #9a866e; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #c9b899; }
+  .hint b { color: #ffb454; }
+</style>
+</head>
+<body>
+
+<h1>SEQ-303 · music maker</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+
+<p class="hint">
+  <b>怎么玩：一下出音，再一下加重音。</b>行尾 <b>SL</b> 打开滑音，右边旋钮调音色，
+  <b>SCALE</b> 换音阶——怎么点都好听。DICE 随机来一段，CLEAR 清空，滑杆调速度。
+</p>
+
+<script>
+/* WebAudio playback: the wasm runtime is silent by architecture ruling
+ * (audio is host-side); the sequencer pushes packed note events into a
+ * queue drained through seq303_note_pop, this script sounds them.
+ *
+ * Anchored lookahead scheduling: every event carries the global step
+ * counter G it sounds on (ev >> 6). (anchorG, anchorT) maps G to an
+ * absolute AudioContext time, so each note is scheduled with
+ * absolute times ~1 step ahead of now (the wasm side queues one step
+ * ahead). Knob/bpm/pitch parameters are polled from seq303_param
+ * every frame and apply to notes created after. */
+(function () {
+  "use strict";
+  var ctx = null;        // created lazily on the first pointerdown
+  var master = null;     // DynamicsCompressor -> destination
+  var delaySend = null;  // shared feedback delay for the melody rows
+  var noiseBuf = null;   // 1 s of white noise, reused by hat/snare
+  var anchorG = -1;      // step counter of the current time anchor
+  var anchorT = 0;       // ctx time that anchorG sounds at
+  var lastFreq = [0, 0, 0, 0, 0, 0, 0, 0];  // per melody row, for SLIDE
+  // params polled from the wasm side: 0..5 knobs (cutoff reso decay
+  // delay swing mix), 6 bpm, 7..14 melody row midi pitches
+  var P = [55, 25, 45, 35, 50, 50, 120, 76, 74, 72, 69, 67, 64, 62, 60];
+
+  function midiFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+  function makeNoise() {
+    var len = ctx.sampleRate;
+    var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+
+  function ensureAudio() {
+    if (ctx) {
+      if (ctx.state === "suspended") ctx.resume();
+      return;
+    }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    master = ctx.createDynamicsCompressor();
+    master.connect(ctx.destination);
+    // shared feedback delay: melody note -> per-note send -> delay ->
+    // wet(1.0) -> master (the send carries the DELAY knob amount)
+    var delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.27;
+    var fb = ctx.createGain();
+    fb.gain.value = 0.34;
+    delay.connect(fb);
+    fb.connect(delay);
+    var wet = ctx.createGain();
+    wet.gain.value = 1.0;
+    delay.connect(wet);
+    wet.connect(master);
+    delaySend = delay;
+    noiseBuf = makeNoise();
+  }
+  window.addEventListener("pointerdown", ensureAudio, { passive: true });
+
+  // map a packed event to an absolute due time, then voice it
+  function schedule(ev) {
+    var row = ev & 15;
+    var accent = ((ev >> 4) & 1) === 1;
+    var slide = ((ev >> 5) & 1) === 1;
+    var G = ev >> 6;
+    var bpm = P[6] > 0 ? P[6] : 120;
+    var stepDur = 15 / bpm;
+    var due = anchorG >= 0 ? anchorT + (G - anchorG) * stepDur : 0;
+    if (anchorG < 0 || due < ctx.currentTime + 0.004) {
+      // no anchor yet, or the queue drained slower than real time:
+      // re-anchor on this event
+      due = ctx.currentTime + 0.004;
+      anchorG = G;
+      anchorT = due;
+    }
+    // swing: odd counter steps land late (50 = straight .. 75 = hard)
+    if (G % 2 === 1) {
+      due += (P[4] - 50) / 50 * stepDur * 0.5;
+    }
+    if (row < 8) playMelody(row, due, accent, slide);
+    else playDrum(row, due);
+  }
+
+  function playMelody(row, due, accent, slide) {
+    var f = midiFreq(P[7 + row]);
+    var cutoff = 150 * Math.pow(2, P[0] / 100 * 5.5);
+    var q = 0.5 + P[1] * P[1] / 250;
+    var decay = 0.08 + P[2] / 100 * 0.55;
+    var dry = Math.max(0.5, 1 - P[5] / 200);
+    if (accent) q *= 1.3;
+    var peak = 0.22 * dry * (accent ? 1.35 : 1);
+    var end = due + 0.005 + decay;
+
+    var lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = cutoff;
+    lp.Q.value = q;
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0, due);
+    g.gain.linearRampToValueAtTime(peak, due + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    lp.connect(g);
+    g.connect(master);
+    // delay send is per note, so the DELAY knob only affects new notes
+    var send = ctx.createGain();
+    send.gain.value = P[3] / 100 * 0.45;
+    g.connect(send);
+    send.connect(delaySend);
+
+    // SLIDE: glide from the row's previous pitch over 60 ms
+    var prev = slide && lastFreq[row] > 0 ? lastFreq[row] : f;
+    lastFreq[row] = f;
+
+    var tri = ctx.createOscillator();
+    tri.type = "triangle";
+    tri.frequency.setValueAtTime(prev, due);
+    if (slide) tri.frequency.exponentialRampToValueAtTime(f, due + 0.06);
+    tri.connect(lp);
+    var sq = ctx.createOscillator();
+    sq.type = "square";
+    sq.frequency.setValueAtTime(prev, due);
+    if (slide) sq.frequency.exponentialRampToValueAtTime(f, due + 0.06);
+    var sg = ctx.createGain();
+    sg.gain.value = 0.18;
+    sq.connect(sg);
+    sg.connect(lp);
+    tri.start(due);
+    sq.start(due);
+    tri.stop(end + 0.05);
+    sq.stop(end + 0.05);
+  }
+
+  function playDrum(row, due) {
+    if (row === 8) {
+      // hi-hat: filtered noise, tight decay
+      var src = ctx.createBufferSource();
+      src.buffer = noiseBuf;
+      var hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 6800;
+      var hg = ctx.createGain();
+      hg.gain.setValueAtTime(0.16, due);
+      hg.gain.exponentialRampToValueAtTime(0.0001, due + 0.05);
+      src.connect(hp);
+      hp.connect(hg);
+      hg.connect(master);
+      src.start(due);
+      src.stop(due + 0.1);
+    } else if (row === 9) {
+      // snare: bandpassed noise body + a short 190 Hz thump
+      var n = ctx.createBufferSource();
+      n.buffer = noiseBuf;
+      var bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1800;
+      bp.Q.value = 0.8;
+      var ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.3, due);
+      ng.gain.exponentialRampToValueAtTime(0.0001, due + 0.15);
+      n.connect(bp);
+      bp.connect(ng);
+      ng.connect(master);
+      n.start(due);
+      n.stop(due + 0.2);
+      var body = ctx.createOscillator();
+      body.type = "sine";
+      body.frequency.value = 190;
+      var bg = ctx.createGain();
+      bg.gain.setValueAtTime(0.2, due);
+      bg.gain.exponentialRampToValueAtTime(0.0001, due + 0.1);
+      body.connect(bg);
+      bg.connect(master);
+      body.start(due);
+      body.stop(due + 0.12);
+    } else if (row === 10) {
+      // kick: pitch-dropping sine
+      var k = ctx.createOscillator();
+      k.type = "sine";
+      k.frequency.setValueAtTime(150, due);
+      k.frequency.exponentialRampToValueAtTime(48, due + 0.13);
+      var kg = ctx.createGain();
+      kg.gain.setValueAtTime(0.5, due);
+      kg.gain.exponentialRampToValueAtTime(0.0001, due + 0.25);
+      k.connect(kg);
+      kg.connect(master);
+      k.start(due);
+      k.stop(due + 0.3);
+    }
+  }
+
+  function pollParams() {
+    for (var i = 0; i < 15; i++) {
+      var v = window.Module.ccall("seq303_param", "number", ["number"], [i]);
+      if (v >= 0) P[i] = v;
+    }
+  }
+
+  function poll() {
+    requestAnimationFrame(poll);
+    try {
+      if (!window.Module || !window.Module.ccall) return;
+      pollParams();
+      // always drain: a backlog played in a burst when the context
+      // arrives would sound like a glitch
+      var ev = window.Module.ccall("seq303_note_pop", "number");
+      while (ev >= 0) {
+        if (ctx) schedule(ev);
+        ev = window.Module.ccall("seq303_note_pop", "number");
+      }
+    } catch (e) {
+      // runtime not initialized yet; try again next frame
+    }
+  }
+  requestAnimationFrame(poll);
+})();
+</script>
+
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="seq303.js"></script>
+</body>
+</html>
