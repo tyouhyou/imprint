@@ -1183,5 +1183,33 @@ int test_graphics()
 #endif
     }
 
+    // zero-copy backing (wrapper mode, code-contract 9): make_ptr over a
+    // caller-owned buffer renders INTO it — data() aliases the caller's
+    // memory and the destructor frees nothing. Depth-agnostic on purpose:
+    // the wrapped element size follows the build's pixel traits, so the
+    // assertions go through data() and a byte probe, never through a
+    // uint32 view of the buffer (two 16bpp pixels pack into one word).
+    // The ASan battery is the double-free / use-after-free detector for
+    // exactly this contract (CanvasWindow::create(w, h, buf) rides the
+    // same path, test_canvas_window).
+    {
+        unsigned char raw[8 * 8 * 4] = {};
+        auto g = core::Graphics::make_ptr(8, 8, raw);
+        EXPECT(static_cast<void *>(g->data()) == raw);
+        g->fill(core::colors::White);
+        EXPECT(g->data()[0].pixel == core::colors::White.pixel);
+        EXPECT(raw[0] != 0);  // the fill landed in the caller's bytes
+    }
+    // the buffer outlives the wrapped Graphics as ordinary caller memory
+    {
+        unsigned char raw[2 * 2 * 4] = {};
+        {
+            auto g = core::Graphics::make_ptr(2, 2, raw);
+            g->fill(core::colors::Black);
+        }
+        raw[0] = 9;  // writable after the wrapper died (no freed-memory write)
+        EXPECT(raw[0] == 9);
+    }
+
     return test::report("graphics");
 }

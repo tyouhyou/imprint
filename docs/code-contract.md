@@ -1629,6 +1629,18 @@ obligations:
   damage model (pixels written outside a widget's paint are overdrawn by
   the next repaint) and no ABI host has asked for it; revisit only when
   an ABI-side custom-widget hook exists.
+- **Zero-copy backing (wrapper mode)**: `Graphics::make_ptr(width, height,
+  your_buffer)` wraps the caller's memory instead of allocating. Every
+  primitive writes into the provided block, `data()` hands it back, and
+  the destructor frees nothing — the block stays ordinary caller-owned
+  memory (the pointer is borrowed for the Graphics object's lifetime;
+  stride is the width, tightly packed). A full-frame consumer renders its
+  scene straight into the wrapped block and no per-frame `draw_surface`
+  copy exists anywhere — the answer to the fps R1 measurement (an 8.29 MB
+  per-frame memcpy at 1080p, ~1.56 ms of pure copy). `CanvasWindow::create(w,
+  h, buf)` rides the same path; locked by `test_graphics` (pointer
+  identity, writes land in the caller's memory, post-scope liveness —
+  the last turns the ASan battery into the double-free detector).
 - **Depth-tested primitives (U-6)**: an *optional, host-owned* depth
   plane rides beside the framebuffer — `attach_depth_buffer(float
   *depth, int stride)` (init path: `stride < buffer width` throws

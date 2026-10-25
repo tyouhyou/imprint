@@ -182,6 +182,19 @@ default when you build the tree by hand):
    wrapping; if you need wide buttons, widen the frame or set smaller
    button sizes before layout.
 
+## Full-frame rendering without a copy
+
+If your app paints every pixel itself (a game viewport, a video frame),
+wrap your own buffer instead of blitting into a library-owned one:
+`Graphics::make_ptr(w, h, your_buffer)` makes the framework draw into
+your memory — primitives, the widget tree on top, and the shell's
+present step all read that one block, so a 1080p frame pays no
+`draw_surface` copy (~8.3 MB per frame otherwise). The pointer is
+borrowed: keep it alive as long as the Graphics object; the buffer is
+tightly packed (stride == width). `CanvasWindow::create(w, h, buf)` is
+the same switch at the window level. The contract lives in
+code-contract §9 ("Zero-copy backing").
+
 ## Describe UIs as text (optional)
 
 Layouts can also be written as `.ui` design files — a tiny text format

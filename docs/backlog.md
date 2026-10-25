@@ -14,10 +14,12 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **A-29. fps consumption-report absorption** — R1 (zero-copy
-   `draw_surface` alias) first, then R6 (deterministic frame contract),
-   R8 (input deltas), then re-evaluate R12/R13 against the absorbed
-   `imraster` module; each item contract-first (§1 A-29).
+1. **A-29. fps consumption-report absorption** — R6 (deterministic frame
+   contract) next, then R8 (input deltas), then re-evaluate R12/R13
+   against the absorbed `imraster` module; each item contract-first
+   (§1 A-29). R1 closed 2026-10-25: the in-tree wrapper mode
+   (`Graphics::make_ptr` over a caller buffer) already is the zero-copy
+   path.
 2. **A-26. imcore primitive throughput** — the open item is ② (SIMD
    inner loops); its decision point is a 1080p-class consumer
    re-measure against the R1 zero-copy build. fps is paused (2026-10-24
@@ -467,12 +469,17 @@ rationale in `reports/audit-2026-10-15.md` §5.
   for them).
 - Agreed order (2026-10-25 user ruling), each item contract-first and
   independently verifiable:
-  1. **R1 zero-copy alias** — `draw_surface` (U-8, code-contract §9)
-     copies the whole frame (~8.29 MB at 1080p, ~1.56 ms, pure-memcpy
-     speed): let the consumer alias its buffer into the lib or hand a
-     "unchanged this frame" hint; U-8 semantics unchanged, damage
-     accounting unchanged. fps measured it as the largest single
-     recoverable item in a 1080p budget.
+  1. **R1 zero-copy alias — RESOLVED (2026-10-25)**: the in-tree wrapper
+     mode already is the answer — `Graphics::make_ptr(w, h, your_buffer)`
+     renders into the caller's block (in the tree since the first
+     commit; `CanvasWindow::create(w, h, buf)` rides it), so a
+     full-frame consumer pays no `draw_surface` copy at all. fps's
+     `draw_surface_alias` suggestion is closed by documenting the
+     contract (code-contract §9 "Zero-copy backing"), a direct test
+     lock (`test_graphics`; the ASan battery is the double-free
+     detector) and the getting-started pointer ("Full-frame rendering
+     without a copy"). fps re-measures its present cost against a
+     snapshot that has this when it resumes.
   2. **R6 deterministic frame contract** — a host-injectable fixed step
      or a "repaint without advancing" call. Today pixel-regression
      consumers can only pin a sim-frozen frame (fps's goldens live on
