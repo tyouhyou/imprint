@@ -90,7 +90,10 @@ namespace
                 ++i;
                 if (flags & 0x80)
                 {
-                    i += 3 * (1 << ((flags & 0x07) + 1));  // local color table
+                    // X-20: the color-table size is 3 * 2^(n+1), always
+                    // positive — spelled unsigned so the += into the
+                    // size_t walk never converts through a signed int
+                    i += 3u * (1u << ((flags & 0x07) + 1));
                 }
                 ++i;  // LZW minimum code size
                 while (i < b.size())
