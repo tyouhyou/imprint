@@ -136,8 +136,55 @@ if (IMPRINT_IS_TOP_LEVEL)
     enable_testing()
 endif()
 
+# Pixel model resolution, hoisted to the top level (A-29 Phase 1: imraster
+# and other module CMakeLists need the resolved model before imcore's
+# subdirectory runs; the decision itself is unchanged from the block that
+# used to live in imcore/CMakeLists.txt). COLOR_DEPTH=16 is meant for
+# embedded displays (NDS): the desktop shells assume 32bpp (e.g. the Win32
+# DIB blit), so 16bpp builds are only supported on embedded targets.
+set(COLOR_DEPTH 32 CACHE STRING "Pixel color depth in bits (16 or 32). Set 16 for embedded framebuffers only.")
+# 32bpp override pair: both must be set for either to take effect (a lone
+# one is a configuration error). They select the pixel traits combo
+# directly, e.g. -DRGB_MODEL=rgba32 -DENDIAN=le for the imraster config.
+set(RGB_MODEL "" CACHE STRING "32bpp RGB model override (must pair with ENDIAN; e.g. rgba32/bgra32/argb32).")
+set(ENDIAN "" CACHE STRING "32bpp endianness override (must pair with RGB_MODEL; le/be).")
+if ((RGB_MODEL AND NOT ENDIAN) OR (ENDIAN AND NOT RGB_MODEL))
+    message(FATAL_ERROR "RGB_MODEL and ENDIAN are a pair: set both or neither "
+                        "(got RGB_MODEL=\"${RGB_MODEL}\" ENDIAN=\"${ENDIAN}\")")
+endif()
+if (COLOR_DEPTH EQUAL 16)
+    # 16bpp: abgr1555, the only 16bpp model provided by pixel_traits.hpp
+    # (overrides are ignored -- there is nothing else to select)
+    set(IMPRINT_RGB_MODEL abgr)
+    set(IMPRINT_ENDIAN 1555)
+else()
+    if (RGB_MODEL)
+        set(IMPRINT_RGB_MODEL ${RGB_MODEL})
+        set(IMPRINT_ENDIAN ${ENDIAN})
+    else()
+        # 32bpp BGRA on little-endian x86: MSVC/APPLE use bgra32+le, UNIX uses
+        # argb32+be — both expand to the same byte order {b,g,r,a} (A-11). The
+        # traits alias names are endian-relative; see ARCHITECTURE.md §4.4.
+        if (MSVC OR WIN32)
+            set(IMPRINT_RGB_MODEL bgra32)
+            set(IMPRINT_ENDIAN le)
+        elseif (APPLE)
+            set(IMPRINT_RGB_MODEL bgra32)
+            set(IMPRINT_ENDIAN le)
+        elseif (UNIX)
+            set(IMPRINT_RGB_MODEL argb32)
+            set(IMPRINT_ENDIAN be)
+        endif ()
+    endif()
+endif()
+message(STATUS "imprint pixel model: COLOR_DEPTH=${COLOR_DEPTH} RGB_MODEL=${IMPRINT_RGB_MODEL} ENDIAN=${IMPRINT_ENDIAN}")
+
 add_subdirectory(imutil)
 add_subdirectory(imcore)
+# the optional 3D raster module (A-29 / ARCHITECTURE §4.12): default OFF,
+# 32bpp rgba32/le only, and not in the install/export set yet (A-28's
+# feature inventory records the packaging decision)
+add_subdirectory(imraster)
 add_subdirectory(imevent)
 add_subdirectory(iminput)
 add_subdirectory(imui)
@@ -154,7 +201,7 @@ endif()
 
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree.
-foreach(_imprint_target imutil imcore imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend zbapi)
+foreach(_imprint_target imutil imcore imraster imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend zbapi)
     if (TARGET ${_imprint_target})
         add_library(imprint::${_imprint_target} ALIAS ${_imprint_target})
     endif()

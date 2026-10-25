@@ -82,6 +82,9 @@ int test_font_size();
 #if defined(IMCORE_HAS_TTF_RUNTIME)
 int test_runtime_ttf();
 #endif
+#if defined(IMPRINT_TEST_IMRASTER)
+int test_raster();
+#endif
 
 struct suite
 {
@@ -167,6 +170,9 @@ static const suite g_suites[] = {
 #endif
 #if defined(IMCORE_HAS_TTF_RUNTIME)
     {"runtime_ttf", test_runtime_ttf},
+#endif
+#if defined(IMPRINT_TEST_IMRASTER)
+    {"raster", test_raster},
 #endif
 };
 

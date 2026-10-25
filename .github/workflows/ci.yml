@@ -5,7 +5,8 @@
 #   - tests run in Debug only (or the default no-config build); Release
 #     distorts the allocation gates
 #   - USE_PNG / USE_JPEG run in Tier 2 (linux-codecs); USE_TTF_RUNTIME in
-#     Tier 2 (linux-ttf-runtime); the NDS cross build and the non-atomic
+#     Tier 2 (linux-ttf-runtime); the absorbed imraster module in Tier 2
+#     (linux-raster); the NDS cross build and the non-atomic
 #     variant cover the rest of the matrix
 #   - the gcc:13 container ships no python3: the font-subset generation
 #     (FONT_SUBSET, default ON) silently degrades to ASCII-only glyphs
@@ -212,6 +213,26 @@ jobs:
       - name: Configure, build, test (USE_TTF_RUNTIME=ON)
         run: |
           cmake -S . -B build_ci -DUSE_TTF_RUNTIME=ON
+          cmake --build build_ci -j"$(nproc)"
+          ./build_ci/bin/test_imui
+
+  # A-29 Phase 1: the absorbed 3D raster module has zero behavioral
+  # coverage outside this job -- the `raster` suite rides test_imui only
+  # when IMPRINT_WITH_IMRASTER=ON and the pixel model resolves to
+  # rgba32/le (the module's static_assert + configure gate, ARCHITECTURE
+  # §4.12). Doubles as whole-framework coverage of a third pixel memory
+  # order ({r,g,b,a}; the desktop defaults are {b,g,r,a}).
+  linux-raster:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
+      - name: Configure, build, test (IMPRINT_WITH_IMRASTER=ON, RGB_MODEL=rgba32 ENDIAN=le)
+        run: |
+          cmake -S . -B build_ci -DIM_SHELL_BACKEND=X11 -DRGB_MODEL=rgba32 -DENDIAN=le -DIMPRINT_WITH_IMRASTER=ON
           cmake --build build_ci -j"$(nproc)"
           ./build_ci/bin/test_imui
 

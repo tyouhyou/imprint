@@ -65,3 +65,9 @@ set(USE_INTEGER_GEOMETRY ON CACHE BOOL "Switch it to ON for FPU-less embedded ta
 # safe and avoids a library call per refcount bump. See the
 # USE_NON_ATOMIC_PTR comment in imcore/CMakeLists.txt.
 set(USE_NON_ATOMIC_PTR ON CACHE BOOL "Switch it to ON for targets without atomic instructions (non-atomic refcounts)." FORCE)
+
+# the optional 3D raster module is a desktop 32bpp rgba32/le component
+# (ARCHITECTURE §4.12); the NDS is 16bpp, so it must never configure in --
+# pinned OFF beside the other FORCEs so a stray -DIMPRINT_WITH_IMRASTER=ON
+# cannot half-configure the cross build
+set(IMPRINT_WITH_IMRASTER OFF CACHE BOOL "Build the optional 3D raster module (32bpp rgba32/le only; ARCHITECTURE §4.12)." FORCE)

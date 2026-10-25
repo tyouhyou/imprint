@@ -131,6 +131,15 @@ if (USE_TTF_RUNTIME)
         IM_TEST_RUNTIME_TTF_FONT="${PROJECT_SOURCE_DIR}/assets/fonts/Inter-Regular.ttf")
 endif()
 
+# A-29 Phase 1: the imraster module's `raster` suite rides test_imui only
+# in builds that configure the module in (the IMCORE_HAS_TTF_RUNTIME
+# pattern; the module is 32bpp rgba32/le only, ARCHITECTURE §4.12)
+if (TARGET imraster)
+    target_sources(test_imui PRIVATE test_raster.cpp)
+    target_compile_definitions(test_imui PRIVATE IMPRINT_TEST_IMRASTER)
+    target_link_libraries(test_imui PRIVATE imraster)
+endif()
+
 # build-time packing smoke: ui_embed validates and embeds the example
 # document; test_ui_file parses the packed bytes back
 set(UI_EMBED_TEST_HEADER ${CMAKE_CURRENT_BINARY_DIR}/ui_embed_test.gen.hpp)

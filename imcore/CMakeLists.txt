@@ -2,10 +2,9 @@ if (MSVC OR WIN32)
     set(CMAKE_WINDOWS_EXPORT_ALL_SYMBOLS ON)
 endif()
 
-# 16bpp is meant for embedded displays (NDS). The desktop shells assume
-# 32bpp (e.g. the Win32 DIB blit), so COLOR_DEPTH=16 builds are only
-# supported on embedded targets.
-set(COLOR_DEPTH 32 CACHE STRING "Pixel color depth in bits (16 or 32). Set 16 for embedded framebuffers only.")
+# COLOR_DEPTH / RGB_MODEL / ENDIAN are declared and resolved at the top
+# level (A-29 Phase 1: the imraster module's configure gate consumes the
+# same resolution); this file only consumes IMPRINT_RGB_MODEL / IMPRINT_ENDIAN.
 # NOTE: these options are OFF in production builds and the default build
 # stays zero-dependency. USE_PNG and USE_JPEG are self-contained: they
 # compile the vendored stb_image/stb_image_write (third_party/stb) into
@@ -267,23 +266,5 @@ endif()
 target_link_libraries(${IMCORELIB} imutil)
 
 target_compile_definitions(${IMCORELIB} PUBLIC COLOR_DEPTH=${COLOR_DEPTH})     #color depth. (32/16 etc.)
-
-if (COLOR_DEPTH EQUAL 16)
-    # 16bpp: abgr1555, the only 16bpp model provided by pixel_traits.hpp
-    target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=1555)             # 16bpp pixel-traits combo selector
-    target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=abgr)
-else()
-    # 32bpp BGRA on little-endian x86: MSVC/APPLE use bgra32+le, UNIX uses
-    # argb32+be — both expand to the same byte order {b,g,r,a} (A-11). The
-    # traits alias names are endian-relative; see ARCHITECTURE.md §4.4.
-    if (MSVC OR WIN32)
-        target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=le)                  #big/little endian. (le/be)
-        target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=bgra32)           #rgb color model. (argb32/rgba32/rgba888/rgb565 etc.)
-    elseif (APPLE)
-        target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=le)                  #big/little endian. (le/be)
-        target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=bgra32)           #rgb color model. (argb32/rgba32/rgba888/rgb565 etc.)
-    elseif (UNIX)
-        target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=be)                  #big/little endian. (le/be)
-        target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=argb32)           #rgb color model. (argb32/rgba32/rgba888/rgb565 etc.)
-    endif ()
-endif ()
+target_compile_definitions(${IMCORELIB} PUBLIC ENDIAN=${IMPRINT_ENDIAN})       #big/little endian. (le/be)
+target_compile_definitions(${IMCORELIB} PUBLIC RGB_MODEL=${IMPRINT_RGB_MODEL}) #rgb color model. (argb32/rgba32/rgba888/rgb565 etc.)
