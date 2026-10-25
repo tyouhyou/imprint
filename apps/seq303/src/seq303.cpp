@@ -1,6 +1,7 @@
 #include "seq303.hpp"
 
 #include <cstdio>
+#include <cstring>
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)
 #include "seq303_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
@@ -23,12 +24,15 @@ namespace
     /*
      * Warm palette: the whole board lives on one amber ramp over dark
      * roast browns, so the busy 16x11 grid still reads as a single
-     * instrument panel instead of a spreadsheet.
+     * instrument panel instead of a spreadsheet. The bass layer's halo
+     * leans a shade redder so the editing view is identifiable at a
+     * glance without stealing attention from the lead.
      */
     const core::Color kBoardBg = core::Color::from(0x24, 0x1b, 0x15);
     const core::Color kCellOff = core::Color::from(0x3e, 0x31, 0x26);
     const core::Color kCellOffBeat = core::Color::from(0x4a, 0x3a, 0x2c);
     const core::Color kMelodyOn = core::Color::from(0xff, 0xb4, 0x54);
+    const core::Color kBassHalo = core::Color::from(0xff, 0x9a, 0x4d);
     const core::Color kMelodyCore = core::Color::from(0xff, 0xe2, 0xb0);
     const core::Color kAccentCore = core::Color::from(0xff, 0xf4, 0xe0);
     const core::Color kKickOn = core::Color::from(0xff, 0x78, 0x47);
@@ -42,6 +46,8 @@ namespace
     const core::Color kLedBarOff = core::Color::from(0x4a, 0x3a, 0x2c);
     const core::Color kLedBarBeat = core::Color::from(0x74, 0x5a, 0x42);
     const core::Color kFieldBg = core::Color::from(0x2b, 0x21, 0x19);
+    const core::Color kBorderDim = core::Color::from(0x3a, 0x2d, 0x20);
+    const core::Color kInkOnAmber = core::Color::from(0x24, 0x1b, 0x15);
 
     // the six playable scales, top row = highest pitch; the SCALE button
     // cycles them, the row labels and the wasm host (midi params) follow
@@ -52,37 +58,41 @@ namespace
         const char16_t *labels[8];
     };
     const scale_def kScaleTable[] = {
-        {"PENTA", {76, 74, 72, 69, 67, 64, 62, 60},
-         {u"E5", u"D5", u"C5", u"A4", u"G4", u"E4", u"D4", u"C4"}},
-        {"MAJOR", {72, 71, 69, 67, 65, 64, 62, 60},
-         {u"C5", u"B4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
-        {"MINOR", {72, 70, 68, 67, 65, 63, 62, 60},
-         {u"C5", u"Bb4", u"Ab4", u"G4", u"F4", u"Eb4", u"D4", u"C4"}},
-        {"DORIAN", {72, 70, 69, 67, 65, 64, 62, 60},
-         {u"C5", u"Bb4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
-        {"MIXO", {72, 71, 69, 67, 65, 64, 62, 60},
-         {u"C5", u"B4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
-        {"CHROM", {72, 71, 70, 69, 68, 67, 66, 65},
-         {u"C5", u"B4", u"Bb4", u"A4", u"Ab4", u"G4", u"Gb4", u"F4"}},
+        {"PENTA", {76, 74, 72, 69, 67, 64, 62, 60}, {u"E5", u"D5", u"C5", u"A4", u"G4", u"E4", u"D4", u"C4"}},
+        {"MAJOR", {72, 71, 69, 67, 65, 64, 62, 60}, {u"C5", u"B4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
+        {"MINOR", {72, 70, 68, 67, 65, 63, 62, 60}, {u"C5", u"Bb4", u"Ab4", u"G4", u"F4", u"Eb4", u"D4", u"C4"}},
+        {"DORIAN", {72, 70, 69, 67, 65, 64, 62, 60}, {u"C5", u"Bb4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
+        {"MIXO", {72, 71, 69, 67, 65, 64, 62, 60}, {u"C5", u"B4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
+        {"CHROM", {72, 71, 70, 69, 68, 67, 66, 65}, {u"C5", u"B4", u"Bb4", u"A4", u"Ab4", u"G4", u"Gb4", u"F4"}},
     };
     constexpr int kScaleCount =
         static_cast<int>(sizeof(kScaleTable) / sizeof(kScaleTable[0]));
 
-    // knob order (and seq303_param idx 0..5): cutoff reso decay delay
-    // swing mix; all knobs span 0..100
-    constexpr int kKnobInit[6] = {55, 25, 45, 35, 50, 50};
+    // knob order on BOTH pages: cutoff reso decay delay, then SWING on
+    // the lead page / DRIVE on the bass page, then mix; 0..100 each
+    constexpr int kKnobInitLead[6] = {55, 25, 45, 35, 50, 50};
+    constexpr int kKnobInitBass[6] = {45, 40, 50, 15, 50, 30};
 
-    // live parameter mirror drained by the wasm host (seq303_param):
-    // 0..5 the knobs, 6 the bpm, 7..14 the melody row midi pitches of
-    // the active scale (PENTA here until a scale change rewrites them)
-    constexpr int kParamCount = 15;
-    int g_params[kParamCount] = {kKnobInit[0], kKnobInit[1], kKnobInit[2],
-                                 kKnobInit[3], kKnobInit[4], kKnobInit[5],
-                                 120, 76, 74, 72, 69, 67, 64, 62, 60};
+    /*
+     * Live parameter mirror drained by the wasm host (seq303_param):
+     * 0..5 the LEAD knob page, 6 the bpm, 7..14 the lead row midi
+     * pitches, 15 the active (edited) layer, 16..21 the BASS knob page,
+     * 22 the playing pattern slot. The bass pitches are the lead ladder
+     * transposed down two octaves, so the host derives them without a
+     * second table.
+     */
+    constexpr int kParamCount = 23;
+    int g_params[kParamCount] = {
+        kKnobInitLead[0], kKnobInitLead[1], kKnobInitLead[2],
+        kKnobInitLead[3], kKnobInitLead[4], kKnobInitLead[5],
+        120, 76, 74, 72, 69, 67, 64, 62, 60, 0, 0,
+        kKnobInitBass[0], kKnobInitBass[1], kKnobInitBass[2],
+        kKnobInitBass[3], kKnobInitBass[4], kKnobInitBass[5]};
 
     // note trigger queue drained by the wasm host (seq303_note_pop);
-    // each entry packs (global_step << 6) | (slide << 5) | (accent << 4)
-    // | row; rows 0..7 melody, 8 HAT, 9 SNARE, 10 KIK
+    // each entry packs (global_step << 7) | (slide << 6) | (accent << 5)
+    // | (layer << 4) | row; rows 0..7 melody (layer 0 lead, 1 bass),
+    // 8 HAT, 9 SNARE, 10 KIK (drums carry no layer)
     constexpr int kQueue = 64;
     int g_notes[kQueue] = {};
     unsigned g_note_head = 0;
@@ -141,6 +151,18 @@ void SeqGrid::set_metrics(const int label_w, const int pitch, const int led_h,
     mark_dirty();
 }
 
+const unsigned char &SeqGrid::cell(const int row, const int step) const
+{
+    return row < kMelodyRows ? melody_[pattern_][layer_][row][step]
+                             : drums_[pattern_][row - kMelodyRows][step];
+}
+
+unsigned char &SeqGrid::cell(const int row, const int step)
+{
+    return row < kMelodyRows ? melody_[pattern_][layer_][row][step]
+                             : drums_[pattern_][row - kMelodyRows][step];
+}
+
 void SeqGrid::set_playing(const bool on)
 {
     if (on == playing_)
@@ -154,19 +176,87 @@ void SeqGrid::set_playing(const bool on)
         step_ = 0;
         acc10_ = 0;
         counter_ = 0;
-        // play start: step 0 sounds on counter 0, step 1 is queued ahead
-        // on counter 1 (trigger_step then keeps the lookahead going)
-        push_step(0, 0);
+        // play start: step 0 sounds on counter 0 for every voice, step
+        // 1 is queued ahead on counter 1 (trigger_step keeps the
+        // lookahead going)
+        push_step(0, 0, 0);
+        push_step(0, 0, 1);
+        push_step(0, 0, -1);
         trigger_step(0);
     }
     mark_dirty();
 }
 
+void SeqGrid::set_layer(const int layer)
+{
+    if (layer < 0 || layer >= kLayers || layer == layer_)
+    {
+        return;
+    }
+    layer_ = layer;
+    mark_dirty();
+}
+
+void SeqGrid::select_pattern(const int p)
+{
+    if (p < 0 || p >= kPatterns)
+    {
+        return;
+    }
+    if (!playing_)
+    {
+        queued_ = -1;
+        if (p != pattern_)
+        {
+            pattern_ = p;
+            g_params[22] = p;  // wasm host mirror (the playing slot)
+            mark_dirty();
+        }
+    }
+    else if (p != pattern_)
+    {
+        // quantized: takes over when the playhead wraps to step 0
+        queued_ = p;
+    }
+}
+
+void SeqGrid::copy_to_next()
+{
+    const int next = (pattern_ + 1) % kPatterns;
+    std::memcpy(melody_[next], melody_[pattern_], sizeof melody_[next]);
+    std::memcpy(drums_[next], drums_[pattern_], sizeof drums_[next]);
+    select_pattern(next);
+}
+
+void SeqGrid::set_chain(const bool on)
+{
+    chain_ = on;
+    if (!on)
+    {
+        // a pending auto-advance dies with the switch; a user-queued
+        // slot survives (it was tapped deliberately)
+        if (queued_ == (pattern_ + 1) % kPatterns)
+        {
+            queued_ = -1;
+        }
+    }
+}
+
 void SeqGrid::clear()
 {
-    for (auto &row : pattern_)
+    for (auto &layer : melody_[pattern_])
     {
-        for (auto &c : row)
+        for (auto &row : layer)
+        {
+            for (unsigned char &c : row)
+            {
+                c = 0;
+            }
+        }
+    }
+    for (auto &row : drums_[pattern_])
+    {
+        for (unsigned char &c : row)
         {
             c = 0;
         }
@@ -176,9 +266,11 @@ void SeqGrid::clear()
 
 void SeqGrid::dice()
 {
-    // deterministic consonant fill: one melody note per column at most
-    // (pentatonic rows -- any pick sounds well together), four-on-the-
-    //floor kick, backbeat snare, sparse hats
+    // deterministic consonant fill of the whole playing pattern: a
+    // sparse lead line (pentatonic rows -- any pick sounds well
+    // together), four-on-the-floor kick, backbeat snare, sparse hats,
+    // and a bass voice that shadows the kick on the low rows with an
+    // accent at the top of each half bar
     clear();
     rng_ = rng_ * 1664525u + 1013904223u;
     unsigned s = rng_ | 1u;
@@ -187,32 +279,44 @@ void SeqGrid::dice()
         s = s * 1664525u + 1013904223u;
         return (s >> 10) & 0x3ffu;
     };
-    // melody rows weighted toward the middle of the ramp (C5 A4 G4 C4)
+    // lead rows weighted toward the middle of the ramp (C5 A4 G4 C4)
     static const int kPick[12] = {2, 4, 3, 7, 2, 3, 4, 7, 0, 1, 5, 6};
     for (int col = 0; col < kSteps; ++col)
     {
         if (rnd() % 100u < 58u)
         {
-            pattern_[kPick[rnd() % 12u]][col] = 1;
+            melody_[pattern_][0][kPick[rnd() % 12u]][col] = 1;
         }
         if (rnd() % 100u < 18u)
         {
-            pattern_[kPick[rnd() % 12u]][col] = 1;
+            melody_[pattern_][0][kPick[rnd() % 12u]][col] = 1;
         }
     }
     for (int col = 0; col < kSteps; ++col)
     {
         if (col % 4 == 0 || rnd() % 100u < 12u)
         {
-            pattern_[10][col] = 1;  // KIK
+            drums_[pattern_][2][col] = 1;  // KIK
         }
         if (col % 8 == 4 || rnd() % 100u < 10u)
         {
-            pattern_[9][col] = 1;   // SNR
+            drums_[pattern_][1][col] = 1;  // SNR
         }
         if (rnd() % 100u < 55u)
         {
-            pattern_[8][col] = 1;   // HAT
+            drums_[pattern_][0][col] = 1;  // HAT
+        }
+    }
+    // bass: every kick column gets the lowest-pitch region, accented on
+    // the half-bar; a few extra off-beat eighths keep it walking
+    static const int kBassPick[6] = {7, 7, 6, 4, 5, 7};
+    for (int col = 0; col < kSteps; ++col)
+    {
+        const bool on_kick = drums_[pattern_][2][col] != 0;
+        if (on_kick || rnd() % 100u < 15u)
+        {
+            melody_[pattern_][1][kBassPick[rnd() % 6u]][col] =
+                col % 8 == 0 ? 2 : 1;
         }
     }
 }
@@ -224,29 +328,46 @@ void SeqGrid::tick()
     {
         return;
     }
-    acc10_ += 10;  // one 60 fps frame == 10 units of 1/600 s
+    acc10_ += 10;                       // one 60 fps frame == 10 units of 1/600 s
     const int threshold = 9000 / bpm_;  // step length in the same units
     while (acc10_ >= threshold)
     {
         acc10_ -= threshold;
         step_ = (step_ + 1) % kSteps;
         ++counter_;
+        if (step_ == 0)
+        {
+            // bar wrap: CHAIN queues the next slot; any queued switch
+            // (user or chain) takes over here
+            if (chain_)
+            {
+                queued_ = (pattern_ + 1) % kPatterns;
+            }
+            if (queued_ >= 0 && queued_ < kPatterns && queued_ != pattern_)
+            {
+                pattern_ = queued_;
+                g_params[22] = pattern_;  // wasm host mirror
+                mark_dirty();
+            }
+            queued_ = -1;
+        }
         trigger_step(step_);
     }
 }
 
 /*
- * The playhead entered `step`: raise the predicted output level and
- * queue the NEXT step's notes one advance early, tagged with the
- * counter they will sound at (one-step lookahead).
+ * The playhead entered `step`: raise the predicted output level from
+ * every voice's notes in this column and queue the NEXT step's notes
+ * one advance early, tagged with the counter they will sound at
+ * (one-step lookahead, once per step).
  */
 void SeqGrid::trigger_step(const int step)
 {
     bool any = false;
     bool accent = false;
-    for (int row = 0; row < kRows; ++row)
+    for (int r = 0; r < kDrumRows; ++r)
     {
-        const unsigned char st = pattern_[row][step];
+        const unsigned char st = drums_[pattern_][r][step];
         if (st == 0)
         {
             continue;
@@ -256,9 +377,25 @@ void SeqGrid::trigger_step(const int step)
         {
             accent = true;
         }
-        if (row == kRows - 1)
+        if (r == kDrumRows - 1)
         {
             level_ = 100;  // KIK always peaks the lamp
+        }
+    }
+    for (int layer = 0; layer < kLayers; ++layer)
+    {
+        for (int row = 0; row < kMelodyRows; ++row)
+        {
+            const unsigned char st = melody_[pattern_][layer][row][step];
+            if (st == 0)
+            {
+                continue;
+            }
+            any = true;
+            if (st == 2)
+            {
+                accent = true;
+            }
         }
     }
     const int target = accent ? 95 : (any ? 70 : 0);
@@ -266,22 +403,54 @@ void SeqGrid::trigger_step(const int step)
     {
         level_ = target;
     }
-    push_step((step + 1) % kSteps, counter_ + 1);
+    push_step((step + 1) % kSteps, counter_ + 1, 0);
+    push_step((step + 1) % kSteps, counter_ + 1, 1);
+    push_step((step + 1) % kSteps, counter_ + 1, -1);
 }
 
-// queue one step's notes, packed with the counter they sound on
-void SeqGrid::push_step(const int step, const int g)
+// queue one step's notes for one voice slice, packed with the counter
+// they sound on; layer < 0 = the shared drum rows, layer 1 is the mono
+// bass (only the lowest lit pitch of the column sounds)
+void SeqGrid::push_step(const int step, const int g, const int layer)
 {
-    for (int row = 0; row < kRows; ++row)
+    if (layer < 0)
     {
-        const unsigned char st = pattern_[row][step];
+        for (int r = 0; r < kDrumRows; ++r)
+        {
+            const unsigned char st = drums_[pattern_][r][step];
+            if (st == 0)
+            {
+                continue;
+            }
+            push_note((g << 7) | (st == 2 ? (1 << 5) : 0) |
+                      (r + kMelodyRows));
+        }
+        return;
+    }
+    if (layer == 1)
+    {
+        for (int row = kMelodyRows - 1; row >= 0; --row)
+        {
+            const unsigned char st = melody_[pattern_][1][row][step];
+            if (st == 0)
+            {
+                continue;
+            }
+            push_note((g << 7) | (slide_[1][row] ? (1 << 6) : 0) |
+                      (st == 2 ? (1 << 5) : 0) | (1 << 4) | row);
+            break;  // one voice: the lowest lit pitch wins
+        }
+        return;
+    }
+    for (int row = 0; row < kMelodyRows; ++row)
+    {
+        const unsigned char st = melody_[pattern_][0][row][step];
         if (st == 0)
         {
             continue;
         }
-        const int packed = (g << 6) | ((row < kMelodyRows && slide_[row]) ? (1 << 5) : 0) |
-                           (st == 2 ? (1 << 4) : 0) | row;
-        push_note(packed);
+        push_note((g << 7) | (slide_[0][row] ? (1 << 6) : 0) |
+                  (st == 2 ? (1 << 5) : 0) | row);
     }
 }
 
@@ -320,7 +489,8 @@ void SeqGrid::draw_at(core::Graphics &area) const
         const int y = row * pitch_ + 1;
         const bool drum = row >= kMelodyRows;
         // row label rides the left column: melody rows carry the active
-        // scale's note names (cream), drums stay dim
+        // scale's note names (the bass view two octaves down), drums
+        // stay dim
         if (drum)
         {
             draw_tag(area, kDrumName[row - kMelodyRows],
@@ -328,11 +498,17 @@ void SeqGrid::draw_at(core::Graphics &area) const
         }
         else
         {
-            const char16_t *lab = kScaleTable[scale_].labels[row];
+            char16_t lab[8] = {};
             int len = 0;
-            while (lab[len] != u'\0')
+            while (len < 7 && kScaleTable[scale_].labels[row][len] != u'\0')
             {
+                lab[len] = kScaleTable[scale_].labels[row][len];
                 ++len;
+            }
+            if (layer_ == 1 && len > 0 && lab[len - 1] >= u'0' + 2)
+            {
+                // the bass ladder reads the same scale two octaves down
+                lab[len - 1] = static_cast<char16_t>(lab[len - 1] - 2);
             }
             draw_tag(area, lab, len, 2, y + cs / 2 - 3, kCream);
         }
@@ -340,15 +516,15 @@ void SeqGrid::draw_at(core::Graphics &area) const
         {
             const int x = label_w_ + col * pitch_ + 1;
             const bool beat_head = col % 4 == 0;
-            const unsigned char st = pattern_[row][col];
+            const unsigned char st = cell(row, col);
             const bool on = st != 0;
             const bool acc = st == 2;
             const bool ph = playing_ && col == step_;
             if (on)
             {
                 const core::Color &base = drum
-                    ? (row == 10 ? kKickOn : (row == 9 ? kSnareOn : kHatOn))
-                    : kMelodyOn;
+                                            ? (row == 10 ? kKickOn : (row == 9 ? kSnareOn : kHatOn))
+                                            : (layer_ == 1 ? kBassHalo : kMelodyOn);
                 // outer pad = the "LED halo", inner core the lit lamp;
                 // accents burn white-hot inside the family halo
                 area.fill_round_rect(x - 1, y - 1, x + cs, y + cs, cs / 4,
@@ -372,7 +548,7 @@ void SeqGrid::draw_at(core::Graphics &area) const
         if (!drum && slide_w_ > 0)
         {
             const int px = label_w_ + kSteps * pitch_ + 1;
-            const bool lit = slide_[row];
+            const bool lit = slide_[layer_][row];
             area.fill_round_rect(px, y, px + slide_w_ - 3, y + cs - 1, cs / 5,
                                  lit ? kMelodyOn : kCellOffBeat);
             if (pitch_ >= 12)
@@ -433,7 +609,7 @@ bool SeqGrid::on_input(const zb::input::input_event &ev)
         {
             return false;
         }
-        slide_[row] = !slide_[row];
+        slide_[layer_][row] = !slide_[layer_][row];
         mark_dirty();
         return true;
     }
@@ -442,7 +618,7 @@ bool SeqGrid::on_input(const zb::input::input_event &ev)
         return false;
     }
     // a tap cycles the cell it lands in: off -> note -> accent -> off
-    unsigned char &st = pattern_[row][col];
+    unsigned char &st = cell(row, col);
     st = st >= 2 ? 0 : static_cast<unsigned char>(st + 1);
     mark_dirty();
     return true;
@@ -471,10 +647,52 @@ void Sequencer::sync_play_button()
     }
     const bool on = grid_ && grid_->is_playing();
     play_btn_->set_text(on ? "STOP" : "PLAY");
-    play_btn_->set_text_color(on ? core::Color::from(0x24, 0x1b, 0x15)
-                                 : core::Color::from(0xf2, 0xe6, 0xd0));
-    play_btn_->set_background_color(on ? core::Color::from(0xff, 0xb4, 0x54)
-                                       : kFieldBg);
+    play_btn_->set_text_color(on ? kInkOnAmber : kCream);
+    play_btn_->set_background_color(on ? kMelodyOn : kFieldBg);
+}
+
+void Sequencer::sync_strip()
+{
+    if (!grid_)
+    {
+        return;
+    }
+    // layer tabs: the active one lights amber with dark ink
+    for (int i = 0; i < kLayers; ++i)
+    {
+        const bool on = grid_->layer() == i;
+        layer_btns_[i]->set_text_color(on ? kInkOnAmber : kCream);
+        layer_btns_[i]->set_background_color(on ? kMelodyOn : kFieldBg);
+    }
+    // pattern slots: current = amber text, queued = amber outline
+    const int cur = grid_->pattern();
+    const int queued = grid_->queued_pattern();
+    for (int i = 0; i < kPatterns; ++i)
+    {
+        pat_btns_[i]->set_text_color(i == cur ? kMelodyOn : kCream);
+        pat_btns_[i]->set_border_color(i == queued ? kMelodyOn : kBorderDim);
+    }
+    const bool chain_on = grid_->chain();
+    chain_btn_->set_text_color(chain_on ? kInkOnAmber : kCream);
+    chain_btn_->set_background_color(chain_on ? kMelodyOn : kFieldBg);
+}
+
+void Sequencer::select_layer(const int layer)
+{
+    if (!grid_)
+    {
+        return;
+    }
+    grid_->set_layer(layer);
+    g_params[15] = layer;
+    // the knob cluster edits the active page: reload the values and
+    // swap the sixth knob's role (SWING on lead, DRIVE on bass)
+    for (int i = 0; i < kKnobs; ++i)
+    {
+        knobs_[i]->set_value(knob_page_[layer][i]);
+    }
+    knob_label_[5]->set_text(layer == 1 ? "DRIVE" : "SWING");
+    sync_strip();
 }
 
 void Sequencer::cycle_scale()
@@ -505,18 +723,25 @@ void Sequencer::create_window(const uint32_t max_client_width,
     window_ = zb::make_shared<CanvasWindow>();
     window_->create(max_client_width, max_client_height, buffer);
 
+    for (int i = 0; i < kKnobs; ++i)
+    {
+        knob_page_[0][i] = kKnobInitLead[i];
+        knob_page_[1][i] = kKnobInitBass[i];
+    }
+
     const int w = static_cast<int>(max_client_width);
     const int h = static_cast<int>(max_client_height);
-    // ui scale from the host buffer (the g2048 shape)
+    // ui scale from the host buffer (the g2048 shape); row 1 transport,
+    // row 2 the pattern strip (LEAD/BASS + A..D + CHAIN + COPY)
     const int u = clamp_i(h / 240, 1, 6);
-    const int header_h = 42 * u;
+    const int header_h = 66 * u;
 
     auto &root = window_->root();
     root.set_background_color(core::Color::from(0x1a, 0x13, 0x10));
 
     auto title = std::make_unique<Label>();
     title->set_text("SEQ-303");
-    title->set_text_color(core::Color::from(0xff, 0xb4, 0x54));
+    title->set_text_color(kMelodyOn);
     title->set_bold(true);
     title->set_size(46 * u, 24 * u);
     title->set_position(10 * u, 10 * u);
@@ -528,13 +753,12 @@ void Sequencer::create_window(const uint32_t max_client_width,
     play->set_size(44 * u, 26 * u);
     play->set_position(62 * u, 8 * u);
     play->set_font_size(8 * u);
-    play->set_border_color(core::Color::from(0xff, 0xb4, 0x54));
+    play->set_border_color(kMelodyOn);
     play_btn_ = play.get();
     sub_play_ = play->clicked.subscribe([this]
                                         {
                                             grid_->set_playing(!grid_->is_playing());
-                                            sync_play_button();
-                                        });
+                                            sync_play_button(); });
     root.add_child(std::move(play));
 
     auto dice = std::make_unique<Button>();
@@ -581,8 +805,7 @@ void Sequencer::create_window(const uint32_t max_client_width,
                                           g_params[6] = v;  // wasm host mirror
                                           char buf[16];
                                           std::snprintf(buf, sizeof(buf), "%d", v);
-                                          bpm_label_->set_text(buf);
-                                      });
+                                          bpm_label_->set_text(buf); });
     root.add_child(std::move(bpm));
 
     auto bpm_val = std::make_unique<Label>();
@@ -594,6 +817,59 @@ void Sequencer::create_window(const uint32_t max_client_width,
     bpm_label_ = bpm_val.get();
     root.add_child(std::move(bpm_val));
 
+    // --- row 2: the pattern strip ---
+    static const char *const kLayerName[kLayers] = {"LEAD", "BASS"};
+    for (int i = 0; i < kLayers; ++i)
+    {
+        auto b = std::make_unique<Button>();
+        b->set_text(kLayerName[i]);
+        b->set_size(44 * u, 24 * u);
+        b->set_position((62 + i * 50) * u, 38 * u);
+        b->set_font_size(7 * u);
+        sub_layer_[i] = b->clicked.subscribe([this, i]
+                                             { select_layer(i); });
+        layer_btns_[i] = b.get();
+        root.add_child(std::move(b));
+    }
+    static const char *const kPatName[kPatterns] = {"A", "B", "C", "D"};
+    for (int i = 0; i < kPatterns; ++i)
+    {
+        auto b = std::make_unique<Button>();
+        b->set_text(kPatName[i]);
+        b->set_size(24 * u, 24 * u);
+        b->set_position((w / u - 208 + i * 28) * u, 38 * u);
+        b->set_font_size(8 * u);
+        sub_pat_[i] = b->clicked.subscribe([this, i]
+                                           {
+                                               grid_->select_pattern(i);
+                                               sync_strip(); });
+        pat_btns_[i] = b.get();
+        root.add_child(std::move(b));
+    }
+    auto chain = std::make_unique<Button>();
+    chain->set_text("CHAIN");
+    chain->set_size(42 * u, 24 * u);
+    chain->set_position((w / u - 92) * u, 38 * u);
+    chain->set_font_size(7 * u);
+    sub_chain_ = chain->clicked.subscribe([this]
+                                          {
+                                              grid_->set_chain(!grid_->chain());
+                                              sync_strip(); });
+    chain_btn_ = chain.get();
+    root.add_child(std::move(chain));
+
+    auto copy = std::make_unique<Button>();
+    copy->set_text("COPY");
+    copy->set_size(38 * u, 24 * u);
+    copy->set_position((w / u - 46) * u, 38 * u);
+    copy->set_font_size(7 * u);
+    sub_copy_ = copy->clicked.subscribe([this]
+                                        {
+                                            grid_->copy_to_next();
+                                            sync_strip(); });
+    copy_btn_ = copy.get();
+    root.add_child(std::move(copy));
+
     // body split: the voice bay on the right, the board fills what is
     // left. Bay width caps at a third of the window so the grid keeps
     // room even at narrow hosts.
@@ -603,7 +879,8 @@ void Sequencer::create_window(const uint32_t max_client_width,
     // board geometry: whole-cell pitch from what fits beside the bay.
     // The grid's own full width is the label column + 16 columns + the
     // SL pill zone (+4px of frame); clamp the pitch so that width plus
-    // a 10*u gap stays strictly left of the bay, under the header
+    // a 10*u gap stays strictly left of the bay, under the two header
+    // rows
     const int label_w = 34 * u;
     const int slide_w = clamp_i(14 * u, 14, 28);  // ~14px SL pill zone
     const int pw =
@@ -633,8 +910,9 @@ void Sequencer::create_window(const uint32_t max_client_width,
     /*
      * Voice bay, top to bottom: OUT label + VU dial (fed from the
      * grid's predicted output level), VOICE label + the 2x3 knob
-     * cluster, then the SCALE button. All stock widgets in the amber
-     * palette.
+     * cluster (edits the ACTIVE layer's page; the sixth knob is SWING
+     * on LEAD and DRIVE on BASS), then the SCALE button. All stock
+     * widgets in the amber palette.
      */
     const int pad = clamp_i(8 * u, 6, 20);
     const int inner_w = bay_w - 2 * pad;
@@ -686,33 +964,40 @@ void Sequencer::create_window(const uint32_t max_client_width,
     root.add_child(std::move(voice_tag));
     by += sec_h + gap / 2;
 
-    static const char *const kKnobName[kKnobs] = {"CUTOFF", "RESO",  "DECAY",
-                                                  "DELAY",  "SWING", "MIX"};
     for (int i = 0; i < kKnobs; ++i)
     {
         const int kx = bay_x + pad + (i % 2) * cell_w;
         const int ky = by + (i / 2) * cell_h;
         auto knob = std::make_unique<Knob>();
         knob->set_range(0, 100);
-        knob->set_value(kKnobInit[i]);
+        knob->set_value(knob_page_[0][i]);
         knob->set_size(kn, kn);
         knob->set_position(kx + (cell_w - kn) / 2, ky);
         knob->set_face_color(kFieldBg);
         knob->set_ring_color(kLedBarBeat);
         knob->set_pointer_color(kMelodyOn);
-        // RAII: hold the subscription for the widget's lifetime
+        // RAII: hold the subscription for the widget's lifetime; the
+        // knob writes its page (lead 0..5 / bass 16..21 in g_params)
         sub_knob_[i] = knob->changed.subscribe(
-            [i](const int v)
-            { g_params[i] = v; });
+            [this, i](const int v)
+            {
+                const int layer = grid_ ? grid_->layer() : 0;
+                knob_page_[layer][i] = v;
+                g_params[layer == 1 ? 16 + i : i] = v;
+            });
+        knobs_[i] = knob.get();
         root.add_child(std::move(knob));
 
         auto klab = std::make_unique<Label>();
+        static const char *const kKnobName[kKnobs] = {"CUTOFF", "RESO", "DECAY",
+                                                      "DELAY", "SWING", "MIX"};
         klab->set_text(kKnobName[i]);
         klab->set_text_color(kDim);
         klab->set_size(cell_w, klab_h);
         klab->set_position(kx, ky + kn);
         klab->set_h_align(Widget::h_align::center);
         klab->set_font_size(klab_font);
+        knob_label_[i] = klab.get();
         root.add_child(std::move(klab));
     }
     by += 3 * cell_h + gap;
@@ -739,4 +1024,5 @@ void Sequencer::create_window(const uint32_t max_client_width,
     root.add_child(std::move(hint));
 
     sync_play_button();
+    sync_strip();
 }

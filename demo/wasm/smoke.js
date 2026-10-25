@@ -329,9 +329,10 @@ createModule({
       }
 
       if (NAME === "seq303") {
-        // PLAY sits at buffer (124,16)..(212,68) at the 800x520 web tier
-        // (u=2 header); after 30 paints the lookahead queue must have
-        // produced note events with advancing global-step tags
+        // transport: PLAY at buffer (124,16)..(212,68), the pattern
+        // strip (LEAD/BASS, A..D, CHAIN, COPY) at y 76..124 (u=2 at the
+        // 800x520 web tier). After 30 paints the lookahead queue must
+        // carry both voices' events with advancing global-step tags
         const drain = function (a) {
           const out = [];
           for (;;) {
@@ -351,22 +352,52 @@ createModule({
           throw new Error("PLAY did not start the sequencer");
         }
         if (notes.length < 4) throw new Error("no note events after PLAY (" + notes.length + ")");
-        let maxG = 0;
-        for (const ev of notes) maxG = Math.max(maxG, ev >> 6);
+        let maxG = 0, lead = 0, bass = 0;
+        for (const ev of notes) {
+          const row = ev & 15, layer = (ev >> 4) & 1;
+          if (ev >> 7 > maxG) maxG = ev >> 7;
+          if (row < 8 && layer === 0) lead++;
+          if (row < 8 && layer === 1) bass++;
+        }
         if (maxG < 3) throw new Error("step counter did not advance (maxG=" + maxG + ")");
-        // determinism: the same taps + paints + drains on two fresh apps
-        // render byte-identical frames (the queue is a process-global
-        // mirror, so both runs drain it after every paint)
+        if (lead === 0) throw new Error("no LEAD voice events");
+        if (bass === 0) throw new Error("no BASS voice events (preloaded dice fills both)");
+        // the BASS tab switches the editing layer (param 15 mirrors it)
+        click(app, 268, 100);
+        if (Module.ccall("seq303_param", "number", ["number"], [15]) !== 1) {
+          throw new Error("BASS tab did not switch the layer");
+        }
+        click(app, 168, 100);  // back to LEAD
+        // pattern B: queued while playing, takes over at the bar wrap;
+        // param 22 mirrors the playing slot, so the quantized switch is
+        // observable without pixels. Then COPY queues C the same way.
+        click(app, 444, 100);  // B
+        for (let i = 0; i < 130; i++) { paint(app); drain(app); }
+        if (Module.ccall("seq303_param", "number", ["number"], [22]) !== 1) {
+          throw new Error("pattern B did not take over at the bar wrap");
+        }
+        click(app, 746, 100);  // COPY (B -> C queued)
+        for (let i = 0; i < 130; i++) { paint(app); drain(app); }
+        if (Module.ccall("seq303_param", "number", ["number"], [22]) !== 2) {
+          throw new Error("COPY did not queue the next slot");
+        }
+        // determinism: the same taps + paints + drains on two fresh
+        // apps render byte-identical frames (the queue is a
+        // process-global mirror, so both runs drain it after every
+        // paint)
         const replay303 = function () {
           const a = Module._zb_app_create(W, H);
           input(a, 9, W >> 1, H >> 1, 0, 0, 0);  // mirror the preamble tap
           input(a, 10, W >> 1, H >> 1, 0, 0, 0);
-          click(a, 168, 42);
+          click(a, 168, 42);   // PLAY
+          click(a, 268, 100);  // BASS tab
+          click(a, 168, 100);  // LEAD tab
+          click(a, 444, 100);  // pattern B (queued)
           const frames = [];
-          for (let i = 0; i < 30; i++) {
+          for (let i = 0; i < 90; i++) {
             paint(a);
             drain(a);
-            if (i % 10 === 9) frames.push(snapOf(a));
+            if (i % 15 === 14) frames.push(snapOf(a));
           }
           Module._zb_app_destroy(a);
           return frames;
@@ -375,7 +406,7 @@ createModule({
         for (let i = 0; i < r1.length; i++) {
           if (!same(r1[i], r2[i])) throw new Error("seq303 replay frame " + i + " diverged");
         }
-        console.log("seq303: notes flow, steps advance, replay byte-identical");
+        console.log("seq303: both voices flow, layers/patterns switch, replay byte-identical");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
