@@ -47,14 +47,14 @@ namespace zb::raster
      */
     struct Camera
     {
-        float ox = 0.f, oy = 0.f, oz = 0.f; // eye
-        float fx = 1.f, fy = 0.f, fz = 0.f; // forward, unit
-        float rx = 0.f, ry = 0.f, rz = 0.f; // right, unit
-        float ux = 0.f, uy = 1.f, uz = 0.f; // up, unit
-        float plane = 0.66f;                // tan(hfov/2)
+        float ox = 0.f, oy = 0.f, oz = 0.f;  // eye
+        float fx = 1.f, fy = 0.f, fz = 0.f;  // forward, unit
+        float rx = 0.f, ry = 0.f, rz = 0.f;  // right, unit
+        float ux = 0.f, uy = 1.f, uz = 0.f;  // up, unit
+        float plane = 0.66f;                 // tan(hfov/2)
         int vw = 0, vh = 0;
         float horizon = 0.f;
-        float near_clip = 0.05f; // closer than this, clamp (avoids blowup)
+        float near_clip = 0.05f;  // closer than this, clamp (avoids blowup)
         const float *depth = nullptr;
     };
 
@@ -100,7 +100,7 @@ namespace zb::raster
      */
     struct FaceShade
     {
-        uint32_t base = 0u; // unshaded RGB; alpha ignored
+        uint32_t base = 0u;  // unshaded RGB; alpha ignored
         float bright = 1.f;
         float grad = 0.f;
         float flash = 0.f;
@@ -134,8 +134,8 @@ namespace zb::raster
     // one material color for a face, plus its optional in-face gradient
     struct FaceStyle
     {
-        uint32_t base = 0u; // unshaded RGB, alpha ignored
-        float grad = 0.f;  // 0 = flat, 0.3 = 30% darker at the bottom edge
+        uint32_t base = 0u;  // unshaded RGB, alpha ignored
+        float grad = 0.f;    // 0 = flat, 0.3 = 30% darker at the bottom edge
     };
 
     /*
@@ -177,4 +177,4 @@ namespace zb::raster
      */
     void draw_box(Canvas &t, const Camera &cam, const float corners[24],
                   const FaceStyle face[6], const BoxPaint &paint);
-} // namespace zb::raster
+}  // namespace zb::raster

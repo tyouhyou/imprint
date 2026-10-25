@@ -99,4 +99,4 @@ namespace zb::raster
     {
         return pack(c.r, c.g, c.b, c.a);
     }
-} // namespace zb::raster
+}  // namespace zb::raster

@@ -11,12 +11,12 @@ namespace zb::raster
         // are wound so the cross product of the first two edges points out
         // of the box, which is what the back-face test below reads.
         constexpr int kFaces[6][4] = {
-            {1, 3, 7, 5}, // +x
-            {4, 6, 2, 0}, // -x
-            {6, 7, 3, 2}, // +y (top)
-            {0, 1, 5, 4}, // -y (bottom)
-            {4, 5, 7, 6}, // +z (front)
-            {1, 0, 2, 3}, // -z (back)
+            {1, 3, 7, 5},  // +x
+            {4, 6, 2, 0},  // -x
+            {6, 7, 3, 2},  // +y (top)
+            {0, 1, 5, 4},  // -y (bottom)
+            {4, 5, 7, 6},  // +z (front)
+            {1, 0, 2, 3},  // -z (back)
         };
 
         uint32_t shade_row(const FaceShade &sh, const float row_bright)
@@ -51,7 +51,7 @@ namespace zb::raster
             return pack(r > 255 ? 255 : r, g > 255 ? 255 : g,
                         b > 255 ? 255 : b);
         }
-    } // namespace
+    }  // namespace
 
     Vtx project(const Camera &cam, const float x, const float y,
                 const float z)
@@ -97,7 +97,8 @@ namespace zb::raster
         const float face_span = sh.face_bot - sh.face_top;
         const bool ramp = sh.grad > 0.f && face_span > 1e-3f;
         // the ramp's color at an absolute screen row
-        const auto ramp_at = [&](const float y) {
+        const auto ramp_at = [&](const float y)
+        {
             if (!ramp)
             {
                 return col_flat;
@@ -112,7 +113,7 @@ namespace zb::raster
                 u = 1.f;
             }
             return shade_row(sh, sh.bright *
-                                      (1.f + sh.grad - 2.f * sh.grad * u));
+                                     (1.f + sh.grad - 2.f * sh.grad * u));
         };
 
         float min_x = corners[0].sx, max_x = corners[0].sx;
@@ -146,7 +147,7 @@ namespace zb::raster
                 if ((p.sx > static_cast<float>(x)) ==
                     (q.sx > static_cast<float>(x)))
                 {
-                    continue; // edge does not straddle this column
+                    continue;  // edge does not straddle this column
                 }
                 const float k = (static_cast<float>(x) - p.sx) /
                                 (q.sx - p.sx);
@@ -192,15 +193,15 @@ namespace zb::raster
             if (span > 1e-3f)
             {
                 w_top = w_lo + (w_hi - w_lo) *
-                                (static_cast<float>(top) - y_lo) / span;
+                                   (static_cast<float>(top) - y_lo) / span;
                 w_bot = w_lo + (w_hi - w_lo) *
-                                (static_cast<float>(bot) - y_lo) / span;
+                                   (static_cast<float>(bot) - y_lo) / span;
             }
             const float w_near = w_top > w_bot ? w_top : w_bot;
             if (cam.depth != nullptr &&
                 (w_near <= 0.f || 1.f / w_near >= cam.depth[x]))
             {
-                continue; // a wall stands in front of this column
+                continue;  // a wall stands in front of this column
             }
 
             if (sh.alpha < 1.f)
@@ -235,7 +236,7 @@ namespace zb::raster
 
         for (int fi = 0; fi < 6; ++fi)
         {
-            const int (&f)[4] = kFaces[fi];
+            const int(&f)[4] = kFaces[fi];
             const float *a = corners + f[0] * 3;
             const float *b = corners + f[1] * 3;
             const float *c = corners + f[2] * 3;
@@ -255,7 +256,7 @@ namespace zb::raster
             const float vcz = (a[2] + b[2] + c[2] + d[2]) * 0.25f - cam.oz;
             if (nx * vcx + ny * vcy + nz * vcz >= 0.f)
             {
-                continue; // back face: a convex box hides it
+                continue;  // back face: a convex box hides it
             }
 
             const float nl = std::sqrt(nx * nx + ny * ny + nz * nz);
@@ -329,4 +330,4 @@ namespace zb::raster
             raster_quad(t, cam, quad, sh);
         }
     }
-} // namespace zb::raster
+}  // namespace zb::raster

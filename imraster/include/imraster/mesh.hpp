@@ -119,15 +119,20 @@ namespace zb::raster
      * numbers fps's trooper calibrated (its draw budget comment: ambient
      * + lambert must stay under ~1 or a close body clips to white).
      */
+    // slot count of MeshPaint::mips / MeshPaint::mip_sizes: the mip level
+    // walk clamps to this bound, so an oversized mip_levels degrades to
+    // the finest stored level instead of indexing past the member arrays
+    inline constexpr int kMipSlots = 8;
+
     struct MeshPaint
     {
         // the one directional light, world space, roughly normalized
         float light_x = 0.36f, light_y = 0.81f, light_z = 0.46f;
-        float ambient = 0.62f; // base brightness
-        float lambert = 0.34f; // extra where the surface faces the light
-        float hemi = 0.30f;    // hemisphere ambient, 0 = off: normals that
-                               // point down sit in the darker half of the sky
-        float rim = 0.22f;     // silhouette light, 0 = off: (1-|n.v|)^3
+        float ambient = 0.62f;  // base brightness
+        float lambert = 0.34f;  // extra where the surface faces the light
+        float hemi = 0.30f;     // hemisphere ambient, 0 = off: normals that
+                                // point down sit in the darker half of the sky
+        float rim = 0.22f;      // silhouette light, 0 = off: (1-|n.v|)^3
         // fog multiplies the final brightness: fog = clamp(1 - v/fog_dist,
         // fog_min, 1), v = view depth of the triangle
         float fog_dist = 15.f;
@@ -175,7 +180,7 @@ namespace zb::raster
          * here (fog_dist, with fog_min at 0, is the fade length).
          */
         bool haze_lerp = false;
-        float flash = 0.f; // 0..1 wash toward white (hit reaction)
+        float flash = 0.f;  // 0..1 wash toward white (hit reaction)
         /*
          * Coverage, 0..1, src-over against whatever is already in the
          * framebuffer. 1 (the default, and what every solid surface wants)
@@ -211,8 +216,8 @@ namespace zb::raster
          * authored models were missing.
          */
         const uint32_t *texels = nullptr;
-        int tex_size = 0;    // power of two; wraps with &
-        float contrast = 1.f; // 0..1 of the texel's own range
+        int tex_size = 0;      // power of two; wraps with &
+        float contrast = 1.f;  // 0..1 of the texel's own range
 
         /*
          * The mip chain, so a receding surface stops reading as noise.
@@ -239,9 +244,15 @@ namespace zb::raster
          * little across a triangle next to the difference between choosing
          * a level and not, and a per-pixel level would put a branch inside
          * the innermost loop of the most expensive pass in the frame.
+         *
+         * mip_levels must not exceed kMipSlots (the slot count of the two
+         * arrays below): the level walk clamps to that bound, so a larger
+         * value degrades to the finest stored level instead of reading
+         * past the member arrays. Review round 1; no in-repo caller
+         * exceeds it.
          */
-        const uint32_t *mips[8] = {};
-        int mip_sizes[8] = {};
+        const uint32_t *mips[kMipSlots] = {};
+        int mip_sizes[kMipSlots] = {};
         int mip_levels = 0;
 
         /*
@@ -269,9 +280,9 @@ namespace zb::raster
          * what the viewmodel and the native test sheets want.
          */
         const float *world_depth = nullptr;
-        int world_w = 0;   // the grid the depth buffer was written at
+        int world_w = 0;  // the grid the depth buffer was written at
         int world_h = 0;
-        float world_iw_eps = 1.5e-3f; // see the compare in draw_mesh
+        float world_iw_eps = 1.5e-3f;  // see the compare in draw_mesh
 
         // the host's tone curve (256 entries per channel); nullptr = identity
         const uint8_t *tone = nullptr;
@@ -293,4 +304,4 @@ namespace zb::raster
      */
     void draw_mesh(Canvas &t, const Camera &cam, const MeshBuf &buf,
                    const MeshPaint &paint);
-} // namespace zb::raster
+}  // namespace zb::raster

@@ -92,6 +92,10 @@ namespace zb::raster
         // grid_w/grid_h are cached rather than divided on read: the
         // raster asks for them once per triangle column, and an integer
         // division there cost more than the span it was guarding.
+        // n is clamped into 1..8: the low end because rep 0 divides
+        // nothing, the high end because the upscale's per-output weight
+        // table is a fixed 8-slot array (canvas.cpp kMaxRep) -- a larger
+        // n degrades to 8 instead of walking that table past its end.
         void set_replicate(int n);
         [[nodiscard]] int replicate() const noexcept { return rep_; }
         // the grid a world pass works on
@@ -106,12 +110,12 @@ namespace zb::raster
         [[nodiscard]] uint32_t *grid_row(int gy) noexcept
         {
             return grid_.data() + static_cast<size_t>(gy) *
-                                       static_cast<size_t>(grid_w_);
+                                      static_cast<size_t>(grid_w_);
         }
         [[nodiscard]] const uint32_t *grid_row(int gy) const noexcept
         {
             return grid_.data() + static_cast<size_t>(gy) *
-                                       static_cast<size_t>(grid_w_);
+                                      static_cast<size_t>(grid_w_);
         }
         [[nodiscard]] uint32_t *grid_at(int gx, int gy) noexcept
         {
@@ -152,7 +156,7 @@ namespace zb::raster
         [[nodiscard]] uint8_t *sky_row(int gy) noexcept
         {
             return sky_.data() + static_cast<size_t>(gy) *
-                                       static_cast<size_t>(active_w());
+                                     static_cast<size_t>(active_w());
         }
         [[nodiscard]] int sky_w() const noexcept { return active_w(); }
         [[nodiscard]] int sky_h() const noexcept { return active_h(); }
@@ -180,7 +184,7 @@ namespace zb::raster
         {
             if (gx < 0 || gx >= active_w() || sky_sentinel_ <= y1)
             {
-                return; // an empty span never occludes anything
+                return;  // an empty span never occludes anything
             }
             span_top_[static_cast<size_t>(gx)] = static_cast<int16_t>(y0 < 0 ? 0 : y0);
             span_bot_[static_cast<size_t>(gx)] = static_cast<int16_t>(y1);
@@ -256,7 +260,6 @@ namespace zb::raster
          * drew on the surface.
          */
         void upscale();
-
 
         // ---- depth buffer: one entry per grid column ----------------
         [[nodiscard]] const float *depth_data() const noexcept
@@ -369,7 +372,7 @@ namespace zb::raster
          * looking for a detail that must not be blocky.
          */
         void fill_hole(int cx, int cy, int radius, uint32_t core,
-                        uint32_t rim, uint32_t skirt);
+                       uint32_t rim, uint32_t skirt);
         // additive radial glow, `strength` 0..1 at the center falling to
         // 0 at the rim (muzzle flash, tracers). Per-pixel, so keep it to
         // a sprite-sized radius.
@@ -400,8 +403,8 @@ namespace zb::raster
         [[nodiscard]] uint32_t *active_row(int y) noexcept
         {
             return rep_ > 1 ? grid_row(y)
-                             : px_.data() + static_cast<size_t>(y) *
-                                                 static_cast<size_t>(w_);
+                            : px_.data() + static_cast<size_t>(y) *
+                                               static_cast<size_t>(w_);
         }
         [[nodiscard]] uint32_t *active_data() noexcept
         {
@@ -434,8 +437,8 @@ namespace zb::raster
         // 4.15 MB of DRAM traffic per frame to move 15 KB of data; see
         // Canvas::upscale.
         std::vector<uint32_t> row_;
-        std::vector<uint8_t> sky_;  // active_w x active_h, 1 where sky shows
-        std::vector<int16_t> span_top_, span_bot_; // per column, the wall span
+        std::vector<uint8_t> sky_;                  // active_w x active_h, 1 where sky shows
+        std::vector<int16_t> span_top_, span_bot_;  // per column, the wall span
         // larger than any row index, so a column with no span occludes
         // nothing; int16 because grid_h is a few hundred
         static constexpr int sky_sentinel_ = 30000;
@@ -443,4 +446,4 @@ namespace zb::raster
         // the mesh pass's per-pixel depth (active-surface sized, above)
         std::vector<float> mesh_depth_;
     };
-} // namespace zb::raster
+}  // namespace zb::raster

@@ -71,7 +71,7 @@ namespace
     {
         return (a < b ? b - a : a - b) <= eps;
     }
-} // namespace
+}  // namespace
 
 int test_raster()
 {
@@ -165,7 +165,7 @@ int test_raster()
         Canvas t;
         t.resize(64, 48);
         t.set_replicate(1);
-        t.fill_rect(0, 0, 63, 47, 0xff646464u); // grey dst
+        t.fill_rect(0, 0, 63, 47, 0xff646464u);  // grey dst
 
         // vspan_blend = src-over: out = src*a + dst*(1-a), in integers
         // (sr + (dr - sr) * (256 - ia) / 256). dst 100, src (200,50,0),
@@ -220,9 +220,9 @@ int test_raster()
     {
         Canvas t;
         t.resize(120, 90);
-        t.set_replicate(1); // the buffer is ZEROED by resize: counting
-                            // non-zero words counts PAINTED pixels, so
-                            // no backdrop fill is allowed in this test
+        t.set_replicate(1);  // the buffer is ZEROED by resize: counting
+                             // non-zero words counts PAINTED pixels, so
+                             // no backdrop fill is allowed in this test
         zb::raster::Camera cam = sheet_cam(120, 90);
         cam.horizon = 45.f;
 
@@ -274,7 +274,7 @@ int test_raster()
             wall[x] = 1.5f;
         }
         cam.depth = wall;
-        t.fill_rect(0, 0, 119, 89, 0u); // re-zero: keep the counting honest
+        t.fill_rect(0, 0, 119, 89, 0u);  // re-zero: keep the counting honest
         zb::raster::draw_box(t, cam, corners, styles, paint);
         painted = 0;
         for (int i = 0; i < 120 * 90; ++i)
@@ -354,7 +354,7 @@ int test_raster()
     {
         Canvas t;
         t.resize(120, 90);
-        t.set_replicate(1); // zeroed buffer: non-zero word = painted
+        t.set_replicate(1);  // zeroed buffer: non-zero word = painted
         zb::raster::Camera cam = sheet_cam(120, 90);
         cam.horizon = 45.f;
 
@@ -369,7 +369,7 @@ int test_raster()
         paint.lambert = 0.f;
         paint.hemi = 0.f;
         paint.rim = 0.f;
-        paint.fog_dist = 1e9f; // 1 - v/1e9 rounds to exactly 1.0f
+        paint.fog_dist = 1e9f;  // 1 - v/1e9 rounds to exactly 1.0f
         const uint32_t col = zb::raster::pack(90, 120, 160);
         const uint32_t one_part[1] = {col};
         paint.part_colors = one_part;
@@ -430,7 +430,7 @@ int test_raster()
         // lost to the zbuf, not to painter order (one buffer, one pass)
         cam.depth = nullptr;
         MeshBuf two;
-        two.add_sphere(0.f, 0.5f, 4.f, 0.25f, 8, 4, 0, 1.f); // far
+        two.add_sphere(0.f, 0.5f, 4.f, 0.25f, 8, 4, 0, 1.f);  // far
         t.fill_rect(0, 0, 119, 89, 0u);
         t.reset_mesh_depth();
         zb::raster::draw_mesh(t, cam, two, paint);
@@ -446,7 +446,7 @@ int test_raster()
         // the near sphere is OFFSET so only part of the far disc hides
         // behind it: same-center discs would nest exactly and "far_seen
         // > 0" would be unsatisfiable by geometry, not by the zbuf
-        two.add_sphere(0.25f, 0.5f, 2.f, 0.25f, 8, 4, 1, 1.f); // near, part 1
+        two.add_sphere(0.25f, 0.5f, 2.f, 0.25f, 8, 4, 1, 1.f);  // near, part 1
         const uint32_t pc2[2] = {col, zb::raster::pack(20, 200, 20)};
         paint.part_colors = pc2;
         paint.part_count = 2;

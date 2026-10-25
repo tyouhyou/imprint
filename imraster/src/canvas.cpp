@@ -78,10 +78,10 @@ namespace zb::raster
      * operands that were in L1 (F40).
      */
     [[gnu::always_inline]] inline uint32_t tent_px(const uint32_t top,
-                                                  const int ar, const int ag,
-                                                  const int ab, const int br,
-                                                  const int bg, const int bb,
-                                                  const int w)
+                                                   const int ar, const int ag,
+                                                   const int ab, const int br,
+                                                   const int bg, const int bb,
+                                                   const int w)
     {
         return top | static_cast<uint32_t>(ar + (((br - ar) * w) >> 8)) |
                (static_cast<uint32_t>(ag + (((bg - ag) * w) >> 8)) << 8) |
@@ -104,7 +104,7 @@ namespace zb::raster
                 std::swap(a, b);
             }
         }
-    } // namespace
+    }  // namespace
 
     void Canvas::reset_mesh_depth() noexcept
     {
@@ -114,9 +114,13 @@ namespace zb::raster
         }
     }
 
-    void Canvas::set_replicate(const int n) 
+    void Canvas::set_replicate(const int n)
     {
-        rep_ = n > 1 ? n : 1;
+        // clamped at both ends (review round 1): the low end keeps rep 0
+        // from dividing, the high end keeps the upscale's fixed
+        // kMaxRep-slot weight table in bounds -- anything past kMaxRep
+        // degrades to kMaxRep, it never walks the table past its end
+        rep_ = n > 1 ? (n < kMaxRep ? n : kMaxRep) : 1;
         grid_w_ = w_ / rep_;
         grid_h_ = h_ / rep_;
         // Only reallocate when the geometry actually moved: set_replicate(1)
@@ -160,7 +164,7 @@ namespace zb::raster
             const int v = a + b;
             return v < 0 ? 0 : (v > 255 ? 255 : v);
         }
-    } // namespace
+    }  // namespace
 
     void Canvas::add_pixel(const int x, const int y, const int r, const int g,
                            const int b, const int gain) noexcept
@@ -189,7 +193,6 @@ namespace zb::raster
                         stride);
         }
     }
-
 
     void Canvas::resize(const int w, const int h)
     {
@@ -227,7 +230,7 @@ namespace zb::raster
     {
         if (rep_ <= 1 || grid_w_ < 1 || grid_h_ < 1)
         {
-            return; // no grid: the world drew on the surface already
+            return;  // no grid: the world drew on the surface already
         }
         const int rep = rep_;
         const int gw = grid_w_;
@@ -333,7 +336,8 @@ namespace zb::raster
          * one short run inside a buffer that is already in L1.
          */
         const int tail = w_ - gw * rep;
-        const auto hrow = [&](uint32_t *const dst, const int gy) {
+        const auto hrow = [&](uint32_t *const dst, const int gy)
+        {
             const uint32_t *const src =
                 grid_.data() + static_cast<size_t>(gy) * static_cast<size_t>(gw);
             for (int gx = 0; gx < gw; ++gx)
@@ -782,7 +786,8 @@ namespace zb::raster
         const double octant_limit =
             static_cast<double>(radius) / std::sqrt(2.0);
 
-        auto incircle_pixels = [&](const int a, const int b) {
+        auto incircle_pixels = [&](const int a, const int b)
+        {
             hspan(cy + b, cx - a, cx + a, c);
             hspan(cy - b, cx - a, cx + a, c);
             hspan(cy + a, cx - b, cx + b, c);
@@ -790,10 +795,12 @@ namespace zb::raster
         };
 
         incircle_pixels(px, py);
-        for (px = 1; static_cast<double>(px) < octant_limit; ++px) {
+        for (px = 1; static_cast<double>(px) < octant_limit; ++px)
+        {
             x2m1 += 2;
             d += x2m1;
-            if (d >= 0) {
+            if (d >= 0)
+            {
                 py--;
                 d -= py << 1;
             }
@@ -831,7 +838,7 @@ namespace zb::raster
                 // linear falloff to the rim: no sqrt, and a sprite this
                 // small does not need the extra fidelity
                 const float f = 1.f - std::sqrt(static_cast<float>(d2)) /
-                                            static_cast<float>(radius);
+                                          static_cast<float>(radius);
                 const float k = f * f * strength;
                 uint32_t &p = active_row(y)[x];
                 // X-20: the int channel -> float promotion of `r * k` was
@@ -844,4 +851,4 @@ namespace zb::raster
             }
         }
     }
-} // namespace zb::raster
+}  // namespace zb::raster

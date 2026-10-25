@@ -23,7 +23,7 @@ namespace zb::raster
         // it through -- so the sort key lives here.
         std::vector<int> g_tri_order;
         std::vector<float> g_tri_key;
-    } // namespace
+    }  // namespace
 
     void MeshBuf::reset()
     {
@@ -291,7 +291,8 @@ namespace zb::raster
             static std::vector<int> remap;
             remap.assign(nv, -1);
             const auto lerp_vert = [&](const int i0, const int i1,
-                                       const float t) {
+                                       const float t)
+            {
                 const MeshVert &a = in.verts[static_cast<size_t>(i0)];
                 const MeshVert &b = in.verts[static_cast<size_t>(i1)];
                 MeshVert m;
@@ -318,7 +319,8 @@ namespace zb::raster
                 return m;
             };
             const auto lerp_uv = [&](const int i0, const int i1,
-                                     const float t) {
+                                     const float t)
+            {
                 const float u0 = in.uv[static_cast<size_t>(i0) * 2 + 0];
                 const float u1 = in.uv[static_cast<size_t>(i1) * 2 + 0];
                 const float v0 = in.uv[static_cast<size_t>(i0) * 2 + 1];
@@ -326,7 +328,8 @@ namespace zb::raster
                 out.uv.push_back(u0 + (u1 - u0) * t);
                 out.uv.push_back(v0 + (v1 - v0) * t);
             };
-            const auto copy_uv = [&](const int i) {
+            const auto copy_uv = [&](const int i)
+            {
                 out.uv.push_back(in.uv[static_cast<size_t>(i) * 2 + 0]);
                 out.uv.push_back(in.uv[static_cast<size_t>(i) * 2 + 1]);
             };
@@ -382,7 +385,7 @@ namespace zb::raster
             }
             return true;
         }
-    } // namespace
+    }  // namespace
 
     void draw_mesh(Canvas &t, const Camera &cam, const MeshBuf &buf,
                    const MeshPaint &paint)
@@ -399,7 +402,7 @@ namespace zb::raster
         const bool was_clipped = clip_near(clipped, cam, buf);
         if (was_clipped && clipped.tris.empty())
         {
-            return; // entirely behind the near plane: nothing to draw
+            return;  // entirely behind the near plane: nothing to draw
         }
         const MeshBuf &mesh = was_clipped ? clipped : buf;
         if (paint.part_colors == nullptr || paint.part_count <= 0)
@@ -411,7 +414,7 @@ namespace zb::raster
             t.mesh_depth_count() !=
                 static_cast<size_t>(gw) * static_cast<size_t>(gh))
         {
-            return; // the canvas owes a reset_mesh_depth()/resize
+            return;  // the canvas owes a reset_mesh_depth()/resize
         }
 
         // whether any column has a wall in front of it at all; the inner
@@ -433,13 +436,13 @@ namespace zb::raster
         const bool have_world_z = paint.world_depth != nullptr &&
                                   paint.world_w > 0 && paint.world_h > 0;
         const float wz_sx = have_world_z
-                                ? static_cast<float>(paint.world_w) /
-                                      static_cast<float>(gw)
-                                : 0.f;
+                              ? static_cast<float>(paint.world_w) /
+                                    static_cast<float>(gw)
+                              : 0.f;
         const float wz_sy = have_world_z
-                                ? static_cast<float>(paint.world_h) /
-                                      static_cast<float>(gh)
-                                : 0.f;
+                              ? static_cast<float>(paint.world_h) /
+                                    static_cast<float>(gh)
+                              : 0.f;
 
         // per-column ray terms: the eye-to-pixel direction is
         //     dir = forward + right * ax[x] + up * ay[y]
@@ -460,8 +463,7 @@ namespace zb::raster
         for (int x = 0; x < gw; ++x)
         {
             ax[static_cast<size_t>(x)] =
-                cam.plane * (2.f * static_cast<float>(x) + 1.f -
-                             static_cast<float>(gw)) /
+                cam.plane * (2.f * static_cast<float>(x) + 1.f - static_cast<float>(gw)) /
                 static_cast<float>(gw);
             ax2[static_cast<size_t>(x)] =
                 ax[static_cast<size_t>(x)] * ax[static_cast<size_t>(x)];
@@ -489,8 +491,8 @@ namespace zb::raster
         // project: screen position plus the perspective term, from the
         // caller's world-space vertices (normals arrive world-space too)
         static std::vector<float> px_buf, nx_buf;
-        px_buf.resize(mesh.verts.size() * 3); // screen x/y/iw
-        nx_buf.resize(mesh.verts.size() * 3); // world normal
+        px_buf.resize(mesh.verts.size() * 3);  // screen x/y/iw
+        nx_buf.resize(mesh.verts.size() * 3);  // world normal
         for (size_t i = 0; i < mesh.verts.size(); ++i)
         {
             const MeshVert &mv = mesh.verts[i];
@@ -531,7 +533,8 @@ namespace zb::raster
             }
             const std::vector<float> &key = g_tri_key;
             std::sort(g_tri_order.begin(), g_tri_order.end(),
-                      [&key](const int a, const int b) {
+                      [&key](const int a, const int b)
+                      {
                           return key[static_cast<size_t>(a)] >
                                  key[static_cast<size_t>(b)];
                       });
@@ -651,8 +654,8 @@ namespace zb::raster
                 else
                 {
                     const float hd = paint.haze_dist > 0.f
-                                         ? paint.haze_dist
-                                         : paint.fog_dist;
+                                       ? paint.haze_dist
+                                       : paint.fog_dist;
                     hf = vtri / hd;
                     hf = hf < 0.f ? 0.f : (hf > 1.f ? 1.f : hf);
                     hf *= hf;
@@ -675,7 +678,7 @@ namespace zb::raster
             // per pixel; untextured it is the same three numbers it always
             // was, and the arithmetic below is unchanged
             float cr_t = cr, cg_t = cg, cb_t = cb;
-            float gr = 1.f, ggn = 1.f, gbn = 1.f; // texture gain, per channel
+            float gr = 1.f, ggn = 1.f, gbn = 1.f;  // texture gain, per channel
 
             /*
              * Texture, when the caller gave one AND the body carries UVs.
@@ -771,7 +774,13 @@ namespace zb::raster
                     const float g2 = gxi > gyi ? gxi : gyi;
                     const float grad = g1 > g2 ? g1 : g2;
                     int lv = 0;
+                    // clamped to the mips[]/mip_sizes[] slot count
+                    // (kMipSlots, review round 1): a caller with an
+                    // oversized mip_levels degrades to the finest stored
+                    // level instead of indexing past the member arrays.
+                    // For mip_levels <= kMipSlots this is the same walk.
                     while (lv + 1 < paint.mip_levels &&
+                           lv + 1 < kMipSlots &&
                            grad >= static_cast<float>(1 << (lv + 1)))
                     {
                         ++lv;
@@ -822,8 +831,8 @@ namespace zb::raster
                 const MeshVert *vv[3] = {&va, &vb, &vc};
                 const float *nn[3] = {na, nb, nc};
                 float *dst[3][3] = {{&vr0, &vg0, &vb0},
-                                     {&vr1, &vg1, &vb1},
-                                     {&vr2, &vg2, &vb2}};
+                                    {&vr1, &vg1, &vb1},
+                                    {&vr2, &vg2, &vb2}};
                 const float pal[3] = {cr, cg, cb};
                 for (int k = 0; k < 3; ++k)
                 {
@@ -943,7 +952,7 @@ namespace zb::raster
                     }
                     else if (re[e] < 0.f)
                     {
-                        row_empty = true; // parallel to the row and outside
+                        row_empty = true;  // parallel to the row and outside
                         break;
                     }
                 }
@@ -1005,8 +1014,8 @@ namespace zb::raster
                     if (iw <= zrow[x] ||
                         (have_walls && iw <= iwall[static_cast<size_t>(x)]))
                     {
-                        continue; // behind the body's own surface, or a
-                                  // wall stands in front of this column
+                        continue;  // behind the body's own surface, or a
+                                   // wall stands in front of this column
                     }
                     /*
                      * The world, when this body is drawn SHARPER than it
@@ -1036,7 +1045,7 @@ namespace zb::raster
                                               static_cast<size_t>(wz_x)];
                         if (wz > 0.f && iw <= wz + paint.world_iw_eps)
                         {
-                            continue; // the world owns this pixel
+                            continue;  // the world owns this pixel
                         }
                     }
                     zrow[x] = iw;
@@ -1044,17 +1053,25 @@ namespace zb::raster
                     // the surface texture, multiplied into the material
                     // AFTER the lighting: a texel is a gain around 1.0, so
                     // it can darken a highlight but must not brighten past
-                    // the same ceiling the untextured path has. The
-                    // Gouraud path cannot take it -- its colours are lit
-                    // per vertex, and a texture is a per-pixel story -- so
-                    // a textured body keeps the exact shading path.
+                    // the same ceiling the untextured path has. BOTH
+                    // shading paths take it as the same per-pixel gain
+                    // (gr/ggn/gbn): the Gouraud path multiplies it over
+                    // the lit vertex colors, the per-pixel-normal path
+                    // into the shaded colour -- a textured triangle on the
+                    // Gouraud path is worth 8 ms a frame on the viewmodel
+                    // (measured, see the fetch below).
+                    // (Comment reworded in review round 1: it used to
+                    // claim the Gouraud path "cannot take" the texture,
+                    // which contradicted the code and the fetch's own
+                    // comment -- the code always applied the gain on both
+                    // paths.)
                     if (textured)
                     {
                         const int tu_i = static_cast<int>(tu) & tlmask;
                         const int tv_i = static_cast<int>(tv) & tlmask;
                         const uint32_t texel = tsel
-                            ? paint.mips[tlevel][tv_i * (tlmask + 1) + tu_i]
-                            : paint.texels[tv_i * paint.tex_size + tu_i];
+                                                 ? paint.mips[tlevel][tv_i * (tlmask + 1) + tu_i]
+                                                 : paint.texels[tv_i * paint.tex_size + tu_i];
                         tu += stu;
                         tv += stv;
                         // 128 is the neutral texel: the map is a GAIN
@@ -1227,4 +1244,4 @@ namespace zb::raster
             }
         }
     }
-} // namespace zb::raster
+}  // namespace zb::raster
