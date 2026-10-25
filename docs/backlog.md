@@ -451,9 +451,20 @@ rationale in `reports/audit-2026-10-15.md` §5.
   `imraster` module** (ARCHITECTURE §4.12) — that closes R20. The other
   supply items (texture/mip chain, tone/Atmosphere, WorldMesh cache,
   asset pipeline) stay documented as fps-side pointers, not absorbed —
-  no imprint consumer today. **R7 is already closed**: the U-6 depth
-  plane (`draw_line_depth`/`fill_triangle_depth`, `test_depth_fill`)
-  postdates the fps report's pinned snapshot (797878b).
+  no imprint consumer today. **Already closed on our side** (the fps
+  report's pinned snapshot 797878b predates them):
+  **R7** — the U-6 depth plane (`draw_line_depth`/`fill_triangle_depth`,
+  `test_depth_fill`); **R9** — getting-started "Text at scale" (5×7
+  bitmap vs runtime TTF, the documented high-res path); **R10** —
+  getting-started "Dialog assembly" plus the two behavior fixes fps
+  asked for, already in the code and test-locked (title box auto-grows
+  to `px + 4`, `dialog.cpp:57` + `test_dialog.cpp:53`; button row
+  shrinks proportionally instead of overflowing, U-5, `dialog.cpp:63` +
+  `test_dialog.cpp:64`); **R5's constraint** is documented (ARCHITECTURE
+  §5 wasm stack bullet). Condition-triggered leftover: R5's
+  scratch-allocator suggestion (`Graphics::scratch(n)`) — only if
+  multi-window/multi-context consumers appear (per-frame statics are wrong
+  for them).
 - Agreed order (2026-10-25 user ruling), each item contract-first and
   independently verifiable:
   1. **R1 zero-copy alias** — `draw_surface` (U-8, code-contract §9)

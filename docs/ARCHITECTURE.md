@@ -681,6 +681,12 @@ for a library-mode consumer and A-28's feature inventory.
   HiDPI backing scale shows a smaller physical image).
 - 16bpp builds are embedded-only: the desktop shells and DIB/XImage present
   assume 32bpp; a desktop `COLOR_DEPTH=16` build is compile/test-only.
+- WebAssembly hosts run on emsdk's default **64 KB stack**: per-frame
+  temporaries in a consumer's render path must live in static or heap
+  storage, not the call stack, and recursion must be bounded or absent —
+  a handful of 4 KB frame arrays together already overflow
+  (`memory access out of bounds`). The framework's own hot paths are
+  written to the same discipline (fps consumer report R5, measured).
 - The `imraster` module (§4.12) is 32bpp `rgba32`/`le`-only: its `raster`
   test suite runs in the raster battery configuration, not in the standard
   desktop battery, and the module configures out of 16bpp/embedded builds
