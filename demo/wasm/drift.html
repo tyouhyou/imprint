@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SIGNAL DRIFT · 信号漂移</title>
+<style>
+  body {
+    margin: 0;
+    padding: 24px 16px;
+    background: #05080f;
+    color: #cfe6ff;
+    font-family: sans-serif;
+    text-align: center;
+  }
+  h1 { font-size: 20px; color: #6ee7ff; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen {
+    width: min(880px, calc(100vw - 32px));
+    aspect-ratio: 800 / 520;
+    height: auto;
+    background: #060a14;
+    border: 1px solid #14303c;
+    border-radius: 6px;
+  }
+  #status { margin-top: 8px; font-size: 13px; color: #55707e; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #9fbed8; }
+  .chips { margin: 14px auto 0; display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .chip {
+    display: inline-block;
+    padding: 4px 12px;
+    border: 1px solid #1e3a46;
+    border-radius: 999px;
+    font-size: 12px;
+    color: #6ee7ff;
+    background: #0a1220;
+  }
+</style>
+</head>
+<body>
+
+<h1>SIGNAL DRIFT · 信号漂移</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+
+<div class="chips">
+  <span class="chip">WATCH 25 秒</span>
+  <span class="chip">FIND 点击找变化</span>
+  <span class="chip">REVEAL 逐字节重放</span>
+</div>
+
+<p class="hint">
+  怎么玩：信号干扰闪过的瞬间有什么变了。第二阶段点击你发现的变化；
+  结算时同一个 runtime 会把 T+0 的画面逐字节重放，并排对比、标出每一处像素差异。
+</p>
+
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="drift.js"></script>
+</body>
+</html>
