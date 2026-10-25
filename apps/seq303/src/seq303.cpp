@@ -206,6 +206,7 @@ void SeqGrid::select_pattern(const int p)
     if (!playing_)
     {
         queued_ = -1;
+        queued_by_chain_ = false;
         if (p != pattern_)
         {
             pattern_ = p;
@@ -213,10 +214,18 @@ void SeqGrid::select_pattern(const int p)
             mark_dirty();
         }
     }
-    else if (p != pattern_)
+    else if (p == pattern_)
+    {
+        // re-tapping the playing slot cancels a pending quantized
+        // switch -- otherwise a mis-tap is uncancellable for a bar
+        queued_ = -1;
+        queued_by_chain_ = false;
+    }
+    else
     {
         // quantized: takes over when the playhead wraps to step 0
         queued_ = p;
+        queued_by_chain_ = false;
     }
 }
 
@@ -231,14 +240,12 @@ void SeqGrid::copy_to_next()
 void SeqGrid::set_chain(const bool on)
 {
     chain_ = on;
-    if (!on)
+    if (!on && queued_by_chain_)
     {
         // a pending auto-advance dies with the switch; a user-queued
         // slot survives (it was tapped deliberately)
-        if (queued_ == (pattern_ + 1) % kPatterns)
-        {
-            queued_ = -1;
-        }
+        queued_ = -1;
+        queued_by_chain_ = false;
     }
 }
 
@@ -337,11 +344,13 @@ void SeqGrid::tick()
         ++counter_;
         if (step_ == 0)
         {
-            // bar wrap: CHAIN queues the next slot; any queued switch
-            // (user or chain) takes over here
-            if (chain_)
+            // bar wrap: CHAIN queues the next slot -- never over a
+            // pending user switch -- and any queued switch (user or
+            // chain) takes over here
+            if (chain_ && queued_ < 0)
             {
                 queued_ = (pattern_ + 1) % kPatterns;
+                queued_by_chain_ = true;
             }
             if (queued_ >= 0 && queued_ < kPatterns && queued_ != pattern_)
             {
@@ -350,6 +359,7 @@ void SeqGrid::tick()
                 mark_dirty();
             }
             queued_ = -1;
+            queued_by_chain_ = false;
         }
         trigger_step(step_);
     }
@@ -657,6 +667,20 @@ void Sequencer::sync_strip()
     {
         return;
     }
+    // strip setters mark dirty unconditionally, and this runs every
+    // paint -- push only on a state change so an idle strip stays out
+    // of the damage region (the repaint overlay on the demo page would
+    // otherwise show a full-frame box forever)
+    const int cur = grid_->pattern();
+    const int queued = grid_->queued_pattern();
+    const bool chain_on = grid_->chain();
+    const int key = grid_->layer() | (cur << 2) | ((queued + 1) << 4) |
+                    (chain_on ? 1 << 8 : 0);
+    if (key == strip_cache_)
+    {
+        return;
+    }
+    strip_cache_ = key;
     // layer tabs: the active one lights amber with dark ink
     for (int i = 0; i < kLayers; ++i)
     {
@@ -665,14 +689,11 @@ void Sequencer::sync_strip()
         layer_btns_[i]->set_background_color(on ? kMelodyOn : kFieldBg);
     }
     // pattern slots: current = amber text, queued = amber outline
-    const int cur = grid_->pattern();
-    const int queued = grid_->queued_pattern();
     for (int i = 0; i < kPatterns; ++i)
     {
         pat_btns_[i]->set_text_color(i == cur ? kMelodyOn : kCream);
         pat_btns_[i]->set_border_color(i == queued ? kMelodyOn : kBorderDim);
     }
-    const bool chain_on = grid_->chain();
     chain_btn_->set_text_color(chain_on ? kInkOnAmber : kCream);
     chain_btn_->set_background_color(chain_on ? kMelodyOn : kFieldBg);
 }

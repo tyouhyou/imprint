@@ -121,9 +121,10 @@ namespace zb::app::seq303
         unsigned char melody_[kPatterns][kLayers][kMelodyRows][kSteps] = {};
         unsigned char drums_[kPatterns][kDrumRows][kSteps] = {};
         bool slide_[kLayers][kMelodyRows] = {};
-        int layer_ = 0;    // editing view
-        int pattern_ = 0;  // playing / shown pattern slot
-        int queued_ = -1;  // pending switch, applied at the bar wrap
+        int layer_ = 0;                 // editing view
+        int pattern_ = 0;               // playing / shown pattern slot
+        int queued_ = -1;               // pending switch, applied at the bar wrap
+        bool queued_by_chain_ = false;  // queued_ came from CHAIN, not a tap
         bool chain_ = false;
         int scale_ = 0;
 
@@ -262,6 +263,7 @@ namespace zb::app::seq303
         event::Subscription<> sub_pat_[kPatterns];
         event::Subscription<> sub_chain_;
         event::Subscription<> sub_copy_;
+        int strip_cache_ = -1;  // packed strip state; setters fire on change only
     };
 }  // namespace zb::app::seq303
 
