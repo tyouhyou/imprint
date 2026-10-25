@@ -41,7 +41,9 @@ regression baseline for this module's arithmetic.
 
 - `raster-test` (imprint verify target; native, ~2s, no game, no wasm;
   the `raster` suite rides `test_imui` in the `IMPRINT_WITH_IMRASTER=ON`
-  rgba32/le config): 27 assertions — projection against the docstring
+  rgba32/le config): 28 assertions (27 upstream one-for-one, plus the
+  imprint-local set_replicate clamp lock added in review round 2) —
+  projection against the docstring
   formula, blend against the src-over expression, builder count
   contracts, the outward-normal invariant of the self-healing winding,
   unlit paint resolving to the EXACT part color, per-pixel

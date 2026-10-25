@@ -3,7 +3,8 @@
  * rasterizer and the per-pixel mesh path -- native, host compiler, no
  * wasm, no game, nothing from imprint beyond the pixel traits header.
  * (Ported 2026-10-25 from the fps repo's raster_check.cpp onto the
- * battery's EXPECT harness; the assertions are upstream's, one for one.)
+ * battery's EXPECT harness; the assertions are upstream's, one for one,
+ * plus one imprint-local set_replicate clamp lock -- review round 2.)
  *
  * Why this exists (2026-10-05, the raster-core extraction). The module
  * was cut out of fps so it could be PROMOTED into imprint as a component,
@@ -214,6 +215,15 @@ int test_raster()
         t.reset_mesh_depth();
         // mesh depth: reset zeroes
         EXPECT(t.mesh_depth_data()[0] == 0.f);
+
+        // imprint-local clamp lock (review round 2; no upstream analog --
+        // fps bounds rep as a settings value): the replicate factor
+        // clamps into 1..8 so the upscale's fixed 8-slot weight table
+        // (canvas.cpp kMaxRep) can never be walked past its end. The
+        // MeshPaint::mip_levels clamp rides the kMipSlots header
+        // contract; it has no one-line assertion of its own.
+        t.set_replicate(9);
+        EXPECT(t.replicate() == 8);
     }
 
     // ---- 3: the box rasterizer, spans and depth ---------------------
