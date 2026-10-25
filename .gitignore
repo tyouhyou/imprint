@@ -64,6 +64,7 @@ Thumbs.db
 /demo/wasm/*.wasm
 !/demo/wasm/main.js
 !/demo/wasm/smoke.js
+!/demo/wasm/proto_host.js
 
 /reports/
 /design/

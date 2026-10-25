@@ -12,7 +12,10 @@ const SIZES = {
     showcase: [320, 240],
     showcase_html: [320, 240],
     life: [320, 240],
-    seedmap: [320, 240]
+    seedmap: [320, 240],
+    seq303: [800, 520],
+    drift: [800, 520],
+    sandbox: [800, 520]
 };
 const SZ = SIZES[NAME] || [256, 192];
 const W = SZ[0], H = SZ[1];
@@ -320,6 +323,118 @@ createModule({
         console.log("playground: declarative C-ABI roundtrip ok (clicks=" + clicks + ", text=" + text + ")");
         Module._zb_app_destroy(declApp);
         Module._free(uiBuf); Module._free(out);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      if (NAME === "seq303") {
+        // PLAY sits at buffer (124,16)..(212,68) at the 800x520 web tier
+        // (u=2 header); after 30 paints the lookahead queue must have
+        // produced note events with advancing global-step tags
+        const drain = function (a) {
+          const out = [];
+          for (;;) {
+            const ev = Module.ccall("seq303_note_pop", "number");
+            if (ev < 0) break;
+            out.push(ev);
+          }
+          return out;
+        };
+        click(app, 168, 42);  // PLAY
+        let notes = [];
+        for (let i = 0; i < 30; i++) {
+          paint(app);
+          notes = notes.concat(drain(app));
+        }
+        if (Module.ccall("seq303_is_playing", "number") !== 1) {
+          throw new Error("PLAY did not start the sequencer");
+        }
+        if (notes.length < 4) throw new Error("no note events after PLAY (" + notes.length + ")");
+        let maxG = 0;
+        for (const ev of notes) maxG = Math.max(maxG, ev >> 6);
+        if (maxG < 3) throw new Error("step counter did not advance (maxG=" + maxG + ")");
+        // determinism: the same taps + paints + drains on two fresh apps
+        // render byte-identical frames (the queue is a process-global
+        // mirror, so both runs drain it after every paint)
+        const replay303 = function () {
+          const a = Module._zb_app_create(W, H);
+          input(a, 9, W >> 1, H >> 1, 0, 0, 0);  // mirror the preamble tap
+          input(a, 10, W >> 1, H >> 1, 0, 0, 0);
+          click(a, 168, 42);
+          const frames = [];
+          for (let i = 0; i < 30; i++) {
+            paint(a);
+            drain(a);
+            if (i % 10 === 9) frames.push(snapOf(a));
+          }
+          Module._zb_app_destroy(a);
+          return frames;
+        };
+        const r1 = replay303(), r2 = replay303();
+        for (let i = 0; i < r1.length; i++) {
+          if (!same(r1[i], r2[i])) throw new Error("seq303 replay frame " + i + " diverged");
+        }
+        console.log("seq303: notes flow, steps advance, replay byte-identical");
+        Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      if (NAME === "drift") {
+        // the feed is a pure function of the frame counter: two apps
+        // painted the same number of times render byte-identical frames,
+        // and consecutive sample frames differ (the feed animates)
+        const runDrift = function () {
+          const a = Module._zb_app_create(W, H);
+          const frames = [];
+          for (let i = 0; i < 90; i++) {
+            paint(a);
+            if (i === 10 || i === 80) frames.push(snapOf(a));
+          }
+          Module._zb_app_destroy(a);
+          return frames;
+        };
+        const r1 = runDrift(), r2 = runDrift();
+        if (same(r1[0], r1[1])) throw new Error("the feed does not animate between frames");
+        for (let i = 0; i < r1.length; i++) {
+          if (!same(r1[i], r2[i])) throw new Error("drift replay frame " + i + " diverged");
+        }
+        console.log("drift: feed animates, replay byte-identical");
+        Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      if (NAME === "sandbox") {
+        // the preloaded world settles under gravity within 60 frames,
+        // and a stroked input stream replays byte-identically (the
+        // page's "same input, same world" promise)
+        const first = snapOf(app);
+        for (let i = 0; i < 60; i++) paint(app);
+        if (same(first, snapOf(app))) throw new Error("the preloaded world does not evolve");
+        const replaySand = function () {
+          const a = Module._zb_app_create(W, H);
+          input(a, 9, 300, 200, 0, 0, 0);
+          input(a, 11, 340, 210, 0, 0, 0);
+          input(a, 11, 380, 220, 0, 0, 0);
+          input(a, 10, 380, 220, 0, 0, 0);
+          const frames = [];
+          for (let i = 0; i < 40; i++) {
+            paint(a);
+            if (i % 10 === 9) frames.push(snapOf(a));
+          }
+          Module._zb_app_destroy(a);
+          return frames;
+        };
+        const r1 = replaySand(), r2 = replaySand();
+        for (let i = 0; i < r1.length; i++) {
+          if (!same(r1[i], r2[i])) throw new Error("sandbox replay frame " + i + " diverged");
+        }
+        console.log("sandbox: world evolves, stroked replay byte-identical");
+        Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
         process.exit(0);

@@ -2,7 +2,7 @@
 # Build a story app as a wasm demo inside the emscripten/emsdk container.
 # Expected layout: the repo is mounted at /src (project root = /src).
 #
-# Usage: build.sh [tictactoe|showcase|showcase_html|playground]  (default: tictactoe)
+# Usage: build.sh [tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox]  (default: tictactoe)
 set -e
 
 cd /src
@@ -179,7 +179,7 @@ TUEOF
     EXTRA_INCLUDES="-I /tmp"
     EXTRA_DEFS="-DIMCORE_HAS_TTF_RUNTIME"
     ;;
-g2048|mines|life|seedmap)
+g2048|mines|life|seedmap|seq303|drift|sandbox)
     # the gh-pages demo-portal apps (2026-10-03): plain story apps, no
     # build-time tooling (the hello shape)
     APP_SRCS="
@@ -190,7 +190,7 @@ g2048|mines|life|seedmap)
     EXPORT_NAME="create$(echo "${APP}" | sed 's/^\(.\)/\U\1/')"
     EXTRA_INCLUDES=""
     case "$APP" in
-    g2048|mines|life|seedmap)
+    g2048|mines|life|seedmap|seq303|drift|sandbox)
         # the portal games scale header/dialog text with the buffer
         # (runtime TTF, the showcase shape): pull in the stb_truetype
         # TUs and pack the Inter blob under the app's own symbol.
@@ -210,7 +210,7 @@ g2048|mines|life|seedmap)
     esac
     ;;
 *)
-    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap)" >&2
+    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox)" >&2
     exit 1
     ;;
 esac
