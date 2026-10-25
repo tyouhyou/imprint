@@ -17,7 +17,10 @@ namespace
         return v < lo ? lo : (v > hi ? hi : v);
     }
 
-    constexpr unsigned char uc(const int v) { return static_cast<unsigned char>(v); }
+    constexpr unsigned char uc(const int v)
+    {
+        return static_cast<unsigned char>(v);
+    }
 
     // feed palette: deep-space navy, monitor cyan accents, warm lamps
     const core::Color kSky1 = core::Color::from(0x06, 0x0a, 0x14);
@@ -529,8 +532,8 @@ void SceneWidget::draw_at(core::Graphics &area) const
         const int remaining = kWatchLen + kFindLen - rframe_;
         const int frac = remaining * W / kFindLen;
         const core::Color &c = remaining * 3 > kFindLen * 2
-            ? kTimer1
-            : (remaining * 3 > kFindLen ? kTimer2 : kTimer3);
+                                 ? kTimer1
+                                 : (remaining * 3 > kFindLen ? kTimer2 : kTimer3);
         area.fill_rect(0, 0, W - 1, 4, kTimerTrack);
         area.fill_rect(0, 1, frac, 3, c);
 

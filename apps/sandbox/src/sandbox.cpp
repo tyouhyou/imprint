@@ -70,7 +70,7 @@ namespace
         "ACID", "LAVA", "STEAM", "ERASE", "CLEAR"};
     const unsigned char kBtnMat[Sandbox::kBtnCount] = {
         SandCanvas::WALL, SandCanvas::SAND, SandCanvas::WATER,
-        SandCanvas::OIL,  SandCanvas::FIRE, SandCanvas::ACID,
+        SandCanvas::OIL, SandCanvas::FIRE, SandCanvas::ACID,
         SandCanvas::LAVA, SandCanvas::STEAM, SandCanvas::EMPTY, 0};
 
     // FIRE / STEAM lifetime knobs (in generations)
@@ -697,8 +697,7 @@ void Sandbox::create_window(const uint32_t max_client_width,
                                               canvas_->set_brush(v);
                                               char buf[8];
                                               std::snprintf(buf, sizeof(buf), "%d", v);
-                                              brush_val_->set_text(buf);
-                                          });
+                                              brush_val_->set_text(buf); });
     root.add_child(std::move(brush));
 
     auto brush_val = std::make_unique<Label>();
