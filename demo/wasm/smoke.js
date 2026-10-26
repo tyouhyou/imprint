@@ -15,7 +15,8 @@ const SIZES = {
     seedmap: [320, 240],
     seq303: [800, 520],
     drift: [800, 520],
-    sandbox: [800, 520]
+    sandbox: [800, 520],
+    firefly: [800, 520]
 };
 const SZ = SIZES[NAME] || [256, 192];
 const W = SZ[0], H = SZ[1];
@@ -465,6 +466,45 @@ createModule({
           if (!same(r1[i], r2[i])) throw new Error("sandbox replay frame " + i + " diverged");
         }
         console.log("sandbox: world evolves, stroked replay byte-identical");
+        Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      if (NAME === "firefly") {
+        // intro card -> START (card centered under the 32u HUD strip at
+        // the 800x520 web tier); the night then runs as a pure function
+        // of the frame counter, and a lantern stroke replays
+        // byte-identically (the determinism contract)
+        const intro = snapOf(app);
+        click(app, 400, 332);  // START (card bottom, u=2 tier)
+        let a = snapOf(app), b = null;
+        for (let i = 0; i < 90; i++) {
+          paint(app);
+          if (i === 45) a = snapOf(app);
+        }
+        b = snapOf(app);
+        if (same(a, b)) throw new Error("the night does not advance between frames");
+        const replayFly = function () {
+          const f = Module._zb_app_create(W, H);
+          const frames = [];
+          click(f, 400, 332);  // START
+          for (let i = 0; i < 90; i++) {
+            if (i === 10) { input(f, 9, 300, 200, 0, 0, 0); }
+            if (i === 40) { input(f, 11, 340, 230, 0, 0, 0); }
+            if (i === 60) { input(f, 10, 340, 230, 0, 0, 0); }
+            paint(f);
+            if (i % 20 === 19) frames.push(snapOf(f));
+          }
+          Module._zb_app_destroy(f);
+          return frames;
+        };
+        const r1 = replayFly(), r2 = replayFly();
+        for (let i = 0; i < r1.length; i++) {
+          if (!same(r1[i], r2[i])) throw new Error("firefly replay frame " + i + " diverged");
+        }
+        console.log("firefly: night runs, lantern stroke replay byte-identical");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
