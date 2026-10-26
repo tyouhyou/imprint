@@ -255,7 +255,7 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 
 **Hello**（`-DSTORY=hello`）——入門アプリ：ラベル 1 つとクリック回数を数えるボタン。コピーすれば自分のアプリの起点になります（[`docs/getting-started.md`](docs/getting-started.md) 参照）。
 
-**三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します——`.ui` か HTML のパスを渡せます。
+**三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します——`.ui` か HTML のパスを渡せます。さらに 12 の story がポータルデモ用に同じ手順でビルドできます：`g2048`、`mines`、`life`、`seedmap`、`seq303`、`drift`、`sandbox`、`firefly`、`windloom`、`rotafarm`、`comet`、`crystal`（`-DSTORY=<name>`。wasm デモページも兼ねます）。
 
 | Windows | macOS | Linux (X11) | WebAssembly | ニンテンドーDS | Python ホスト |
 |:---:|:---:|:---:|:---:|:---:|:---:|
