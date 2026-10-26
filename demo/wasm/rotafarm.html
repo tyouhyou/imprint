@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ROTAFARM · 转阳田</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #14100e; color: #cfe6ff; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #ffd98a; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #14100e; border: 1px solid #3a2c20; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #ffd98a; }
+</style>
+</head>
+<body>
+<h1>ROTAFARM · 转阳田</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<p class="hint"><b>怎么玩：点田环格子播种，太阳走到哪、哪一格才生长。</b>作物五个阶段后结出金色花——<b>变金立刻点它收割</b>；反向巡游的<b>蝗群阴影</b>会吃掉半熟以上的作物。太阳绕一圈是一天，收割数就是你的分数。</p>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="rotafarm.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COMET COURIER · 陨石快递</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #060818; color: #cfe6ff; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #6ee7ff; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #060818; border: 1px solid #2a3a4a; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #6ee7ff; }
+</style>
+</head>
+<body>
+<h1>COMET COURIER · 陨石快递</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<p class="hint"><b>怎么玩：在任意处按下并向后拖拽（弹弓），松手发射。</b>绕开两颗行星的引力，依次穿过三个<b>星门</b>，最后荡回绿色<b>空间站</b>即通关；撞星、飞出边界或在轨道上搁浅都计一次尝试（已点亮的星门保留）。瞄准时会显示预测轨迹。</p>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="comet.js"></script>
+</body>
+</html>

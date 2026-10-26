@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRYSTAL EPOCH · 结晶纪</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #120a24; color: #cfe6ff; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #6ee7ff; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #120a24; border: 1px solid #3a2a50; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #6ee7ff; }
+</style>
+</head>
+<body>
+<h1>CRYSTAL EPOCH · 结晶纪</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<p class="hint"><b>怎么玩：拖动画出金色「催化线」。</b>晶体会优先沿着你的笔迹生长、在空白处分叉；在<b>溶液耗尽</b>（底部蓝条）前让枝晶碰到全部三个<b>品红锚点</b>即胜。暗红杂质会杀死撞上的枝杈，走催化线要付双倍溶液——省着画。</p>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="crystal.js"></script>
+</body>
+</html>

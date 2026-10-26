@@ -1,5 +1,5 @@
 set(STORY tictactoe CACHE STRING "Demo application to build")
-set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly)
+set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly windloom rotafarm comet crystal)
 
 # app libraries are always built on desktop (tests link them); STORY only
 # selects which one the shell executable links. The previewer is a
@@ -25,6 +25,10 @@ if (NOT NDS_PLATFORM)
     add_subdirectory(drift)
     add_subdirectory(sandbox)
     add_subdirectory(firefly)
+    add_subdirectory(windloom)
+    add_subdirectory(rotafarm)
+    add_subdirectory(comet)
+    add_subdirectory(crystal)
     add_subdirectory(ui_preview)
 endif()
 if (NOT NDS_PLATFORM OR STORY STREQUAL "showcase")
@@ -40,6 +44,6 @@ if (NOT STORY STREQUAL "tictactoe" AND NOT STORY STREQUAL "ui_preview"
     AND NOT STORY STREQUAL "showcase_html" AND NOT STORY STREQUAL "g2048"
     AND NOT STORY STREQUAL "mines" AND NOT STORY STREQUAL "life"
     AND NOT STORY STREQUAL "seedmap" AND NOT STORY STREQUAL "seq303"
-    AND NOT STORY STREQUAL "drift" AND NOT STORY STREQUAL "sandbox" AND NOT STORY STREQUAL "firefly")
+    AND NOT STORY STREQUAL "drift" AND NOT STORY STREQUAL "sandbox" AND NOT STORY STREQUAL "firefly" AND NOT STORY STREQUAL "windloom" AND NOT STORY STREQUAL "rotafarm" AND NOT STORY STREQUAL "comet" AND NOT STORY STREQUAL "crystal")
     message(FATAL_ERROR "Unknown STORY: ${STORY}")
 endif()

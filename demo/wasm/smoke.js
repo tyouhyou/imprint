@@ -16,7 +16,11 @@ const SIZES = {
     seq303: [800, 520],
     drift: [800, 520],
     sandbox: [800, 520],
-    firefly: [800, 520]
+    firefly: [800, 520],
+    windloom: [800, 520],
+    rotafarm: [800, 520],
+    comet: [800, 520],
+    crystal: [800, 520]
 };
 const SZ = SIZES[NAME] || [256, 192];
 const W = SZ[0], H = SZ[1];
@@ -505,6 +509,49 @@ createModule({
           if (!same(r1[i], r2[i])) throw new Error("firefly replay frame " + i + " diverged");
         }
         console.log("firefly: night runs, lantern stroke replay byte-identical");
+        Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      // ---- shared determinism template for the 2026-10-26 concept
+      // batch (windloom/rotafarm/comet/crystal): every world is a pure
+      // function of the input stream -- same stroke script, same bytes
+      if (NAME === "windloom" || NAME === "rotafarm" || NAME === "comet" ||
+          NAME === "crystal") {
+        // the worlds have quiet openings (a parked comet, first seed at
+        // frame 30, slow sun) -- check for motion at per-story
+        // checkpoints (comet flies then exits and re-parks quickly)
+        input(app, 9, 300, 200, 0, 0, 0);
+        input(app, 11, 340, 210, 0, 0, 0);
+        input(app, 11, 380, 220, 0, 0, 0);
+        input(app, 10, 380, 220, 0, 0, 0);
+        const cp = NAME === "comet" ? [5, 15] : [30, 60];
+        for (let i = 0; i < cp[0]; i++) paint(app);
+        const a1 = snapOf(app);
+        for (let i = cp[0]; i < cp[1]; i++) paint(app);
+        const a2 = snapOf(app);
+        if (same(a1, a2)) throw new Error(NAME + " does not advance between frames");
+        const runOnce = function () {
+          const f = Module._zb_app_create(W, H);
+          const frames = [];
+          input(f, 9, 300, 200, 0, 0, 0);
+          input(f, 11, 340, 210, 0, 0, 0);
+          input(f, 11, 380, 220, 0, 0, 0);
+          input(f, 10, 380, 220, 0, 0, 0);
+          for (let i = 0; i < 60; i++) {
+            paint(f);
+            if (i % 15 === 14) frames.push(snapOf(f));
+          }
+          Module._zb_app_destroy(f);
+          return frames;
+        };
+        const r1 = runOnce(), r2 = runOnce();
+        for (let i = 0; i < r1.length; i++) {
+          if (!same(r1[i], r2[i])) throw new Error(NAME + " replay frame " + i + " diverged");
+        }
+        console.log(NAME + ": world advances, stroke replay byte-identical");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
