@@ -19,7 +19,10 @@ namespace
 
     // night palette; dawn is the same world lerped warm -- the timer is
     // the sky itself, not a UI number
-    constexpr unsigned char uc(const int v) { return static_cast<unsigned char>(v); }
+    constexpr unsigned char uc(const int v)
+    {
+        return static_cast<unsigned char>(v);
+    }
 
     const core::Color kGlowHalo = core::Color::from(0x5a, 0x4c, 0x1e);
     const core::Color kGlowMid = core::Color::from(0xcb, 0xb4, 0x5c);
@@ -164,9 +167,10 @@ void GroveCanvas::tick()
         // them back out (attraction outweighs the damping)
         for (const webdef &w : kWebs)
         {
-            const float dx = fx_[i] - w.x;
-            const float dy = fy_[i] - w.y;
-            if (dx * dx + dy * dy < w.r * w.r)
+            const float dx = fx_[i] - static_cast<float>(w.x);
+            const float dy = fy_[i] - static_cast<float>(w.y);
+            const float wr = static_cast<float>(w.r);
+            if (dx * dx + dy * dy < wr * wr)
             {
                 vx_[i] *= 0.70f;
                 vy_[i] *= 0.70f;
@@ -223,9 +227,10 @@ void GroveCanvas::tick()
             stuck_[i] = false;
             for (const webdef &w : kWebs)
             {
-                const float dx = fx_[i] - w.x;
-                const float dy = fy_[i] - w.y;
-                if (dx * dx + dy * dy < w.r * w.r)
+                const float dx = fx_[i] - static_cast<float>(w.x);
+                const float dy = fy_[i] - static_cast<float>(w.y);
+                const float wr = static_cast<float>(w.r);
+                if (dx * dx + dy * dy < wr * wr)
                 {
                     stuck_[i] = true;
                     break;
@@ -285,7 +290,8 @@ void GroveCanvas::draw_at(core::Graphics &area) const
         const unsigned h = hash(i, 7);
         const int x = static_cast<int>(h % 400u);
         const int y = static_cast<int>((h >> 8) % 150u);
-        const int b = static_cast<int>(((h >> 16) & 0xffu) * (100 - t100) / 100);
+        const unsigned fade = static_cast<unsigned>(100 - t100);
+        const int b = static_cast<int>(((h >> 16) & 0xffu) * fade / 100u);
         if (b > 40)
         {
             area.fill_rect(X(x), Y(y), X(x), Y(y),
@@ -605,8 +611,7 @@ void FireflyApp::create_window(const uint32_t max_client_width,
                                           {
                                               grove_->start_night();
                                               grove_->set_playing(true);
-                                              show_intro(false);
-                                          });
+                                              show_intro(false); });
     intro->add_child(std::move(start));
     intro_ = intro.get();
     root.add_child(std::move(intro));
@@ -650,8 +655,7 @@ void FireflyApp::create_window(const uint32_t max_client_width,
     sub_again_ = again->clicked.subscribe([this]
                                           {
                                               grove_->start_night();
-                                              grove_->set_playing(true);
-                                          });
+                                              grove_->set_playing(true); });
     dawn->add_child(std::move(again));
     dawn_card_ = dawn.get();
     root.add_child(std::move(dawn));

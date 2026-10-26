@@ -35,13 +35,17 @@ namespace zb::app::firefly
 
         // one host frame: advance the night (paused unless playing)
         void tick();
-        void start_night();   // fresh swarm, full night ahead
+        void start_night();  // fresh swarm, full night ahead
         void set_playing(bool on) { playing_ = on; }
         [[nodiscard]] bool done() const { return done_; }
         [[nodiscard]] int homed() const { return homed_; }
         [[nodiscard]] int dawn_pct() const
         {
-            return frame_ * 100 / (kNightLen > 0 ? kNightLen : 1);
+            // unsigned math spelled out: the frame counter is unsigned and
+            // kNightLen is a positive compile-time constant, so the only
+            // narrowing is the final result the HUD wants as an int
+            const unsigned night = static_cast<unsigned>(kNightLen);
+            return static_cast<int>(frame_ * 100u / night);
         }
 
     protected:
@@ -179,7 +183,7 @@ namespace zb::app::firefly
 
         event::Subscription<> sub_start_;
         event::Subscription<> sub_again_;
-        int last_homed_ = -1;   // HUD cache: setters fire on change only
+        int last_homed_ = -1;  // HUD cache: setters fire on change only
         bool last_done_ = false;
     };
 }  // namespace zb::app::firefly

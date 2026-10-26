@@ -500,12 +500,13 @@ void SceneWidget::draw_at(core::Graphics &area) const
         // the actual pixel diff, marked on both halves
         const uint32_t *pa = reinterpret_cast<const uint32_t *>(buf_a_.data());
         const uint32_t *pb = reinterpret_cast<const uint32_t *>(buf_b_.data());
-        const size_t words = buf_a_.size() / 4;
         for (int y = 0; y < H; ++y)
         {
+            const size_t row = static_cast<size_t>(y) * static_cast<size_t>(W);
             for (int x = 0; x < W; ++x)
             {
-                if (pa[y * static_cast<size_t>(W) + x] != pb[y * static_cast<size_t>(W) + x])
+                const size_t i = row + static_cast<size_t>(x);
+                if (pa[i] != pb[i])
                 {
                     area.draw_pixel(x, y, kAccent);
                 }
