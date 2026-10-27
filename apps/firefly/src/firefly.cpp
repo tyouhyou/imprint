@@ -49,7 +49,8 @@ namespace
     // led home to, sticky spider webs, and the wind band
     constexpr int kGroveX = 330;
     constexpr int kGroveY = 185;
-    constexpr int kGroveR = 22;
+    // the capture radius the swarm is led home by (the grove is drawn from
+    // the lamp radii below, so there is no separate grove radius)
     constexpr int kHomeR = 22;
     constexpr int kBeamR = 80;
     constexpr int kFarR = 260;  // beyond the beam, a weak far glow still pulls
