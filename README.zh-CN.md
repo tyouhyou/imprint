@@ -319,7 +319,7 @@ ABORT 将座舱切换到逃生协议。UI 是一份 HTML 设计稿，布局以�
 
 **Hello**（`-DSTORY=hello`）——入门应用：一个标签加一个点击计数的按钮；复制它即可开始写自己的应用（见 [`docs/getting-started.md`](docs/getting-started.md)）。
 
-**井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件——可传 `.ui` 或 HTML 路径。另有十二个 story 供门户演示，构建方式相同：`g2048`、`mines`、`life`、`seedmap`、`seq303`、`drift`、`sandbox`、`firefly`、`windloom`、`rotafarm`、`comet`、`crystal`（`-DSTORY=<name>`；它们同时是 wasm 演示页）。
+**井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件——可传 `.ui` 或 HTML 路径。另有十四个 story 供门户演示，构建方式相同：`g2048`、`mines`、`life`、`seedmap`、`seq303`、`drift`、`sandbox`、`firefly`、`windloom`、`rotafarm`、`comet`、`crystal`、`moonpull`、`fogkeeper`（`-DSTORY=<name>`；它们同时是 wasm 演示页）。最后两个是使用可选 imraster 模块的 3D story，仅在以 `-DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32 -DENDIAN=le` 配置时才会生成。
 
 | Windows | macOS | Linux (X11) | WebAssembly | 任天堂 DS | Python 宿主 |
 |:---:|:---:|:---:|:---:|:---:|:---:|
