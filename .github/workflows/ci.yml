@@ -385,9 +385,17 @@ jobs:
       # decode abgr1555 as RGB565 (red/blue swapped) and nothing caught it.
       - name: Framebuffer decode check (X-11)
         run: python3 demo/python/test_framebuffer.py
+      # The FB backend, not the UNIX default X11 one: this job runs on the
+      # bare ubuntu-latest image, which ships xvfb but no libx11-dev, and
+      # the X-2 change made the X11 backend a hard `find_package(X11
+      # REQUIRED)` -- the cron run died at configure with "Could NOT find
+      # X11". zbapi needs no window system at all (the host is pygame), so
+      # pick the backend that carries no package requirement instead of
+      # installing one. Every other Linux job keeps the X11 default; they
+      # run inside the gcc:13 container, which does carry the headers.
       - name: Build the C-ABI host library
         run: |
-          cmake -S . -B build_ci
+          cmake -S . -B build_ci -DIM_SHELL_BACKEND=FB
           cmake --build build_ci --target zbapi -j"$(nproc)"
       - name: Headless host smoke (SDL dummy driver)
         run: |
