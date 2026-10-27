@@ -8,6 +8,10 @@
  *   <script src="demo_common.js"></script>
  *   <script src="g2048.js"></script>
  *
+ * pixelOrder: "rgba" opts out of the R/B swap in present() -- the 3D
+ * stories build the rgba32/le pixel model (imraster), whose buffer is
+ * already in ImageData's byte order.
+ *
  * width/height are the app's MINIMUM design size: the framebuffer is
  * sized from the canvas's laid-out CSS box (times devicePixelRatio, capped
  * at 2), so the software render is presented without a nearest-neighbor
@@ -205,11 +209,24 @@
     if (!ptr) return;
     var src = Module.HEAPU8.subarray(ptr, ptr + PIXELS);
     var i, j;
-    for (i = 0, j = 0; i < PIXELS; i += 4, j += 4) {
-      rgba[j]     = src[i + 2]; // r <- b
-      rgba[j + 1] = src[i + 1];
-      rgba[j + 2] = src[i];     // b <- r
-      rgba[j + 3] = 0xff;
+    // pixelOrder "rgba" = the build's memory order is already {r,g,b,a}
+    // (the 3D stories: imraster's packed words, ARCHITECTURE 4.12) --
+    // copy straight through. The default build is bgra32: swap R/B.
+    var straight = CFG.pixelOrder === "rgba";
+    if (straight) {
+      for (i = 0, j = 0; i < PIXELS; i += 4, j += 4) {
+        rgba[j] = src[i];
+        rgba[j + 1] = src[i + 1];
+        rgba[j + 2] = src[i + 2];
+        rgba[j + 3] = 0xff;
+      }
+    } else {
+      for (i = 0, j = 0; i < PIXELS; i += 4, j += 4) {
+        rgba[j]     = src[i + 2]; // r <- b
+        rgba[j + 1] = src[i + 1];
+        rgba[j + 2] = src[i];     // b <- r
+        rgba[j + 3] = 0xff;
+      }
     }
     ctx.putImageData(imageData, 0, 0);
 

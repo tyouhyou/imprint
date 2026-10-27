@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FOGKEEPER · 雾港灯塔</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #060a1a; color: #d8e0f0; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #ffd98a; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #060a1a; border: 1px solid #2a3a4a; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #ffd98a; }
+</style>
+</head>
+<body>
+<h1>FOGKEEPER · 雾港灯塔</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<p class="hint"><b>怎么玩：按住左右拖动，扫动灯塔的巨光束。</b>雾里什么也看不见——<b>船只在光束里才会前进</b>（被照到时亮起暖色并加速），离开光束就只能在黑暗中随波漂向暗礁。把光束铺在船与绿色港门之间，一段一段把它们领回来；三艘沉船或黎明到来，守夜结束。</p>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false, pixelOrder: "rgba" };</script>
+<script src="proto_host.js"></script>
+<script src="fogkeeper.js"></script>
+</body>
+</html>

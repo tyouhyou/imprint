@@ -2,7 +2,7 @@
 # Build a story app as a wasm demo inside the emscripten/emsdk container.
 # Expected layout: the repo is mounted at /src (project root = /src).
 #
-# Usage: build.sh [tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal]  (default: tictactoe)
+# Usage: build.sh [tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal|moonpull|fogkeeper]  (default: tictactoe)
 set -e
 
 cd /src
@@ -10,6 +10,12 @@ cd /src
 APP="${1:-tictactoe}"
 EXTRA_DEFS=""
 EXTRA_SRCS=""
+# the 3D stories (moonpull/fogkeeper) render through imraster, whose
+# packed-word arithmetic only exists in the rgba32/le pixel model; the
+# page host is told via DEMO_CONFIG.pixelOrder = "rgba" (proto_host.js
+# copies the buffer straight to ImageData instead of swapping R/B)
+PIXEL_MODEL="bgra32"
+IMRASTER_INC=""
 
 # framework sources shared by every story
 FRAMEWORK_SRCS="
@@ -209,8 +215,32 @@ g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|cr
         ;;
     esac
     ;;
+moonpull|fogkeeper)
+    # the 3D stories (2026-10-26): a portal app plus the imraster
+    # module, under the rgba32/le pixel model the module's packed-word
+    # arithmetic static_asserts (ARCHITECTURE 4.12). Same runtime-TTF
+    # text shape as the portal games.
+    APP_SRCS="
+      apps/${APP}/src/app_maker.cpp
+      apps/${APP}/src/${APP}.cpp
+      imraster/src/canvas.cpp
+      imraster/src/raster.cpp
+      imraster/src/mesh.cpp
+      imcore/src/text/stb_truetype_impl.cpp
+      imcore/src/text/runtime_ttf_provider.cpp
+    "
+    APP_INCLUDE="/src/apps/${APP}/include"
+    EXPORT_NAME="create$(echo "${APP}" | sed 's/^\(.\)/\U\1/')"
+    PIXEL_MODEL="rgba32"
+    IMRASTER_INC="-I /src/imraster/include"
+    g++ -std=c++17 -O2 /src/tools/bytes_embed.cpp -o /tmp/bytes_embed
+    /tmp/bytes_embed /tmp/${APP}_font.gen.hpp ${APP}_font \
+        /src/assets/fonts/Inter-Regular.ttf
+    EXTRA_INCLUDES="-I /tmp"
+    EXTRA_DEFS="-DIMCORE_HAS_TTF_RUNTIME"
+    ;;
 *)
-    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal)" >&2
+    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal|moonpull|fogkeeper)" >&2
     exit 1
     ;;
 esac
@@ -228,7 +258,7 @@ if python3 tools/font_subset.py --extras tools/extra_glyphs.py \
 fi
 
 em++ -std=c++17 -O2 \
-  -DCOLOR_DEPTH=32 -DRGB_MODEL=bgra32 -DENDIAN=le \
+  -DCOLOR_DEPTH=32 -DRGB_MODEL=${PIXEL_MODEL} -DENDIAN=le \
   $SUBSET_FLAGS $EXTRA_DEFS \
   -I /src/imcore/include \
   -I /src/imcore/include/core \
@@ -242,6 +272,7 @@ em++ -std=c++17 -O2 \
   -I "$APP_INCLUDE" \
   -I /src/binding/include \
   -I /src/third_party/stb \
+  $IMRASTER_INC \
   $EXTRA_INCLUDES \
   -s EXPORTED_FUNCTIONS='["_zb_app_create","_zb_app_destroy","_zb_input","_zb_paint","_zb_buffer","_zb_set_painted_callback","_zb_set_closed_callback","_zb_set_log_callback","_zb_app_create_from_ui","_zb_set_event_callback","_zb_widget_text","_zb_widget_set_text","_zb_buffer_bpp","_zb_buffer_format","_zb_version","_malloc","_free"]' \
   -s EXPORTED_RUNTIME_METHODS='["ccall","cwrap","HEAPU8","HEAPU32","addFunction"]' \
@@ -264,7 +295,7 @@ ls -l "$OUT"
 # main.js drives it through the global `Module` object)
 SMOKE_OUT="/src/demo/wasm/${APP}_mod.js"
 em++ -std=c++17 -O2 \
-  -DCOLOR_DEPTH=32 -DRGB_MODEL=bgra32 -DENDIAN=le \
+  -DCOLOR_DEPTH=32 -DRGB_MODEL=${PIXEL_MODEL} -DENDIAN=le \
   $SUBSET_FLAGS $EXTRA_DEFS \
   -I /src/imcore/include \
   -I /src/imcore/include/core \
@@ -278,6 +309,7 @@ em++ -std=c++17 -O2 \
   -I "$APP_INCLUDE" \
   -I /src/binding/include \
   -I /src/third_party/stb \
+  $IMRASTER_INC \
   $EXTRA_INCLUDES \
   -s MODULARIZE=1 -s EXPORT_NAME="$EXPORT_NAME" \
   -s ENVIRONMENT=node \

@@ -20,7 +20,9 @@ const SIZES = {
     windloom: [800, 520],
     rotafarm: [800, 520],
     comet: [800, 520],
-    crystal: [800, 520]
+    crystal: [800, 520],
+    moonpull: [800, 520],
+    fogkeeper: [800, 520]
 };
 const SZ = SIZES[NAME] || [256, 192];
 const W = SZ[0], H = SZ[1];
@@ -509,6 +511,88 @@ createModule({
           if (!same(r1[i], r2[i])) throw new Error("firefly replay frame " + i + " diverged");
         }
         console.log("firefly: night runs, lantern stroke replay byte-identical");
+        Module._zb_app_destroy(app);
+        Module._free(w); Module._free(h);
+        console.log("SMOKE TEST OK");
+        process.exit(0);
+      }
+
+      // ---- the 3D stories (moonpull/fogkeeper, 2026-10-26): the
+      // rgba32/le pixel model renders byte 0 = red, so the pixel
+      // probes read r,g,b in natural order. Same contract as the rest:
+      // world advances on its own, and a stroke replay is byte-identical
+      if (NAME === "moonpull" || NAME === "fogkeeper") {
+        const livePx = function (a, x, y) {
+          paint(a);
+          const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [a, w, h]);
+          const o = (y * W + x) * 4;
+          return [Module.HEAPU8[b + o], Module.HEAPU8[b + o + 1], Module.HEAPU8[b + o + 2]];
+        };
+        // the frame is water at the lower left: blue-dominant
+        const sea = livePx(app, 100, H - 60);
+        if (!(sea[2] > sea[0] && sea[2] > 25)) {
+          throw new Error(NAME + ": no sea at the lower left (r,g,b " + sea.join(",") + ")");
+        }
+        // the top-left corner is sky past the scene geometry: dark
+        const sky = livePx(app, 30, 100);
+        if (sky[0] + sky[1] + sky[2] > 90) {
+          throw new Error(NAME + ": top-left corner is not night sky (r,g,b " + sky.join(",") + ")");
+        }
+        // the hero light: moonpull's moon (a mesh sphere, bone-white on
+        // the night sky) or the lamp glow (fogkeeper). The moon's spot
+        // moves with its default azimuth, so scan the sky band for the
+        // disc instead of pinning a pixel
+        let heroFound = false;
+        {
+          paint(app);
+          const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app, w, h]);
+          if (NAME === "moonpull") {
+            for (let y = 55; y < 140 && !heroFound; y += 2) {
+              for (let x = 100; x < 700; x += 2) {
+                const o = (y * W + x) * 4;
+                if (Module.HEAPU8[b + o] > 230 && Module.HEAPU8[b + o + 1] > 210) {
+                  heroFound = true;
+                  break;
+                }
+              }
+            }
+          } else {
+            const o = (273 * W + (W >> 1)) * 4;
+            heroFound = Module.HEAPU8[b + o] > 100;
+          }
+        }
+        if (!heroFound) {
+          throw new Error(NAME + ": hero light missing");
+        }
+        // drag stroke: sideways drag (moon orbit / beam aim)
+        input(app, 9, 300, 200, 0, 0, 0);
+        input(app, 11, 360, 210, 0, 0, 0);
+        input(app, 11, 420, 220, 0, 0, 0);
+        input(app, 10, 420, 220, 0, 0, 0);
+        for (let i = 0; i < 30; i++) paint(app);
+        const a1 = snapOf(app);
+        for (let i = 30; i < 60; i++) paint(app);
+        const a2 = snapOf(app);
+        if (same(a1, a2)) throw new Error(NAME + " does not advance between frames");
+        const runOnce = function () {
+          const f = Module._zb_app_create(W, H);
+          const frames = [];
+          input(f, 9, 300, 200, 0, 0, 0);
+          input(f, 11, 360, 210, 0, 0, 0);
+          input(f, 11, 420, 220, 0, 0, 0);
+          input(f, 10, 420, 220, 0, 0, 0);
+          for (let i = 0; i < 60; i++) {
+            paint(f);
+            if (i % 15 === 14) frames.push(snapOf(f));
+          }
+          Module._zb_app_destroy(f);
+          return frames;
+        };
+        const r1 = runOnce(), r2 = runOnce();
+        for (let i = 0; i < r1.length; i++) {
+          if (!same(r1[i], r2[i])) throw new Error(NAME + " replay frame " + i + " diverged");
+        }
+        console.log(NAME + ": sea/sky/hero pixels ok, stroke replay byte-identical");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
