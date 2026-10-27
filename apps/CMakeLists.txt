@@ -1,5 +1,5 @@
 set(STORY tictactoe CACHE STRING "Demo application to build")
-set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly windloom rotafarm comet crystal moonpull)
+set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly windloom rotafarm comet crystal moonpull fogkeeper)
 
 # app libraries are always built on desktop (tests link them); STORY only
 # selects which one the shell executable links. The previewer is a
@@ -36,7 +36,8 @@ endif()
 # where the raster module does, and never in the default configs
 if (IMPRINT_WITH_IMRASTER)
     add_subdirectory(moonpull)
-elseif (STORY STREQUAL "moonpull")
+    add_subdirectory(fogkeeper)
+elseif (STORY STREQUAL "moonpull" OR STORY STREQUAL "fogkeeper")
     message(FATAL_ERROR
         "STORY=${STORY} is a 3D story and needs the raster module: "
         "configure with -DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32 -DENDIAN=le")
@@ -54,6 +55,6 @@ if (NOT STORY STREQUAL "tictactoe" AND NOT STORY STREQUAL "ui_preview"
     AND NOT STORY STREQUAL "showcase_html" AND NOT STORY STREQUAL "g2048"
     AND NOT STORY STREQUAL "mines" AND NOT STORY STREQUAL "life"
     AND NOT STORY STREQUAL "seedmap" AND NOT STORY STREQUAL "seq303"
-    AND NOT STORY STREQUAL "drift" AND NOT STORY STREQUAL "sandbox" AND NOT STORY STREQUAL "firefly" AND NOT STORY STREQUAL "windloom" AND NOT STORY STREQUAL "rotafarm" AND NOT STORY STREQUAL "comet" AND NOT STORY STREQUAL "crystal" AND NOT STORY STREQUAL "moonpull")
+    AND NOT STORY STREQUAL "drift" AND NOT STORY STREQUAL "sandbox" AND NOT STORY STREQUAL "firefly" AND NOT STORY STREQUAL "windloom" AND NOT STORY STREQUAL "rotafarm" AND NOT STORY STREQUAL "comet" AND NOT STORY STREQUAL "crystal" AND NOT STORY STREQUAL "moonpull" AND NOT STORY STREQUAL "fogkeeper")
     message(FATAL_ERROR "Unknown STORY: ${STORY}")
 endif()
