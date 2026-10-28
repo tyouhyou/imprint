@@ -2,7 +2,7 @@
 # Build a story app as a wasm demo inside the emscripten/emsdk container.
 # Expected layout: the repo is mounted at /src (project root = /src).
 #
-# Usage: build.sh [tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal|moonpull|fogkeeper]  (default: tictactoe)
+# Usage: build.sh [tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal|moonpull|fogkeeper|hoursmith]  (default: tictactoe)
 set -e
 
 cd /src
@@ -215,8 +215,8 @@ g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|cr
         ;;
     esac
     ;;
-moonpull|fogkeeper)
-    # the 3D stories (2026-10-26): a portal app plus the imraster
+moonpull|fogkeeper|hoursmith)
+    # the 3D stories (2026-10-26/27): a portal app plus the imraster
     # module, under the rgba32/le pixel model the module's packed-word
     # arithmetic static_asserts (ARCHITECTURE 4.12). Same runtime-TTF
     # text shape as the portal games.
@@ -240,7 +240,7 @@ moonpull|fogkeeper)
     EXTRA_DEFS="-DIMCORE_HAS_TTF_RUNTIME"
     ;;
 *)
-    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal|moonpull|fogkeeper)" >&2
+    echo "unknown app: $APP (expected tictactoe|showcase|showcase_html|playground|g2048|mines|life|seedmap|seq303|drift|sandbox|firefly|windloom|rotafarm|comet|crystal|moonpull|fogkeeper|hoursmith)" >&2
     exit 1
     ;;
 esac

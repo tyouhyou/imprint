@@ -22,7 +22,8 @@ const SIZES = {
     comet: [800, 520],
     crystal: [800, 520],
     moonpull: [800, 520],
-    fogkeeper: [800, 520]
+    fogkeeper: [800, 520],
+    hoursmith: [800, 520]
 };
 const SZ = SIZES[NAME] || [256, 192];
 const W = SZ[0], H = SZ[1];
@@ -517,54 +518,165 @@ createModule({
         process.exit(0);
       }
 
-      // ---- the 3D stories (moonpull/fogkeeper, 2026-10-26): the
-      // rgba32/le pixel model renders byte 0 = red, so the pixel
+      // ---- the 3D stories (moonpull/fogkeeper/hoursmith, 2026-10-26/27):
+      // the rgba32/le pixel model renders byte 0 = red, so the pixel
       // probes read r,g,b in natural order. Same contract as the rest:
       // world advances on its own, and a stroke replay is byte-identical
-      if (NAME === "moonpull" || NAME === "fogkeeper") {
+      if (NAME === "moonpull" || NAME === "fogkeeper" || NAME === "hoursmith") {
         const livePx = function (a, x, y) {
           paint(a);
           const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [a, w, h]);
           const o = (y * W + x) * 4;
           return [Module.HEAPU8[b + o], Module.HEAPU8[b + o + 1], Module.HEAPU8[b + o + 2]];
         };
-        // the frame is water at the lower left: blue-dominant
+        // the frame is water at the lower left (moonpull/fogkeeper) or
+        // warm stone plaza (hoursmith): r,b split tells them apart
         const sea = livePx(app, 100, H - 60);
-        if (!(sea[2] > sea[0] && sea[2] > 25)) {
-          throw new Error(NAME + ": no sea at the lower left (r,g,b " + sea.join(",") + ")");
-        }
-        // the top-left corner is sky past the scene geometry: dark
-        const sky = livePx(app, 30, 100);
-        if (sky[0] + sky[1] + sky[2] > 90) {
-          throw new Error(NAME + ": top-left corner is not night sky (r,g,b " + sky.join(",") + ")");
-        }
-        // the hero light: moonpull's moon (a mesh sphere, bone-white on
-        // the night sky) or the lamp glow (fogkeeper). The moon's spot
-        // moves with its default azimuth, so scan the sky band for the
-        // disc instead of pinning a pixel
-        let heroFound = false;
-        {
-          paint(app);
-          const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app, w, h]);
-          if (NAME === "moonpull") {
-            for (let y = 55; y < 140 && !heroFound; y += 2) {
-              for (let x = 100; x < 700; x += 2) {
+        if (NAME === "hoursmith") {
+          // the plaza's lower center: warm stone, r >= g >= b
+          const stone = livePx(app, 400, H - 102);
+          if (!(stone[0] > 110 && stone[0] >= stone[1] && stone[1] >= stone[2])) {
+            throw new Error(NAME + ": no stone plaza at the lower center (r,g,b " + stone.join(",") + ")");
+          }
+          // above the plaza's far rim the dawn sky shows: dark and cool
+          const sky = livePx(app, 30, 100);
+          if (sky[0] + sky[1] + sky[2] > 220 || sky[2] < sky[0]) {
+            throw new Error(NAME + ": top-left corner is not dawn sky (r,g,b " + sky.join(",") + ")");
+          }
+          // PICK/DRAG LOCK (2026-10-27 review): the canvas widget sits
+          // below the HUD strip and the dispatcher delivers events in
+          // WINDOW space, so on_input must translate before hit-testing.
+          // The probe drags the level-1 stone from its projected window
+          // position and requires the stone to land under the cursor --
+          // with the translation missing, the pick misses by the HUD
+          // height and the stone never moves. The camera mirror below
+          // must track DialCanvas::build_camera.
+          {
+            const HUD = 68;  // 34 * u, u = h/240 at 520
+            const vh = H - HUD;
+            const FY = -185 / 315, FZ = 255 / 315, VS = W / (2 * 0.68),
+                  HZ = 0.36 * vh;
+            const proj = function (x, y, z) {
+              const ry = y - 185, rz = z + 255;
+              const v = ry * FY + rz * FZ;
+              const up = ry * FZ + rz * 0.58729;
+              return [W / 2 + x * VS / v, HZ - up * VS / v + HUD];
+            };
+            const crimsonNear = function (px, py, rad) {
+              const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app, w, h]);
+              for (let y = py - rad; y <= py + rad; y++) {
+                for (let x = px - rad; x <= px + rad; x++) {
+                  if (x < 0 || y < 0 || x >= W || y >= H) continue;
+                  const o = (y * W + x) * 4;
+                  const r = Module.HEAPU8[b + o], g = Module.HEAPU8[b + o + 1],
+                        bl = Module.HEAPU8[b + o + 2];
+                  if (r > 120 && r - g > 50 && g - bl > 8 && bl < 100) return true;
+                }
+              }
+              return false;
+            };
+            const s0 = proj(36, 0, 84);   // the level-1 stone's base
+            const t0 = proj(-34, 0, -40); // a plain patch of plaza
+            input(app, 9, Math.round(s0[0]), Math.round(s0[1]) - 6, 0, 0, 0);
+            for (let s = 1; s <= 8; s++) {
+              input(app, 11,
+                Math.round(s0[0] + (t0[0] - s0[0]) * s / 8),
+                Math.round(s0[1] - 6 + (t0[1] - (s0[1] - 6)) * s / 8), 0, 0, 0);
+            }
+            input(app, 10, Math.round(t0[0]), Math.round(t0[1]), 0, 0, 0);
+            paint(app);
+            if (!crimsonNear(Math.round(t0[0]), Math.round(t0[1]), 10)) {
+              throw new Error(NAME + ": dragged stone did not land under the cursor");
+            }
+            if (crimsonNear(Math.round(s0[0]), Math.round(s0[1]), 14)) {
+              throw new Error(NAME + ": dragged stone stayed at its start");
+            }
+          }
+          // SHADOW-AREA LOCK (2026-10-27 review): the dial clip is a
+          // Sutherland-Hodgman circle clip, and taking the wrong quadratic
+          // root for an ENTRY crossing silently drops a wedge of every
+          // long shadow. It only bites when the shadow actually leaves the
+          // plaza -- dawn and dusk, where the stone's tip runs past the
+          // rim (measured: 508 px with the bad root, 1113 with the fix at
+          // frame 30) -- so the census runs at dawn, not at a noon-ish
+          // hour where nothing is clipped.
+          {
+            const f = Module._zb_app_create(W, H);
+            for (let i = 0; i < 30; i++) paint(f);
+            const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [f, w, h]);
+            let ink = 0;
+            for (let y = 100; y < 340; y++) {
+              for (let x = 180; x < 700; x++) {
                 const o = (y * W + x) * 4;
-                if (Module.HEAPU8[b + o] > 230 && Module.HEAPU8[b + o + 1] > 210) {
+                const r = Module.HEAPU8[b + o], g = Module.HEAPU8[b + o + 1],
+                      bl = Module.HEAPU8[b + o + 2];
+                if (r < 45 && g < 50 && bl > r + 10 && bl < 80) ink++;
+              }
+            }
+            Module._zb_app_destroy(f);
+            if (ink < 800) {
+              throw new Error(NAME + ": dawn shadow is only " + ink + " px (clip wedge lost?)");
+            }
+          }
+          // the shell's level key ('3' via ch): three colored wells
+          // appear -- scan for the amber one right of the tower
+          input(app, 12, 0, 0, 0, 51, 0);
+          let heroFound = false;
+          {
+            paint(app);
+            const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app, w, h]);
+            for (let y = 220; y < 340 && !heroFound; y += 2) {
+              for (let x = 430; x < 720; x += 2) {
+                const o = (y * W + x) * 4;
+                const r = Module.HEAPU8[b + o], g2 = Module.HEAPU8[b + o + 1],
+                      b2 = Module.HEAPU8[b + o + 2];
+                if (r > 140 && r - b2 > 60 && r - g2 > 20) {
                   heroFound = true;
                   break;
                 }
               }
             }
-          } else {
-            const o = (273 * W + (W >> 1)) * 4;
-            heroFound = Module.HEAPU8[b + o] > 100;
+          }
+          if (!heroFound) {
+            throw new Error(NAME + ": amber ring missing after level key");
+          }
+        } else {
+          if (!(sea[2] > sea[0] && sea[2] > 25)) {
+            throw new Error(NAME + ": no sea at the lower left (r,g,b " + sea.join(",") + ")");
+          }
+          // the top-left corner is sky past the scene geometry: dark
+          const sky = livePx(app, 30, 100);
+          if (sky[0] + sky[1] + sky[2] > 90) {
+            throw new Error(NAME + ": top-left corner is not night sky (r,g,b " + sky.join(",") + ")");
+          }
+          // the hero light: moonpull's moon (a mesh sphere, bone-white on
+          // the night sky) or the lamp glow (fogkeeper). The moon's spot
+          // moves with its default azimuth, so scan the sky band for the
+          // disc instead of pinning a pixel
+          let heroFound = false;
+          {
+            paint(app);
+            const b = Module.ccall("zb_buffer", "number", ["number", "number", "number"], [app, w, h]);
+            if (NAME === "moonpull") {
+              for (let y = 55; y < 140 && !heroFound; y += 2) {
+                for (let x = 100; x < 700; x += 2) {
+                  const o = (y * W + x) * 4;
+                  if (Module.HEAPU8[b + o] > 230 && Module.HEAPU8[b + o + 1] > 210) {
+                    heroFound = true;
+                    break;
+                  }
+                }
+              }
+            } else {
+              const o = (273 * W + (W >> 1)) * 4;
+              heroFound = Module.HEAPU8[b + o] > 100;
+            }
+          }
+          if (!heroFound) {
+            throw new Error(NAME + ": hero light missing");
           }
         }
-        if (!heroFound) {
-          throw new Error(NAME + ": hero light missing");
-        }
-        // drag stroke: sideways drag (moon orbit / beam aim)
+        // drag stroke: sideways drag (moon orbit / beam aim / stone move)
         input(app, 9, 300, 200, 0, 0, 0);
         input(app, 11, 360, 210, 0, 0, 0);
         input(app, 11, 420, 220, 0, 0, 0);
@@ -577,6 +689,7 @@ createModule({
         const runOnce = function () {
           const f = Module._zb_app_create(W, H);
           const frames = [];
+          if (NAME === "hoursmith") input(f, 12, 0, 0, 0, 51, 0);
           input(f, 9, 300, 200, 0, 0, 0);
           input(f, 11, 360, 210, 0, 0, 0);
           input(f, 11, 420, 220, 0, 0, 0);
@@ -592,7 +705,7 @@ createModule({
         for (let i = 0; i < r1.length; i++) {
           if (!same(r1[i], r2[i])) throw new Error(NAME + " replay frame " + i + " diverged");
         }
-        console.log(NAME + ": sea/sky/hero pixels ok, stroke replay byte-identical");
+        console.log(NAME + ": world pixels ok, stroke replay byte-identical");
         Module._zb_app_destroy(app);
         Module._free(w); Module._free(h);
         console.log("SMOKE TEST OK");
