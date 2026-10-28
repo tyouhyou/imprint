@@ -293,7 +293,7 @@ size (code-contract §11.1).
 | Linux (framebuffer) | `cmake -S . -B build/build_linux -DIM_SHELL_BACKEND=FB && cmake --build build/build_linux` | presents only; use X11 for interaction |
 | Terminal (SIXEL) | `cmake -S . -B build/build_term -DIM_SHELL_BACKEND=SIXEL && cmake --build build/build_term` | demo target: the same UI in a sixel terminal (WezTerm/foot/iTerm2), input via SGR mouse + keys; `IM_TERM_SIZE=WxH` resizes |
 | Nintendo DS | `docker run --rm -v $PWD:/src -w /src devkitpro/devkitarm:20260610 sh -c 'cmake -S . -B build/build_nds -DCMAKE_TOOLCHAIN_FILE=cmake/nds.toolchain.cmake && cmake --build build/build_nds'` | produces `build/build_nds/bin/tictactoe.nds`; add `-DSTORY=showcase` for the ORION NX-07 ROM (it additionally needs the host-built `html_embed` and `bytes_embed`, passed as `-DHTML_EMBED_EXECUTABLE=` / `-DBYTES_EMBED_EXECUTABLE=`), or `-DSTORY=showcase_html` for the HTML showcase (same, plus the host-built `html_embed` as `-DHTML_EMBED_EXECUTABLE=`) |
-| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh <story>` produces one self-contained `.js` per story (wasm embedded) — `showcase` (ORION NX-07), `tictactoe`, `g2048`, `mines`, `life`, `seedmap`, `seq303`, `drift`, `sandbox`, `firefly`, `windloom`, `rotafarm`, `comet`, `crystal`, `moonpull`, `fogkeeper`, `playground` (design-file editor host); includes a node smoke test (`demo/wasm/smoke.js <story>_mod.js`) |
+| WebAssembly | `demo/wasm/build.sh` (docker emscripten) | `build.sh <story>` produces one self-contained `.js` per story (wasm embedded) — `showcase` (ORION NX-07), `tictactoe`, `g2048`, `mines`, `life`, `seedmap`, `seq303`, `drift`, `sandbox`, `firefly`, `windloom`, `rotafarm`, `comet`, `crystal`, `moonpull`, `fogkeeper`, `hoursmith`, `playground` (design-file editor host); includes a node smoke test (`demo/wasm/smoke.js <story>_mod.js`) |
 | Python | build the `binding` shared lib, then `SDL_VIDEODRIVER=dummy python3 demo/python/myapp.py --lib <libzbapi>` | ctypes + pygame host; `python3 demo/python/test_framebuffer.py` checks the host's 32bpp/16bpp decode against the framework's pixel traits (no pygame, no display, no built library) |
 
 Tests: `<build>/bin/test_imui` — a local `EXPECT` macro (NDEBUG-safe,
@@ -394,11 +394,11 @@ buttons, layout and repaint-on-demand; the NDS build produces
 `build/build_nds/bin/tictactoe.nds`. A third app, `ui_preview`
 (`-DSTORY=ui_preview`), renders design files from `UI_PREVIEW_FILES`
 (space-separated paths; left/right keys switch documents) — pass `.ui` or
-HTML paths. Fourteen more stories power the portal demos and build the same way:
+HTML paths. Fifteen more stories power the portal demos and build the same way:
 `g2048`, `mines`, `life`, `seedmap`, `seq303`, `drift`, `sandbox`, `firefly`,
-`windloom`, `rotafarm`, `comet`, `crystal`, `moonpull`, `fogkeeper`
+`windloom`, `rotafarm`, `comet`, `crystal`, `moonpull`, `fogkeeper`, `hoursmith`
 (`-DSTORY=<name>`; they are also
-the wasm demo pages). The last two are 3D stories on the optional imraster
+the wasm demo pages). The last three are 3D stories on the optional imraster
 module: they configure only with `-DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32
 -DENDIAN=le`.
 
