@@ -22,7 +22,21 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 enable_testing()
 
-find_package(imprint 0.1 CONFIG REQUIRED
+# X-14: the requested version comes from the installed recipe (its
+# `Version:` line is generated from PROJECT_VERSION), so a minor bump
+# leaves no stale literal behind here -- and asking for exactly the
+# installed version proves the generated ConfigVersion file accepts its
+# own tree. That check is not cosmetic: the compatibility mode is
+# SameMinorVersion, so a 0.1 request does not resolve against 0.2.
+if (NOT IMPRINT_SMOKE_VERSION)
+    file(STRINGS ${IMPRINT_STAGING_PREFIX}/lib/pkgconfig/imprint.pc _pc_version_line REGEX "^Version:")
+    string(REGEX REPLACE "^Version:[ \t]*" "" IMPRINT_SMOKE_VERSION "${_pc_version_line}")
+endif()
+if (NOT IMPRINT_SMOKE_VERSION)
+    message(FATAL_ERROR "cannot read the installed imprint.pc version")
+endif()
+
+find_package(imprint ${IMPRINT_SMOKE_VERSION} CONFIG REQUIRED
     PATHS ${IMPRINT_STAGING_PREFIX}
     NO_DEFAULT_PATH)
 

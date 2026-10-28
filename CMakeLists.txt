@@ -1,10 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
 # X-14: the project version is what find_package(imprint <ver>) checks
-# against, so it must not trail the released tags (v0.1 / v0.1.1 are
-# already out; a 0.1.0 here made `find_package(imprint 0.1.1)` fail
+# against, so it must not trail the released tags (v0.1, v0.1.1 and
+# v0.2.0 are out; a 0.1.0 here made `find_package(imprint 0.1.1)` fail
 # against a package built from this tree). Keep it >= the newest release.
-project(imprint VERSION 0.1.1)
+# The generated version file is SameMinorVersion, so this number and the
+# tag ship in the same commit: a tree that trails its own tag cannot
+# satisfy a consumer asking for that tag.
+project(imprint VERSION 0.2.0)
 
 # Subproject detection (CMake 3.16 has no PROJECT_IS_TOP_LEVEL): when
 # imprint is consumed via add_subdirectory/FetchContent, CMAKE_SOURCE_DIR

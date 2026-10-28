@@ -125,9 +125,13 @@ same `imprint::` targets (P1.5, 2026-10-01):
   `find_package(imprint CONFIG REQUIRED)`:
 
   ```cmake
-  find_package(imprint 0.1 CONFIG REQUIRED)
+  find_package(imprint 0.2 CONFIG REQUIRED)
   target_link_libraries(my_app PRIVATE imprint::imapp_canvas imprint::shell_backend)
   ```
+
+  The version file is `SameMinorVersion`: a request for a different
+  minor does not resolve, so the number in the request names the release
+  line, not just a floor.
 
   The export set carries every library target the generating build had
   (`imutil` … `imui`, `imapp` / `imapp_canvas` / `snapshot`, the
