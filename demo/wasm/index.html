@@ -2,41 +2,165 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>TicTacToe — WASM Demo</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Imprint demo games</title>
 <style>
+  :root {
+    --bg: #0a0e16; --panel: #101724; --line: #1e2938;
+    --text: #c9d3e0; --muted: #7d89a0;
+    --accent: #4fd6e0; --amber: #f0b243;
+    --mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+    --sans: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+  }
+  * { box-sizing: border-box; }
   body {
     margin: 0;
-    background: #1e1e28;
-    color: #ddd;
-    font-family: sans-serif;
-    text-align: center;
-    padding: 16px;
+    background:
+      radial-gradient(1100px 500px at 50% -120px, #12203a 0%, rgba(18,32,58,0) 60%),
+      var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    line-height: 1.6;
   }
-  h1 { font-size: 20px; margin: 8px 0 12px; }
-  #screen {
-    width: 512px;
-    height: 384px;
-    image-rendering: pixelated;
-    image-rendering: crisp-edges;
-    border: 2px solid #555;
-    background: #000;
-    touch-action: none;
-    cursor: pointer;
+  .wrap { max-width: 780px; margin: 0 auto; padding: 0 20px; }
+  header { border-bottom: 1px solid var(--line); padding: 18px 0; }
+  header .wrap { display: flex; align-items: center; justify-content: space-between; }
+  .mark {
+    font-family: var(--mono); font-size: 15px; font-weight: 700;
+    letter-spacing: 0.32em; color: var(--text);
+    display: flex; align-items: center; gap: 12px; text-decoration: none;
   }
-  p.hint { font-size: 13px; color: #999; margin-top: 12px; }
-  #status { font-size: 12px; color: #7c7; margin-top: 6px; min-height: 1em; }
+  .mark::before {
+    content: ""; width: 11px; height: 11px; background: var(--accent);
+    box-shadow: 0 0 10px rgba(79,214,224,0.55);
+  }
+  .nav a {
+    font-family: var(--mono); font-size: 12px;
+    letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); text-decoration: none; margin-left: 22px;
+  }
+  .nav a:hover { color: var(--accent); }
+  .hero { padding: 44px 0 10px; text-align: center; }
+  .hero h1 {
+    margin: 0 0 14px; font-size: clamp(24px, 4.5vw, 34px);
+    font-weight: 650; letter-spacing: -0.01em; color: #e8eef7;
+  }
+  .hero h1 em { font-style: normal; color: var(--accent); }
+  .hero p { margin: 0 auto; max-width: 620px; color: var(--muted); font-size: 15px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; margin: 34px 0 10px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 16px 14px; text-decoration: none; display: block;
+    transition: border-color 120ms ease, transform 120ms ease;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card h3 {
+    margin: 0 0 6px; font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase; color: var(--accent);
+  }
+  .card p { margin: 0; color: var(--muted); font-size: 13px; }
+  .card .tag {
+    display: inline-block; margin-top: 8px; font-family: var(--mono);
+    font-size: 10px; letter-spacing: 0.1em; color: var(--amber); text-transform: uppercase;
+  }
+  .card.three { border-color: #263450; }
+  .card.three h3 { color: #7ec8ff; }
+  footer {
+    margin-top: 40px; border-top: 1px solid var(--line); padding: 22px 0 34px;
+    font-size: 13px; color: var(--muted);
+  }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 10px 26px; align-items: baseline; justify-content: space-between; }
+  footer a { color: var(--muted); text-decoration: none; border-bottom: 1px dotted #33415a; }
+  footer a:hover { color: var(--accent); }
+  footer .fine { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; }
+  @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
 </style>
 </head>
 <body>
-<h1>TicTacToe — WASM</h1>
-<canvas id="screen" width="256" height="192"></canvas>
-<p class="hint">
-  可直接双击打开（wasm 已内嵌进 tictactoe.js，无需 HTTP 服务器）<br>
-  操作：鼠标点击棋盘下棋（256×192 帧缓冲，CSS 放大 2 倍，pixelated 显示）<br>
-  键盘：方向键 / Enter / Tab / Space 操作
-</p>
-<div id="status">loading…</div>
-<script src="main.js"></script>
-<script src="tictactoe.js"></script>
+
+<header>
+  <div class="wrap">
+    <a class="mark" href="index.html">IMPRINT</a>
+    <nav class="nav"><a href="https://github.com/tyouhyou/imprint">GitHub</a></nav>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <h1>Demo <em>games</em> — local preview</h1>
+  <p>
+    The eleven story pages in this directory, each the real framework
+    compiled to WebAssembly. Serve this folder over HTTP
+    (<code>python3 -m http.server</code>) and open a page; the published
+    portal with the older framework demos lives on the gh-pages branch.
+  </p>
+</div>
+
+<div class="wrap">
+  <div class="cards">
+    <a class="card three" href="hoursmith.html">
+      <h3>HOURSMITH · 晷匠</h3>
+      <p>Calibrate a stone sundial: shadow tips into their color rings at the right hour.</p>
+      <span class="tag">3D · imraster · 2D/3D hybrid</span>
+    </a>
+    <a class="card three" href="moonpull.html">
+      <h3>MOONPULL · 引潮记</h3>
+      <p>Hold the moon; drag a two-crest standing tide through a three-task dawn.</p>
+      <span class="tag">3D · imraster · tides</span>
+    </a>
+    <a class="card three" href="fogkeeper.html">
+      <h3>FOGKEEPER · 雾港灯塔</h3>
+      <p>Sweep the lighthouse beam; ships only advance while lit.</p>
+      <span class="tag">3D · imraster · light as a path</span>
+    </a>
+    <a class="card" href="comet.html">
+      <h3>COMET COURIER · 陨石快递</h3>
+      <p>Sling a comet around two gravity wells through three stargates.</p>
+      <span class="tag">gravity slingshot</span>
+    </a>
+    <a class="card" href="crystal.html">
+      <h3>CRYSTAL EPOCH · 结晶纪</h3>
+      <p>Draw catalyst lines; grow the crystal into three anchors before solution runs out.</p>
+      <span class="tag">grow a budget</span>
+    </a>
+    <a class="card" href="windloom.html">
+      <h3>WINDLOOM · 织风</h3>
+      <p>Every stroke is a lasting wind; blow falling seeds into the soil cups.</p>
+      <span class="tag">draw lasting wind</span>
+    </a>
+    <a class="card" href="rotafarm.html">
+      <h3>ROTAFARM · 转阳田</h3>
+      <p>A clockface farm that grows only under the sun; harvest before the locusts.</p>
+      <span class="tag">clockface farming</span>
+    </a>
+    <a class="card" href="firefly.html">
+      <h3>FIREFLY GROVE · 萤火林</h3>
+      <p>Herd fireflies home with a lantern; the night is the countdown.</p>
+      <span class="tag">herding by light</span>
+    </a>
+    <a class="card" href="drift.html">
+      <h3>SIGNAL DRIFT · 信号漂移</h3>
+      <p>A change-blindness game with byte-exact replay in the verdict.</p>
+      <span class="tag">change blindness</span>
+    </a>
+    <a class="card" href="seq303.html">
+      <h3>SEQ-303 · music maker</h3>
+      <p>Two-voice acid step sequencer, sounded through WebAudio.</p>
+      <span class="tag">sound on (WebAudio)</span>
+    </a>
+    <a class="card" href="sandbox.html">
+      <h3>SANDBOX · 粒子沙盘</h3>
+      <p>A deterministic falling-sand automaton: sand, oil, fire, acid, lava.</p>
+      <span class="tag">falling sand</span>
+    </a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Imprint UI · C++17 · one renderer, every platform</span>
+    <span class="fine"><a href="https://github.com/tyouhyou/imprint">source</a></span>
+  </div>
+</footer>
+
 </body>
 </html>

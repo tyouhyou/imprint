@@ -51,9 +51,13 @@
   .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
   .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
   .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
+  .back { margin: 0 auto 12px; font-size: 12px; letter-spacing: 1px; }
+  .back a { color: var(--muted-c, #9fb3c8); text-decoration: none; }
+  .back a:hover { color: var(--tint, #dfe8f4); }
 </style>
 </head>
 <body>
+<p class="back"><a href="index.html">← all games</a></p>
 
 <h1>SIGNAL DRIFT · 信号漂移</h1>
 <canvas id="screen"></canvas>
