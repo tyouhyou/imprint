@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>COMET COURIER · 陨石快递</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #060818; color: #cfe6ff; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #6ee7ff; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #060818; border: 1px solid #2a3a4a; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #6ee7ff; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
+  .back { margin: 0 auto 12px; font-size: 12px; letter-spacing: 1px; }
+  .back a { color: var(--muted-c, #9fb3c8); text-decoration: none; }
+  .back a:hover { color: var(--tint, #dfe8f4); }
+</style>
+</head>
+<body>
+<p class="back"><a href="index.html">← all games</a></p>
+<h1>COMET COURIER · 陨石快递</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：在任意处按下并向后拖拽（弹弓），松手发射。</b>绕开两颗行星的引力，依次穿过三个<b>星门</b>，最后荡回绿色<b>空间站</b>即通关；撞星、飞出边界或在轨道上搁浅都计一次尝试（已点亮的星门保留）。瞄准时会显示预测轨迹。</p>
+<p class="hint en"><b>How to play: press anywhere and drag backward (a slingshot), release to launch.</b> Steer around two planets' gravity wells, thread all three <b>stargates</b> in order, then sling back to the green <b>space station</b> to win. Crashing into a planet, flying out of bounds or stranding on an orbit all cost one attempt (lit gates stay lit). The predicted trajectory shows while you aim.</p>
+<p class="hint ja"><b>遊び方：どこかで押して後ろへ拖け（パチンコ）、離して発射。</b>二つの惑星の重力を避け、三つの<b>星門</b>を順にくぐり、最後は緑の<b>宇宙ステーション</b>へ戻ればクリア。惑星への激突・場外・軌道への座礁はすべて一度の試行として数える（点灯した星門は残る）。狙っている間、予測軌道が表示される。</p>
+</div>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="comet.js"></script>
+</body>
+</html>

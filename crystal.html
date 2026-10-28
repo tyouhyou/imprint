@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CRYSTAL EPOCH · 结晶纪</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #120a24; color: #cfe6ff; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #6ee7ff; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #120a24; border: 1px solid #3a2a50; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #6ee7ff; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
+  .back { margin: 0 auto 12px; font-size: 12px; letter-spacing: 1px; }
+  .back a { color: var(--muted-c, #9fb3c8); text-decoration: none; }
+  .back a:hover { color: var(--tint, #dfe8f4); }
+</style>
+</head>
+<body>
+<p class="back"><a href="index.html">← all games</a></p>
+<h1>CRYSTAL EPOCH · 结晶纪</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：拖动画出金色「催化线」。</b>晶体会优先沿着你的笔迹生长、在空白处分叉；在<b>溶液耗尽</b>（底部蓝条）前让枝晶碰到全部三个<b>品红锚点</b>即胜。暗红杂质会杀死撞上的枝杈，走催化线要付双倍溶液——省着画。</p>
+<p class="hint en"><b>How to play: drag to draw golden "catalyst lines."</b> The crystal grows along your strokes first and branches elsewhere; make its branches touch all three <b>magenta anchors</b> before the <b>solution runs out</b> (the blue bar at the bottom) to win. Dark-red impurities kill any branch that hits them, and drawing a catalyst line costs double solution — spend sparingly.</p>
+<p class="hint ja"><b>遊び方：拖いて金色の「触媒線」を描く。</b>結晶はまずあなたの筆跡に沿って成長し、空白で枝分かれする。<b>溶液</b>（下部の青バー）が尽きる前に枝を三つの<b>マゼンタの錨点</b>すべてに届かせれば勝ち。暗赤の不純物に触れた枝は死ぬ。触媒線を描くには二倍の溶液が要る——描くのは節約して。</p>
+</div>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="crystal.js"></script>
+</body>
+</html>

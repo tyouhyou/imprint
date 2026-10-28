@@ -39,7 +39,20 @@
     font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
     color: var(--amber); text-transform: uppercase;
   }
-  .card.featured { grid-column: 1 / -1; border-color: #263450; }
+  .card .zh {
+    display: inline-block; margin-top: 10px; margin-right: 8px;
+    font-size: 11px; color: var(--muted); letter-spacing: 0.06em;
+  }
+  .card.three { border-color: #263450; }
+  .card.three h3 { color: #7ec8ff; }
+  .card.tool { grid-column: 1 / -1; border-color: #263450; }
+  .moreline { text-align: center; margin: 26px 0 0; }
+  .moreline a {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); text-decoration: none;
+    border-bottom: 1px dotted #33415a; padding-bottom: 2px;
+  }
+  .moreline a:hover { color: var(--accent); }
   @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
 </style>
 </head>
@@ -61,71 +74,137 @@
     pixels. No timers, no threads, no hidden state: for a fixed build and
     buffer size, the same input sequence draws the same framebuffer bytes,
     every time — on a desktop window, a hand-held console, a terminal, or
-    this browser tab. Every page below is the real framework compiled to
-    WebAssembly; there is no DOM rendering anywhere.
+    this browser tab. Every game below is the real framework compiled to
+    WebAssembly; there is no DOM rendering anywhere. How-to-play is offered
+    in 中文 / English / 日本語 on each page.
   </p>
 </div>
 
 <div class="wrap">
   <div class="cards">
-    <a class="card featured" href="orion.html">
-      <h3>ORION NX-07 · command deck</h3>
+    <a class="card three" href="hoursmith.html">
+      <h3>HOURSMITH · 晷匠</h3>
       <p>
-        A playable starship command deck: power distribution sliders and
-        system toggles, a sweeping scanner scope, tactical maneuvering
-        (WASDQE), a galactic navigator modal and a live event log — driven
-        by a deterministic C++ app, in a framebuffer sized to your viewport.
+        Calibrate a stone sundial while the sun runs from dawn to dusk:
+        drag each stone and adjust its height so its shadow tip lands in
+        its color ring at the ring's own hour. Dawn shadows sweep long and
+        fast, noon's stay short and steady — real projected shadow geometry.
       </p>
-      <span class="tag">flagship deck · responsive buffer</span>
+      <span class="zh">拖石调高，让影尖在正确的钟点落进色环</span>
+      <span class="tag">3D · imraster · 2D/3D hybrid</span>
     </a>
-    <a class="card" href="g2048.html">
-      <h3>2048 + time travel</h3>
+    <a class="card three" href="moonpull.html">
+      <h3>MOONPULL · 引潮记</h3>
       <p>
-        The classic tile game, and a scrubber that rewinds it: the whole
-        app is a pure function of its input stream, so history replays
-        byte-identically.
+        Hold the moon in your hand: drag it around the sea ring and raise
+        or lower it to drive a two-crest standing tide — float the ferry
+        over its causeway, dry the pearl-beds with the trough, and keep
+        the tide off Lantern Isle before your lamp burns out.
       </p>
-      <span class="tag">game · determinism you can scrub</span>
+      <span class="zh">手持月亮驱动双峰驻波潮汐，三步任务链</span>
+      <span class="tag">3D · imraster · tides</span>
     </a>
-    <a class="card" href="playground.html">
-      <h3>Design playground</h3>
+    <a class="card three" href="fogkeeper.html">
+      <h3>FOGKEEPER · 雾港灯塔</h3>
       <p>
-        Paste an HTML design, hit RUN, and watch a C++ software rasterizer
-        draw it — no browser layout engine involved on the canvas side.
+        The harbor lives inside one lighthouse beam: ships only advance
+        while lit. Sweep the great light between each ship and the green
+        harbor gate and walk them home one stretch at a time — three
+        wrecks, or dawn, ends the night watch.
       </p>
-      <span class="tag">interactive · parse → widgets → pixels</span>
+      <span class="zh">挥动灯塔巨光束，在雾中把船领回港门</span>
+      <span class="tag">3D · imraster · light as a path</span>
     </a>
-    <a class="card" href="life.html">
-      <h3>Life / plasma / stars</h3>
+    <a class="card" href="comet.html">
+      <h3>COMET COURIER · 陨石快递</h3>
       <p>
-        A Game of Life colony, a plasma field and a starfield — animation
-        without a single timer, a pure function of the paint count.
+        Sling a courier comet around two gravity wells, thread three
+        stargates in order and swing home to the station — with a
+        predicted trajectory drawn while you aim.
       </p>
-      <span class="tag">demoscene · no-timer animation</span>
+      <span class="zh">弹弓绕双引力井穿三门回站</span>
+      <span class="tag">gravity slingshot</span>
     </a>
-    <a class="card" href="seedmap.html">
-      <h3>Seed → dungeon</h3>
+    <a class="card" href="crystal.html">
+      <h3>CRYSTAL EPOCH · 结晶纪</h3>
       <p>
-        Type a seed, carve a dungeon. The map fingerprint lets you verify
-        determinism by eye across platforms.
+        Draw golden catalyst lines: the crystal grows along your strokes,
+        branches in open space, and you spend solution for every inch —
+        reach all three magenta anchors before the solution runs out.
       </p>
-      <span class="tag">procedural · verifiable output</span>
+      <span class="zh">拖画催化线，引导枝晶碰满三锚点</span>
+      <span class="tag">grow a budget</span>
     </a>
-    <a class="card" href="mines.html">
-      <h3>Minesweeper</h3>
+    <a class="card" href="windloom.html">
+      <h3>WINDLOOM · 织风</h3>
       <p>
-        A 9×9 minefield with modal dialogs and an 81-label grid; the repaint
-        overlay shows the flood fill touching only the cells it opens.
+        Every stroke you draw becomes a lasting air current. Weave the
+        drafts that carry the mother plant's seeds into the three soil
+        cups — past the thorny rosebushes.
       </p>
-      <span class="tag">game · damage tracking</span>
+      <span class="zh">一笔一气流，以风织种入土窝</span>
+      <span class="tag">draw lasting wind</span>
     </a>
-    <a class="card" href="tictactoe.html">
-      <h3>Tic-tac-toe</h3>
+    <a class="card" href="rotafarm.html">
+      <h3>ROTAFARM · 转阳田</h3>
       <p>
-        The original story app: a custom board widget, modal dialogs and a
-        minimax opponent over the C ABI.
+        A clockface farm: a cell only grows while the sun is over it, the
+        locust shadow patrols the other way, and the harvest goes to who
+        taps the golden flower at its ripest moment.
       </p>
-      <span class="tag">game · the app shape</span>
+      <span class="zh">太阳走到哪哪格长，蝗影反向巡食</span>
+      <span class="tag">clockface farming</span>
+    </a>
+    <a class="card" href="firefly.html">
+      <h3>FIREFLY GROVE · 萤火林</h3>
+      <p>
+        Hold the lantern and the fireflies gather; let go and they
+        scatter. Shepherd the whole swarm home to the mother tree through
+        webs and wind — and the night itself is your countdown.
+      </p>
+      <span class="zh">提灯放牧萤火群，黎明即终局</span>
+      <span class="tag">herding by light</span>
+    </a>
+    <a class="card" href="drift.html">
+      <h3>SIGNAL DRIFT · 信号漂移</h3>
+      <p>
+        The interference flash arrives — what changed? Spot it, then the
+        very same runtime replays the T+0 frame byte-for-byte and marks
+        every pixel that differs.
+      </p>
+      <span class="zh">闪过的一瞬什么变了？逐字节重放揭示答案</span>
+      <span class="tag">change blindness · deterministic replay</span>
+    </a>
+    <a class="card" href="seq303.html">
+      <h3>SEQ-303 · music maker</h3>
+      <p>
+        A two-voice acid step sequencer: per-voice grids and tone knobs
+        (BASS resonant filter + accent + DRIVE), four chained patterns,
+        slides and scales — audible through the host-side WebAudio bridge.
+      </p>
+      <span class="zh">双声部步进音序器，重音推滤波的 acid 哭腔</span>
+      <span class="tag">sound on (WebAudio)</span>
+    </a>
+    <a class="card" href="sandbox.html">
+      <h3>SANDBOX · 粒子沙盘</h3>
+      <p>
+        A falling-sand cellular automaton: sand sinks, oil floats, fire
+        ignites the oil, acid eats walls and lava turns to stone in water
+        — all deterministic to the input stream.
+      </p>
+      <span class="zh">沙沉油浮火燃油，酸蚀岩浆遇水成石</span>
+      <span class="tag">falling sand</span>
+    </a>
+    <a class="card tool" href="classic.html">
+      <h3>The framework workbench — orion, 2048 + time travel, playground, life, seedmap, minesweeper, tic-tac-toe</h3>
+      <p>
+        The older demo set: a starship command deck drawn from an HTML
+        design file, the classic 2048 with a scrubber that replays history
+        byte-identically, the design-file playground, a demoscene page, a
+        seed→dungeon generator and the original story apps. Each shows a
+        different face of the framework itself.
+      </p>
+      <span class="tag">framework features · determinism you can verify</span>
     </a>
   </div>
 </div>

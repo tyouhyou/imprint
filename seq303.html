@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEQ-303 · music maker</title>
+<style>
+  body {
+    margin: 0;
+    padding: 24px 16px;
+    background: #14100c;
+    color: #f2e6d0;
+    font-family: sans-serif;
+    text-align: center;
+  }
+  h1 { font-size: 20px; color: #ffb454; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen {
+    width: min(880px, calc(100vw - 32px));
+    aspect-ratio: 800 / 520;
+    height: auto;
+    background: #1a1310;
+    border: 1px solid #3a2e22;
+    border-radius: 6px;
+  }
+  #status { margin-top: 8px; font-size: 13px; color: #9a866e; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #c9b899; }
+  .hint b { color: #ffb454; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
+  .back { margin: 0 auto 12px; font-size: 12px; letter-spacing: 1px; }
+  .back a { color: var(--muted-c, #9fb3c8); text-decoration: none; }
+  .back a:hover { color: var(--tint, #dfe8f4); }
+</style>
+</head>
+<body>
+<p class="back"><a href="index.html">← all games</a></p>
+
+<h1>SEQ-303 · music maker</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：一下出音，再一下加重音。</b><b>LEAD / BASS</b> 两个声部各有独立格子与音色旋钮 （BASS 页第六钮是 <b>DRIVE</b> 驱动，重音会把滤波器顶开——acid 的哭腔）。 <b>A–D</b> 四个段落随时切换，<b>CHAIN</b> 逐段自动推进，<b>COPY</b> 复制当前段做变奏。 行尾 <b>SL</b> 打开滑音，<b>SCALE</b> 换音阶，DICE 随机来一段，滑杆调速度。</p>
+<p class="hint en"><b>How to play: one tap sounds a note, tap again for an accent.</b> The <b>LEAD</b> and <b>BASS</b> voices each have their own grid and their own tone knobs (the sixth BASS knob is <b>DRIVE</b> — an accent shoves the filter open, the acid's cry). <b>A–D</b> switches patterns any time, <b>CHAIN</b> advances them automatically, <b>COPY</b> clones the current pattern for a variation. <b>SL</b> at the row's end opens a slide, <b>SCALE</b> changes the scale, DICE rolls a random riff, and the slider sets the tempo.</p>
+<p class="hint ja"><b>遊び方：一押しで発音、もう一押しでアクセント。</b><b>LEAD</b> と <b>BASS</b> の二声部はそれぞれ独立したグリッドと音色ノブを持つ（BASS の第六ノブは <b>DRIVE</b> ドライブ——アクセントでフィルターが開き、アシッドの泣き声になる）。<b>A–D</b> で四つのパターンをいつでも切り替え、<b>CHAIN</b> が順送りし、<b>COPY</b> で現行パターンを複製して変奏。行末の <b>SL</b> でスライド、<b>SCALE</b> で音階変更、DICE でランダム、スライダーでテンポ調整。</p>
+</div>
+
+<script>
+/* WebAudio playback: the wasm runtime is silent by architecture ruling
+ * (audio is host-side); the sequencer pushes packed note events into a
+ * queue drained through seq303_note_pop, this script sounds them.
+ *
+ * Two voices: LEAD (triangle+square through a lowpass) and BASS (saw +
+ * sub-octave square through a resonant lowpass with a per-note cutoff
+ * envelope -- accents shove the filter open -- then a persistent
+ * waveshaper drive bus). Anchored lookahead scheduling: every event
+ * carries the global step counter G it sounds on (ev >> 7); (anchorG,
+ * anchorT) maps G to an absolute AudioContext time, so each note is
+ * scheduled ~1 step ahead of now (the wasm side queues one step
+ * ahead). Parameters are polled from seq303_param every frame: 0..5
+ * the LEAD knob page, 6 bpm, 7..14 lead row midi, 16..21 the BASS page
+ * (cutoff reso decay delay swing/unused drive mix). */
+(function () {
+  "use strict";
+  var ctx = null;        // created lazily on the first pointerdown
+  var master = null;     // DynamicsCompressor -> destination
+  var delaySend = null;  // shared feedback delay
+  var noiseBuf = null;   // 1 s of white noise, reused by hat/snare
+  var bassBus = null;    // WaveShaper -> gain -> master (persistent)
+  var driveCurve = -1;   // cached DRIVE value the shaper was built for
+  var anchorG = -1;      // step counter of the current time anchor
+  var anchorT = 0;       // ctx time that anchorG sounds at
+  var voiceFreq = [0, 0];  // per-voice last pitch, for SLIDE glides
+  // params polled from the wasm side (see the comment above)
+  var P = [
+    55, 25, 45, 35, 50, 50,          // 0..5  lead knobs
+    120,                              // 6     bpm
+    76, 74, 72, 69, 67, 64, 62, 60,  // 7..14 lead row midi
+    0,                                // 15    active layer (info only)
+    45, 40, 50, 15, 50, 30,          // 16..21 bass knobs
+    0                                 // 22    playing pattern slot
+  ];
+
+  function midiFreq(m) { return 440 * Math.pow(2, (m - 69) / 12); }
+
+  function makeNoise() {
+    var len = ctx.sampleRate;
+    var buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    var d = buf.getChannelData(0);
+    for (var i = 0; i < len; i++) d[i] = Math.random() * 2 - 1;
+    return buf;
+  }
+
+  function makeDriveCurve(drive) {
+    // tanh saturation normalized to unity slope at zero; DRIVE widens k
+    var k = 1 + drive / 100 * 9;
+    var n = 1024;
+    var curve = new Float32Array(n);
+    var norm = Math.tanh(k);
+    for (var i = 0; i < n; i++) {
+      var x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(k * x) / norm;
+    }
+    return curve;
+  }
+
+  function ensureAudio() {
+    if (ctx) {
+      if (ctx.state === "suspended") ctx.resume();
+      return;
+    }
+    var AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return;
+    ctx = new AC();
+    master = ctx.createDynamicsCompressor();
+    master.connect(ctx.destination);
+    // shared feedback delay: note -> per-note send -> delay ->
+    // wet(1.0) -> master (the send carries the DELAY knob amount)
+    var delay = ctx.createDelay(1);
+    delay.delayTime.value = 0.27;
+    var fb = ctx.createGain();
+    fb.gain.value = 0.34;
+    delay.connect(fb);
+    fb.connect(delay);
+    var wet = ctx.createGain();
+    wet.gain.value = 1.0;
+    delay.connect(wet);
+    wet.connect(master);
+    delaySend = delay;
+    // the persistent bass drive bus: every bass note feeds the shaper
+    var shaper = ctx.createWaveShaper();
+    shaper.curve = makeDriveCurve(P[21]);
+    driveCurve = P[21];
+    var bg = ctx.createGain();
+    bg.gain.value = 0.9;
+    shaper.connect(bg);
+    bg.connect(master);
+    bassBus = shaper;
+    noiseBuf = makeNoise();
+  }
+  window.addEventListener("pointerdown", ensureAudio, { passive: true });
+
+  // map a packed event to an absolute due time, then voice it
+  function schedule(ev) {
+    var row = ev & 15;
+    var layer = (ev >> 4) & 1;
+    var accent = ((ev >> 5) & 1) === 1;
+    var slide = ((ev >> 6) & 1) === 1;
+    var G = ev >> 7;
+    var bpm = P[6] > 0 ? P[6] : 120;
+    var stepDur = 15 / bpm;
+    var due = anchorG >= 0 ? anchorT + (G - anchorG) * stepDur : 0;
+    if (anchorG < 0 || due < ctx.currentTime + 0.004) {
+      // no anchor yet, or the queue drained slower than real time:
+      // re-anchor on this event
+      due = ctx.currentTime + 0.004;
+      anchorG = G;
+      anchorT = due;
+    }
+    // swing: odd counter steps land late (50 = straight .. 75 = hard)
+    if (G % 2 === 1) {
+      due += (P[4] - 50) / 50 * stepDur * 0.5;
+    }
+    if (row >= 8) playDrum(row, due);
+    else if (layer === 1) playBass(row, due, accent, slide);
+    else playLead(row, due, accent, slide);
+  }
+
+  function playLead(row, due, accent, slide) {
+    var f = midiFreq(P[7 + row]);
+    var cutoff = 150 * Math.pow(2, P[0] / 100 * 5.5);
+    var q = 0.5 + P[1] * P[1] / 250;
+    var decay = 0.08 + P[2] / 100 * 0.55;
+    var dry = Math.max(0.5, 1 - P[5] / 200);
+    if (accent) q *= 1.3;
+    var peak = 0.22 * dry * (accent ? 1.35 : 1);
+    var end = due + 0.005 + decay;
+
+    var lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.value = cutoff;
+    lp.Q.value = q;
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0, due);
+    g.gain.linearRampToValueAtTime(peak, due + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    lp.connect(g);
+    g.connect(master);
+    // delay send is per note, so the DELAY knob only affects new notes
+    var send = ctx.createGain();
+    send.gain.value = P[3] / 100 * 0.45;
+    g.connect(send);
+    send.connect(delaySend);
+
+    // SLIDE: glide from the voice's previous pitch over 60 ms
+    var prev = slide && voiceFreq[0] > 0 ? voiceFreq[0] : f;
+    voiceFreq[0] = f;
+
+    var tri = ctx.createOscillator();
+    tri.type = "triangle";
+    tri.frequency.setValueAtTime(prev, due);
+    if (slide) tri.frequency.exponentialRampToValueAtTime(f, due + 0.06);
+    tri.connect(lp);
+    var sq = ctx.createOscillator();
+    sq.type = "square";
+    sq.frequency.setValueAtTime(prev, due);
+    if (slide) sq.frequency.exponentialRampToValueAtTime(f, due + 0.06);
+    var sg = ctx.createGain();
+    sg.gain.value = 0.18;
+    sq.connect(sg);
+    sg.connect(lp);
+    tri.start(due);
+    sq.start(due);
+    tri.stop(end + 0.05);
+    sq.stop(end + 0.05);
+  }
+
+  function playBass(row, due, accent, slide) {
+    // the bass ladder reads the lead table two octaves down
+    var f = midiFreq(P[7 + row] - 24);
+    var base = 80 * Math.pow(2, P[16] / 100 * 5.6);
+    var q = Math.min(30, 0.7 + P[17] * P[17] / 180);
+    var decay = 0.1 + P[18] / 100 * 0.7;
+    var dry = Math.max(0.5, 1 - P[21] / 300);
+    var peak = 0.34 * dry * (accent ? 1.35 : 1);
+    var end = due + 0.006 + decay;
+
+    if (bassBus && P[21] !== driveCurve) {
+      bassBus.curve = makeDriveCurve(P[21]);
+      driveCurve = P[21];
+    }
+
+    var lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.Q.value = accent ? q * 1.5 : q;
+    // the cutoff envelope: the accent shoves the filter wide open, the
+    // ramp back down is the pluck (the 303 cry)
+    var peakHz = base * (accent ? 5.5 : 2.2);
+    lp.frequency.setValueAtTime(Math.min(18000, peakHz), due);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(40, base), due + decay);
+
+    var g = ctx.createGain();
+    g.gain.setValueAtTime(0, due);
+    g.gain.linearRampToValueAtTime(peak, due + 0.006);
+    g.gain.exponentialRampToValueAtTime(0.0001, end);
+    lp.connect(g);
+    g.connect(bassBus ? bassBus : master);
+    var send = ctx.createGain();
+    send.gain.value = P[19] / 100 * 0.3;
+    g.connect(send);
+    send.connect(delaySend);
+
+    // SLIDE: glide from the bass voice's previous pitch, 90 ms
+    var prev = slide && voiceFreq[1] > 0 ? voiceFreq[1] : f;
+    voiceFreq[1] = f;
+
+    var saw = ctx.createOscillator();
+    saw.type = "sawtooth";
+    saw.frequency.setValueAtTime(prev, due);
+    if (slide) saw.frequency.exponentialRampToValueAtTime(f, due + 0.09);
+    saw.connect(lp);
+    var sub = ctx.createOscillator();
+    sub.type = "square";
+    sub.frequency.setValueAtTime(prev / 2, due);
+    if (slide) sub.frequency.exponentialRampToValueAtTime(f / 2, due + 0.09);
+    var subg = ctx.createGain();
+    subg.gain.value = 0.3;
+    sub.connect(subg);
+    subg.connect(lp);
+    saw.start(due);
+    sub.start(due);
+    saw.stop(end + 0.05);
+    sub.stop(end + 0.05);
+  }
+
+  function playDrum(row, due) {
+    if (row === 8) {
+      // hi-hat: filtered noise, tight decay
+      var src = ctx.createBufferSource();
+      src.buffer = noiseBuf;
+      var hp = ctx.createBiquadFilter();
+      hp.type = "highpass";
+      hp.frequency.value = 6800;
+      var hg = ctx.createGain();
+      hg.gain.setValueAtTime(0.16, due);
+      hg.gain.exponentialRampToValueAtTime(0.0001, due + 0.05);
+      src.connect(hp);
+      hp.connect(hg);
+      hg.connect(master);
+      src.start(due);
+      src.stop(due + 0.1);
+    } else if (row === 9) {
+      // snare: bandpassed noise body + a short 190 Hz thump
+      var n = ctx.createBufferSource();
+      n.buffer = noiseBuf;
+      var bp = ctx.createBiquadFilter();
+      bp.type = "bandpass";
+      bp.frequency.value = 1800;
+      bp.Q.value = 0.8;
+      var ng = ctx.createGain();
+      ng.gain.setValueAtTime(0.3, due);
+      ng.gain.exponentialRampToValueAtTime(0.0001, due + 0.15);
+      n.connect(bp);
+      bp.connect(ng);
+      ng.connect(master);
+      n.start(due);
+      n.stop(due + 0.2);
+      var body = ctx.createOscillator();
+      body.type = "sine";
+      body.frequency.value = 190;
+      var bg = ctx.createGain();
+      bg.gain.setValueAtTime(0.2, due);
+      bg.gain.exponentialRampToValueAtTime(0.0001, due + 0.1);
+      body.connect(bg);
+      bg.connect(master);
+      body.start(due);
+      body.stop(due + 0.12);
+    } else if (row === 10) {
+      // kick: pitch-dropping sine
+      var k = ctx.createOscillator();
+      k.type = "sine";
+      k.frequency.setValueAtTime(150, due);
+      k.frequency.exponentialRampToValueAtTime(48, due + 0.13);
+      var kg = ctx.createGain();
+      kg.gain.setValueAtTime(0.5, due);
+      kg.gain.exponentialRampToValueAtTime(0.0001, due + 0.25);
+      k.connect(kg);
+      kg.connect(master);
+      k.start(due);
+      k.stop(due + 0.3);
+    }
+  }
+
+  function pollParams() {
+    for (var i = 0; i < 23; i++) {
+      var v = window.Module.ccall("seq303_param", "number", ["number"], [i]);
+      if (v >= 0) P[i] = v;
+    }
+  }
+
+  function poll() {
+    requestAnimationFrame(poll);
+    try {
+      if (!window.Module || !window.Module.ccall) return;
+      pollParams();
+      // always drain: a backlog played in a burst when the context
+      // arrives would sound like a glitch
+      var ev = window.Module.ccall("seq303_note_pop", "number");
+      while (ev >= 0) {
+        if (ctx) schedule(ev);
+        ev = window.Module.ccall("seq303_note_pop", "number");
+      }
+    } catch (e) {
+      // runtime not initialized yet; try again next frame
+    }
+  }
+  requestAnimationFrame(poll);
+})();
+</script>
+
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="seq303.js"></script>
+</body>
+</html>

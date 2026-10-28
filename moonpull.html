@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MOONPULL · 引潮记</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #060816; color: #d8e4f4; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #9fd8ff; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #060816; border: 1px solid #2a3a4a; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #9fd8ff; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
+  .back { margin: 0 auto 12px; font-size: 12px; letter-spacing: 1px; }
+  .back a { color: var(--muted-c, #9fb3c8); text-decoration: none; }
+  .back a:hover { color: var(--tint, #dfe8f4); }
+</style>
+</head>
+<body>
+<p class="back"><a href="index.html">← all games</a></p>
+<h1>MOONPULL · 引潮记</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：按住拖动，月亮就在你手里。</b>横向拖让月亮绕海环行，竖向拖升降月亮（越低潮力越大）。潮峰永远跟着月亮的方向鼓起——把<b>潮峰</b>停在渡口的礁道上，渡船才会起航（1/3）；把<b>潮谷</b>压在珠蚌床上晾干它（2/3）；最后在灯芯烧尽前别让潮水漫上<b>灯笼屿</b>（3/3）。黎明为限。</p>
+<p class="hint en"><b>How to play: press and hold — the moon is in your hand.</b> Drag sideways to circle the moon around the sea ring, drag up and down to raise or lower it (the lower it hangs, the harder it pulls). The tidal crest always bulges toward the moon: park the <b>crest</b> on the causeway of the ferry jetty and the boat sets sail (1/3); press the <b>trough</b> down onto the pearl-beds to dry them (2/3); before the lamp wick burns out, keep the tide from washing over <b>Lantern Isle</b> (3/3). You have until dawn.</p>
+<p class="hint ja"><b>遊び方：押さえて拖けば、月はあなたの手の中。</b>横に拖いて月を海の環の周りを回し、縦に拖いて高さを変える（低いほど潮の力は強い）。潮の峰は常に月の方へ膨らむ——<b>潮峰</b>を渡し場の礁道に止めれば渡し船が出航し（1/3）、<b>潮谷</b>を真珠の床に押し当てれば床が乾く（2/3）。灯りの芯が燃え尽きる前に、潮が<b>灯籠島</b>を越えないように見張る（3/3）。締め切りは夜明けまで。</p>
+</div>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false, pixelOrder: "rgba" };</script>
+<script src="proto_host.js"></script>
+<script src="moonpull.js"></script>
+</body>
+</html>

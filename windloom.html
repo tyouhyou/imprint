@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WINDLOOM · 织风</title>
+<style>
+  body { margin: 0; padding: 24px 16px; background: #16222e; color: #cfe6ff; font-family: sans-serif; text-align: center; }
+  h1 { font-size: 20px; color: #d9c25a; margin: 0 0 16px; letter-spacing: 2px; }
+  #screen { width: min(880px, calc(100vw - 32px)); aspect-ratio: 800 / 520; height: auto;
+    background: #16222e; border: 1px solid #3a4a38; border-radius: 6px; cursor: pointer; touch-action: none; }
+  #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
+  .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
+  .hint b { color: #d9c25a; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
+  .back { margin: 0 auto 12px; font-size: 12px; letter-spacing: 1px; }
+  .back a { color: var(--muted-c, #9fb3c8); text-decoration: none; }
+  .back a:hover { color: var(--tint, #dfe8f4); }
+</style>
+</head>
+<body>
+<p class="back"><a href="index.html">← all games</a></p>
+<h1>WINDLOOM · 织风</h1>
+<canvas id="screen"></canvas>
+<div id="status">loading module…</div>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：手指拖动即「织风」。</b>画出的每笔都是一道持久流动的气流（虚线），把母株陆续撒落的种子吹进土窝<b>开花</b>——三个土窝都种满即完成花园。带刺的蔷薇丛会杀死触碰的种子，落在外面的空地只长草。</p>
+<p class="hint en"><b>How to play: drag with your finger or mouse — that is "weaving wind."</b> Every stroke you draw becomes a lasting, flowing air current (the dashed lines). Use them to blow the seeds the mother plant keeps dropping into the soil cups so they <b>bloom</b> — fill all three cups and the garden is complete. The thorny rosebushes kill any seed they touch; a seed that lands on bare ground grows only grass.</p>
+<p class="hint ja"><b>遊び方：指やマウスで拖けばそれが「風を織る」こと。</b>描いた一筆ごとが、流れ続ける気流（点線）になる。母株が次々と落とす種をその気流で吹かせ、土の鉢へ運んで<b>咲かせる</b>——三つの鉢全部が満たれば庭園の完成。棘だらけの薔薇は触れた種を殺す。外の裸地に落ちた種は草しか生やさない。</p>
+</div>
+<script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
+<script src="proto_host.js"></script>
+<script src="windloom.js"></script>
+</body>
+</html>

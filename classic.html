@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Framework workbench · Imprint demos</title>
+<link rel="stylesheet" href="demo.css">
+<style>
+  .hero { padding: 44px 0 26px; text-align: center; }
+  .hero h1 {
+    margin: 0 0 14px;
+    font-size: clamp(22px, 4vw, 30px);
+    font-weight: 650; letter-spacing: -0.01em; color: #e8eef7;
+  }
+  .hero p { margin: 0 auto; max-width: 620px; color: var(--muted); font-size: 15px; }
+
+  .cards {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 14px; margin: 40px 0 10px;
+  }
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 18px 18px 16px;
+    text-decoration: none; display: block;
+    transition: border-color 120ms ease, transform 120ms ease;
+  }
+  .card:hover { border-color: var(--accent); transform: translateY(-2px); }
+  .card h3 {
+    margin: 0 0 8px;
+    font-family: var(--mono); font-size: 12px; font-weight: 700;
+    letter-spacing: 0.14em; text-transform: uppercase;
+    color: var(--accent);
+  }
+  .card p { margin: 0; color: var(--muted); font-size: 13.5px; }
+  .card .tag {
+    display: inline-block; margin-top: 10px;
+    font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+    color: var(--amber); text-transform: uppercase;
+  }
+  .card.featured { grid-column: 1 / -1; border-color: #263450; }
+  .backline { text-align: center; margin: 30px 0 0; }
+  .backline a {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--muted); text-decoration: none;
+    border-bottom: 1px dotted #33415a; padding-bottom: 2px;
+  }
+  .backline a:hover { color: var(--accent); }
+  @media (max-width: 700px) { .cards { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap">
+    <a class="mark" href="index.html">IMPRINT</a>
+    <nav class="nav">
+      <a href="index.html">Games</a>
+      <a href="https://github.com/tyouhyou/imprint">GitHub</a>
+    </nav>
+  </div>
+</header>
+
+<div class="hero wrap">
+  <h1>The framework <em>workbench</em></h1>
+  <p>
+    The older demo set: each page shows a different face of the runtime
+    itself — deterministic replay, damage tracking, design-file
+    materialization, embedded targets. The games live on the
+    <a href="index.html" style="color:var(--accent)">front page</a>.
+  </p>
+</div>
+
+<div class="wrap">
+  <div class="cards">
+    <a class="card featured" href="orion.html">
+      <h3>ORION NX-07 · command deck</h3>
+      <p>
+        A playable starship command deck: power distribution sliders and
+        system toggles, a sweeping scanner scope, tactical maneuvering
+        (WASDQE), a galactic navigator modal and a live event log — driven
+        by a deterministic C++ app, in a framebuffer sized to your viewport.
+      </p>
+      <span class="tag">flagship deck · responsive buffer</span>
+    </a>
+    <a class="card" href="g2048.html">
+      <h3>2048 + time travel</h3>
+      <p>
+        The classic tile game, and a scrubber that rewinds it: the whole
+        app is a pure function of its input stream, so history replays
+        byte-identically.
+      </p>
+      <span class="tag">game · determinism you can scrub</span>
+    </a>
+    <a class="card" href="playground.html">
+      <h3>Design playground</h3>
+      <p>
+        Paste an HTML design, hit RUN, and watch a C++ software rasterizer
+        draw it — no browser layout engine involved on the canvas side.
+      </p>
+      <span class="tag">interactive · parse → widgets → pixels</span>
+    </a>
+    <a class="card" href="life.html">
+      <h3>Life / plasma / stars</h3>
+      <p>
+        A Game of Life colony, a plasma field and a starfield — animation
+        without a single timer, a pure function of the paint count.
+      </p>
+      <span class="tag">demoscene · no-timer animation</span>
+    </a>
+    <a class="card" href="seedmap.html">
+      <h3>Seed → dungeon</h3>
+      <p>
+        Type a seed, carve a dungeon. The map fingerprint lets you verify
+        determinism by eye across platforms.
+      </p>
+      <span class="tag">procedural · verifiable output</span>
+    </a>
+    <a class="card" href="mines.html">
+      <h3>Minesweeper</h3>
+      <p>
+        A 9×9 minefield with modal dialogs and an 81-label grid; the repaint
+        overlay shows the flood fill touching only the cells it opens.
+      </p>
+      <span class="tag">game · damage tracking</span>
+    </a>
+    <a class="card" href="tictactoe.html">
+      <h3>Tic-tac-toe</h3>
+      <p>
+        The original story app: a custom board widget, modal dialogs and a
+        minimax opponent over the C ABI.
+      </p>
+      <span class="tag">game · the app shape</span>
+    </a>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Imprint UI · C++17 · one renderer, every platform</span>
+    <span class="fine"><a href="https://github.com/tyouhyou/imprint">source</a></span>
+  </div>
+</footer>
+
+</body>
+</html>
