@@ -40,6 +40,20 @@ int test_term_input()
         EXPECT(ev[1].key == static_cast<int>(key_code::tab));
         EXPECT(ev[2].key == static_cast<int>(key_code::backspace));
         EXPECT(ev[3].key == static_cast<int>(key_code::escape));  // Ctrl-C
+
+        // space is a navigation key (§4.2), never a character -- the same
+        // routing as the desktop shells, so it activates the focused widget
+        ev = feed(p, " ");
+        EXPECT(ev.size() == 1 && ev[0].key == static_cast<int>(key_code::space) &&
+               ev[0].ch == 0);
+
+        // U-1 decoration through the shared helper: lowercase key code for
+        // letters, verbatim digits, punctuation ch-only
+        ev = feed(p, "Z5!");
+        EXPECT(ev.size() == 3);
+        EXPECT(ev[0].key == 'z' && ev[0].ch == 'Z');
+        EXPECT(ev[1].key == '5' && ev[1].ch == '5');
+        EXPECT(ev[2].key == 0 && ev[2].ch == '!');
     }
 
     // arrows in CSI and SS3 forms; a sequence split across chunks

@@ -108,10 +108,10 @@ namespace zb::input
 
     /*
      * U-1 decoration: the printable-character half of the rule every
-     * input translator applies (win/x11/mac, plus the wasm and python
-     * hosts). Given the printable ASCII a platform reported, fill the
-     * event's `key` — lowercase for letters, verbatim for digits — and
-     * set `ch` on key_down only (key_up always carries ch == 0).
+     * input translator applies (win/x11/mac/terminal, plus the wasm and
+     * python hosts). Given the printable ASCII a platform reported, fill
+     * the event's `key` — lowercase for letters, verbatim for digits —
+     * and set `ch` on key_down only (key_up always carries ch == 0).
      * Punctuation and everything outside printable ASCII map to no key
      * (key stays whatever the translator's navigation table set, which
      * is why the rule is "fill if it is a letter/digit", not "assign").

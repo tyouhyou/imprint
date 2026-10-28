@@ -3,6 +3,8 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdint>
+#include <cstdlib>
+#include <memory>
 #include <string>
 #include <utility>
 #include <vector>
@@ -182,18 +184,25 @@ namespace zb::ui
                 int h = 0;
                 int xoff = 0;
                 int yoff = 0;
-                unsigned char *bmp = stbtt_GetGlyphBitmap(&s.info, scale, scale, g,
-                                                          &w, &h, &xoff, &yoff);
+                // stb_truetype allocated with the default STBTT_malloc
+                // (malloc); the wrapper TU overrides nothing. A guard, not
+                // a catch-and-free: the cov.assign below can throw
+                // bad_alloc (the acquire/release RAII rule).
+                struct free_deleter
+                {
+                    void operator()(unsigned char *p) const { std::free(p); }
+                };
+                const std::unique_ptr<unsigned char, free_deleter> bmp(
+                    stbtt_GetGlyphBitmap(&s.info, scale, scale, g,
+                                         &w, &h, &xoff, &yoff));
                 if (bmp != nullptr)
                 {
-                    e.cov.assign(bmp, bmp + static_cast<size_t>(w) * static_cast<size_t>(h));
+                    e.cov.assign(bmp.get(),
+                                 bmp.get() + static_cast<size_t>(w) * static_cast<size_t>(h));
                     e.w = w;
                     e.h = h;
                     e.xoff = xoff;
                     e.yoff = yoff;
-                    // stb_truetype allocated with the default STBTT_malloc
-                    // (malloc); the wrapper TU overrides nothing
-                    std::free(bmp);
                 }
             }
             const size_t bytes = e.cov.size();
@@ -214,26 +223,31 @@ namespace zb::ui
         {
             throw error("TtfFamily: empty font path");
         }
-        std::FILE *f = std::fopen(path, "rb");
+        // a guard, not a catch-and-close: the resize/fread below can
+        // throw (the acquire/release RAII rule)
+        struct file_closer
+        {
+            void operator()(std::FILE *f) const { std::fclose(f); }
+        };
+        const std::unique_ptr<std::FILE, file_closer> f(std::fopen(path, "rb"));
         if (f == nullptr)
         {
             throw error(std::string("TtfFamily: cannot open font file: ") + path);
         }
         std::vector<unsigned char> bytes;
-        if (std::fseek(f, 0, SEEK_END) == 0)
+        if (std::fseek(f.get(), 0, SEEK_END) == 0)
         {
-            const long n = std::ftell(f);
-            std::fseek(f, 0, SEEK_SET);
+            const long n = std::ftell(f.get());
+            std::fseek(f.get(), 0, SEEK_SET);
             if (n > 0)
             {
                 bytes.resize(static_cast<size_t>(n));
-                if (std::fread(bytes.data(), 1, bytes.size(), f) != bytes.size())
+                if (std::fread(bytes.data(), 1, bytes.size(), f.get()) != bytes.size())
                 {
                     bytes.clear();
                 }
             }
         }
-        std::fclose(f);
         if (bytes.empty())
         {
             throw error(std::string("TtfFamily: cannot read font file: ") + path);

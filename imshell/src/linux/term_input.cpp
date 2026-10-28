@@ -184,26 +184,26 @@ namespace zb::shell::term_input
         case 0x04:
             push_key(out, zb::input::key_code::escape);
             return;
+        case ' ':
+            // §4.2 pipeline convention: space is a navigation key
+            // (activation), never a character (B1) -- the same routing as
+            // the desktop shells, so space activates the focused widget
+            push_key(out, zb::input::key_code::space);
+            return;
         default:
             break;
         }
         if (ch >= 0x20 && ch <= 0x7e)
         {
+            // U-1 through the shared letter/digit classification (the
+            // same helper the win/x11/mac translators and the wasm/python
+            // hosts apply): letters carry their lowercase key code, digits
+            // verbatim, punctuation ch-only. The terminal protocol itself
+            // has no key-up -- key-state is unavailable on this target
+            // (ARCHITECTURE §4.2).
             zb::input::input_event ev{};
             ev.type = zb::input::input_type::key_down;
-            ev.ch = static_cast<int>(ch);
-            // U-1: letters/digits also carry the platform-independent key
-            // code (lowercase/verbatim). The terminal protocol has no
-            // key-up at all -- key-state is unavailable on this target
-            // (ARCHITECTURE §4.2).
-            if (ch >= 'A' && ch <= 'Z')
-            {
-                ev.key = ch + 0x20;
-            }
-            else if ((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9'))
-            {
-                ev.key = ch;
-            }
+            zb::input::decorate_printable_key(ev, ch);
             out.push_back(ev);
         }
         // other control bytes are dropped

@@ -322,11 +322,15 @@ namespace zb::ui
             {
                 continue;
             }
-            std::uint32_t sr = 0, sg = 0, sb = 0, w = 0;
+            // 64-bit accumulators: a long recording can push one bucket's
+            // weight (and so 255*weight) past the 32-bit field (e.g. a
+            // bright uniform background over hundreds of frames) — the
+            // wrap would silently corrupt the palette entry
+            std::uint64_t sr = 0, sg = 0, sb = 0, w = 0;
             for (std::size_t i = b.begin; i < b.end; ++i)
             {
                 const std::uint32_t c = colors_[i];
-                const std::uint32_t k = counts_[i];
+                const std::uint64_t k = counts_[i];
                 sr += ((c >> 16) & 0xFF) * k;
                 sg += ((c >> 8) & 0xFF) * k;
                 sb += (c & 0xFF) * k;
