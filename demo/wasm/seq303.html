@@ -25,6 +25,23 @@
   #status { margin-top: 8px; font-size: 13px; color: #9a866e; }
   .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #c9b899; }
   .hint b { color: #ffb454; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
 </style>
 </head>
 <body>
@@ -33,12 +50,12 @@
 <canvas id="screen"></canvas>
 <div id="status">loading module…</div>
 
-<p class="hint">
-  <b>怎么玩：一下出音，再一下加重音。</b><b>LEAD / BASS</b> 两个声部各有独立格子与音色旋钮
-  （BASS 页第六钮是 <b>DRIVE</b> 驱动，重音会把滤波器顶开——acid 的哭腔）。
-  <b>A–D</b> 四个段落随时切换，<b>CHAIN</b> 逐段自动推进，<b>COPY</b> 复制当前段做变奏。
-  行尾 <b>SL</b> 打开滑音，<b>SCALE</b> 换音阶，DICE 随机来一段，滑杆调速度。
-</p>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：一下出音，再一下加重音。</b><b>LEAD / BASS</b> 两个声部各有独立格子与音色旋钮 （BASS 页第六钮是 <b>DRIVE</b> 驱动，重音会把滤波器顶开——acid 的哭腔）。 <b>A–D</b> 四个段落随时切换，<b>CHAIN</b> 逐段自动推进，<b>COPY</b> 复制当前段做变奏。 行尾 <b>SL</b> 打开滑音，<b>SCALE</b> 换音阶，DICE 随机来一段，滑杆调速度。</p>
+<p class="hint en"><b>How to play: one tap sounds a note, tap again for an accent.</b> The <b>LEAD</b> and <b>BASS</b> voices each have their own grid and their own tone knobs (the sixth BASS knob is <b>DRIVE</b> — an accent shoves the filter open, the acid's cry). <b>A–D</b> switches patterns any time, <b>CHAIN</b> advances them automatically, <b>COPY</b> clones the current pattern for a variation. <b>SL</b> at the row's end opens a slide, <b>SCALE</b> changes the scale, DICE rolls a random riff, and the slider sets the tempo.</p>
+<p class="hint ja"><b>遊び方：一押しで発音、もう一押しでアクセント。</b><b>LEAD</b> と <b>BASS</b> の二声部はそれぞれ独立したグリッドと音色ノブを持つ（BASS の第六ノブは <b>DRIVE</b> ドライブ——アクセントでフィルターが開き、アシッドの泣き声になる）。<b>A–D</b> で四つのパターンをいつでも切り替え、<b>CHAIN</b> が順送りし、<b>COPY</b> で現行パターンを複製して変奏。行末の <b>SL</b> でスライド、<b>SCALE</b> で音階変更、DICE でランダム、スライダーでテンポ調整。</p>
+</div>
 
 <script>
 /* WebAudio playback: the wasm runtime is silent by architecture ruling

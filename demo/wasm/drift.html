@@ -34,6 +34,23 @@
     color: #6ee7ff;
     background: #0a1220;
   }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
 </style>
 </head>
 <body>
@@ -48,10 +65,12 @@
   <span class="chip">REVEAL 逐字节重放</span>
 </div>
 
-<p class="hint">
-  怎么玩：信号干扰闪过的瞬间有什么变了。第二阶段点击你发现的变化；
-  结算时同一个 runtime 会把 T+0 的画面逐字节重放，并排对比、标出每一处像素差异。
-</p>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh">怎么玩：信号干扰闪过的瞬间有什么变了。第二阶段点击你发现的变化； 结算时同一个 runtime 会把 T+0 的画面逐字节重放，并排对比、标出每一处像素差异。</p>
+<p class="hint en"><b>How to play: the interference flash arrives — what changed?</b> In the second stage, click the changes you spotted. At settlement the very same runtime replays the T+0 frame byte-for-byte, shows the two frames side by side and marks every pixel that differs.</p>
+<p class="hint ja"><b>遊び方：信号の妨害が走った瞬間、何が変わった？</b>第二段階で気づいた変化をクリック。判定では同じ runtime が T+0 の画面をバイト単位で再生し、二画面を並べて一枚残らず違うピクセルを示す。</p>
+</div>
 
 <script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
 <script src="proto_host.js"></script>

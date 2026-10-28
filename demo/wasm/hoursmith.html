@@ -12,13 +12,35 @@
   #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
   .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #c8c2b4; }
   .hint b { color: #ffe2a8; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
 </style>
 </head>
 <body>
 <h1>HOURSMITH · 晷匠</h1>
 <canvas id="screen"></canvas>
 <div id="status">loading module…</div>
-<p class="hint"><b>怎么玩：你是日晷台的匠人。</b>太阳从清晨六点跑到傍晚六点，每块色石的影子尖端随之扫过石盘。把色石<b>拖</b>到合适的位置（点住石头拖动；点选后用右侧上下键或 <b>[ ]</b> 键调高矮），让它的影子尖端在色环自己的钟点<b>落进色环</b>并坚持到钟声敲响。清晨与傍晚影子又长又急，正午影子最短最稳。按 <b>1–4</b> 跳级。左下角是匠人的图纸，下方时间轴就是太阳本身。暮色收钟。</p>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：你是日晷台的匠人。</b>太阳从清晨六点跑到傍晚六点，每块色石的影子尖端随之扫过石盘。把色石<b>拖</b>到合适的位置（点住石头拖动；点选后用右侧上下键或 <b>[ ]</b> 键调高矮），让它的影子尖端在色环自己的钟点<b>落进色环</b>并坚持到钟声敲响。清晨与傍晚影子又长又急，正午影子最短最稳。按 <b>1–4</b> 跳级。左下角是匠人的图纸，下方时间轴就是太阳本身。暮色收钟。</p>
+<p class="hint en"><b>How to play: you are the dial-keeper's smith.</b> The sun runs from six in the morning to six in the evening, and the shadow tip of every colored stone sweeps the dial with it. <b>Drag</b> each stone into place (grab and drag; once picked, raise or lower it with the up/down keys on the right or the <b>[ ]</b> keys) so its shadow tip <b>lands inside the ring</b> of its own color at the ring's own hour and holds until the bell rings. Dawn and dusk shadows are long and fast; noon's is short and steady. Press <b>1–4</b> to jump levels. The smith's plan sits in the lower left; the timeline below is the sun itself. Dusk closes the day.</p>
+<p class="hint ja"><b>遊び方：あなたは日時計台の匠。</b>太陽は朝六時から夕方六時まで走り、色石の影の先端もそれに従って石盤を掃く。色石を適所へ<b>拖</b>き（掴んで動かす；選んだ後は右の上下キーか <b>[ ]</b> キーで高さを調整）、その影先をその色の環が指定する刻に<b>環の中へ落とし</b>、鐘が鳴るまで保たせる。朝と夕方の影は長く速く、正午の影は短く穏やか。<b>1–4</b> キーで面を跳ばせる。左下は匠の設計図、下の時間帯は太陽そのもの。夕暮れに鐘を納める。</p>
+</div>
 <script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false, pixelOrder: "rgba" };</script>
 <script src="proto_host.js"></script>
 <script src="hoursmith.js"></script>

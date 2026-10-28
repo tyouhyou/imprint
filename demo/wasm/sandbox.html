@@ -34,6 +34,23 @@
     color: #ffb454;
     background: #241b15;
   }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
 </style>
 </head>
 <body>
@@ -50,10 +67,12 @@
   <span class="chip">岩浆成石</span>
 </div>
 
-<p class="hint">
-  怎么玩：沙沉水面、油浮于水、火点燃油、酸腐蚀墙体、岩浆遇水成石。
-  整场模拟是确定性的：同样的输入流永远得到同样的世界。
-</p>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh">怎么玩：沙沉水面、油浮于水、火点燃油、酸腐蚀墙体、岩浆遇水成石。 整场模拟是确定性的：同样的输入流永远得到同样的世界。</p>
+<p class="hint en"><b>How to play: sand sinks below water, oil floats on it, fire ignites the oil, acid eats walls, lava meeting water turns to stone.</b> Draw with the mouse and watch the rules play out. The whole simulation is deterministic: the same input stream always yields the same world.</p>
+<p class="hint ja"><b>遊び方：砂は水に沈み、油は水に浮かぶ。火は油に燃え移り、酸は壁を侵食し、溶岩は水に触れると石になる。</b>マウスで描いて規則の動きを見る。シミュレーション全体は決定論的：同じ入力ストリームは常に同じ世界を生む。</p>
+</div>
 
 <script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false };</script>
 <script src="proto_host.js"></script>

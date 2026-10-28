@@ -12,13 +12,35 @@
   #status { margin-top: 8px; font-size: 13px; color: #9fb3c8; }
   .hint { max-width: 720px; margin: 16px auto 0; font-size: 14px; line-height: 1.7; color: #b8cade; }
   .hint b { color: #ffd98a; }
+  /* language tabs: pure CSS, radio + :has() selectors */
+  .lang { margin: 16px auto 0; display: flex; gap: 8px; justify-content: center; }
+  .lang input { position: absolute; opacity: 0; pointer-events: none; }
+  .lang label {
+    font-size: 12px; padding: 3px 14px; cursor: pointer; user-select: none;
+    border: 1px solid var(--lc, #3a4a5a); border-radius: 999px;
+    color: var(--muted-c, #9fb3c8); letter-spacing: 1px;
+  }
+  .lang label:has(input:checked) {
+    color: var(--tint, #dfe8f4); background: rgba(120,160,210,0.14);
+  }
+  .hintbox .hint { display: none; }
+  /* the checked input sits inside .lang; :has() carries its state up to
+   * the wrapper, which is the true sibling of .hintbox */
+  .lang:has(#lang-zh:checked) ~ .hintbox .hint.zh,
+  .lang:has(#lang-en:checked) ~ .hintbox .hint.en,
+  .lang:has(#lang-ja:checked) ~ .hintbox .hint.ja { display: block; }
 </style>
 </head>
 <body>
 <h1>FOGKEEPER · 雾港灯塔</h1>
 <canvas id="screen"></canvas>
 <div id="status">loading module…</div>
-<p class="hint"><b>怎么玩：按住左右拖动，扫动灯塔的巨光束。</b>雾里什么也看不见——<b>船只在光束里才会前进</b>（被照到时亮起暖色并加速），离开光束就只能在黑暗中随波漂向暗礁。把光束铺在船与绿色港门之间，一段一段把它们领回来；三艘沉船或黎明到来，守夜结束。</p>
+<div class="lang"><label><input type="radio" name="lang" id="lang-zh" checked>中文</label><label><input type="radio" name="lang" id="lang-en">EN</label><label><input type="radio" name="lang" id="lang-ja">日本語</label></div>
+<div class="hintbox">
+<p class="hint zh"><b>怎么玩：按住左右拖动，扫动灯塔的巨光束。</b>雾里什么也看不见——<b>船只在光束里才会前进</b>（被照到时亮起暖色并加速），离开光束就只能在黑暗中随波漂向暗礁。把光束铺在船与绿色港门之间，一段一段把它们领回来；三艘沉船或黎明到来，守夜结束。</p>
+<p class="hint en"><b>How to play: hold and drag left-right to sweep the lighthouse's great beam.</b> Nothing can be seen in the fog — <b>ships only advance while caught in the beam</b> (lit ships glow warm and pick up speed); outside it they drift helplessly toward the reefs. Lay the beam between a ship and the green harbor gate and walk them home one stretch at a time. Three wrecks — or dawn — ends the night watch.</p>
+<p class="hint ja"><b>遊び方：押さえて左右に拖き、灯台の巨光を振る。</b>霧の中は何も見えない——<b>船は光に照らされている間だけ進む</b>（照らされると温かく光り、加速する）。光を外れた船は闇の中を漂い暗礁へ向かう。光を船と緑の港門の間に敷き、少しずつ導き戻す。三隻沈むか、夜明けが来れば見張りは終わり。</p>
+</div>
 <script>window.DEMO_CONFIG = { width: 800, height: 520, timeTravel: false, pixelOrder: "rgba" };</script>
 <script src="proto_host.js"></script>
 <script src="fogkeeper.js"></script>
