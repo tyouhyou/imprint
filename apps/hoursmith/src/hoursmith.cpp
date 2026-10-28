@@ -401,8 +401,8 @@ void DialCanvas::level_text(char *buf, const int cap) const
     // the status label is ~200 px wide at the portal size: one short
     // line, and the count in front carries the progress
     static const char *const kHint[kLevels] = {
-        "NOON BELL: CRIMSON TIP IN RING AT 12",
-        "BELLS AT 9 AND 15: ONE STONE EACH",
+        "NOON: CRIMSON TIP IN RING AT 12",
+        "BELLS 9 AND 15: ONE STONE EACH",
         "THREE BELLS: 8, 12 AND 16",
         "MASTER'S DAY: 7, 12 AND 17"};
     if (night_)
@@ -1387,7 +1387,9 @@ void Hoursmith::create_window(const uint32_t max_client_width,
     auto stat = std::make_unique<Label>();
     stat->set_text("0/1  DAY 1");
     stat->set_text_color(kStatus);
-    stat->set_size(w - 300 * u, 20 * u);
+    // the line carries the level's goal: wide enough for a full hint,
+    // stopping short of the RESET button
+    stat->set_size(w - 241 * u, 20 * u);
     stat->set_position(165 * u, 8 * u);
     stat->set_font_size(8 * u);
     status_ = stat.get();
