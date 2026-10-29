@@ -1960,6 +1960,17 @@ namespace zb::ui
             {
                 return false;
             }
+
+            // colors and pos grow in lockstep in the stop loop above, so the
+            // two sizes always agree. Stating that here makes the invariant
+            // mechanical: the N-stop block below indexes pos by
+            // colors.size() and dereferences front()/back(), and GCC's -O2
+            // null-dereference analysis cannot see the parallel growth (it
+            // reports the front() call). A real guard, not a pragma.
+            if (pos.size() != colors.size())
+            {
+                return false;
+            }
             if (colors.size() == 1)
             {
                 n.prop("background", colors[0]);
