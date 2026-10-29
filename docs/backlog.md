@@ -17,9 +17,7 @@ Dependency-driven: each tier unlocks what follows.
 1. **A-29. fps consumption-report absorption** — R6 (deterministic frame
    contract) next, then R8 (input deltas), then re-evaluate R12/R13
    against the absorbed `imraster` module; each item contract-first
-   (§1 A-29). R1 closed 2026-10-25: the in-tree wrapper mode
-   (`Graphics::make_ptr` over a caller buffer) already is the zero-copy
-   path.
+   (§1 A-29). R1 is closed — see §1.
 2. **A-26. imcore primitive throughput** — the open item is ② (SIMD
    inner loops); its decision point is a 1080p-class consumer
    re-measure against the R1 zero-copy build. fps is paused (2026-10-24
@@ -31,59 +29,7 @@ Dependency-driven: each tier unlocks what follows.
    `cpu.pressure`.
 3. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
-   items stay trigger-gated. Batch G's P1–P4 roadmap is landed
-   (2026-09-26 through 2026-10-01; history in `git log`).
-3. **Batch X** (2026-10-15 independent audit): all items landed
-   (X-20 2026-10-25: `-Wconversion` / `-Wsign-conversion` triage —
-   308 findings fixed or proven benign and both flags added to the X-8
-   set in `cmake/imprint-warnings.cmake`; the MSVC `/wd4244` family
-   suppression removed).
-   X-7 and X-9 landed (2026-10-19: a real X11 loop under Xvfb in CI, and
-   one shared 64-bit geometry helper); **X-8 landed the same day** (a
-   per-compiler warning set with `-Werror` in-tree, clean across the
-   whole build matrix; `cmake/imprint-warnings.cmake` is its home), and
-   **X-21 landed the same day** (the mingw-w64 cross probe that puts the
-   Windows-only shell TUs under that set: `win-probe` locally, the
-   `mingw-probe` CI job, plus the failure-only MSVC warning inventory in
-   `windows-desktop`). **X-10 and X-11 landed 2026-10-20**: the 16bpp
-   presenter refusal is now symmetric across the desktop shells and the
-   fb fast path compares channel descriptors instead of byte counts
-   (`core::native_panel_layout()`), and the Python host decodes abgr1555
-   with a check that takes its ground truth from the pixel traits.
-   **X-12 landed 2026-10-24**: a per-declaration 64 KiB var() expansion
-   budget plus cycle rejection, 1024-command / 4096-point path caps, and
-   a 64-byte CSI accumulation bound. **X-13 landed the same day**: the
-   sixel register-budget diagnostic latches per frame instead of firing
-   once per dropped pixel, and the header/ARCHITECTURE §5 now state the
-   real drop behavior instead of the old nearest-color promise.
-   **X-14 landed the same day**: SOVERSION on both shared libraries, a
-   project version that no longer trails the released tags, an installed
-   LICENSE, and a pkg-config recipe — all asserted by the installed
-   smoke. **X-15 landed the same day**: the chrome-bar fill and the
-   painted→present region read move through two shared seams
-   (`for_each_bar`, `painted_region`), and the U-1 key-decoration rule
-   has one home (`decorate_printable_key`) that every C++ translator
-   calls instead of re-deriving it; the §3.1 "~100–200 lines of glue"
-   claim is now backed by the seams rather than aspirational.
-   **X-16 landed the same day**: the container/accessibility gaps and
-   the design-file image gap are stated as boundaries in ARCHITECTURE
-   §5 instead of being left for a reader to discover.
-   **X-17 landed the same day**: `subscribe()` is `[[nodiscard]`, the
-   pixel word no longer puns through a union (memcpy of the object
-   representation), the dev container's rebuildable files are committed
-   so a clone can reproduce the environment, all three READMEs carry a
-   CI badge, and CONTRIBUTING / SECURITY / CHANGELOG exist.
-   **X-18 landed the same day**: every SVG rasterizer walk is
-   intersected with the draw area at the entry, so a design file
-   declaring a huge stroke width or radius walks the surface, not the
-   declared geometry; `walk_pixel_count()` is the deterministic cost
-   bound the battery asserts on. **X-19 landed the same day**: the
-   whole first-party tree is formatted to `.clang-format`
-   (clang-format 18.1.3, one mechanical commit, renders byte-identical
-   before and after), and `tools/format-check.sh` gates it with the
-   version pinned so a runner shipping a newer clang-format cannot
-   rewrite the tree on its own. Nothing in the batch reopens a
-   ratified ruling; sequencing stays the operator's call.
+   items stay trigger-gated.
 
 ### Batch V — Visual Presentation (open remainder only)
 
@@ -172,10 +118,6 @@ history in `git log`.
 - **W-2 (IM-IN-002). `ZB_INPUT_MOUSE_*_CLICK` are advertised but the
   dispatcher silently drops them**. Waiting on: document as inert host-side
   synonyms vs. remove from `zbapi.h` (C-ABI surface semantics).
-- **W-3 (IM-IN-005). Terminal translator routes Space only through `ch`,
-  so Space can never activate the focused widget on the SIXEL target**.
-  The fix is a translator behavior change needing a fresh NDS/SIXEL
-  verification pass; bundle with the next melonDS re-verify.
 - **W-7 (IM-BLD-007). `demo/wasm/build.sh` hand-maintains its source
   list** (stale vs. `imui/CMakeLists.txt`, different font-subset inputs).
   Currently sufficient (the smoke passes); regenerating the list needs a
@@ -209,16 +151,6 @@ history in `git log`.
   (The sixth — "shell `main`s catch only `zb::ui::error`" — landed with
   X-5, 2026-10-17: every framework-mode `main` now runs through
   `zb::shell::guarded_main`.)
-
-### Batch X — Independent Audit (2026-10-15; audit-ordered, mostly decision-free)
-
-Origin: a full-repo independent audit at `efe684a`, verified by one clean
-`desktop-test` run of its own (60/60 suites, 361 s) — so every item below
-sits outside what the current battery covers or exercises. Detail ledger:
-`reports/audit-2026-10-15.md` (local-only, the same convention as Batch W),
-which also carries the audit's strengths list, the positioning/demo
-proposals and one *withdrawn* finding. Ordered by the audit's recommended
-priority; no item reopens a ratified ruling.
 
 ### Batch F — Event Loop Extension & Frame Automation (Long-term)
 
@@ -453,33 +385,23 @@ rationale in `reports/audit-2026-10-15.md` §5.
   `imraster` module** (ARCHITECTURE §4.12) — that closes R20. The other
   supply items (texture/mip chain, tone/Atmosphere, WorldMesh cache,
   asset pipeline) stay documented as fps-side pointers, not absorbed —
-  no imprint consumer today. **Already closed on our side** (the fps
-  report's pinned snapshot 797878b predates them):
-  **R7** — the U-6 depth plane (`draw_line_depth`/`fill_triangle_depth`,
-  `test_depth_fill`); **R9** — getting-started "Text at scale" (5×7
-  bitmap vs runtime TTF, the documented high-res path); **R10** —
-  getting-started "Dialog assembly" plus the two behavior fixes fps
-  asked for, already in the code and test-locked (title box auto-grows
-  to `px + 4`, `dialog.cpp:57` + `test_dialog.cpp:53`; button row
-  shrinks proportionally instead of overflowing, U-5, `dialog.cpp:63` +
-  `test_dialog.cpp:64`); **R5's constraint** is documented (ARCHITECTURE
-  §5 wasm stack bullet). Condition-triggered leftover: R5's
+  no imprint consumer today. **Closed before the report's snapshot
+  (797878b)** — history in `git log`: **R7** (U-6 depth plane,
+  `draw_line_depth`/`fill_triangle_depth`), **R9** (getting-started "Text
+  at scale"), **R10** (getting-started "Dialog assembly" plus the two
+  behavior fixes it asked for, U-5), **R5's constraint** (ARCHITECTURE §5
+  wasm stack bullet). Condition-triggered leftover: R5's
   scratch-allocator suggestion (`Graphics::scratch(n)`) — only if
   multi-window/multi-context consumers appear (per-frame statics are wrong
   for them).
 - Agreed order (2026-10-25 user ruling), each item contract-first and
   independently verifiable:
-  1. **R1 zero-copy alias — RESOLVED (2026-10-25)**: the in-tree wrapper
-     mode already is the answer — `Graphics::make_ptr(w, h, your_buffer)`
-     renders into the caller's block (in the tree since the first
-     commit; `CanvasWindow::create(w, h, buf)` rides it), so a
-     full-frame consumer pays no `draw_surface` copy at all. fps's
-     `draw_surface_alias` suggestion is closed by documenting the
-     contract (code-contract §9 "Zero-copy backing"), a direct test
-     lock (`test_graphics`; the ASan battery is the double-free
-     detector) and the getting-started pointer ("Full-frame rendering
-     without a copy"). fps re-measures its present cost against a
-     snapshot that has this when it resumes.
+  1. **R1 zero-copy alias — RESOLVED 2026-10-25**: the in-tree wrapper
+     mode (`Graphics::make_ptr(w, h, your_buffer)`, ridden by
+     `CanvasWindow::create(w, h, buf)`) already is the zero-copy path; the
+     contract is code-contract §9 "Zero-copy backing", locked by
+     `test_graphics`. fps re-measures its present cost against a snapshot
+     that has this when it resumes.
   2. **R6 deterministic frame contract** — a host-injectable fixed step
      or a "repaint without advancing" call. Today pixel-regression
      consumers can only pin a sim-frozen frame (fps's goldens live on
