@@ -213,6 +213,17 @@ satisfies. Changing any of these is an architecture change.
   (win32, x11, mac) feed translated events through the shared `feed_input`
   seam (A-2), which calls `paint()` only when `is_dirty()` became true,
   and present on the `painted` event.
+- **The shell owns the frame clock (R6).** Because the desktop loops are
+  event-driven, a frame advances only when input arrives; there is no
+  timer anywhere in the shells. A host that needs frame *N* to be a pure
+  function of *N* — a pixel-regression capture, a replay — injects a fixed
+  step instead of freezing the simulation: `run_options::step_micros` makes
+  the shell deliver exactly one `IApp::step(step_micros, index)` per frame
+  and never consult a wall clock, and `max_steps` bounds the run so `run`
+  returns on its own. Zero (the default) is the behavior above, unchanged.
+  The API contract is code-contract §11.4; the mode decision lives in the
+  pure `frame_pacer`, so each shell keeps only its event pump and its
+  blit.
 - **Present region (A-2):** what a shell blits is decided by the shared
   `region_to_present` rule (the app's dirty region when it drew something,
   the whole buffer otherwise, nothing when the frame drew nothing).

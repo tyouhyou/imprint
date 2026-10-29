@@ -1845,6 +1845,8 @@ struct run_options {
     std::string title;              // empty = keep the window's own title
     uint32_t    width  = 0;         // nonzero pair = constrained
     uint32_t    height = 0;         //   create_window(width, height)
+    uint32_t    step_micros = 0;    // R6: 0 = the shell's own scheduling
+    uint64_t    max_steps   = 0;    // R6: 0 = until the app closes
 };
 
 // Drives the platform event loop until the app closes (the window is
@@ -1939,6 +1941,67 @@ int run(zb::SharedPtr<zb::app::IApp> app, const run_options& options = {});
   `IM_TEST_REQUIRE_DISPLAY=1`, which makes a missing server a failure
   rather than a silent skip. Windows/macOS loops are still compile-only:
   their `run` bodies need a desktop session the runners do not have.
+
+---
+
+### 11.4 Deterministic frame stepping (R6)
+
+A pixel-regression consumer needs frame *N* to be a pure function of *N*.
+Before R6 the only way to pin a frame was to freeze the simulation, because
+the desktop loops are event-driven: they advance when input arrives and at
+no other time (X11 blocks in `XNextEvent`, Win32 in `GetMessage`, AppKit in
+`[nsapp run]`, FB idle-polls). fps's goldens live on the boot frame for
+exactly this reason.
+
+`run_options::step_micros` injects a fixed step instead:
+
+```cpp
+struct IApp {                     // imapp/include/iapp.hpp
+    // called once per frame immediately before paint(), only when
+    // step_micros is nonzero; `index` counts from 0
+    virtual void step(std::uint32_t step_micros, std::uint64_t index) noexcept;
+};
+```
+
+- **Zero `step_micros` (default) changes nothing.** The loop keeps its own
+  scheduling and `IApp::step` is never called. An app that overrides it
+  must therefore not depend on being stepped.
+- **Nonzero `step_micros` makes the shell the clock.** It delivers exactly
+  one `step(step_micros, index)` per frame, then requests a paint, then
+  presents. A wall clock never decides what the app sees: the app advances
+  its simulation by exactly `step_micros` in `step()` and by nothing
+  anywhere else. The shell does not block on an idle event source in this
+  mode (it drains what is pending), so a frame is never held hostage by
+  input.
+- **`max_steps` bounds the run.** Nonzero: `run` returns after that many
+  steps without the app closing its window, which is what makes a capture
+  a pure function of (design, input script, step count). A bounded run
+  does not sleep between frames — it wants the frames, not a schedule.
+  Zero: the run continues until the app closes and paces itself at
+  `step_micros` (a game loop).
+- **A frame bound with no step is rejected.** `max_steps != 0` with
+  `step_micros == 0` throws `zb::ui::error` from `run`'s entry (§1, §11.2):
+  the bound could only be a silent no-op, because nothing would advance
+  the index.
+- **The painted count is not the step count.** The shell requests a paint
+  after every step, but a frame whose content did not change draws
+  nothing and emits no `painted` (§9 frame-debt protocol). A capture reads
+  the buffer after `run` returns; it does not count presentations.
+- **The pacer is a pure object.** `zb::shell::frame_pacer`
+  (`imshell/include/shell/frame_pacer.hpp`) owns the mode decision and the
+  index, with no clock, platform handle or allocation, so the battery
+  proves the semantics directly (`test_frame_pacer`) and each shell keeps
+  only its event pump and its blit — the same split the A-2 input
+  translators use. `test_shell_loop` then drives the real X11 loop through
+  it: a bounded fixed-step run must deliver exactly `max_steps` steps with
+  contiguous indices and return on its own.
+- **Per-shell note (macOS).** AppKit keeps `[nsapp run]`; the step rides an
+  `NSTimer` instead of a manual pump, so the X-4 teardown symmetry is
+  untouched. Each fire delivers exactly one step, so the *content* of frame
+  N is deterministic, and `max_steps` still bounds the run exactly; only
+  the wall-clock spacing differs from the other shells. The timer is
+  invalidated before `run` returns, and its block reaches the pacer
+  through a pointer because a block captures C++ objects const.
 
 ---
 

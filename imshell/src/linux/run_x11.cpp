@@ -3,6 +3,7 @@
 // calls run() from their own main. The loop protocol, the I-2a
 // presentation mapping, and the A-2 seams are unchanged.
 #include <vector>
+#include <unistd.h>
 #include <X11/Xlib.h>
 #include <X11/Xutil.h>
 #include <X11/Xatom.h>
@@ -11,6 +12,7 @@
 #include "imcore.hpp"
 #include "logging.hpp"
 #include "shell/device_overlay.hpp"
+#include "shell/frame_pacer.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presentation.hpp"
@@ -255,13 +257,15 @@ namespace zb::shell
         const auto closed_sub = app->on_closed([&app_closed]()
                                                { app_closed = true; });
 
-        XEvent event{};
-        while (!app_closed)
+        // One event's worth of work, shared by the blocking (free-running)
+        // and the non-blocking (fixed-step) paths below. Returns false when
+        // the loop must stop: a window-manager delete, or the app closing
+        // its window during dispatch.
+        const auto handle_event = [&](XEvent &event) -> bool
         {
-            XNextEvent(display, &event);
             if (event.type == ClientMessage && event.xclient.message_type == wm_delete)
             {
-                break;
+                return false;
             }
             // A-2 InputSource: the event -> input_event mapping (key codes,
             // characters, wheel buttons) lives in x11_input::translate,
@@ -314,12 +318,45 @@ namespace zb::shell
             default:
                 break;
             }
-            if (app_closed)
+            // the app closed the window during event dispatch
+            return !app_closed;
+        };
+
+        // R6: the fixed-step clock (code-contract §11.4). A zero
+        // step_micros leaves the event-driven loop exactly as it was.
+        zb::shell::frame_pacer pacer(options);
+
+        XEvent event{};
+        // `keep_running` is not `!app_closed`: handle_event also reports a
+        // window-manager delete, and that must stop the loop in both modes
+        // (a fixed-step loop that only watched app_closed would keep
+        // delivering steps to a window the server has already taken down).
+        bool keep_running = true;
+        while (keep_running && !pacer.done())
+        {
+            if (pacer.fixed())
             {
-                break;  // the app closed the window during event dispatch
+                // fixed step: drain what is pending without blocking, so a
+                // frame is never held hostage by an idle event source
+                while (keep_running && XPending(display) > 0)
+                {
+                    XNextEvent(display, &event);
+                    keep_running = handle_event(event);
+                }
+                if (!keep_running)
+                {
+                    break;
+                }
+                pacer.deliver(*app);
+                app->paint();
+                if (!pacer.unbounded_speed())
+                {
+                    usleep(pacer.step_micros());
+                }
+                continue;
             }
-            // XNextEvent already blocks while no event is pending, so a sleep
-            // here only delays input/paint response by 30ms per event
+            XNextEvent(display, &event);
+            keep_running = handle_event(event);
         }
 
         // XDestroyImage frees ximage->data with Xfree; the buffer belongs to

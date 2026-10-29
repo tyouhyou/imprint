@@ -11,6 +11,7 @@
 #include "input.hpp"
 #include "logging.hpp"
 #include "shell/device_overlay.hpp"
+#include "shell/frame_pacer.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presentation.hpp"
@@ -364,9 +365,47 @@ namespace zb::shell
         ShowWindow(hwnd, SW_RESTORE);
         UpdateWindow(hwnd);
 
+        // R6: the fixed-step clock (code-contract §11.4). A zero
+        // step_micros leaves the message-driven loop exactly as it was.
+        zb::shell::frame_pacer pacer(options);
+
         MSG msg{};
-        while (GetMessage(&msg, nullptr, 0, 0) > 0)
+        bool running = true;
+        while (running && !pacer.done())
         {
+            if (pacer.fixed())
+            {
+                // fixed step: drain what is pending without blocking, so a
+                // frame is never held hostage by an idle message queue
+                while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
+                {
+                    if (msg.message == WM_QUIT)
+                    {
+                        running = false;
+                        break;
+                    }
+                    TranslateMessage(&msg);
+                    DispatchMessage(&msg);
+                }
+                if (!running)
+                {
+                    break;
+                }
+                pacer.deliver(*g_app);
+                g_app->paint();
+                if (!pacer.unbounded_speed())
+                {
+                    // Sleep() takes milliseconds; a sub-millisecond step
+                    // rounds to 0 and runs flat out, which is the closest
+                    // the Win32 scheduler allows without a waitable timer
+                    Sleep(static_cast<DWORD>(pacer.step_micros() / 1000u));
+                }
+                continue;
+            }
+            if (GetMessage(&msg, nullptr, 0, 0) <= 0)
+            {
+                break;
+            }
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }

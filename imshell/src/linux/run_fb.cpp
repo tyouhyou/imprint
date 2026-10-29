@@ -6,6 +6,7 @@
 #include "core/error.hpp"
 #include "linux/fb.hpp"
 #include "logging.hpp"
+#include "shell/frame_pacer.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presenter.hpp"
 #include "shell/run.hpp"
@@ -56,8 +57,22 @@ namespace zb::shell
             }
             fb.draw(static_cast<char *>(window->data()), window->width(), window->height(), r.x, r.y, r.w, r.h); });
 
-        while (!app_closed)
+        // R6: the fixed-step clock (code-contract §11.4). A zero
+        // step_micros leaves the idle-poll loop exactly as it was.
+        zb::shell::frame_pacer pacer(options);
+
+        while (!app_closed && !pacer.done())
         {
+            if (pacer.fixed())
+            {
+                pacer.deliver(*app);
+                app->paint();
+                if (!pacer.unbounded_speed())
+                {
+                    usleep(pacer.step_micros());
+                }
+                continue;
+            }
             if (app->is_dirty())
             {
                 app->paint();

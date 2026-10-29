@@ -61,6 +61,25 @@ namespace zb::app
         virtual void paint() = 0;
 
         /*
+         * @brief the shell's fixed step (R6; code-contract §11.4)
+         *        Called once per frame immediately before paint() when
+         *        run_options::step_micros is nonzero, and never otherwise.
+         *        The app advances its simulation by exactly step_micros
+         *        here -- never from a wall clock, or frame N stops being a
+         *        pure function of N and no pixel golden can be pinned.
+         * @param step_micros the fixed step the host injected
+         * @param index       frame index, counting from 0
+         *
+         * The default does nothing: an app with no simulation ignores the
+         * step and keeps its event-driven behavior.
+         */
+        virtual void step(std::uint32_t step_micros, std::uint64_t index) noexcept
+        {
+            (void)step_micros;
+            (void)index;
+        }
+
+        /*
          * @brief whether a repaint is owed: until the first paint, after
          *        input changed something, or after any widget setter
          *        reported damage (the tree propagates it to the window,

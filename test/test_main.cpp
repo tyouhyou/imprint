@@ -57,6 +57,7 @@ int test_snapshot();
 int test_sixel();
 int test_term_input();
 int test_key_decoration();
+int test_frame_pacer();
 int test_theme();
 int test_showcase();
 int test_toggle_switch();
@@ -147,6 +148,7 @@ static const suite g_suites[] = {
     {"sixel", test_sixel},
     {"term_input", test_term_input},
     {"key_decoration", test_key_decoration},
+    {"frame_pacer", test_frame_pacer},
     {"theme", test_theme},
     {"showcase", test_showcase},
     {"toggle_switch", test_toggle_switch},

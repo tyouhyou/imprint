@@ -27,6 +27,24 @@ namespace zb::shell
         // created its window.
         uint32_t width = 0;
         uint32_t height = 0;
+
+        // R6 deterministic frame stepping (code-contract §11.4). Zero (the
+        // default) keeps the shell's own scheduling: the loop is
+        // event-driven and the app advances when input arrives. Nonzero
+        // turns the loop into a fixed-step clock -- the shell delivers
+        // exactly one IApp::step(step_micros, index) per frame, paints,
+        // presents, and never lets a wall clock decide what the app sees.
+        uint32_t step_micros = 0;
+
+        // R6: with step_micros set, return after this many steps
+        // (0 = run until the app closes). A bounded run is what makes a
+        // pixel-regression capture a pure function of (design, input
+        // script, step count) instead of a function of how long the loop
+        // happened to run. A bounded run does not sleep between frames;
+        // an unbounded fixed-step run paces itself at step_micros.
+        // A nonzero value with step_micros == 0 throws zb::ui::error from
+        // run()'s entry (a frame bound with no step would never advance).
+        uint64_t max_steps = 0;
     };
 
     /*

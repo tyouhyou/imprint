@@ -63,6 +63,7 @@ namespace
             window_ = zb::make_shared<CanvasWindow>();
             window_->create(w, h, buffer);
             frames_ = 0;
+            steps_ = 0;
             painted_sub_ = window_->painted.subscribe([this](const void *)
                                                       {
                 ++frames_;
@@ -88,6 +89,14 @@ namespace
             {
                 window_->paint();
             }
+        }
+
+        // R6 (code-contract §11.4): the shell's fixed step
+        void step(std::uint32_t step_micros, std::uint64_t index) noexcept override
+        {
+            ++steps_;
+            last_step_micros_ = step_micros;
+            last_step_index_ = index;
         }
 
         [[nodiscard]] bool is_dirty() const noexcept override
@@ -132,12 +141,18 @@ namespace
         void set_close_on_first_frame(const bool on) { close_on_first_frame_ = on; }
         void detach_frame_handler() { painted_sub_.reset(); }
         [[nodiscard]] CanvasWindow *canvas() { return window_.get(); }
+        [[nodiscard]] int steps() const { return steps_; }
+        [[nodiscard]] std::uint32_t last_step_micros() const { return last_step_micros_; }
+        [[nodiscard]] std::uint64_t last_step_index() const { return last_step_index_; }
 
     private:
         zb::SharedPtr<CanvasWindow> window_;
         zb::event::Subscription<const void *> painted_sub_;
         int frames_ = 0;
         bool close_on_first_frame_ = true;
+        int steps_ = 0;
+        std::uint32_t last_step_micros_ = 0;
+        std::uint64_t last_step_index_ = 0;
     };
 
     /*
@@ -296,6 +311,41 @@ int test_shell_loop()
     if (pixels != nullptr)
     {
         EXPECT(pixels[0].pixel == zb::ui::theme().background.pixel);
+    }
+
+    // ---- run 3: R6 fixed-step bounded run (code-contract §11.4) ----
+    // A fresh app with a fixed step and a frame bound: run() must deliver
+    // exactly max_steps steps -- indices 0..max_steps-1, every one carrying
+    // the injected step -- paint after each, and return on its own without
+    // the app closing its window. That is the whole deterministic-capture
+    // story: frame N is a pure function of N, not of how long the loop ran.
+    {
+        auto stepped = zb::make_shared<loop_probe>();
+        stepped->set_close_on_first_frame(false);
+        zb::SharedPtr<IApp> stepped_app = stepped;
+
+        zb::shell::run_options fixed;
+        fixed.width = 96;
+        fixed.height = 64;
+        fixed.step_micros = 1000;  // 1 ms per step
+        fixed.max_steps = 5;
+
+        rc = run_loop(stepped_app, fixed);
+        EXPECT(rc == 0);
+        EXPECT(stepped->steps() == 5);
+        EXPECT(stepped->last_step_micros() == 1000);
+        EXPECT(stepped->last_step_index() == 4);  // contiguous, from 0
+        // the painted count is deliberately NOT the step count: the shell
+        // requests a paint after every step, but a frame whose content did
+        // not change draws nothing and emits no "painted" (the §9 frame-debt
+        // protocol). One present proves the step drove the loop.
+        EXPECT(stepped->frames() >= 1);
+
+        std::printf("[shell_loop] R6 fixed step: %d steps, last index=%llu, "
+                    "frames=%d\n",
+                    stepped->steps(),
+                    static_cast<unsigned long long>(stepped->last_step_index()),
+                    stepped->frames());
     }
 
     // 11.1: no shell handler survives its loop -- the event is back to

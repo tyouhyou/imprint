@@ -32,6 +32,7 @@
 #include "input.hpp"
 #include "core/error.hpp"
 #include "shell/device_overlay.hpp"
+#include "shell/frame_pacer.hpp"
 #include "shell/input_source.hpp"
 #include "shell/platform_font.hpp"
 #include "shell/presentation.hpp"
@@ -446,7 +447,46 @@ namespace zb::shell
             g_app->paint();  // fill the buffer before the first show
             [win makeKeyAndOrderFront:nil];
             [nsapp activateIgnoringOtherApps:YES];
+
+            // R6 (code-contract §11.4): the fixed-step clock. A zero
+            // step_micros leaves [nsapp run] exactly as it was. A nonzero
+            // one installs a timer that delivers one step per fire; a
+            // bounded run (max_steps) runs flat out and stops the run loop
+            // when the last step has been delivered. A block captures C++
+            // variables **const**, so the pacer is reached through a
+            // pointer the block holds by value -- a non-const call on an
+            // object captured by reference does not compile (desk-checked
+            // with the stubbed-Cocoa clang probe). The timer must be
+            // invalidated before this scope ends (the teardown below).
+            zb::shell::frame_pacer pacer(options);
+            zb::shell::frame_pacer *pacer_ptr = &pacer;
+            NSTimer *step_timer = nil;
+            if (pacer.fixed())
+            {
+                const NSTimeInterval interval =
+                    pacer.unbounded_speed()
+                        ? 0.0  // a capture wants the frames, not a schedule
+                        : static_cast<NSTimeInterval>(pacer.step_micros()) / 1000000.0;
+                step_timer = [NSTimer scheduledTimerWithTimeInterval:interval
+                                                             repeats:YES
+                                                               block:^(NSTimer *timer)
+                {
+                    if (g_app == nullptr || pacer_ptr->done())
+                    {
+                        [timer invalidate];
+                        [NSApp stop:NSApp];
+                        return;
+                    }
+                    pacer_ptr->deliver(*g_app);
+                    g_app->paint();
+                }];
+            }
+
             [nsapp run];
+
+            // the timer outlives the run loop otherwise, and its block
+            // holds `pacer` by reference
+            [step_timer invalidate];
 
             // X-4 teardown (mirrors the win shell, code-contract §11.1):
             // the run loop has stopped, so nothing else will use the
