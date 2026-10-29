@@ -60,6 +60,7 @@ add_executable(
     test_term_input.cpp
     test_key_decoration.cpp
     test_frame_pacer.cpp
+    test_perf_fill.cpp
     test_theme.cpp
     test_showcase.cpp
     test_toggle_switch.cpp

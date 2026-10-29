@@ -14,10 +14,10 @@
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **A-29. fps consumption-report absorption** — R6 (deterministic frame
-   contract) next, then R8 (input deltas), then re-evaluate R12/R13
-   against the absorbed `imraster` module; each item contract-first
-   (§1 A-29). R1 is closed — see §1.
+1. **A-29. fps consumption-report absorption** — Phase 2 landed
+   2026-10-30: R6 (deterministic frame contract) implemented, R8 and
+   R12/R13 closed against the tree (evidence in §1 A-29). The remaining
+   A-29 thread is the condition-triggered R5 scratch allocator.
 2. **A-26. imcore primitive throughput** — the open item is ② (SIMD
    inner loops); its decision point is a 1080p-class consumer
    re-measure against the R1 zero-copy build. fps is paused (2026-10-24
@@ -140,6 +140,23 @@ history in `git log`.
   runs Debug"** — no Linux CI job sets a build type, so `DEBUG` is
   undefined there. Waiting on: add `-DCMAKE_BUILD_TYPE=Debug` to the
   Linux jobs vs. amend §8's premise.
+- **W-15 (found 2026-10-30 while building A-26's Release instrument). The
+  tree does not compile at `-O2` under the in-tree warning set.** Every CI
+  job and every kit target configures without a build type, so everything
+  is `-O0` (W-12's consequence), and `-Werror` never sees the optimization
+  passes. A plain `cmake -B build -DCMAKE_BUILD_TYPE=Release` fails with
+  `-Werror=null-dereference` at three sites:
+  `imui/src/html.cpp` (fixed the same day: `parse_linear_layer` now states
+  the `colors`/`pos` lockstep invariant as a real guard, because the N-stop
+  block indexes `pos` by `colors.size()` and GCC cannot see the two
+  vectors' parallel growth), plus `test/test_theme.cpp:20` (`w.data()`
+  dereferenced without a null check in a helper) and
+  `test/test_showcase.cpp:395` (the `pseudo()` pointer). This is a
+  user-facing defect — a Release build is the documented path for a
+  consumer, and for performance work it is the *only* valid one.
+  Waiting on: fix the two remaining sites and add a Release entry to the
+  `warnings-survey` matrix (and a CI job) so `-O2` diagnostics are not
+  invisible again, vs. accept Release-with-`IMPRINT_WERROR=OFF`.
 - **W-14 (IM-HOST-003 remainder). Shell/ABI hardening, five sub-items**:
   `run_win` assigns
   global `g_app` before a throwing `CreateWindowEx`; the C-ABI
@@ -285,13 +302,38 @@ rationale in `reports/audit-2026-10-15.md` §5.
 
 ### A-26. imcore primitive throughput (② SIMD; gated on the fps re-measure)
 
-- **What remains for ② SIMD:** the no-clip remainder is the per-pixel
-  blend/modulate arithmetic itself (fill 5.2 ms, `draw_image` 6.9 ms,
-  tinted 13.1 ms per half/full-screen unit) — exactly the SIMD
-  territory. wasm simd128 first (where 1080p consumers run), then
-  desktop SSE2/NEON. **Trigger:** a 1080p-class consumer re-measure
-  against the R1 zero-copy build (fps paused 2026-10-24; the method is
-  the fps A/B discipline, fps IMPRINT-RUNTIME R15/R18 — see §0 item 2).
+- **② SIMD — the gate now has an in-tree instrument and a reading
+  (2026-10-30).** `perf_fill` (`test/test_perf_fill.cpp`, run from a
+  **Release** build: `cmake -B build/build_bench -DCMAKE_BUILD_TYPE=Release`
+  then `./build/build_bench/bin/test_imui perf_fill`) measures the real
+  `Graphics` entry points at 1920x1080 with the fps discipline — interleaved
+  arms, rotating order, min-of-N, and a **null A/B** whose spread is the
+  host's noise floor. Measured (min of 7, null-A/B noise floor ~0.01 ms,
+  i.e. ~2% of the smallest kernel):
+
+  | kernel (full-screen) | min ms | share of a 16.67 ms frame |
+  |---|---|---|
+  | `fill_rect` opaque | 0.428 | 2.6 % |
+  | `fill_rect` a=128 (blend) | 0.430 | 2.6 % |
+  | `draw_image` plain | 0.791 | 4.7 % |
+  | `draw_image` tinted | 6.040 | 36 % |
+
+  The fps-era figures this item was written from (fill 5.2 ms,
+  `draw_image` 6.9 ms, tinted 13.1 ms) are 2-12x the current ones: the
+  opaque fill and the plain blit are **no longer SIMD territory** at
+  1080p — a full-screen unit costs 2-5% of the frame budget. The tinted
+  blit is the one kernel left where SIMD could pay (36% of the budget for
+  a single full-screen unit), and it is ~7.6x the plain blit because the
+  per-channel modulate runs scalar.
+  **Decision: the trigger is narrowed, not met.** No in-tree consumer
+  draws a full-screen tinted blit per frame (the 3D stories hand off
+  through the opaque `draw_surface`; the widget layer fills), so there is
+  still no measured consumer miss to justify the work — and a SIMD rewrite
+  is a byte-identical-determinism job (16bpp battery + `framebuffer_hash`)
+  that wants its own task. If the tinted path is taken up: wasm simd128
+  first (where 1080p consumers run), then desktop SSE2/NEON, starting from
+  the tinted modulate loop only. Re-run `perf_fill` before and after —
+  never `cpu.pressure`, and never a single arm.
 - **Deferred within ①:** diagonal `draw_line` gate hoisting — the
   Bresenham walk is inherently per-pixel (15 ms per 1920 lines locally)
   and not the fps bottleneck; revisit only if fps evidence says
@@ -402,21 +444,58 @@ rationale in `reports/audit-2026-10-15.md` §5.
      contract is code-contract §9 "Zero-copy backing", locked by
      `test_graphics`. fps re-measures its present cost against a snapshot
      that has this when it resumes.
-  2. **R6 deterministic frame contract** — a host-injectable fixed step
-     or a "repaint without advancing" call. Today pixel-regression
-     consumers can only pin a sim-frozen frame (fps's goldens live on
-     the boot frame for exactly this reason).
-  3. **R8 input_event deltas** — relative pointer motion + stable
-     platform-independent codes for printable keys (down/up pairing;
-     "hold to move" needs it). POD shape change = architecture change
-     (ARCHITECTURE §4.2): all shells + both demo hosts move together.
-  4. **Re-evaluate R12/R13 against the absorbed module** — imraster's
-     `Canvas` already ships the consumer-side answer (a full-resolution
-     surface beside the low-res grid; `mark_sky` coverage + per-column
-     wall spans, maintained by recording instead of clearing). Decide
-     whether runtime-side primitives (a full-res composite callback
-     between scene resolve and UI; a coverage query) are still wanted,
-     or the items close as "solved consumer-side".
+  2. **R6 deterministic frame contract — LANDED 2026-10-30.** The shell
+     owns the frame clock and a host injects the step:
+     `run_options::step_micros` makes the shell deliver exactly one
+     `IApp::step(step_micros, index)` per frame with no wall clock in the
+     loop, and `max_steps` bounds the run so `run` returns on its own.
+     Contract code-contract §11.4, architectural fact ARCHITECTURE §4.1;
+     the mode decision is the pure `frame_pacer`, pinned by
+     `test_frame_pacer` and driven through the real X11 loop by
+     `test_shell_loop`. A capture is now a pure function of (design,
+     input script, step count) instead of a sim-frozen boot frame.
+  3. **R8 input_event deltas — CLOSED as already landed** (it shipped as
+     U-1/U-3 before this item was written; the report's snapshot predates
+     both). Relative pointer motion: `input_type::pointer_delta` +
+     `dx`/`dy`, host-provided, dispatcher-inert, exported as
+     `zb_input_delta` (ARCHITECTURE §4.2 "Relative motion (U-3)",
+     `test_dispatch`). Stable platform-independent key codes with down/up
+     pairing: `decorate_printable_key` in every translator (win/x11/mac/
+     terminal) and both hosts (wasm/python), `key_up` carrying the same
+     `key` with `ch == 0` (ARCHITECTURE §4.2 "Key codes ride both edges
+     (U-1)", `test_key_decoration`). The POD shape change the item
+     anticipated had already moved all shells and both hosts together.
+  4. **R12/R13 — CLOSED as "solved consumer-side"** (2026-10-30). Both
+     asked for runtime primitives that the absorbed `imraster` module now
+     ships in-tree, and the two 3D stories use the path end to end:
+     - *R12 (full-resolution composite between scene resolve and UI):*
+       `Canvas::upscale()` + `world_row()/world_*()` give the app the 1:1
+       surface at exactly that moment, and `Graphics::draw_surface` is the
+       handoff to UI. `moonpull`/`hoursmith` do render-at-rep-2 →
+       `upscale()` → draw 1:1 → `draw_surface`. No second seam is added:
+       a "composite callback" would duplicate the documented handoff, and
+       fps asked explicitly for a drawing opportunity, not a pass list.
+     - *R13 (which pixels are background / covered):* `Canvas` records
+       coverage instead of clearing it — `mark_sky`/`sky_at`,
+       `set_wall_span`/`wall_at`/`reset_wall_spans`, `clear_sky_cell` —
+       which is fps's own measured lesson (per-column span recording
+       instead of per-cell clearing: ~1.3 ms → below the noise floor).
+     Reopen only if a consumer appears that cannot record coverage (a
+     post-hoc query over a scene it did not draw).
+- **R14 (sanitizer failures do not name the allocation) — closed as "not
+  an imprint defect" (2026-10-30).** The report's failing tool was the
+  *wasm* heap checker in fps's own Emscripten build; imprint's library
+  ships no runtime of its own to instrument, and the demos' `build.sh`
+  deliberately carries no sanitizer flags (they are the shipped pages).
+  The attribution the item asks for is what `-fsanitize=address -g` emits
+  by default — allocation *and* free stacks — and imprint already builds
+  the battery that way: CI's `asan` job (`address,undefined`,
+  `-fno-omit-frame-pointer -g`) and the kit's `desktop-test-asan`. A
+  consumer that wants heap checking in its own wasm build owns the flag
+  (`-sASSERTIONS=1`); imprint does not put it in the demo artifacts.
+  Kept as a standing constraint, not an open item: the sanitizer stays on
+  a runnable path, so a corruption can be attributed rather than read out
+  of the source.
 - Not absorbed, deliberately: audio (no imprint facility — product
   decision if ever), fps sim/UI/level content (load-side meat, not
   library), fps-side unratified art rulings (C12/C14, thin walls — they

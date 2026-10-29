@@ -98,7 +98,7 @@ int test_frame_pacer()
             ++guard;
         }
 
-        EXPECT(guard == 3);       // the bound is the delivery count
+        EXPECT(guard == 3);  // the bound is the delivery count
         EXPECT(app.calls == 3);
         EXPECT(app.first_index == 0);  // frame indices count from 0
         EXPECT(app.last_index == 2);   // ...and are contiguous
