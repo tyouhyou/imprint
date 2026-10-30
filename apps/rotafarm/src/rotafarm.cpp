@@ -357,7 +357,9 @@ void Rotafarm::sync_status()
     const int key = farm_->day() * 1000 + farm_->harvests();
     if (key != last_status_)
     {
-        char buf[32];
+        // 48: sized for the format's INT_MIN worst case (11 + 11), which
+        // the -O2 format-truncation check pins against this exact string
+        char buf[48];
         std::snprintf(buf, sizeof(buf), "DAY %d   HARVEST %d", farm_->day(),
                       farm_->harvests());
         status_->set_text(buf);

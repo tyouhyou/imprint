@@ -76,7 +76,13 @@ if (TARGET zbcompat)
     target_link_options(${IMCORELIB} PRIVATE ${ZBAPI_HOST_LINK_OPTIONS})
 endif()
 
-# C smoke test driving the app like a host shell would (host-only)
+# C smoke test driving the app like a host shell would (host-only).
+# Its assertions ARE the test and its source #errors under NDEBUG, so the
+# target must never see NDEBUG -- including at a Release build type, where
+# the tree-wide flags carry -DNDEBUG. Undefining NDEBUG for this one TU
+# keeps the smoke in every configuration (a plain Release build of the tree
+# has to complete) and keeps it in ctest, which dropping it from `all`
+# would not.
 if (NOT NDS_PLATFORM)
 add_executable(
     test_zbapi
@@ -88,6 +94,12 @@ target_link_libraries(
     PRIVATE
     zbapi
 )
+
+if (MSVC)
+    target_compile_options(test_zbapi PRIVATE /UNDEBUG)
+else()
+    target_compile_options(test_zbapi PRIVATE -UNDEBUG)
+endif()
 
 add_test(NAME zbapi COMMAND test_zbapi)
 endif()

@@ -392,7 +392,10 @@ int test_showcase()
     {
         const auto *before = sweep->pseudo(1);
         EXPECT(before != nullptr);
-        const auto ang0 = before->rot_ang;
+        // the deref gets its own branch: EXPECT records a failure but the
+        // compiler cannot use it as a precondition, so a separate statement
+        // read as a potential null dereference at -O2
+        const auto ang0 = before != nullptr ? before->rot_ang : 0;
         app.paint();
         const auto *after = sweep->pseudo(1);
         EXPECT(after != nullptr && after->rot_ang != ang0);

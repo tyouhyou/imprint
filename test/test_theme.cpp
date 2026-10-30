@@ -17,12 +17,22 @@ namespace
     core::Color px(const CanvasWindow &w, const int x, const int y)
     {
         const auto *p = static_cast<const core::Color *>(w.data());
+        if (p == nullptr)
+        {
+            // no surface: record it rather than hand back a silent black,
+            // which would let a pixel assertion pass on a window that never
+            // created (the guard also keeps the read legal at -O2)
+            test::check(false, __FILE__, __LINE__, "w.data() != nullptr");
+            return core::Color{};
+        }
         return p[y * w.width() + x];
     }
 
     bool has_pixel(const CanvasWindow &w, const core::Color c)
     {
         const auto *p = static_cast<const core::Color *>(w.data());
+        if (p == nullptr)
+            return false;
         const int n = w.width() * w.height();
         for (int i = 0; i < n; ++i)
         {
