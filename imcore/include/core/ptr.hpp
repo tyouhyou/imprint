@@ -12,11 +12,13 @@
  * plain int refcount, no thread-safety (the UI runs on a single thread).
  * See the note in imcore/CMakeLists.txt.
  *
- * Supported surface: make_shared / copy / get / reset / -> / * / bool.
+ * Supported surface: make_shared / copy / get / reset / -> / * / bool,
+ * plus construction and comparison against nullptr (both branches).
  * No weak_ptr, no aliasing constructors, no custom deleters are used
  * anywhere in this code base.
  */
 
+#include <cstddef>
 #include <memory>
 #include <utility>
 
@@ -29,6 +31,12 @@ namespace zb
     {
     public:
         SharedPtr() = default;
+        // nullptr parity with std::shared_ptr: the two branches must accept
+        // the same expressions, or code that compiles in the default build
+        // breaks only under USE_NON_ATOMIC_PTR (the 2026-10-30 CI red: a
+        // `return nullptr;` for a SharedPtr return type). A null SharedPtr
+        // owns no control block, so there is nothing to allocate here.
+        SharedPtr(std::nullptr_t) noexcept {}
         explicit SharedPtr(T *p)
             : ptr_(p), count_(make_count(p)) {}
 

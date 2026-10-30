@@ -150,5 +150,25 @@ int test_ptr()
     }
     EXPECT(PtrDerived::alive == 0);
 
+    // construction from nullptr, both branches. std::shared_ptr accepts it;
+    // the non-atomic branch did not until 2026-10-30, so a `return nullptr;`
+    // for a SharedPtr return type compiled everywhere except the
+    // USE_NON_ATOMIC_PTR config (the CI linux-nonatomic-ptr red). The two
+    // branches must accept the same expressions -- this TU always compiles
+    // the non-atomic branch (USE_NON_ATOMIC_PTR above), so the lock lives
+    // here rather than in a config only CI builds.
+    {
+        zb::SharedPtr<PtrBase> a = nullptr;  // copy-init from nullptr
+        zb::SharedPtr<PtrBase> b(nullptr);   // direct-init from nullptr
+        EXPECT(!a);
+        EXPECT(!b);
+        zb::SharedPtr<PtrDerived> d = nullptr;
+        zb::SharedPtr<PtrBase> up = d;  // converting copy of a null handle
+        EXPECT(!up);
+        EXPECT(up == nullptr);
+        a = nullptr;  // assignment through the converting ctor
+        EXPECT(!a);
+    }
+
     return test::report("ptr");
 }
