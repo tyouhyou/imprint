@@ -140,23 +140,6 @@ history in `git log`.
   runs Debug"** — no Linux CI job sets a build type, so `DEBUG` is
   undefined there. Waiting on: add `-DCMAKE_BUILD_TYPE=Debug` to the
   Linux jobs vs. amend §8's premise.
-- **W-15 (found 2026-10-30 while building A-26's Release instrument). The
-  tree does not compile at `-O2` under the in-tree warning set.** Every CI
-  job and every kit target configures without a build type, so everything
-  is `-O0` (W-12's consequence), and `-Werror` never sees the optimization
-  passes. A plain `cmake -B build -DCMAKE_BUILD_TYPE=Release` fails with
-  `-Werror=null-dereference` at three sites:
-  `imui/src/html.cpp` (fixed the same day: `parse_linear_layer` now states
-  the `colors`/`pos` lockstep invariant as a real guard, because the N-stop
-  block indexes `pos` by `colors.size()` and GCC cannot see the two
-  vectors' parallel growth), plus `test/test_theme.cpp:20` (`w.data()`
-  dereferenced without a null check in a helper) and
-  `test/test_showcase.cpp:395` (the `pseudo()` pointer). This is a
-  user-facing defect — a Release build is the documented path for a
-  consumer, and for performance work it is the *only* valid one.
-  Waiting on: fix the two remaining sites and add a Release entry to the
-  `warnings-survey` matrix (and a CI job) so `-O2` diagnostics are not
-  invisible again, vs. accept Release-with-`IMPRINT_WERROR=OFF`.
 - **W-14 (IM-HOST-003 remainder). Shell/ABI hardening, five sub-items**:
   `run_win` assigns
   global `g_app` before a throwing `CreateWindowEx`; the C-ABI

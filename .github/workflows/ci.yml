@@ -3,7 +3,9 @@
 #
 # Discipline from the repo's build matrix (CONTEXT.md / README "Build"):
 #   - tests run in Debug only (or the default no-config build); Release
-#     distorts the allocation gates
+#     distorts the allocation gates. The one Release job
+#     (linux-warnings-release) builds without running them: its subject is
+#     the -O2 diagnostics, not the batteries (W-15)
 #   - USE_PNG / USE_JPEG run in Tier 2 (linux-codecs); USE_TTF_RUNTIME in
 #     Tier 2 (linux-ttf-runtime); the absorbed imraster module in Tier 2
 #     (linux-raster); the NDS cross build and the non-atomic
@@ -158,6 +160,25 @@ jobs:
         run: |
           cmake -S . -B build_warn -DIMPRINT_WERROR=ON
           cmake --build build_warn -j"$(nproc)"
+
+  # The Release half of the warning gate. Every other job configures
+  # without a build type, so they are all -O0 and the optimization passes
+  # never run -- the diagnostics that only fire at -O2 (-Wnull-dereference
+  # among them) used to reach CI nowhere, while a Release build is the
+  # documented path for a consumer and the only valid one for performance
+  # work. Build-only on purpose: the batteries stay Debug-shaped (W-12).
+  linux-warnings-release:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
+      - name: Configure and build (Release, project warning set + -Werror)
+        run: |
+          cmake -S . -B build_warn_release -DCMAKE_BUILD_TYPE=Release -DIMPRINT_WERROR=ON
+          cmake --build build_warn_release -j"$(nproc)"
 
   # X-21: `imshell/src/win/*` is compiled only by MSVC in windows-desktop,
   # which cannot see the GCC families the rest of the tree is held to
