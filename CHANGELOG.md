@@ -11,6 +11,28 @@ The released tags are summarized below; the full history lives in
 
 ## [Unreleased]
 
+### Added
+- **Feature-gated builds** (A-28): `IMPRINT_FEATURE_HTML` and
+  `IMPRINT_FEATURE_UI_FILE` are configure-time options; turning one off
+  links a stub TU instead of the parser, so the parser headers and the
+  C ABI stay link-complete and a gated entry rejects every document with
+  a logged diagnostic (`IMUI_HAS_HTML` / `IMUI_HAS_UI_FILE` expose the
+  choice to consumers). A story declares the closure it needs with
+  `imprint_require_feature(HTML|UI_FILE)`, which fails the configure
+  with a named target instead of failing later. The post-core feature
+  inventory, dependency DAG and measured costs live in ARCHITECTURE
+  §4.9.1; the `features-off` / `features-gate-off` verify targets and the
+  CI `linux-features-off` job keep the off configurations in the battery.
+
+### Changed
+- Every feature and packaging option (`IMPRINT_WITH_*`, `USE_*`,
+  `IMPRINT_FEATURE_*`) is now declared in `cmake/imprint-features.cmake`
+  — one home instead of inline declarations in the module CMakeLists.
+- `demo/wasm/build.sh` links the imui front-ends per story: stories that
+  never parse now compile the stubs (the export list and the C ABI are
+  unchanged). On the tictactoe story the two real front-ends cost
+  212,755 B of wasm (−36.5% when gated out).
+
 ## [0.2.0] — 2026-10-28
 
 The first feature release after v0.1.1 (424 commits). The framework now

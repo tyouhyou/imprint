@@ -585,6 +585,8 @@ satisfies. Changing any of these is an architecture change.
 | `IMPRINT_WITH_DEMOS`      | ON (top level) / OFF (subproject) | — | configure-time gate: demo app libraries + `binding` + the `${STORY}` executable (framework mode, §3.2); implies tools when ON |
 | `IMPRINT_WITH_SHELL`      | ON (top level) / OFF (subproject) | — | configure-time gate: the platform shell (`shell_common` / `shell_hostloop` / `shell_backend` + the backend mains); OFF keeps the platform's packages (X11) out of a headless consumer (§3.2) |
 | `IMPRINT_WITH_IMRASTER`   | OFF     | OFF (FORCE)   | the optional 3D raster module (`zb::raster`, §4.12); configure-time error unless the build resolves to 32bpp `RGB_MODEL=rgba32` + `ENDIAN=le` |
+| `IMPRINT_FEATURE_HTML`    | ON      | ON            | A-28: the HTML/CSS front-end (`imui/src/html.cpp`); OFF links `html_stub.cpp`, which rejects every document (`ok=false` + one `LE`) and keeps the header/C-ABI surface link-complete (§4.9.1) |
+| `IMPRINT_FEATURE_UI_FILE` | ON      | ON            | A-28: the `.ui` design-file front-end (`imui/src/ui_file.cpp`); OFF links `ui_file_stub.cpp` under the same stub contract (§4.9.1) |
 | `IMPRINT_WARNINGS`        | ON      | —             | the project's per-compiler warning set (`cmake/imprint-warnings.cmake`): `-Wall -Wextra -Wpedantic` + format/shadow/cast family (and C++-only `-Wold-style-cast`, `-Wnon-virtual-dtor`, …) for gcc/clang/apple-clang/emscripten, `/W4 /permissive-` for MSVC; vendored headers stay out via `SYSTEM` includes |
 | `IMPRINT_WERROR`          | ON (top level) / OFF (subproject) | — | promote that set to errors (`-Werror` / `/WX`); off as a subproject so a consumer's newer compiler cannot fail their build on a diagnostic we have not seen |
 
@@ -595,6 +597,98 @@ it needs, and there is no runtime backend switching. The `IMPRINT_WITH_*`
 switches are configure-scope packaging gates for out-of-tree consumption
 (§3.2), not backend switches: at top level the tree configures and builds
 exactly what it always did.
+
+#### 4.9.1 Post-core feature inventory (A-28)
+
+"Post-core" is everything the frame/widget/input kernel does not need.
+The table maps each feature to its sources, removal mechanism, surface
+impact and measured cost; `cmake/imprint-features.cmake` is the single
+home of every option it names. The stub behavior is contracted in
+code-contract §5.4.
+
+| Feature | Sources | Removal | Surface when off | Measured cost |
+|---|---|---|---|---|
+| HTML/CSS front-end | `imui/src/html.cpp` | `IMPRINT_FEATURE_HTML=OFF` links `html_stub.cpp` | `parse_html` stays link-complete and rejects (`ok=false` + one `LE`); `IMUI_HAS_HTML=0`; C ABI unchanged | 203,359 B wasm (tictactoe, export list unchanged) |
+| `.ui` design-file front-end | `imui/src/ui_file.cpp` | `IMPRINT_FEATURE_UI_FILE=OFF` links `ui_file_stub.cpp` | same contract, `IMUI_HAS_UI_FILE=0` | 11,614 B wasm |
+| SVG canvas | `imui/src/svg_canvas.cpp` | no option: `ui_builder` constructs it (`make_unique<SvgCanvas>`) and `html.cpp` calls its path flatteners | — (inside the declarative closure) | not separable from the front-ends: both reference it, so a front-end-on link always carries it |
+| PNG / JPEG codecs | `imcore/src/codec/{png,jpeg,stb_impl}.cpp` | `USE_PNG` / `USE_JPEG` (both default OFF) | codec entry points are declared under `#if defined(USE_PNG/JPEG)` (`codec/image.hpp`, the existing define pattern); the PUBLIC define keeps consumers consistent | +330,064 B `libimcore.so` for both |
+| GIF writer | `imcore/src/codec/gif.cpp` | always built (dependency-free, V-0) | — | — |
+| Runtime TTF | `imcore/src/text/{stb_truetype_impl,runtime_ttf_provider}.cpp` | `USE_TTF_RUNTIME` (default OFF) | `TtfFamily` compiles only under the PUBLIC `IMCORE_HAS_TTF_RUNTIME` | +211,416 B `libimcore.so` |
+| Build-time TTF subset | `tools/ttf_subset.cpp` + `imcore/src/text/ttf_provider.cpp` | empty `TTF_FONT` (default) | `IMCORE_HAS_TTF_SUBSET` off | build-time tool; the generated table scales with the code-point set |
+| Platform default font | font-subset pipeline (`USE_FONT_SIZE`) | option off (default) | `IMCORE_USE_FONT_SIZE` off, the 5x7 bitmap stays the default provider | — |
+| Font subset table | `tools/font_subset.py` | `FONT_SUBSET=OFF` or no Python | `IMCORE_HAS_SUBSET` off, ASCII-only glyphs | — |
+| Shell backends | `imshell/src/<backend>/*` | `IM_SHELL_BACKEND` selection, `IMPRINT_WITH_SHELL=OFF` | packaging only, no library surface | — |
+| C-ABI binding | `binding/src/zbapi.cpp` (+ `host_compat.c`) | `IMPRINT_WITH_DEMOS=OFF` (library mode) | the `zb_*` exports (§4.8); it is the only SHARED consumer that references both parsers unconditionally | — |
+| 3D raster | `imraster/src/*.cpp` | `IMPRINT_WITH_IMRASTER=OFF` (default) | `zb::raster` absent (§4.12) | — |
+| Host tools | `tools/*.cpp` | `IMPRINT_WITH_TOOLS=OFF`; the design tools additionally need their front-end (`ui_embed`→UI_FILE, `html_embed`→HTML, `imprint-render`→both) | — | — |
+
+Dependency DAG (left depends on right):
+
+```
+apps/<story> ─► imui ─► imcore
+   │             ├─ ui_builder ─► svg_canvas
+   │             ├─ html.cpp ──► svg_canvas (path flatteners)
+   │             └─ ui_file.cpp
+   ├─ binding/zbapi (SHARED) ─► parse_html + parse_ui_text (from_ui only)
+   └─ imraster (3D stories only) ─► imcore pixel traits
+tools/ui_embed ─► ui_file.cpp
+tools/html_embed ─► html.cpp
+tools/imprint-render ─► both front-ends + imcore
+```
+
+**Gate vs. dead strip — the rule follows the link.** `imui` is STATIC, so
+a final link drops a front-end TU nothing references: the NDS tictactoe
+ROM carries no parser symbol in either configuration (the A-23 placement
+note, re-confirmed 2026-10-31). `imcore` is SHARED, so the linker drops
+nothing and its features must be configured out (codecs, runtime TTF,
+font pipeline). `libzbapi` is SHARED and references both parsers from
+`zb_app_create_from_ui`, so a host that loads the binding pays for both
+unless the configure swaps in stubs. The wasm link is hand-built
+(`demo/wasm/build.sh`), so every listed TU is linked, and the export
+list is host-facing: `zb_app_create_from_ui` is exported on every story,
+which keeps the declarative closure (both front-ends, `ui_builder`, the
+materializer) reachable. Removing that export would save another
+136,209 B (369,897 → 233,688) but changes the host surface, so it is
+not a gate.
+
+**Mechanism decision (2026-10-31): per-feature options.** The trigger
+condition — a measured size win — is met: the tictactoe wasm story goes
+582,652 → 369,897 B (−212,755 B, −36.5%) with the C ABI unchanged, and
+the SHARED-library deltas show where dead-strip cannot answer at all.
+The implementation keeps the existing patterns: one option file
+(`cmake/imprint-features.cmake`, mirroring
+`cmake/imprint-warnings.cmake`), PUBLIC `0/1` feature defines for
+consumers (the `IMCORE_HAS_TTF_RUNTIME` presence pattern), and no new
+code-level `#if` beyond it.
+
+**Measured evidence** (2026-10-31; wasm = emsdk 5.0.1, `-O2`, tictactoe
+story, subset table on; `libimcore.so` = `warnings-survey` `-O0` build):
+both front-ends 582,652 B / html only 573,256 / `.ui` only 381,511 /
+stubs 369,897; `libimcore.so` 351,416 base, 681,480 with both codecs
+(+330,064), 562,832 with runtime TTF (+211,416). The NDS tictactoe ROM
+is unchanged by the HTML gate (727,040 B in the 2026-10-25 default build
+and in the HTML-off build) because the parser is already unreachable —
+on statically linked stories the gate buys compile time and a declared
+closure, not bytes.
+
+**Story/target closure.** In-tree stories declare what they parse:
+`apps/showcase` and `apps/showcase_html` call
+`imprint_require_feature(HTML)`, `apps/ui_preview` requires both, and
+`apps/CMakeLists.txt` adds a story subdirectory only when its front-ends
+exist; suites and tools follow the same conditions. This is why a
+single-gate configure (one front-end off, everything else on) still
+builds and passes the remaining battery — the gated suites drop out by
+the same condition that drops their apps. Out of tree, an
+off configure that calls a gated entry gets the logged rejection at
+runtime, never a link error, and a consumer branches on `IMUI_HAS_HTML`
+/ `IMUI_HAS_UI_FILE`. The wasm builder declares per-story closure
+(`NEED_HTML` / `NEED_UI_FILE`) and links the stubs otherwise. The off
+configuration is in the battery: `features-off` (library-mode build plus
+the external smoke asserting the stub contract), `features-gate-off`
+(each single-gate config with suites on — the remaining battery must
+pass), CI `linux-features-off` (both off, then both single-gate runs),
+a `warnings-survey` row, and `nds-features-off` for the `.ui`-only NDS
+build.
 
 ### 4.10 Design-file layer
 
@@ -684,8 +778,8 @@ paths keep per-frame scratch in file-scope statics (the wasm 64 KB stack
 discipline), so the module is **single-threaded and non-reentrant** —
 consistent with the no-multi-threaded-rendering ruling (§5). Packaging:
 the `imprint::imraster` alias exists for in-tree/add_subdirectory
-consumption; the module is **not installed/exported** yet — that waits
-for a library-mode consumer and A-28's feature inventory.
+consumption; the module is **not installed/exported** yet — no
+library-mode consumer exists today (§4.9.1 records the decision).
 
 ## 5. Known limitations (public)
 

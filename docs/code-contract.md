@@ -1334,6 +1334,33 @@ grammar.
 - Consumption: `find_ui_file` fetches bytes → `parse_ui_text` →
   `build(host, doc)`; all platforms take the same code path.
 
+### 5.4 Feature-gated builds (A-28)
+
+The two declarative front-ends are build-time features
+(`IMPRINT_FEATURE_UI_FILE`, `IMPRINT_FEATURE_HTML`; inventory and measured
+sizes in ARCHITECTURE §4.9.1). Gating them must not change a public
+surface, so the entries stay link-complete in every configuration:
+
+- **The parser entry points keep their signatures.** A feature-off build
+  compiles a stub in place of the parser TU: `parse_ui_text` /
+  `parse_html` return an empty `ui_node` with `ok=false` and emit one
+  `LE` diagnostic naming the gate. This is exactly the §5.3
+  "document yields no widget" outcome, so consumers need no new error
+  path.
+- **The C ABI is unchanged.** `zb_app_create_from_ui` is exported in every
+  configuration and, with a front-end off, returns null through the
+  existing failure branch (the host sees an unusable document; the log
+  line names the gate). `zbapi.h` carries no conditional compilation and
+  `ZB_API_VERSION` does not move.
+- **C++ consumers can branch at compile time** on `IMUI_HAS_HTML` /
+  `IMUI_HAS_UI_FILE` (PUBLIC `0`/`1`, the `IMCORE_HAS_TTF_RUNTIME`
+  precedent). The build-time tools for a front-end (`ui_embed`,
+  `html_embed`, `imprint-render`) exist only where it does.
+- **Story-level consumers declare their closure** with
+  `imprint_require_feature(<HTML|UI_FILE>)` in their CMakeLists, so a
+  feature-off configure fails at configure time with the target's path
+  instead of shipping an app whose UI never materializes.
+
 ---
 
 ## 6. Tree-mutation protocol (batch J3 final)
@@ -2085,9 +2112,9 @@ encoding evolve without silently re-baselining.
 
 Status: optional (`IMPRINT_WITH_IMRASTER`, ARCHITECTURE §4.9/§4.12). No
 C-ABI surface — every §9/§4.8-adjacent export is unchanged by its
-presence — and it is not in the install/export set yet (A-28's feature
-inventory records the packaging decision when a library-mode consumer
-appears).
+presence. A-28's inventory (§4.9.1) records the packaging decision: it
+stays out of the install/export set until a library-mode consumer
+appears (none today; the in-tree consumers are the three 3D stories).
 
 - The API contract lives in the module's headers
   (`imraster/include/imraster/*.hpp`): the comment blocks are the

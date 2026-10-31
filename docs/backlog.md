@@ -39,10 +39,10 @@ frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
 - **V-4. codec: memory-source image decode** (condition-triggered):
   `Image::read_png*` accepts only file names; embedded targets shipping
   compressed art need `read_png_memory(bytes, n, ...)` (stb offers
-  `stbi_load_from_memory`). Gated together with the USE_PNG
-  default-OFF question — decide both when the first real
-  compressed-asset use case appears; until then the procedural
-  generator covers the demo.
+  `stbi_load_from_memory`). The default-OFF decision is on record:
+  ARCHITECTURE §4.9.1 measures both codecs at +330,064 B of the SHARED
+  `libimcore.so`, so they stay OFF until the first real compressed-asset
+  use case appears; until then the procedural generator covers the demo.
 
 ### Batch H — HTML/CSS Rendering Path (landed end to end; open remainder only)
 
@@ -351,57 +351,6 @@ rationale in `reports/audit-2026-10-15.md` §5.
 - **Trigger:** a zbapi host's present path becomes a measured
   bottleneck (wasm story demo, Python, a future Kitty presenter), or
   the wasm demo wants region-wise upload.
-
-### A-28. Feature inventory & per-target minimal builds (on-demand compilation / feature gating; added 2026-10-25)
-
-- **Motivation:** everything beyond the core raster/kernel is real but
-  unenumerated — the HTML/CSS path (`html` TU + `html_embed`), the `.ui`
-  design-file path (`ui_builder`/`ui_file` + `ui_embed`), the SVG canvas,
-  the stb image codecs, runtime TTF (`USE_TTF_RUNTIME`), the platform font
-  (`USE_FONT_SIZE`), the shell backends, the C-ABI binding, the host tools.
-  Their controls are scattered: `USE_*` options declared inline in
-  `imcore/CMakeLists.txt`, `IMPRINT_WITH_*` bundles in the root CMakeLists,
-  FORCE-set entries in `cmake/nds.toolchain.cmake`, and the rest leans on
-  the A-23 static dead-strip. A target integrator has no single place that
-  says what exists, what depends on what, and how to leave it out. First
-  concrete want: an NDS story that ships `.ui`-only (no HTML) — runtime
-  HTML→UI generation is slow on the ARM9.
-- **Do not re-litigate the A-23 placement note (2026-09-12):** for
-  statically linked targets the linker already drops an unreferenced `html`
-  TU, so consumer-side size trimming works today. What is missing is
-  discoverability, declared dependencies, and gates where dead-stripping
-  cannot apply (SHARED imcore / `zbapi` consumers — W-8 adjacent).
-- **Shape, three layers:**
-  1. *Inventory (decision-free, do first):* one list of every post-core
-     feature — source closure, intra-feature dependencies (a small DAG),
-     C-ABI/export implications, droppable-by-static-linker vs.
-     needs-a-build-gate, and a measured size contribution (ROM / `.wasm` /
-     install — evidence, not estimates). Home: the ARCHITECTURE §4.9
-     compile-time option table, extended; options touching the C-ABI or
-     pixel matrix state their why in code-contract.md per the standing
-     rule. The USE_PNG default-OFF question (V-4) becomes a row instead of
-     an open thread.
-  2. *Build-level gating:* choose the mechanism — per-feature CMake options
-     following the existing pattern (default OFF on desktop, FORCE ON in
-     the embedded toolchain; ARCHITECTURE §4.9 updated per option) vs.
-     staying dead-strip-only with the inventory as the map. If options
-     win, `cmake/imprint-features.cmake` is their single home, mirroring
-     `cmake/imprint-warnings.cmake` (X-8 precedent); no code-level `#if`
-     sprawl beyond the existing define pattern (`IMCORE_HAS_TTF_RUNTIME`).
-  3. *Story/target-level selection:* the `${STORY}` composition and the
-     `<story>_app` target declare the feature closure they need, so the
-     same sources yield an NDS `.ui`-only story and a desktop
-     full-feature story.
-- **Constraints:** contract-before-API — a dropped feature must not
-  silently change the `zbapi.h` surface (A-1's wording-sync discipline);
-  every feature-off configuration must compile clean under the X-8 warning
-  set and have a battery story (extend the `warnings-survey` config
-  matrix; never trust one local build); compile-time only — no runtime
-  backend switching (settled non-goal).
-- **Trigger:** the inventory can start whenever the integrator need
-  arises (the NDS HTML slowness is already on record); the
-  gating-mechanism decision waits for a second target or a measured
-  size/runtime win.
 
 ### A-29. fps consumption-report absorption (Phase 2; added 2026-10-25)
 
