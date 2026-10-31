@@ -37,9 +37,15 @@ int test_text_input();
 int test_builder();
 int test_measure();
 int test_dirty();
+#if IMUI_HAS_UI_FILE
 int test_ui_file();
+#endif
+#if IMUI_HAS_HTML
 int test_html();
+#endif
+#if IMUI_HAS_HTML && IMUI_HAS_UI_FILE
 int test_preview();
+#endif
 
 int test_widget_size();
 int test_remove();
@@ -60,7 +66,9 @@ int test_key_decoration();
 int test_frame_pacer();
 int test_perf_fill();
 int test_theme();
+#if IMUI_HAS_HTML
 int test_showcase();
+#endif
 int test_toggle_switch();
 int test_gauge_dial();
 int test_knob();
@@ -130,9 +138,15 @@ static const suite g_suites[] = {
     {"builder", test_builder},
     {"measure", test_measure},
     {"dirty", test_dirty},
+#if IMUI_HAS_UI_FILE
     {"ui_file", test_ui_file},
+#endif
+#if IMUI_HAS_HTML
     {"html", test_html},
+#endif
+#if IMUI_HAS_HTML && IMUI_HAS_UI_FILE
     {"preview", test_preview},
+#endif
     {"widget_size", test_widget_size},
     {"remove", test_remove},
     {"layout_dirty", test_layout_dirty},
@@ -152,7 +166,9 @@ static const suite g_suites[] = {
     {"frame_pacer", test_frame_pacer},
     {"perf_fill", test_perf_fill},
     {"theme", test_theme},
+#if IMUI_HAS_HTML
     {"showcase", test_showcase},
+#endif
     {"toggle_switch", test_toggle_switch},
     {"gauge_dial", test_gauge_dial},
     {"knob", test_knob},

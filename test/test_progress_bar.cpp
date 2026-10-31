@@ -171,6 +171,8 @@ int test_progress_bar()
         EXPECT(pb != nullptr);
         EXPECT(pb->get_min() == 0 && pb->get_max() == 200 && pb->get_value() == 42);
     }
+    // .ui source lands in the same table (A-28: needs the .ui front-end)
+#if IMUI_HAS_UI_FILE
     {
         FlexPanel host;
         host.set_size(200, 100);
@@ -182,6 +184,7 @@ int test_progress_bar()
         EXPECT(pb != nullptr);
         EXPECT(pb->get_min() == 10 && pb->get_max() == 20 && pb->get_value() == 15);
     }
+#endif
 
     // zero-allocation steady state: value updates + repaints (contract 8)
     {

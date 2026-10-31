@@ -324,6 +324,7 @@ int test_builder()
 
         // the same tags parse identically from a design file (the parser
         // and the fluent builders share the tag table, contract 4.10)
+#if IMUI_HAS_UI_FILE
         {
             bool ok = false;
             zb::ui::ui_node tree = parse_ui_text(
@@ -344,10 +345,12 @@ int test_builder()
             EXPECT(gd != nullptr && gd->get_value() == 120);
             EXPECT(kn != nullptr && kn->get_value() == 40 && kn->get_step() == 5);
         }
+#endif
 
         // a one-axis size declaration keeps the other axis's own measure
         // (regression: width= only used to force the height to an explicit
         // 0 -- buttons and sliders collapsed flat and became unclickable)
+#if IMUI_HAS_UI_FILE
         {
             bool ok = false;
             zb::ui::ui_node tree = parse_ui_text(
@@ -370,6 +373,7 @@ int test_builder()
             EXPECT(sh->get_size().width > 0);  // auto track width, not 0
             EXPECT(!sh->is_width_explicit() && sh->is_height_explicit());
         }
+#endif
 
         // host root node is documentation only... panel() children flow
         // color props (batch H step 2): background and color land on the
@@ -515,6 +519,7 @@ int test_builder()
         // never resets pre-configured host state (the old unconditional
         // spacing/padding transfer clobbered hosts configured before build),
         // while a declared prop still transfers
+#if IMUI_HAS_HTML
         {
             FlexPanel host;
             host.set_size(60, 60);
@@ -567,6 +572,7 @@ int test_builder()
             const auto cp4 = phost.get_children()[0]->get_position();
             EXPECT(cp4.x == 7 && cp4.y == 7);
         }
+#endif
 
         // action binding rides materialization (code-contract §4, IM-BLD-001):
         // each id binds the widget its own node created; a duplicate id binds

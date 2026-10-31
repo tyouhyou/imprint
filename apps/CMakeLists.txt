@@ -29,7 +29,14 @@ if (NOT NDS_PLATFORM)
     add_subdirectory(rotafarm)
     add_subdirectory(comet)
     add_subdirectory(crystal)
-    add_subdirectory(ui_preview)
+    # A-28: the previewer consumes both declarative front-ends; a
+    # feature-off build skips it (each app declares its own closure, so a
+    # STORY=ui_preview configure still errors with the app's path)
+    if ((IMPRINT_FEATURE_HTML AND IMPRINT_FEATURE_UI_FILE) OR STORY STREQUAL "ui_preview")
+        add_subdirectory(ui_preview)
+    else()
+        message(STATUS "ui_preview: skipped (needs IMPRINT_FEATURE_HTML and IMPRINT_FEATURE_UI_FILE)")
+    endif()
 endif()
 # the 3D stories (2026-10-26) consume imraster, which only configures in
 # the rgba32/le pixel model (ARCHITECTURE 4.12) -- they exist exactly
@@ -44,12 +51,22 @@ elseif (STORY STREQUAL "moonpull" OR STORY STREQUAL "fogkeeper" OR STORY STREQUA
         "configure with -DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32 -DENDIAN=le")
 endif()
 if (NOT NDS_PLATFORM OR STORY STREQUAL "showcase")
-    add_subdirectory(showcase)
+    # A-28: showcase materializes orion.html at runtime; its closure is
+    # declared in the app's CMakeLists (imprint_require_feature)
+    if (IMPRINT_FEATURE_HTML OR STORY STREQUAL "showcase")
+        add_subdirectory(showcase)
+    else()
+        message(STATUS "showcase: skipped (IMPRINT_FEATURE_HTML=OFF)")
+    endif()
 endif()
 # showcase_html follows the showcase rule: the desktop library always
 # builds, the NDS ROM needs a host-built html_embed handed in
 if (NOT NDS_PLATFORM OR STORY STREQUAL "showcase_html")
-    add_subdirectory(showcase_html)
+    if (IMPRINT_FEATURE_HTML OR STORY STREQUAL "showcase_html")
+        add_subdirectory(showcase_html)
+    else()
+        message(STATUS "showcase_html: skipped (IMPRINT_FEATURE_HTML=OFF)")
+    endif()
 endif()
 if (NOT STORY STREQUAL "tictactoe" AND NOT STORY STREQUAL "ui_preview"
     AND NOT STORY STREQUAL "showcase" AND NOT STORY STREQUAL "hello"

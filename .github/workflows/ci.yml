@@ -290,6 +290,52 @@ jobs:
           cmake --build build_ci -j"$(nproc)"
           ./build_ci/bin/test_imui
 
+  # A-28: the post-core feature gates (inventory in ARCHITECTURE §4.9).
+  # The off configuration is a library-mode consumer build -- the gated
+  # front-ends' consumers (showcase*, ui_preview, the design tools and
+  # their suites) are story-level and not part of it. The smoke then
+  # asserts the stub contract: the parser symbols stay link-complete and
+  # every document is rejected (code-contract §5.4), so enabling the gate
+  # never turns a public surface into a link error. The last step is the
+  # realistic single-gate configs (one front-end off, everything else
+  # on, both directions): the gated suites drop out by the same condition
+  # that drops their apps, the remaining battery still runs.
+  linux-features-off:
+    runs-on: ubuntu-latest
+    container: gcc:13
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install build tools
+        run: apt-get update && apt-get install -y --no-install-recommends cmake make python3
+      - name: Configure and build (both front-ends off, project warning set + -Werror)
+        run: |
+          cmake -S . -B build_ci \
+            -DIMPRINT_FEATURE_HTML=OFF -DIMPRINT_FEATURE_UI_FILE=OFF \
+            -DIMPRINT_WITH_DEMOS=OFF -DIMPRINT_WITH_TESTS=OFF \
+            -DIMPRINT_WITH_TOOLS=OFF -DIMPRINT_WITH_SHELL=OFF \
+            -DIMPRINT_WERROR=ON
+          cmake --build build_ci -j"$(nproc)"
+      - name: Consumer smoke under the same closure
+        run: |
+          cmake -S test/external_smoke -B build_smoke \
+            -DIMPRINT_FEATURE_HTML=OFF -DIMPRINT_FEATURE_UI_FILE=OFF \
+            -DIMPRINT_WERROR=ON
+          cmake --build build_smoke -j"$(nproc)"
+          ./build_smoke/bin/external_smoke
+      - name: Single-gate configs (one front-end off, suites on) and the battery
+        run: |
+          cmake -S . -B build_ci_gate_off \
+            -DIMPRINT_FEATURE_HTML=OFF -DIMPRINT_FEATURE_UI_FILE=ON \
+            -DIMPRINT_WERROR=ON
+          cmake --build build_ci_gate_off -j"$(nproc)"
+          ./build_ci_gate_off/bin/test_imui
+          cmake -S . -B build_ci_gate_off \
+            -DIMPRINT_FEATURE_HTML=ON -DIMPRINT_FEATURE_UI_FILE=OFF \
+            -DIMPRINT_WERROR=ON
+          cmake --build build_ci_gate_off -j"$(nproc)"
+          ./build_ci_gate_off/bin/test_imui
+
   linux-x11:
     runs-on: ubuntu-latest
     container: gcc:13

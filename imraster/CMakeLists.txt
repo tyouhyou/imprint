@@ -4,7 +4,7 @@
 # module's own README carries the upstream boundary rules. The module's
 # arithmetic is frozen upstream (the fps golden frames are the regression
 # baseline) -- never edit src/*.cpp or include/imraster/*.hpp here.
-option(IMPRINT_WITH_IMRASTER "Build the optional 3D raster module (zb::raster; 32bpp rgba32/le pixel model only, ARCHITECTURE §4.12)" OFF)
+# the option declaration lives in cmake/imprint-features.cmake (A-28)
 if (NOT IMPRINT_WITH_IMRASTER)
     return()
 endif()

@@ -17,6 +17,15 @@ EXTRA_SRCS=""
 PIXEL_MODEL="bgra32"
 IMRASTER_INC=""
 
+# A-28 per-story front-end closure. The parsers are leaves of the imui
+# closure, but a hand-built wasm TU list links every TU and the exported
+# zb_app_create_from_ui keeps parse_ui_text/parse_html reachable, so a story
+# that never parses links a stub instead (same header, logged rejection) --
+# the C-ABI surface and the export list stay unchanged. Only the stories
+# that parse request the real front-end below.
+NEED_HTML=0
+NEED_UI_FILE=0
+
 # framework sources shared by every story
 FRAMEWORK_SRCS="
   imcore/src/core/graphics.cpp
@@ -42,15 +51,21 @@ FRAMEWORK_SRCS="
   imui/src/dialog.cpp
   imui/src/dispatcher.cpp
   imui/src/theme.cpp
-  imui/src/ui_file.cpp
   imui/src/ui_builder.cpp
-  imui/src/html.cpp
   imui/src/scroll_panel.cpp
   binding/src/zbapi.cpp
 "
 
-# zb_app_create_from_ui is exported on every wasm story (the linker no
-# longer gc's it), so its parse path must link everywhere too
+# the html_embed validators below compile every imui TU at once (html.cpp is
+# not standalone); the stub TUs define the same symbols, so they are not
+# part of that closure
+ALL_IMUI_SRCS=""
+for src in /src/imui/src/*.cpp; do
+    case "$src" in
+    *_stub.cpp) ;;
+    *) ALL_IMUI_SRCS="$ALL_IMUI_SRCS $src" ;;
+    esac
+done
 
 case "$APP" in
 tictactoe)
@@ -83,13 +98,14 @@ showcase)
     "
     APP_INCLUDE="/src/apps/showcase/include"
     EXPORT_NAME=createShowcase
+    NEED_HTML=1
     g++ -std=c++17 -O2 \
         -DCOLOR_DEPTH=32 -DRGB_MODEL=argb32 -DENDIAN=be \
         -I /src/imui/include -I /src/imutil/include \
         -I /src/imcore/include -I /src/imcore/include/core \
         -I /src/imcore/include/text -I /src/imcore/include/codec \
         -I /src/imevent/include -I /src/iminput/include \
-        /src/tools/html_embed.cpp /src/imui/src/*.cpp \
+        /src/tools/html_embed.cpp $ALL_IMUI_SRCS \
         /src/imcore/src/core/graphics.cpp \
         /src/imcore/src/text/utf8.cpp \
         /src/imcore/src/text/bitmap_provider.cpp \
@@ -118,13 +134,14 @@ showcase_html)
     "
     APP_INCLUDE="/src/apps/showcase_html/include"
     EXPORT_NAME=createShowcaseHtml
+    NEED_HTML=1
     g++ -std=c++17 -O1 \
         -DCOLOR_DEPTH=32 -DRGB_MODEL=argb32 -DENDIAN=be \
         -I /src/imui/include -I /src/imutil/include \
         -I /src/imcore/include -I /src/imcore/include/core \
         -I /src/imcore/include/text -I /src/imcore/include/codec \
         -I /src/imevent/include -I /src/iminput/include \
-        /src/tools/html_embed.cpp /src/imui/src/*.cpp \
+        /src/tools/html_embed.cpp $ALL_IMUI_SRCS \
         /src/imcore/src/core/graphics.cpp \
         /src/imcore/src/text/utf8.cpp \
         /src/imcore/src/text/bitmap_provider.cpp \
@@ -145,6 +162,10 @@ playground)
     "
     APP_INCLUDE="/src/apps/hello/include"
     EXPORT_NAME=createPlayground
+    # the page feeds HTML designs through zb_app_create_from_ui(is_html=1);
+    # the smoke drives the same entry with a .ui document
+    NEED_HTML=1
+    NEED_UI_FILE=1
     # the design samples size text through the CSS font-size path
     # (code-contract 2.4), which needs the runtime TTF family. The
     # playground has no app TU to call install_font from, so a
@@ -245,7 +266,18 @@ moonpull|fogkeeper|hoursmith)
     ;;
 esac
 
-SRCS="$FRAMEWORK_SRCS $APP_SRCS $EXTRA_SRCS"
+if [ "$NEED_HTML" = 1 ]; then
+    FRONTEND_SRCS="imui/src/html.cpp"
+else
+    FRONTEND_SRCS="imui/src/html_stub.cpp"
+fi
+if [ "$NEED_UI_FILE" = 1 ]; then
+    FRONTEND_SRCS="$FRONTEND_SRCS imui/src/ui_file.cpp"
+else
+    FRONTEND_SRCS="$FRONTEND_SRCS imui/src/ui_file_stub.cpp"
+fi
+
+SRCS="$FRAMEWORK_SRCS $FRONTEND_SRCS $APP_SRCS $EXTRA_SRCS"
 
 OUT="/src/demo/wasm/$APP.js"
 

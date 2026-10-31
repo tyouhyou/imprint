@@ -5,45 +5,9 @@ endif()
 # COLOR_DEPTH / RGB_MODEL / ENDIAN are declared and resolved at the top
 # level (A-29 Phase 1: the imraster module's configure gate consumes the
 # same resolution); this file only consumes IMPRINT_RGB_MODEL / IMPRINT_ENDIAN.
-# NOTE: these options are OFF in production builds and the default build
-# stays zero-dependency. USE_PNG and USE_JPEG are self-contained: they
-# compile the vendored stb_image/stb_image_write (third_party/stb) into
-# imcore and need no external library. USE_TTF_RUNTIME likewise compiles
-# the vendored stb_truetype (batch L-5) -- the framework carries no
-# external font library.
-set(USE_PNG OFF CACHE BOOL "Switch it to ON if png file processing is needed.")
-set(USE_JPEG OFF CACHE BOOL "Switch it to ON if jpeg file processing is needed.")
-# Integer-only geometry: no std::sqrt in the circle/ellipse scanlines and
-# no runtime floating point in the arc trig for FPU-less embedded targets
-# (the NDS toolchain sets this automatically). The default keeps the
-# floating-point bounds/trig, which on desktop stay deterministic (IEEE)
-# and on FPU-less targets are replaced by algebraic/lookup equivalents
-# within the same sub-pixel contract.
-set(USE_INTEGER_GEOMETRY OFF CACHE BOOL "Switch it to ON for FPU-less embedded targets (integer-only circle/ellipse bounds + arc trig lookup).")
-# Non-atomic shared pointer: zb::SharedPtr falls back to a plain-int
-# refcount implementation for targets without atomic instructions
-# (devkitARM's NDS ships no libatomic; the toolchain sets this
-# automatically). The default is std::shared_ptr everywhere else. The UI
-# runs on a single thread, so the non-atomic branch is safe.
-set(USE_NON_ATOMIC_PTR OFF CACHE BOOL "Switch it to ON for targets without atomic instructions (non-atomic refcounts).")
-# Font subset (batch E): scans the app/test sources at configure time and
-# generates a glyph table for the code units they use beyond the built-in
-# ASCII range (tools/font_subset.py + tools/extra_glyphs.py). Needs
-# Python 3; without it the provider falls back to ASCII-only glyphs.
-set(FONT_SUBSET ON CACHE BOOL "Scan sources and generate the font subset table (needs Python 3).")
-# Font subset plan 2 (batch S2, code-contract 2.4): rasterize a TrueType
-# font into the subset at build time (tools/ttf_subset over the vendored
-# stb_truetype). Empty TTF_FONT = off, the build stays identical. Host
-# builds only, like ui_embed.
-set(TTF_FONT "" CACHE FILEPATH "TrueType font rasterized into the build-time glyph subset (plan 2). Empty = off.")
-set(TTF_PIXEL_SIZE 16 CACHE STRING "Pixel size of the rasterized TTF subset (plan 2).")
-# Platform default font size (code-contract 2.4): when ON, a TTF_FONT left
-# empty resolves to the platform's system font and the rasterized subset
-# becomes the process-wide default glyph provider (installed by
-# CanvasWindow). OFF keeps the 5x7 bitmap default everywhere. Host builds
-# only — the TTF pipeline never runs on NDS.
-set(USE_FONT_SIZE OFF CACHE BOOL "Render widgets with the platform default font at TTF_PIXEL_SIZE instead of the 5x7 bitmap (hosts only).")
-set(USE_TTF_RUNTIME OFF CACHE BOOL "Runtime TTF rasterization through vendored stb_truetype (batch L-5): TtfFamily hands out one glyph provider per pixel size over a bounded shared cache. When OFF only the 5x7 bitmap and build-time subset paths exist.")
+# Every feature option (USE_PNG, USE_JPEG, USE_TTF_RUNTIME, USE_FONT_SIZE,
+# FONT_SUBSET, TTF_FONT, USE_INTEGER_GEOMETRY, USE_NON_ATOMIC_PTR) is
+# declared in cmake/imprint-features.cmake (A-28); this file consumes them.
 
 # USE_FONT_SIZE with an empty TTF_FONT resolves the platform's system font
 # (hardcoded paths); a missing file is a config error.

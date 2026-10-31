@@ -19,20 +19,14 @@ else()
     set(IMPRINT_IS_TOP_LEVEL OFF)
 endif()
 
-# A-23 / Batch G P1: configure-time packaging gates. The options state
-# standalone intent; the effective switches are resolved right after
-# (the test battery needs the demo app libraries and the ui_embed tool,
-# the demo composition implies both).
-option(IMPRINT_WITH_TOOLS "Also build the host tools (ui_embed, html_embed, asset_gen)" ${IMPRINT_IS_TOP_LEVEL})
-option(IMPRINT_WITH_TESTS "Build the test battery (implies the demo app libraries and the host tools)" ${IMPRINT_IS_TOP_LEVEL})
-option(IMPRINT_WITH_DEMOS "Build the demo app libraries, the binding, and the STORY demo executable (framework mode)" ${IMPRINT_IS_TOP_LEVEL})
-# X-3: the shell is packaging, not part of the library surface. A consumer
-# that wants the headless widget path (imcore / imui / imapp) must not
-# inherit the platform's packages -- before this gate, add_subdirectory
-# always configured imshell and the UNIX default backend made libx11-dev a
-# hard requirement of every Linux consumer. ON top level (the in-tree
-# build, unchanged), OFF as a subproject.
-option(IMPRINT_WITH_SHELL "Build the platform shell (A-2 seams + the selected backend's usage requirements)" ${IMPRINT_IS_TOP_LEVEL})
+# A-28: every feature/packaging option is declared in one file (the
+# inventory lives in ARCHITECTURE §4.9). X-3 note: the shell is packaging,
+# not part of the library surface -- a consumer that wants the headless
+# widget path (imcore / imui / imapp) must not inherit the platform's
+# packages; ON top level (the in-tree build, unchanged), OFF as a subproject.
+include(cmake/imprint-features.cmake)
+# the effective switches (the test battery needs the demo app libraries and
+# the ui_embed tool, the demo composition implies both)
 if (IMPRINT_WITH_TESTS OR IMPRINT_WITH_DEMOS)
     set(IMPRINT_USE_APPS ON)
     set(IMPRINT_USE_TOOLS ON)
@@ -347,25 +341,34 @@ endif()
 
 # build-time UI design file packer (validates with the library parser,
 # embeds documents as byte arrays). Host tool only: embedded targets
-# ship pre-packed documents from their own build.
+# ship pre-packed documents from their own build. A-28: a tool that
+# validates with a gated front-end exists only where the front-end does.
 if (IMPRINT_USE_TOOLS AND NOT NDS_PLATFORM)
-    # links the full imui (the html_embed precedent): pass 1 gates on
-    # materializes_widget, which needs the widget factory, not just the
-    # parser — a document of only unknown tags must fail the build
-    add_executable(ui_embed tools/ui_embed.cpp)
-    target_link_libraries(ui_embed PRIVATE imui)
-    target_include_directories(ui_embed PRIVATE
-        ${PROJECT_SOURCE_DIR}/imui/include
-        ${PROJECT_SOURCE_DIR}/imutil/include
-    )
+    if (IMPRINT_FEATURE_UI_FILE)
+        # links the full imui (the html_embed precedent): pass 1 gates on
+        # materializes_widget, which needs the widget factory, not just the
+        # parser — a document of only unknown tags must fail the build
+        add_executable(ui_embed tools/ui_embed.cpp)
+        target_link_libraries(ui_embed PRIVATE imui)
+        target_include_directories(ui_embed PRIVATE
+            ${PROJECT_SOURCE_DIR}/imui/include
+            ${PROJECT_SOURCE_DIR}/imutil/include
+        )
+    else()
+        message(STATUS "ui_embed: skipped (IMPRINT_FEATURE_UI_FILE=OFF)")
+    endif()
     # HTML design file packer (the ui_embed precedent for parse_html):
     # validates with the library parser, embeds documents as byte arrays
-    add_executable(html_embed tools/html_embed.cpp)
-    target_link_libraries(html_embed PRIVATE imui)
-    target_include_directories(html_embed PRIVATE
-        ${PROJECT_SOURCE_DIR}/imui/include
-        ${PROJECT_SOURCE_DIR}/imutil/include
-    )
+    if (IMPRINT_FEATURE_HTML)
+        add_executable(html_embed tools/html_embed.cpp)
+        target_link_libraries(html_embed PRIVATE imui)
+        target_include_directories(html_embed PRIVATE
+            ${PROJECT_SOURCE_DIR}/imui/include
+            ${PROJECT_SOURCE_DIR}/imutil/include
+        )
+    else()
+        message(STATUS "html_embed: skipped (IMPRINT_FEATURE_HTML=OFF)")
+    endif()
     # procedural showcase asset generator (V-2): emits RGBA8 arrays at
     # build time — the ttf_subset precedent (build-time materialization
     # of a shipping asset), no runtime decode and no USE_PNG dependency
@@ -376,12 +379,16 @@ if (IMPRINT_USE_TOOLS AND NOT NDS_PLATFORM)
     # design-file renderer CLI (Batch G P2): .ui/.html in, PNG/GIF out,
     # the frame hash on stdout. PNG rides its own vendored stb writer TU
     # so the default zero-option build renders PNG (USE_PNG stays a
-    # library-codec option)
-    add_executable(imprint-render tools/imprint_render.cpp)
-    target_link_libraries(imprint-render PRIVATE imui imapp_snapshot)
-    # SYSTEM: vendored stb stays out of the project warning set
-    target_include_directories(imprint-render SYSTEM PRIVATE
-        ${PROJECT_SOURCE_DIR}/third_party/stb)
+    # library-codec option). Both front-ends are its input formats.
+    if (IMPRINT_FEATURE_HTML AND IMPRINT_FEATURE_UI_FILE)
+        add_executable(imprint-render tools/imprint_render.cpp)
+        target_link_libraries(imprint-render PRIVATE imui imapp_snapshot)
+        # SYSTEM: vendored stb stays out of the project warning set
+        target_include_directories(imprint-render SYSTEM PRIVATE
+            ${PROJECT_SOURCE_DIR}/third_party/stb)
+    else()
+        message(STATUS "imprint-render: skipped (both design-file front-ends are needed)")
+    endif()
 endif()
 
 if (IMPRINT_WITH_TESTS)

@@ -364,7 +364,9 @@ int test_percent()
     }
 
     // .ui source: quoted and bare percent values land as the same "N%"
-    // string prop and materialize into resolved sizes
+    // string prop and materialize into resolved sizes (A-28: the case
+    // needs the .ui front-end)
+#if IMUI_HAS_UI_FILE
     {
         const char *doc = "row id=\"page\"\n"
                           "  button id=\"a\" width=\"50%\" height=20\n"
@@ -391,6 +393,7 @@ int test_percent()
         EXPECT(wb->get_size().width == 50);   // 25% of 200
         EXPECT(at(*wb, 100, 0));
     }
+#endif
 
     // fluent builder: .width_pct/.height_pct produce the same percent form
     {

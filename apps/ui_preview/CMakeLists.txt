@@ -1,3 +1,7 @@
+# A-28 closure: the previewer opens both design-file formats.
+imprint_require_feature(HTML)
+imprint_require_feature(UI_FILE)
+
 add_library(ui_preview_app STATIC src/app_maker.cpp src/ui_preview.cpp)
 target_link_libraries(ui_preview_app PUBLIC imapp_canvas)
 target_include_directories(ui_preview_app

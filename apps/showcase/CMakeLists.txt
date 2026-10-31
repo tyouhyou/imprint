@@ -3,6 +3,8 @@
 # showcase.cpp. Build-time steps follow the showcase_html precedent:
 # html_embed packs (and validates) the design document, bytes_embed
 # packs the Inter TTF blob for the runtime-TTF text path.
+# A-28 closure: showcase parses orion.html at startup.
+imprint_require_feature(HTML)
 add_library(showcase_app STATIC src/app_maker.cpp src/showcase.cpp)
 target_link_libraries(showcase_app PUBLIC imapp_canvas)
 target_include_directories(showcase_app

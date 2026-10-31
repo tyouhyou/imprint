@@ -40,9 +40,6 @@ add_executable(
     test_progress_bar.cpp
     test_list_box.cpp
     test_measure.cpp
-    test_ui_file.cpp
-    test_html.cpp
-    test_preview.cpp
     test_widget_size.cpp
     test_remove.cpp
     test_layout_dirty.cpp
@@ -62,7 +59,6 @@ add_executable(
     test_frame_pacer.cpp
     test_perf_fill.cpp
     test_theme.cpp
-    test_showcase.cpp
     test_toggle_switch.cpp
     test_gauge_dial.cpp
     test_knob.cpp
@@ -80,10 +76,23 @@ target_link_libraries(
     imapp_snapshot
     imutil
     tictactoe_app
-    showcase_app
-    ui_preview_app
     shell_common
 )
+
+# A-28: the suites of a gated front-end (and the apps built on it) exist
+# only where the front-end does; the define is the same PUBLIC 0/1 the
+# library carries, so test_main's table and the suites agree.
+if (IMPRINT_FEATURE_HTML)
+    target_sources(test_imui PRIVATE test_html.cpp test_showcase.cpp)
+    target_link_libraries(test_imui PRIVATE showcase_app)
+endif()
+if (IMPRINT_FEATURE_UI_FILE)
+    target_sources(test_imui PRIVATE test_ui_file.cpp)
+endif()
+if (IMPRINT_FEATURE_HTML AND IMPRINT_FEATURE_UI_FILE)
+    target_sources(test_imui PRIVATE test_preview.cpp)
+    target_link_libraries(test_imui PRIVATE ui_preview_app)
+endif()
 
 target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/include)
 
@@ -143,7 +152,9 @@ if (TARGET imraster)
 endif()
 
 # build-time packing smoke: ui_embed validates and embeds the example
-# document; test_ui_file parses the packed bytes back
+# document; test_ui_file parses the packed bytes back (A-28: the tool
+# exists only with the .ui front-end)
+if (IMPRINT_FEATURE_UI_FILE)
 set(UI_EMBED_TEST_HEADER ${CMAKE_CURRENT_BINARY_DIR}/ui_embed_test.gen.hpp)
 add_custom_command(
     OUTPUT ${UI_EMBED_TEST_HEADER}
@@ -154,6 +165,7 @@ add_custom_command(
 add_custom_target(ui_embed_test_gen DEPENDS ${UI_EMBED_TEST_HEADER})
 add_dependencies(test_imui ui_embed_test_gen)
 target_include_directories(test_imui PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+endif()
 
 # C8: register with CTest so desktop builds can `ctest -R test_imui`
 # (CI still invokes the binary directly; this wires the local path.

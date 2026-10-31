@@ -1,3 +1,7 @@
+# A-28 closure: the app re-parses its HTML document at startup (the
+# design-file path is its whole point).
+imprint_require_feature(HTML)
+
 add_library(showcase_html_app STATIC src/app_maker.cpp src/showcase_html.cpp)
 target_link_libraries(showcase_html_app PUBLIC imapp_canvas)
 target_include_directories(showcase_html_app
