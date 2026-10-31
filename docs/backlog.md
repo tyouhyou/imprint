@@ -39,10 +39,11 @@ frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
 - **V-4. codec: memory-source image decode** (condition-triggered):
   `Image::read_png*` accepts only file names; embedded targets shipping
   compressed art need `read_png_memory(bytes, n, ...)` (stb offers
-  `stbi_load_from_memory`). The default-OFF decision is on record:
-  ARCHITECTURE §4.9.1 measures both codecs at +330,064 B of the SHARED
-  `libimcore.so`, so they stay OFF until the first real compressed-asset
-  use case appears; until then the procedural generator covers the demo.
+  `stbi_load_from_memory`). The default-OFF decision is on record
+  (ARCHITECTURE §4.9.1 carries the measured codec cost of the SHARED
+  `libimcore.so`): both codecs stay OFF until the first real
+  compressed-asset use case appears; until then the procedural
+  generator covers the demo.
 
 ### Batch H — HTML/CSS Rendering Path (landed end to end; open remainder only)
 

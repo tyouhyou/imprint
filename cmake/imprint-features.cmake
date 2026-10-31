@@ -4,8 +4,10 @@
 # static dead-strip, C-ABI impact, measured sizes); this file carries the
 # declarations. No other file declares one of these options (the pixel
 # matrix and the warning gate keep their own homes); the modules consume
-# these variables, the target toolchains FORCE their own policy
-# (cmake/nds.toolchain.cmake does so beside its other pins), and the
+# these variables, a toolchain FORCEs only the pins it owns beside its other
+# pins (cmake/nds.toolchain.cmake: the imcore USE_* pair and
+# IMPRINT_WITH_IMRASTER -- the front-end gates need no pin, default ON and a
+# static NDS link dead-strips what no story references), and the
 # default build is exactly the zero-option full-feature build it always was.
 #
 # Two families live here:
@@ -38,11 +40,8 @@ option(IMPRINT_WITH_IMRASTER "Build the optional 3D raster module (zb::raster; 3
 # STATIC final link drops them -- but two links cannot: a SHARED consumer of
 # imui (libzbapi) and the hand-written wasm TU list link every TU, and the
 # exported zb_app_create_from_ui keeps the declarative closure reachable.
-# Measured on the tictactoe wasm story with the C-ABI export list unchanged
-# (A-28, 2026-10-31, emsdk 5.0.1 -O2): both front-ends 582,652 B, stubs
-# 369,897 B (-212,755 B, -36.5%); html alone 203,359 B, ui_file alone
-# 11,614 B. Dropping the export instead reaches 233,688 B but changes the
-# host-facing surface, so it is not a gate (ARCHITECTURE §4.9.1).
+# The measured size win that met the A-28 trigger, and the rule that the
+# export list itself is not a gate, live in ARCHITECTURE §4.9.1.
 option(IMPRINT_FEATURE_HTML "Build the HTML/CSS front-end (imui/src/html.cpp; docs/html-path.md)" ON)
 option(IMPRINT_FEATURE_UI_FILE "Build the .ui design-file front-end (imui/src/ui_file.cpp)" ON)
 
@@ -63,9 +62,9 @@ endfunction()
 # §4.9), not features, and stay declared at the top level.
 #
 # USE_PNG / USE_JPEG default OFF (V-4's row in the §4.9 inventory): compiled
-# into the SHARED imcore, where the linker cannot drop them -- measured
-# +330,064 B of libimcore.so for both codecs (A-28, 2026-10-31, -O0 survey
-# build). The codecs are self-contained: they compile the vendored
+# into the SHARED imcore, where the linker cannot drop them -- the measured
+# libimcore.so delta is in ARCHITECTURE §4.9.1 (A-28 survey, 2026-10-31).
+# The codecs are self-contained: they compile the vendored
 # stb_image/stb_image_write (third_party/stb) and need no external library.
 set(USE_PNG OFF CACHE BOOL "Switch it to ON if png file processing is needed.")
 set(USE_JPEG OFF CACHE BOOL "Switch it to ON if jpeg file processing is needed.")
@@ -91,6 +90,5 @@ set(TTF_PIXEL_SIZE 16 CACHE STRING "Pixel size of the rasterized TTF subset (pla
 # subset as the default glyph provider. Hosts only -- never on NDS.
 set(USE_FONT_SIZE OFF CACHE BOOL "Render widgets with the platform default font at TTF_PIXEL_SIZE instead of the 5x7 bitmap (hosts only).")
 # Runtime TTF rasterization (batch L-5): vendored stb_truetype behind one
-# wrapper TU. Measured +211,416 B of libimcore.so when ON (A-28, 2026-10-31,
-# -O0 survey build).
+# wrapper TU (measured cost: ARCHITECTURE §4.9.1).
 set(USE_TTF_RUNTIME OFF CACHE BOOL "Runtime TTF rasterization through vendored stb_truetype (batch L-5): TtfFamily hands out one glyph provider per pixel size over a bounded shared cache. When OFF only the 5x7 bitmap and build-time subset paths exist.")

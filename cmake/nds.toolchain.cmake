@@ -57,13 +57,13 @@ set(COLOR_DEPTH 16 CACHE STRING "Pixel color depth in bits (16 or 32). Set 16 fo
 
 # NDS ARM9 has no FPU: keep the geometry scanlines integer-only (no
 # std::sqrt) and the arc trig on the compile-time lookup table; see the
-# USE_INTEGER_GEOMETRY comment in imcore/CMakeLists.txt
+# USE_INTEGER_GEOMETRY comment in cmake/imprint-features.cmake
 set(USE_INTEGER_GEOMETRY ON CACHE BOOL "Switch it to ON for FPU-less embedded targets (integer-only circle/ellipse bounds + arc trig lookup)." FORCE)
 
 # devkitARM's NDS toolchain has no libatomic: zb::SharedPtr switches to
 # plain-int (non-atomic) refcounts; the UI is single-threaded, so this is
 # safe and avoids a library call per refcount bump. See the
-# USE_NON_ATOMIC_PTR comment in imcore/CMakeLists.txt.
+# USE_NON_ATOMIC_PTR comment in cmake/imprint-features.cmake.
 set(USE_NON_ATOMIC_PTR ON CACHE BOOL "Switch it to ON for targets without atomic instructions (non-atomic refcounts)." FORCE)
 
 # the optional 3D raster module is a desktop 32bpp rgba32/le component
