@@ -10,6 +10,11 @@
  * The second half drives a declarative app (P3): a design file instead
  * of the story app, actions by id, widget text read/write -- the same
  * keyboard-only discipline.
+ *
+ * The declarative halves gate on the library's PUBLIC 0/1 feature defines
+ * (A-28, code-contract §5.4): a front-end configured off compiles its
+ * section out (the stub rejects every document) and the run prints what
+ * it skipped. zbapi.h itself stays unconditional in every configuration.
  */
 #include <assert.h>
 #include <stdint.h>
@@ -34,6 +39,9 @@ static void on_painted(void *userdata)
     painted_calls++;
 }
 
+/* the declarative sections' callbacks: with the .ui front-end gated off
+ * the sections compile out and these would sit unused */
+#if IMUI_HAS_UI_FILE
 static void on_action_count(const char *widget_id, void *userdata)
 {
     (void)widget_id;
@@ -45,6 +53,7 @@ static void on_action_count_two(const char *widget_id, void *userdata)
     (void)widget_id;
     ++*(int *)userdata;
 }
+#endif  /* IMUI_HAS_UI_FILE */
 
 static void on_log(int level, const char *message)
 {
@@ -119,6 +128,7 @@ int main(void)
 
     zb_app_destroy(app);
 
+#if IMUI_HAS_UI_FILE
     /* ---------- declarative apps (P3, ARCHITECTURE 4.8) ---------- *
      * a design file instead of the story app: one button, one label.
      * The drive is keyboard-only like above -- the button takes focus
@@ -176,7 +186,9 @@ int main(void)
     /* a malformed design fails the create (exit code 2 semantics) */
     assert(zb_app_create_from_ui("garbage ?? no tags", 0, 100, 100) == NULL);
     assert(zb_app_create_from_ui(NULL, 0, 100, 100) == NULL);
+#endif  /* IMUI_HAS_UI_FILE */
 
+#if IMUI_HAS_HTML
     /* the HTML front-end drives the same path (page box sizes it) */
     zb_app_t *html_app = zb_app_create_from_ui(
         "<body style=\"width:200px;height:100px\">"
@@ -188,8 +200,15 @@ int main(void)
         assert(hw == 200 && hh == 100);
     }
     zb_app_destroy(html_app);
+#endif  /* IMUI_HAS_HTML */
 
+#if IMUI_HAS_UI_FILE
     zb_app_destroy(ui);
+#endif
+
+#if !IMUI_HAS_UI_FILE || !IMUI_HAS_HTML
+    printf("zbapi smoke: a front-end gate is off, its declarative section compiled out\n");
+#endif
 
     printf("zbapi smoke test passed\n");
     return 0;

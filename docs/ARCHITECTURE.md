@@ -678,7 +678,10 @@ closure, not bytes.
 exist; suites and tools follow the same conditions. This is why a
 single-gate configure (one front-end off, everything else on) still
 builds and passes the remaining battery — the gated suites drop out by
-the same condition that drops their apps. Out of tree, an
+the same condition that drops their apps, and the C-ABI smoke
+(`test_zbapi`) gates its declarative sections on the same PUBLIC `0/1`
+defines (its story-app half always runs), so it rides both single-gate
+configs. Out of tree, an
 off configure that calls a gated entry gets the logged rejection at
 runtime, never a link error, and a consumer branches on `IMUI_HAS_HTML`
 / `IMUI_HAS_UI_FILE`. The wasm builder declares per-story closure
@@ -686,7 +689,8 @@ runtime, never a link error, and a consumer branches on `IMUI_HAS_HTML`
 configuration is in the battery: `features-off` (library-mode build plus
 the external smoke asserting the stub contract), `features-gate-off`
 (each single-gate config with suites on — the remaining battery must
-pass), CI `linux-features-off` (both off, then both single-gate runs),
+pass), CI `linux-features-off` (both off, then both single-gate runs
+with `test_imui` + `test_zbapi`),
 a `warnings-survey` row, and `nds-features-off` for the `.ui`-only NDS
 build.
 

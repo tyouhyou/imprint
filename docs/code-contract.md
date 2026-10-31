@@ -1352,7 +1352,9 @@ surface, so the entries stay link-complete in every configuration:
   existing failure branch (the host sees an unusable document; the log
   line names the gate). `zbapi.h` carries no conditional compilation and
   `ZB_API_VERSION` does not move.
-- **C++ consumers can branch at compile time** on `IMUI_HAS_HTML` /
+- **Consumers can branch at compile time** (C++ or C — the C smoke
+  `test_zbapi` gates its declarative sections the same way) on
+  `IMUI_HAS_HTML` /
   `IMUI_HAS_UI_FILE` (PUBLIC `0`/`1`, the `IMCORE_HAS_TTF_RUNTIME`
   precedent). The build-time tools for a front-end (`ui_embed`,
   `html_embed`, `imprint-render`) exist only where it does.

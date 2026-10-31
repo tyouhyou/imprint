@@ -95,6 +95,21 @@ target_link_libraries(
     zbapi
 )
 
+# A-28: the smoke's declarative sections gate on the same PUBLIC 0/1 the
+# library carries (code-contract §5.4). zbapi links imui PRIVATE, so the
+# usage requirements do not cross the SHARED boundary -- hand the defines
+# to this TU explicitly; zbapi.h itself stays unconditional.
+if (IMPRINT_FEATURE_UI_FILE)
+    target_compile_definitions(test_zbapi PRIVATE IMUI_HAS_UI_FILE=1)
+else()
+    target_compile_definitions(test_zbapi PRIVATE IMUI_HAS_UI_FILE=0)
+endif()
+if (IMPRINT_FEATURE_HTML)
+    target_compile_definitions(test_zbapi PRIVATE IMUI_HAS_HTML=1)
+else()
+    target_compile_definitions(test_zbapi PRIVATE IMUI_HAS_HTML=0)
+endif()
+
 if (MSVC)
     target_compile_options(test_zbapi PRIVATE /UNDEBUG)
 else()

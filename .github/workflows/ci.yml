@@ -299,7 +299,9 @@ jobs:
   # never turns a public surface into a link error. The last step is the
   # realistic single-gate configs (one front-end off, everything else
   # on, both directions): the gated suites drop out by the same condition
-  # that drops their apps, the remaining battery still runs.
+  # that drops their apps, and test_zbapi compiles its declarative
+  # sections out under the same 0/1 defines -- the remaining battery
+  # (test_imui + test_zbapi) still runs.
   linux-features-off:
     runs-on: ubuntu-latest
     container: gcc:13
@@ -325,16 +327,18 @@ jobs:
           ./build_smoke/bin/external_smoke
       - name: Single-gate configs (one front-end off, suites on) and the battery
         run: |
-          cmake -S . -B build_ci_gate_off \
+          cmake -S . -B build_ci_gate_html_off \
             -DIMPRINT_FEATURE_HTML=OFF -DIMPRINT_FEATURE_UI_FILE=ON \
             -DIMPRINT_WERROR=ON
-          cmake --build build_ci_gate_off -j"$(nproc)"
-          ./build_ci_gate_off/bin/test_imui
-          cmake -S . -B build_ci_gate_off \
+          cmake --build build_ci_gate_html_off -j"$(nproc)"
+          ./build_ci_gate_html_off/bin/test_imui
+          ./build_ci_gate_html_off/bin/test_zbapi
+          cmake -S . -B build_ci_gate_uifile_off \
             -DIMPRINT_FEATURE_HTML=ON -DIMPRINT_FEATURE_UI_FILE=OFF \
             -DIMPRINT_WERROR=ON
-          cmake --build build_ci_gate_off -j"$(nproc)"
-          ./build_ci_gate_off/bin/test_imui
+          cmake --build build_ci_gate_uifile_off -j"$(nproc)"
+          ./build_ci_gate_uifile_off/bin/test_imui
+          ./build_ci_gate_uifile_off/bin/test_zbapi
 
   linux-x11:
     runs-on: ubuntu-latest
