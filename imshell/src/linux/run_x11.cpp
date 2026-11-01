@@ -18,6 +18,7 @@
 #include "shell/presentation.hpp"
 #include "shell/presenter.hpp"
 #include "shell/run.hpp"
+#include "x11_ime.hpp"
 #include "x11_input.hpp"
 
 namespace zb::shell
@@ -113,10 +114,12 @@ namespace zb::shell
         const Atom wm_delete = XInternAtom(display, "WM_DELETE_WINDOW", False);
         XSetWMProtocols(display, window, const_cast<Atom *>(&wm_delete), 1);
 
+        // FocusChangeMask: the IM server routes keys only to a focused
+        // input context, so the shell must track focus for it
         XSelectInput(display, window,
                      ExposureMask | StructureNotifyMask | KeyPressMask |
                          KeyReleaseMask | ButtonPressMask | ButtonReleaseMask |
-                         PointerMotionMask);
+                         PointerMotionMask | FocusChangeMask);
         XMapWindow(display, window);
 
         GC gc = XCreateGC(display, window, 0, nullptr);
@@ -133,6 +136,19 @@ namespace zb::shell
         if (xi == nullptr)
         {
             throw zb::ui::error("X11 shell: XCreateImage failed");
+        }
+
+        // FI-01: the platform IME owns composition (root-window preedit --
+        // the IM server paints its own window); the shell only relays
+        // committed text. Opened after the last throwing init step, so the
+        // teardown close() below cannot be skipped by an init-path throw
+        // (code-contract §11.2). A failed open degrades to the legacy
+        // XLookupString path with one warning.
+        zb::shell::x11_ime::context ime;
+        const bool ime_active = zb::shell::x11_ime::open(display, window, ime);
+        if (ime_active)
+        {
+            LI << "X11 IME committed-text relay active";
         }
 
         // I-2a presentation state: the fixed buffer mapped into the current
@@ -267,6 +283,33 @@ namespace zb::shell
             {
                 return false;
             }
+            // FI-01: with the IME active the input method gets the first
+            // pass at every event; a filtered event was consumed by the IM
+            // (preedit keystrokes, commit bookkeeping) and must not reach
+            // the translator
+            if (ime_active && zb::shell::x11_ime::filter(ime, &event))
+            {
+                return !app_closed;
+            }
+            if (ime_active && event.type == KeyPress)
+            {
+                // the input-context path: one KeyPress becomes 0..n
+                // committed key_downs (committed text, plus the navigation
+                // keys the IM reports); the legacy XLookupString
+                // translation below stays untouched for the no-IME case.
+                // Commits beyond the buffer bound truncate -- lookup
+                // reports the total, the bound covers real commits
+                constexpr int ime_event_cap = 64;
+                zb::input::input_event committed[ime_event_cap];
+                const int total =
+                    zb::shell::x11_ime::lookup(ime, &event, committed, ime_event_cap);
+                const int fed = total < ime_event_cap ? total : ime_event_cap;
+                for (int i = 0; i < fed; ++i)
+                {
+                    zb::shell::feed_input(*app, committed[i]);
+                }
+                return !app_closed;
+            }
             // A-2 InputSource: the event -> input_event mapping (key codes,
             // characters, wheel buttons) lives in x11_input::translate,
             // dummy-driven unit-tested; the loop only maps the point into
@@ -315,6 +358,13 @@ namespace zb::shell
                 LD << "window destroyed";
                 break;
             }
+            case FocusIn:
+            case FocusOut:
+            {
+                // the IM server routes keys only to a focused input context
+                zb::shell::x11_ime::set_focus(ime, event.type == FocusIn);
+                break;
+            }
             default:
                 break;
             }
@@ -358,6 +408,10 @@ namespace zb::shell
             XNextEvent(display, &event);
             keep_running = handle_event(event);
         }
+
+        // the IM's X resources must go before XCloseDisplay runs in
+        // display_guard's destructor
+        zb::shell::x11_ime::close(ime);
 
         // XDestroyImage frees ximage->data with Xfree; the buffer belongs to
         // the app's Graphics (delete[]) and is freed again by its destructor.
