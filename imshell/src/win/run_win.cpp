@@ -24,7 +24,10 @@ using namespace zb::input;
 
 namespace
 {
-    const TCHAR AppClassName[] = TEXT("MyApp");
+    // W-variant window class: the window must be Unicode so WM_CHAR
+    // carries UTF-16 code units -- the committed-text relay (FI-01) and
+    // any non-ASCII title depend on it
+    const wchar_t AppClassName[] = L"MyApp";
 
     zb::SharedPtr<IApp> g_app;
     HWND g_hwnd = nullptr;
@@ -51,6 +54,34 @@ namespace
         }
         return zb::shell::presentation_fit(rc.right - rc.left, rc.bottom - rc.top,
                                            g_buffer_width, g_buffer_height);
+    }
+
+    // UTF-8 -> UTF-16 for the W-variant window title: the runtime string
+    // cannot go through a TEXT() literal (a byte-wise widen mangles
+    // non-ASCII titles). Returns an empty string when the conversion
+    // fails -- the window opens untitled and the warning names it.
+    std::wstring utf8_to_wide_title(const std::string &utf8)
+    {
+        std::wstring wide;
+        if (utf8.empty())
+        {
+            return wide;
+        }
+        const int n = MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(),
+                                          static_cast<int>(utf8.size()), nullptr, 0);
+        if (n <= 0)
+        {
+            LW << "window title conversion to UTF-16 failed, opening untitled";
+            return wide;
+        }
+        wide.resize(static_cast<std::size_t>(n));
+        if (MultiByteToWideChar(CP_UTF8, 0, utf8.c_str(), static_cast<int>(utf8.size()),
+                                wide.data(), n) <= 0)
+        {
+            LW << "window title conversion to UTF-16 failed, opening untitled";
+            wide.clear();
+        }
+        return wide;
     }
 
     // pointer events whose window-client point lands on the letterbox are
@@ -256,7 +287,7 @@ namespace zb::shell
         static bool window_class_registered = false;
         if (!window_class_registered)
         {
-            WNDCLASSEX wcx{};
+            WNDCLASSEXW wcx{};
             wcx.cbSize = sizeof(wcx);
             wcx.style = CS_HREDRAW | CS_VREDRAW;
             wcx.lpfnWndProc = WndProc;
@@ -270,9 +301,9 @@ namespace zb::shell
             wcx.lpszClassName = AppClassName;
             wcx.hIconSm = wcx.hIcon;
 
-            if (0 == RegisterClassEx(&wcx))
+            if (0 == RegisterClassExW(&wcx))
             {
-                throw zb::ui::error("Win32 shell: RegisterClassEx failed");
+                throw zb::ui::error("Win32 shell: RegisterClassExW failed");
             }
             window_class_registered = true;
         }
@@ -316,32 +347,13 @@ namespace zb::shell
 
         const std::string os_title =
             !options.title.empty() ? options.title : window->title();
-#ifdef UNICODE
-        // UTF-8 -> UTF-16 (a byte-wise widen mangles non-ASCII titles)
-        std::wstring wide_title;
-        if (!os_title.empty())
-        {
-            const int n = MultiByteToWideChar(
-                CP_UTF8, 0, os_title.c_str(),
-                static_cast<int>(os_title.size()), nullptr, 0);
-            if (n > 0)
-            {
-                wide_title.resize(static_cast<std::size_t>(n));
-                MultiByteToWideChar(CP_UTF8, 0, os_title.c_str(),
-                                    static_cast<int>(os_title.size()),
-                                    wide_title.data(), n);
-            }
-        }
-#endif
-        const HWND hwnd = CreateWindowEx(
+        // the class is the W variant, so the runtime title goes in as
+        // UTF-16 (a byte-wise widen mangles non-ASCII titles)
+        const std::wstring wide_title = utf8_to_wide_title(os_title);
+        const HWND hwnd = CreateWindowExW(
             dwExStyle,
             AppClassName,
-#ifdef UNICODE
-            // the window title is a runtime string, so TEXT() cannot be used
             wide_title.c_str(),
-#else
-            os_title.c_str(),
-#endif
             dwStyle | WS_CLIPSIBLINGS | WS_CLIPCHILDREN,
             CW_USEDEFAULT,
             CW_USEDEFAULT,
@@ -354,7 +366,7 @@ namespace zb::shell
 
         if (nullptr == hwnd)
         {
-            throw zb::ui::error("Win32 shell: CreateWindowEx failed");
+            throw zb::ui::error("Win32 shell: CreateWindowExW failed");
         }
 
         g_hwnd = hwnd;
@@ -509,5 +521,7 @@ extern "C" LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM l
         }
         }
     }
-    return DefWindowProc(hwnd, msg, wParam, lParam);
+    // W variant, matching the Unicode window class: an A call here would
+    // reinterpret the UTF-16 message parameters as ANSI
+    return DefWindowProcW(hwnd, msg, wParam, lParam);
 }
