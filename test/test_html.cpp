@@ -3249,7 +3249,7 @@ int test_html()
     // T-5 review round 2: an EMPTY segment (a plain or whitespace-only
     // span) is a by-design no-run — nothing was dropped — so it must not
     // fire the relocation warning, and must not consume the once-per-
-    // process flag a genuine entity-edge drop needs (the warn test above
+    // process flag a genuine entity-edge drop needs (the warn test below
     // runs AFTER this block, so a false fire here would starve it)
     {
         std::vector<std::string> warns;
