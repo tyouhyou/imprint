@@ -51,10 +51,12 @@ namespace zb::shell::x11_input
      *   - control characters (C0, DEL, C1) and invalid UTF-8 produce
      *     nothing; decoding goes through the framework decoder
      *     (decode_utf8_next), which never reads past `utf8 + len`;
-     *   - a keysym that maps to a key_code appends one key_down with
-     *     ch = 0, so Enter/Tab/... stay reachable through the input
-     *     context; with XLookupBoth the keysym event rides after the
-     *     committed text events.
+     *   - when the text side produced no event (bare keysym lookup, or
+     *     a commit that was only control characters / space), a keysym
+     *     that maps to a key_code appends one key_down with ch = 0, so
+     *     Enter/Tab/... stay reachable through the input context; with
+     *     XLookupBoth the text event already carries key+ch (the legacy
+     *     shape) and the keysym half adds nothing.
      */
     int commit_events(KeySym keysym, const char *utf8, int len,
                       zb::input::input_event *out, int cap);

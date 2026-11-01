@@ -126,7 +126,8 @@ namespace
             if (chars.length > 0)
             {
                 const unichar c = [chars characterAtIndex:0];
-                if (c >= 0xA0 && c <= 0xFFFF && !(c >= 0xF700 && c <= 0xF8FF))
+                if ((c >= 0xA0 && c <= 0xD7FF) ||
+                    (c >= 0xE000 && c <= 0xFFFF && !(c >= 0xF700 && c <= 0xF8FF)))
                 {
                     out.ch = c;
                 }
