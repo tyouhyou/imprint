@@ -3246,6 +3246,30 @@ int test_html()
         }
     }
 
+    // T-5 review round 2: an EMPTY segment (a plain or whitespace-only
+    // span) is a by-design no-run — nothing was dropped — so it must not
+    // fire the relocation warning, and must not consume the once-per-
+    // process flag a genuine entity-edge drop needs (the warn test above
+    // runs AFTER this block, so a false fire here would starve it)
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        parse_html("<p>a<span></span>b</p>\n", nullptr);
+        parse_html("<p>a<span> </span>b</p>\n", nullptr);
+        zb::Logging::set_log_handle();
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("could not be relocated") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 0);
+    }
+
     // T-5 review: a bare trailing '&' can complete an entity from the
     // segment's own bytes (raw p text "x&amp;y"), so the segment cannot be
     // relocated in the finalized text — the run drops WITH a diagnostic,

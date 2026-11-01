@@ -5203,8 +5203,12 @@ namespace zb::ui
                         at = byte;
                     }
                 }
-                if (at == std::string::npos && !unresolvable_warned)
+                if (at == std::string::npos &&
+                    !e.inlines[i].text.empty() && !unresolvable_warned)
                 {
+                    // an empty segment resolving to npos is the by-design
+                    // no-run (nothing was dropped) — only a non-empty
+                    // segment the scan cannot vouch for is a diagnostic
                     unresolvable_warned = true;
                     LW << "html: an inline segment could not be relocated "
                           "in the finalized paragraph text; its run was "
