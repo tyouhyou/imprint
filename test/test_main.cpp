@@ -34,6 +34,7 @@ int test_slider();
 int test_progress_bar();
 int test_list_box();
 int test_text_input();
+int test_text_area();
 int test_builder();
 int test_measure();
 int test_dirty();
@@ -135,6 +136,7 @@ static const suite g_suites[] = {
     {"progress_bar", test_progress_bar},
     {"list_box", test_list_box},
     {"text_input", test_text_input},
+    {"text_area", test_text_area},
     {"builder", test_builder},
     {"measure", test_measure},
     {"dirty", test_dirty},

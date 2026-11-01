@@ -16,6 +16,7 @@
 #include "slider.hpp"
 #include "list_box.hpp"
 #include "svg_canvas.hpp"
+#include "text_area.hpp"
 #include "text_input.hpp"
 #include "theme.hpp"
 #include "toggle_switch.hpp"

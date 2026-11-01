@@ -9,6 +9,7 @@ add_executable(
     test_builder.cpp
     test_panel.cpp
     test_text_input.cpp
+    test_text_area.cpp
     test_button.cpp
     test_label.cpp
     test_dialog.cpp
