@@ -1087,13 +1087,17 @@ namespace zb::ui
         /*
          * Anchors a copy of `family` on the widget WITHOUT touching any
          * rendering state (no primary provider, no size declaration). The
-         * anchor keeps the family's shared state — and every provider
-         * borrowed from it — alive for the widget's lifetime, so a
-         * `text_style_run::provider` resolved from the process family
+         * anchor sits in its own sidecar slot that the font-size setters
+         * never touch, and keeps the family's shared state — and every
+         * provider borrowed from it — alive for the widget's lifetime, so
+         * a `text_style_run::provider` resolved from the process family
          * (the T-5 builder path) survives a later set_font_family /
-         * clear_font_family. This is the review-4 borrow rule's keeper
-         * half: a borrowed run provider must have an owner that outlives
-         * the widget's use of it.
+         * clear_font_family AND any widget-level set_font_size. It is one
+         * slot: a later anchor_font_family call with a different family
+         * replaces the keeper (the builder anchors the one process family
+         * a page's runs were resolved from). This is the review-4 borrow
+         * rule's keeper half: a borrowed run provider must have an owner
+         * that outlives the widget's use of it.
          */
         void anchor_font_family(const TtfFamily &family);
         [[nodiscard]] int font_size() const
@@ -1554,6 +1558,11 @@ namespace zb::ui
 #if defined(IMCORE_HAS_TTF_RUNTIME)
             TtfFamily font_family{};  // anchor copy: the sized provider
                                       // never outlives its family (§2.4)
+            TtfFamily run_family{};   // the run providers' keeper (T-5):
+                                      // written only by anchor_font_family,
+                                      // so the font-size setters' resets of
+                                      // font_family can never end it while
+                                      // installed runs still borrow
 #endif
             uint8_t has_pos = 0;
             uint8_t has_grad = 0;

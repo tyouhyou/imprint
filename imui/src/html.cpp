@@ -5178,9 +5178,12 @@ namespace zb::ui
         // whose text also occurs in the bare text before it (e.g.
         // <p>Ctrl+<span>C</span></p>). A segment the scan cannot vouch for
         // (degenerate entity re-decode across the segment edge) resolves
-        // to npos and the converter skips it.
+        // to npos and the converter skips it — with a warn-once diagnostic
+        // (the letter-spacing convention): a dropped styled run must not
+        // be silent.
         void resolve_inline_offsets(Elem &e)
         {
+            static bool unresolvable_warned = false;
             const std::string raw = std::move(e.text);
             std::vector<std::pair<std::size_t, bool>> marks;
             e.text = normalize_wrapped(raw.data(),
@@ -5199,6 +5202,13 @@ namespace zb::ui
                     {
                         at = byte;
                     }
+                }
+                if (at == std::string::npos && !unresolvable_warned)
+                {
+                    unresolvable_warned = true;
+                    LW << "html: an inline segment could not be relocated "
+                          "in the finalized paragraph text; its run was "
+                          "dropped";
                 }
                 e.inline_offs[i] = at;
             }

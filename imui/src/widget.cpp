@@ -560,11 +560,13 @@ namespace zb::ui
 
     void Widget::anchor_font_family(const TtfFamily &family)
     {
-        // anchor copy only (the T-3 borrow rule's keeper half): the family
-        // handle keeps its shared state — and the run providers resolved
-        // from it — alive; rendering state is untouched
+        // anchor copy only (the T-3 borrow rule's keeper half), in its own
+        // sidecar slot: the font-size setters reset ext_->font_family, so
+        // the run keeper must not share that slot — a widget-level
+        // set_font_size must never end a run provider's keeper while the
+        // installed runs still borrow it. Rendering state is untouched.
         ensure_ext();
-        ext_->font_family = family;
+        ext_->run_family = family;
     }
 #endif
 

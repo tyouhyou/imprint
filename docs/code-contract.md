@@ -437,9 +437,11 @@ colored, bolded, or drawn through another glyph provider.
   **borrowed** — it must outlive the widget's use of it (the
   review-4 `GifWriter` rule; the header states it). The builder path
   satisfies the rule with `Widget::anchor_font_family(const
-  TtfFamily &)` — an anchor copy holding no rendering state — which
-  keeps a run provider resolved from the process family alive even
-  after a later `set_font_family`/`clear_font_family` (T-5). The C-ABI
+  TtfFamily &)` — an anchor copy holding no rendering state, in a
+  sidecar slot the font-size setters never touch — which keeps a run
+  provider resolved from the process family alive even after a later
+  `set_font_family`/`clear_font_family` or a widget-level
+  `set_font_size` (T-5). The C-ABI
   does not carry runs in this batch, and `.ui` documents do not grow
   run syntax — html inline spans are the declarative carrier (T-5).
   Internally runs ride the shared design-file IR as one string

@@ -3246,6 +3246,32 @@ int test_html()
         }
     }
 
+    // T-5 review: a bare trailing '&' can complete an entity from the
+    // segment's own bytes (raw p text "x&amp;y"), so the segment cannot be
+    // relocated in the finalized text — the run drops WITH a diagnostic,
+    // not silently (the letter-spacing warn-once convention)
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        ui_node r = parse_html(
+            "<p>x&<span style=\"color:red\">amp;y</span></p>\n", nullptr);
+        zb::Logging::set_log_handle();
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "x&y");
+        EXPECT(find_prop(r.children[0], "text_run") < 0);
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("could not be relocated") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 1);
+    }
+
     // T-5: a span-level letter-spacing warns once and is ignored — the
     // unstyled remainder merges with no run
     {
@@ -3433,6 +3459,45 @@ int test_html()
         clear_font_family();
         core::Graphics g2(200, 80, nullptr);
         host.draw(g2);  // dangling without the anchor (ASan-visible)
+        std::size_t diffs = 0;
+        for (int y = 0; y < 80; ++y)
+        {
+            for (int x = 0; x < 200; ++x)
+            {
+                if (test::pixel_at(g, x, y) != test::pixel_at(g2, x, y))
+                {
+                    ++diffs;
+                }
+            }
+        }
+        EXPECT(diffs == 0);
+    }
+
+    // T-3/T-5 review: the run keeper sits in its own sidecar slot — a
+    // widget-level set_font_size (which resets the primary-font anchor
+    // ext_->font_family) must not end it while installed runs still
+    // borrow. Same page shape as above: no paragraph font-size, so the
+    // run provider is the only family borrow.
+    {
+        const TtfFamily family =
+            TtfFamily::from_file(IM_TEST_RUNTIME_TTF_FONT);
+        set_font_family(family);
+        ui_node root = parse_html(
+            "<p id=\"para\" style=\"width: 160px; height: 40px\">"
+            "xx <span style=\"font-size: 8px\">HH</span></p>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(200, 80);
+        build(host, root);
+        host.layout();
+        auto *para = static_cast<Label *>(host.find_by_id("para"));
+        EXPECT(para != nullptr);
+        core::Graphics g(200, 80, nullptr);
+        host.draw(g);
+        para->set_font_size(0);  // resets the primary-font anchor slot
+        clear_font_family();
+        core::Graphics g2(200, 80, nullptr);
+        host.draw(g2);  // dangling without the dedicated slot
         std::size_t diffs = 0;
         for (int y = 0; y < 80; ++y)
         {
