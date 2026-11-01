@@ -143,11 +143,20 @@ namespace zb::ui
         }
         case zb::input::input_type::key_down:
         {
-            // printable character (space arrives as a key, see the key
-            // mapping in the shells)
+            // character input (space arrives as a key, see the key
+            // mapping in the shells). T-2 acceptance (code-contract §2
+            // "Text input scope"): printable ASCII plus any code point
+            // >= U+00A0 inserts as a BMP code unit; C1 controls and
+            // non-BMP code points drop — the caret is a u16 index and
+            // the cluster/advance extension is A-25 territory
             if (ev.ch != 0)
             {
-                if (ev.ch >= 0x20 && ev.ch <= 0x7e)
+                if (ev.ch >= 0x20 && ev.ch <= 0x7E)
+                {
+                    insert(static_cast<char16_t>(ev.ch));
+                    return true;
+                }
+                if (ev.ch >= 0xA0 && ev.ch <= 0xFFFF)
                 {
                     insert(static_cast<char16_t>(ev.ch));
                     return true;

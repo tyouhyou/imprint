@@ -18,12 +18,25 @@ namespace zb::shell::term_input
             ev.key = static_cast<int>(key);
             out.push_back(ev);
         }
+
+        // the invalid-UTF-8 report (T-2): one U+FFFD per broken or
+        // overlong sequence / per isolated high byte
+        void push_replacement_char(std::vector<zb::input::input_event> &out)
+        {
+            zb::input::input_event ev{};
+            ev.type = zb::input::input_type::key_down;
+            ev.ch = 0xFFFD;
+            out.push_back(ev);
+        }
     }
 
     void parser::reset()
     {
         state_ = state::ground;
         csi_.clear();
+        utf8_len_ = 0;
+        utf8_need_ = 0;
+        utf8_cp_ = 0;
     }
 
     void parser::set_cell_size(const int width_px, const int height_px)
@@ -160,15 +173,15 @@ namespace zb::shell::term_input
         }
     }
 
-    void parser::ground(const char ch,
+    void parser::ground(const unsigned char b,
                         std::vector<zb::input::input_event> &out)
     {
-        if (ch == '\x1b')
+        if (b == '\x1b')
         {
             state_ = state::esc;
             return;
         }
-        switch (ch)
+        switch (b)
         {
         case '\r':
             push_key(out, zb::input::key_code::enter);
@@ -193,7 +206,7 @@ namespace zb::shell::term_input
         default:
             break;
         }
-        if (ch >= 0x20 && ch <= 0x7e)
+        if (b >= 0x20 && b <= 0x7e)
         {
             // U-1 through the shared letter/digit classification (the
             // same helper the win/x11/mac translators and the wasm/python
@@ -203,10 +216,72 @@ namespace zb::shell::term_input
             // (ARCHITECTURE §4.2).
             zb::input::input_event ev{};
             ev.type = zb::input::input_type::key_down;
-            zb::input::decorate_printable_key(ev, ch);
+            zb::input::decorate_printable_key(ev, b);
             out.push_back(ev);
+            return;
         }
-        // other control bytes are dropped
+        if (b < 0x80)
+        {
+            return;  // other control bytes are dropped
+        }
+        // T-2 (code-contract §2 "Text input scope"): C2..F4 lead bytes
+        // start a multibyte sequence buffered across feed() calls. Every
+        // other high byte is one U+FFFD — an isolated continuation
+        // (0x80..0xBF), an overlong-only lead (0xC0/0xC1), or an invalid
+        // lead (0xF5..0xFF) — and the parser stays in ground, so the
+        // stream is accounted for byte by byte and never dropped.
+        if (b >= 0xC2 && b <= 0xF4)
+        {
+            utf8_need_ = (b < 0xE0) ? 2 : (b < 0xF0) ? 3
+                                                     : 4;
+            utf8_len_ = 1;
+            static constexpr unsigned char kLeadMask[5] = {0, 0, 0x1F, 0x0F, 0x07};
+            utf8_cp_ = b & kLeadMask[utf8_need_];
+            state_ = state::utf8;
+            return;
+        }
+        zb::input::input_event ev{};
+        ev.type = zb::input::input_type::key_down;
+        ev.ch = 0xFFFD;
+        out.push_back(ev);
+    }
+
+    void parser::utf8_step(const unsigned char b,
+                           std::vector<zb::input::input_event> &out)
+    {
+        if (b < 0x80 || b > 0xBF)
+        {
+            // a non-continuation byte ends the pending sequence: one
+            // U+FFFD for it, then the byte re-enters ground parsing —
+            // the resync point (a lead byte starts fresh, ASCII emits)
+            state_ = state::ground;
+            push_replacement_char(out);
+            ground(b, out);
+            return;
+        }
+        utf8_cp_ = (utf8_cp_ << 6) | (b & 0x3F);
+        ++utf8_len_;
+        if (utf8_len_ < utf8_need_)
+        {
+            return;  // still incomplete: buffered across feed() calls
+        }
+        state_ = state::ground;
+        // overlong encodings, surrogate encodings, and out-of-range
+        // values are invalid UTF-8: one U+FFFD, exactly like a broken
+        // sequence (the framework text decoder applies the same rules)
+        static constexpr char32_t kMinCp[5] = {0, 0, 0x80, 0x800, 0x10000};
+        if (utf8_cp_ < kMinCp[utf8_need_] || utf8_cp_ > 0x10FFFF ||
+            (utf8_cp_ >= 0xD800 && utf8_cp_ <= 0xDFFF))
+        {
+            push_replacement_char(out);
+            return;
+        }
+        // one completed code point per key_down; key stays 0 — U-1
+        // decorates the ASCII half only, non-ASCII code points ride ch
+        zb::input::input_event ev{};
+        ev.type = zb::input::input_type::key_down;
+        ev.ch = static_cast<int>(utf8_cp_);
+        out.push_back(ev);
     }
 
     void parser::feed(const char *data, const std::size_t n,
@@ -214,11 +289,14 @@ namespace zb::shell::term_input
     {
         for (std::size_t i = 0; i < n; ++i)
         {
-            const char ch = data[i];
+            const unsigned char ch = static_cast<unsigned char>(data[i]);
             switch (state_)
             {
             case state::ground:
                 ground(ch, out);
+                break;
+            case state::utf8:
+                utf8_step(ch, out);
                 break;
             case state::esc:
                 if (ch == '[')
@@ -238,7 +316,9 @@ namespace zb::shell::term_input
             case state::csi:
                 if (ch >= 0x40 && ch <= 0x7e)
                 {
-                    csi_final(ch, out);
+                    // the final byte is ASCII by the range check, so the
+                    // cast cannot change its value
+                    csi_final(static_cast<char>(ch), out);
                     state_ = state::ground;
                 }
                 else if (csi_.size() >= kCsiMax)
@@ -248,7 +328,10 @@ namespace zb::shell::term_input
                 }
                 else
                 {
-                    csi_ += ch;  // params/intermediates
+                    // params/intermediates: stored as raw bytes (the
+                    // string form keeps the byte pattern; only ASCII is
+                    // ever read back)
+                    csi_ += static_cast<char>(ch);
                 }
                 break;
             case state::csi_discard:

@@ -156,5 +156,69 @@ int test_term_input()
         EXPECT(ev.size() == 1 && ev[0].key == static_cast<int>(key_code::up));
     }
 
+    // T-2: UTF-8 multibyte assembly (code-contract §2 "Text input
+    // scope"): one key_down per sequence with ch = code point, key = 0;
+    // a sequence split across feed() calls buffers exactly like the
+    // escape parser
+    {
+        zb::shell::term_input::parser p(320, 240);
+        // 你好 = E4 BD A0 E5 A5 BD, cut mid-sequence across three feeds
+        EXPECT(feed(p, "\xE4").empty());    // lead buffered
+        EXPECT(feed(p, "\xBD").empty());    // still one continuation short
+        auto ev = feed(p, "\xA0\xE5\xA5");  // 你 completes; 好 pending
+        EXPECT(ev.size() == 1);
+        if (ev.size() == 1)
+        {
+            EXPECT(ev[0].type == input_type::key_down);
+            EXPECT(ev[0].ch == 0x4F60 && ev[0].key == 0);
+        }
+        ev = feed(p, "\xBD");  // 好 completes
+        EXPECT(ev.size() == 1);
+        if (ev.size() == 1)
+        {
+            EXPECT(ev[0].ch == 0x597D && ev[0].key == 0);
+        }
+
+        // 4-byte sequence assembles to its code point (U+1F600); the
+        // editor layer owns the non-BMP drop
+        ev = feed(p, "\xF0\x9F\x98\x80");
+        EXPECT(ev.size() == 1 && ev[0].ch == 0x1F600 && ev[0].key == 0);
+
+        // a non-continuation byte breaks the pending sequence: one
+        // U+FFFD for it, then the byte re-enters ground (the resync
+        // point) and still delivers
+        ev = feed(p, "\xC2"
+                     "A");
+        EXPECT(ev.size() == 2);
+        if (ev.size() == 2)
+        {
+            EXPECT(ev[0].ch == 0xFFFD && ev[0].key == 0);
+            EXPECT(ev[1].ch == 'A' && ev[1].key == 'a');
+        }
+
+        // isolated high bytes report one U+FFFD each (continuation,
+        // overlong-only lead, invalid lead)
+        ev = feed(p, "\x80\xC0\xFF");
+        EXPECT(ev.size() == 3);
+        for (const auto &e : ev)
+        {
+            EXPECT(e.ch == 0xFFFD && e.key == 0);
+        }
+
+        // overlong 3-byte encoding (E0 9F 80 = U+07C0): one U+FFFD
+        ev = feed(p, "\xE0\x9F\x80");
+        EXPECT(ev.size() == 1 && ev[0].ch == 0xFFFD);
+
+        // surrogate encoding (ED A0 80 = U+D800) is invalid UTF-8 too
+        ev = feed(p, "\xED\xA0\x80");
+        EXPECT(ev.size() == 1 && ev[0].ch == 0xFFFD);
+
+        // reset drops a pending sequence and returns to ground
+        EXPECT(feed(p, "\xE4").empty());
+        p.reset();
+        ev = feed(p, "a");
+        EXPECT(ev.size() == 1 && ev[0].ch == 'a');
+    }
+
     return test::report("term_input");
 }

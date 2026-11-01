@@ -141,5 +141,41 @@ int test_text_input()
         EXPECT(submitted == "o");
     }
 
+    // T-2: code points >= U+00A0 insert as BMP code units (ch = code
+    // point, key = 0, the terminal translator's UTF-8 assembly), C1
+    // controls and non-BMP code points drop
+    {
+        Panel root;
+        root.set_size(200, 100);
+        auto in = std::make_unique<TextInput>();
+        in->set_size(120, 20);
+        in->set_position(10, 10);
+        auto *input = in.get();
+        root.add_child(std::move(in));
+
+        InputDispatcher d;
+        std::string last;
+        input->changed += [&](const std::string &t)
+        { last = t; };
+
+        d.dispatch(root, press_at(15, 20));
+        d.dispatch(root, char_ev(0x4F60));  // 你
+        EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+        EXPECT(last == "\xE4\xBD\xA0");  // changed carries UTF-8 bytes
+        // é (Latin-1 supplement, above the C1 block) also inserts
+        d.dispatch(root, char_ev(0xE9));
+        EXPECT(input->get_text() == std::u16string(u"\u4F60\xE9"));
+
+        // backspace erases one code unit
+        d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+
+        // DEL (0x7F), the C1 block, and a non-BMP code point drop
+        d.dispatch(root, char_ev(0x7F));
+        d.dispatch(root, char_ev(0x9F));
+        d.dispatch(root, char_ev(0x1F600));
+        EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+    }
+
     return test::report("text_input");
 }

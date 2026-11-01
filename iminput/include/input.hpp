@@ -115,6 +115,8 @@ namespace zb::input
      * Punctuation and everything outside printable ASCII map to no key
      * (key stays whatever the translator's navigation table set, which
      * is why the rule is "fill if it is a letter/digit", not "assign").
+     * Non-ASCII code points (T-2) never pass through here: the
+     * translator sets ch = code point, key = 0 itself.
      *
      * Space is deliberately excluded: it is a navigation key
      * (key_code::space), never a character (B1). Returns true when the
