@@ -13,8 +13,9 @@
  * Display, libX11's internal keyboard mapping is uninitialized and the
  * keycode range check inside XLookupKeysym crashes (real shells always
  * see server-initialized mappings); the button, wheel and motion paths
- * read event fields only and are fully covered. Only built where the X11
- * backend builds.
+ * read event fields only and are fully covered. The IME committed-text
+ * relay (commit_events) is pure and driven directly. Only built where
+ * the X11 backend builds.
  */
 
 using zb::shell::x11_input::result;
@@ -127,6 +128,108 @@ int test_x11_input()
         EXPECT(translate(e, ev) == result::not_handled);
         e.type = ClientMessage;
         EXPECT(translate(e, ev) == result::not_handled);
+    }
+
+    // FI-01 committed-text relay: one IME commit -> 0..n key_downs
+    using zb::shell::x11_input::commit_events;
+
+    // printable ASCII relay: a single code point is exactly the legacy
+    // decorate_printable_key shape (key+ch in one event)
+    {
+        zb::input::input_event ev[4];
+        EXPECT(commit_events(NoSymbol, "a", 1, ev, 4) == 1);
+        EXPECT(ev[0].type == zb::input::input_type::key_down);
+        zb::input::input_event legacy{};
+        legacy.type = zb::input::input_type::key_down;
+        EXPECT(zb::input::decorate_printable_key(legacy, 'a'));
+        EXPECT(ev[0].key == legacy.key && ev[0].ch == legacy.ch);
+
+        EXPECT(commit_events(NoSymbol, "W", 1, ev, 4) == 1);
+        EXPECT(ev[0].ch == 'W' && ev[0].key == 'w');
+
+        // punctuation carries ch without a key (layout-bound), same as
+        // the legacy path
+        EXPECT(commit_events(NoSymbol, "!", 1, ev, 4) == 1);
+        EXPECT(ev[0].ch == '!' && ev[0].key == 0);
+    }
+
+    // CJK text: one key_down per code point, ch = code point, key = 0
+    // (the T-2 / term_input precedent)
+    {
+        zb::input::input_event ev[4];
+        // U+4E2D U+6587, six UTF-8 bytes
+        EXPECT(commit_events(NoSymbol, "\xe4\xb8\xad\xe6\x96\x87", 6, ev, 4) == 2);
+        EXPECT(ev[0].type == zb::input::input_type::key_down);
+        EXPECT(ev[0].ch == 0x4E2D && ev[0].key == 0);
+        EXPECT(ev[1].ch == 0x6587 && ev[1].key == 0);
+    }
+
+    // non-BMP code points relay the same way
+    {
+        zb::input::input_event ev[4];
+        // U+1F600, four UTF-8 bytes
+        EXPECT(commit_events(NoSymbol, "\xf0\x9f\x98\x80", 4, ev, 4) == 1);
+        EXPECT(ev[0].ch == 0x1F600 && ev[0].key == 0);
+    }
+
+    // space is a navigation key, never a character (B1): a pure space
+    // commit produces only the keysym's space key event
+    {
+        zb::input::input_event ev[4];
+        EXPECT(commit_events(NoSymbol, " ", 1, ev, 4) == 0);
+        EXPECT(commit_events(XK_space, " ", 1, ev, 4) == 1);
+        EXPECT(ev[0].type == zb::input::input_type::key_down);
+        EXPECT(ev[0].key == static_cast<int>(zb::input::key_code::space));
+        EXPECT(ev[0].ch == 0);
+    }
+
+    // navigation keys stay reachable through the input context: the
+    // keysym appends one ch=0 key event; XLookupBoth produces both halves
+    {
+        zb::input::input_event ev[4];
+        // Enter: the committed "\n" is a control character and drops
+        EXPECT(commit_events(XK_Return, "\n", 1, ev, 4) == 1);
+        EXPECT(ev[0].key == static_cast<int>(zb::input::key_code::enter));
+        EXPECT(ev[0].ch == 0);
+
+        // a letter as XLookupBoth: text event first, keysym event (ch = 0)
+        // appended after it
+        EXPECT(commit_events(XK_a, "a", 1, ev, 4) == 2);
+        EXPECT(ev[0].ch == 'a' && ev[0].key == 'a');
+        EXPECT(ev[1].key == 'a' && ev[1].ch == 0);
+
+        // an unmapped keysym adds nothing
+        EXPECT(commit_events(XK_Home, "x", 1, ev, 4) == 1);
+        EXPECT(ev[0].ch == 'x');
+
+        // keysym-only commit (XLookupKeySymVal shape)
+        EXPECT(commit_events(XK_Tab, nullptr, 0, ev, 4) == 1);
+        EXPECT(ev[0].key == static_cast<int>(zb::input::key_code::tab));
+    }
+
+    // invalid UTF-8 and control characters produce nothing
+    {
+        zb::input::input_event ev[4];
+        EXPECT(commit_events(NoSymbol, "\x80", 1, ev, 4) == 0);          // stray continuation
+        EXPECT(commit_events(NoSymbol, "\xe4\xb8", 2, ev, 4) == 0);      // truncated sequence
+        EXPECT(commit_events(NoSymbol, "\xed\xa0\x80", 3, ev, 4) == 0);  // UTF-8-encoded surrogate
+        EXPECT(commit_events(NoSymbol, "\x01", 1, ev, 4) == 0);          // C0
+        EXPECT(commit_events(NoSymbol, "\x7f", 1, ev, 4) == 0);          // DEL
+        EXPECT(commit_events(NoSymbol, "\xc2\x85", 2, ev, 4) == 0);      // C1 (U+0085)
+        // a committed U+FFFD is three bytes: relayed, not dropped
+        EXPECT(commit_events(NoSymbol, "\xef\xbf\xbd", 3, ev, 4) == 1);
+        EXPECT(ev[0].ch == 0xFFFD);
+    }
+
+    // cap truncation: the return value is the total needed, at most cap
+    // events are written; a zero cap writes nothing (out may be null)
+    {
+        zb::input::input_event ev[4];
+        EXPECT(commit_events(NoSymbol, "abc", 3, ev, 2) == 3);
+        EXPECT(ev[0].ch == 'a' && ev[1].ch == 'b');
+        EXPECT(commit_events(NoSymbol, "abc", 3, nullptr, 0) == 3);
+        EXPECT(commit_events(NoSymbol, "abc", 3, ev, 4) == 3);
+        EXPECT(ev[2].ch == 'c');
     }
 
     return test::report("x11_input");

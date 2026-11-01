@@ -3,6 +3,8 @@
 #include <X11/Xutil.h>  // XLookupString (Xlib.h has XLookupKeysym only)
 #include <X11/keysym.h>
 
+#include "text/utf8.hpp"
+
 namespace zb::shell::x11_input
 {
     namespace
@@ -160,5 +162,72 @@ namespace zb::shell::x11_input
         default:
             return result::not_handled;
         }
+    }
+
+    int commit_events(const KeySym keysym, const char *utf8, const int len,
+                      zb::input::input_event *out, const int cap)
+    {
+        int total = 0;
+        if (utf8 != nullptr && len > 0)
+        {
+            const char *p = utf8;
+            const char *end = utf8 + len;
+            while (p < end)
+            {
+                const char *const before = p;
+                const char32_t cp = zb::ui::decode_utf8_next(p, end);
+                // an invalid sequence is reported as U+FFFD and consumes
+                // exactly one byte; a committed U+FFFD consumes three.
+                // Broken bytes are dropped, not relayed as characters --
+                // the commit text is host input, and a replacement glyph
+                // is not what the user typed
+                const bool invalid = cp == U'\uFFFD' && p - before == 1;
+                // C0, DEL and C1 are never text
+                const bool control = cp < 0x20 || (cp >= 0x7F && cp <= 0x9F);
+                if (invalid || control || cp == U' ')
+                {
+                    // B1: space is a navigation key, not a character --
+                    // its key event comes from the keysym side alone
+                    continue;
+                }
+                zb::input::input_event ev{};
+                ev.type = zb::input::input_type::key_down;
+                if (cp <= 0x7E)
+                {
+                    // printable ASCII: the exact legacy shape, so a
+                    // single-code-point commit is indistinguishable from
+                    // the XLookupString path (key+ch in one event)
+                    zb::input::decorate_printable_key(ev, static_cast<int>(cp));
+                }
+                else
+                {
+                    // T-2 / term_input precedent: ch carries the code
+                    // point, key stays 0. The decoder rejects values
+                    // above U+10FFFF, so the int store cannot narrow
+                    ev.ch = static_cast<int>(cp);
+                }
+                if (total < cap)
+                {
+                    out[total] = ev;
+                }
+                ++total;
+            }
+        }
+        if (keysym != 0)
+        {
+            const int key = key_from_keysym(keysym);
+            if (key != 0)
+            {
+                zb::input::input_event ev{};
+                ev.type = zb::input::input_type::key_down;
+                ev.key = key;
+                if (total < cap)
+                {
+                    out[total] = ev;
+                }
+                ++total;
+            }
+        }
+        return total;
     }
 }

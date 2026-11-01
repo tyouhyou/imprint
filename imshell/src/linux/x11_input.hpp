@@ -30,4 +30,32 @@ namespace zb::shell::x11_input
      * a real keyboard mapping, which a display-less test cannot provide
      */
     int key_from_keysym(KeySym ks);
+
+    /*
+     * FI-01 committed-text relay: turns one IME commit -- the keysym and
+     * the UTF-8 string an input context reports for a KeyPress -- into
+     * the key_down events the framework contract promises, and returns
+     * the total number produced. At most `cap` of them are written to
+     * `out`; a caller detects truncation by comparing the return value
+     * against `cap`. Pure and allocation-free like translate(): the
+     * caller passes a fixed array, no Display is needed.
+     *
+     * Event shapes (seam contract, input.hpp):
+     *   - printable ASCII code points except space go through
+     *     decorate_printable_key, so a single-code-point commit is
+     *     exactly the legacy key+ch event;
+     *   - non-ASCII code points (non-BMP included) relay as
+     *     ch = code point, key = 0 (the term_input T-2 precedent);
+     *   - space is a navigation key, never a character (B1): its key
+     *     event comes from the keysym side alone;
+     *   - control characters (C0, DEL, C1) and invalid UTF-8 produce
+     *     nothing; decoding goes through the framework decoder
+     *     (decode_utf8_next), which never reads past `utf8 + len`;
+     *   - a keysym that maps to a key_code appends one key_down with
+     *     ch = 0, so Enter/Tab/... stay reachable through the input
+     *     context; with XLookupBoth the keysym event rides after the
+     *     committed text events.
+     */
+    int commit_events(KeySym keysym, const char *utf8, int len,
+                      zb::input::input_event *out, int cap);
 }
