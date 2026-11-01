@@ -147,7 +147,7 @@ build; this rule governs the build-time gate only.
 | `div` | `column` / `row` | default `column` (block reading order); `flex-direction: row` → `row`, and a bare `display: flex` also selects `row` (the CSS flex default — stylesheets that lay out with `display: flex` alone depend on it). `display: block` (or anything else) keeps `column`. The div is a content-measuring flex container, **not** HTML block layout; it never stretches to fill a parent's main axis. `flex:` markup drives fill |
 | `div` (with `overflow: scroll`) | `scroll_panel` | H-4: the container becomes a vertical scroll container — the flow stacks (`flex-direction: row` does **not** make it horizontal), children lay out per the flex rules, and overflow is reachable by wheel or the scrollbar thumb instead of clipping. See code-contract §3.4 |
 | `p` | `label` | the paragraph element: the text wraps at the element's assigned width and `br` is a hard line break (§Text wrapping) |
-| `span`, `label`, `small` | `label` | single-line labels (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins) |
+| `span`, `label`, `small` | `label` — or, inside a wrapping `p`, styled runs | single-line labels (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins); inside a wrapping `p` a `span` is **not** a child label: its text and any bare text around it concatenate into the paragraph in document order as styled runs (code-contract §2 "Styled text runs", T-5), carrying `color` / `font-size` / `letter-spacing` / `font-weight` |
 | `button` | `button` | `text` = element text content |
 | `checkbox` | `checkbox` | `text` = content; `checked` = **attribute presence** (HTML semantics) |
 | `radio` | `radio` | `text` = content; `checked` = presence; `group` |
@@ -416,10 +416,14 @@ seam (code-contract §2 "Wrapped text"):
   (the CSS non-auto rule). A single line fills the content cross box,
   so `center`/`end` place within the real extent and stretch fills the
   container; wrapped lines keep stacking from the padding origin.
-- No text flow beyond the paragraph: `p` wraps (§Text wrapping);
-  `span`/`label`/`small` stay single-line, container bare text stays
-  single-line anonymous labels, and a `br` is a hard break in a `p`
-  or a one-line spacer as a container child.
+- No text flow beyond the paragraph — but styled flow *within* one
+  (T-5): `p` wraps (§Text wrapping); inside a wrapping `p`, an inline
+  `span` contributes styled runs to the paragraph's own text instead
+  of a separate label — the one inline mechanism, no nested boxes, no
+  inline images/links. `span`/`label`/`small` outside a `p` stay
+  single-line, container bare text stays single-line anonymous
+  labels, and a `br` is a hard break in a `p` or a one-line spacer as
+  a container child.
 - Entities are only the six named above (`&nbsp;` folds to a space).
 - `meter` is a `progress_bar`.
 - Widgets are the presentation: alignment, focus, and interaction follow

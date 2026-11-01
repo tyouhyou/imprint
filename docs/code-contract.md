@@ -374,12 +374,33 @@ wrapping):
   `line_h`), so bare widgets stay allocation-free and the inline
   size gates hold. `set_line_height` clamps negatives to 0 and
   reports damage + layout invalidation like every text setter.
-- The engine is greedy word wrapping over the stored u16 text: break
-  candidates at spaces (U+0020), `\n` is a hard break (the html `br`
-  inside a wrapping element), no hyphenation; a word wider than the
-  whole width sits alone on its line and clips. Pitch =
-  `line_height` when declared, else the provider `line_metrics`
-  height; block height = `(lines-1) × pitch + line height`.
+- The engine is greedy wrapping over the stored u16 text: break
+  candidates are (a) spaces (U+0020; the break space drops at a wrap,
+  leading spaces collapse), (b) `\n` as a hard break (the html `br`
+  inside a wrapping element), and (c) **CJK breaks (T-1)**: the
+  boundary between two adjacent code units that both lie in the CJK
+  break set — U+2E80–U+9FFF, U+F900–U+FAFF, U+FF00–U+FFEF (radicals,
+  CJK punctuation, kana, ideographs, compatibility ideographs,
+  fullwidth forms; Hangul and Latin stay word-wrapped). No
+  hyphenation. A run with no break candidate (a long Latin word, a
+  URL) wider than the whole width sits alone on its line and clips.
+- **Surrogate atomicity (T-1)**: a non-BMP character (a surrogate
+  pair) is one break-atomic unit — no candidate exists between its
+  two code units, and surrogates are not in the CJK break set; a
+  pair adjacent to a CJK unit still breaks between the pair end and
+  that unit.
+- **Kinsoku-lite (T-1, one-unit retraction)**: a CJK break is
+  retracted before the previous unit when it would start a line with
+  a member of the line-head-forbidden set
+  (`、。，．：；？！）］｝〉》」』”’…‥`) or end a line with a member of
+  the line-tail-forbidden set (`（［｛〈《「『“‘`). Space breaks keep
+  the existing trim/drop rules; U+3000 (ideographic space) is an
+  ordinary CJK unit, not a space. The retraction is single-step (no
+  chains) and both sets are exactly the strings above — the battery
+  pins them.
+- Pitch = `line_height` when declared, else the provider
+  `line_metrics` height; block height = `(lines-1) × pitch + line
+  height`.
 - Wrap width = the widget's current `size.width` (the assigned box:
   an explicit size, a resolved percent, or the flex-assigned
   extent). Zero width keeps the single-line demand — a wrap-enabled
@@ -402,6 +423,85 @@ wrapping):
   as above), dressing (letter-spacing, double-strike bold,
   text-shadow) applied per line through `draw_text_at`. SVG `text`
   stays single-line by design.
+
+**Styled text runs (T-3)**: per-unit style intervals on the widget
+text seam — the paragraph-emphasis capability behind html inline
+spans (html-path.md): one flowing wrapped paragraph, parts of it
+colored, bolded, or drawn through another glyph provider.
+
+- API: `struct text_style_run { uint16_t offset; uint16_t len;
+  std::optional<core::Color> color; const GlyphProvider *provider;
+  bool bold; }` and `Widget::set_text_runs(std::vector<text_style_run>)`
+  (a content setter: damage + layout invalidation, clears
+  `advance_cache_`; an empty vector clears all runs). `provider` is
+  **borrowed** — it must outlive the widget's use of it (the
+  review-4 `GifWriter` rule; the header states it). The C-ABI does
+  not carry runs in this batch, and `.ui` documents do not grow run
+  syntax — html inline spans are the declarative carrier (T-5).
+- Indices address the stored u16 text. `set_text_runs` sorts by
+  offset and drops zero-length entries at set time (the stored form
+  is the normalized list; setters never throw). `set_text`
+  re-clamps every run to the new length — a run left past the end
+  drops.
+- **Coverage**: a unit takes the first run (by offset) that covers
+  it; uncovered units keep the widget's base style. Runs never
+  affect wrapping or the text itself — `wrap_spans` output and
+  every break rule above are run-agnostic; runs decide only *how*
+  a wrapped line is drawn and measured.
+- **Measurement matches draw**: a run's `provider` overrides the
+  primary/fallback pick for its units in measure, wrap, and draw
+  alike (the per-unit pick consults runs first); a line's advance
+  for alignment sums its per-part advances. Run `bold`
+  double-strikes that part only (the P-2a mechanism, per part);
+  run `color` replaces the base text color for the part;
+  text-shadow rides the whole line as today.
+
+**Text input scope (T-2)**: what a text editor accepts and where
+the characters come from.
+
+- `input_event::ch` carries a Unicode code point (it always has).
+  The translators' ASCII half (U-1 `decorate_printable_key`:
+  letters and digits also fill `key`) is unchanged; non-ASCII code
+  points set `ch` only. The terminal translator (`term_input`)
+  assembles one UTF-8 multibyte sequence into one code point per
+  key_down, buffering a truncated sequence across `feed()` calls
+  exactly like the escape parser; an invalid or overlong sequence
+  emits U+FFFD once and resynchronizes at the next lead byte
+  (deterministic — the stream is never dropped).
+- Editor acceptance (`TextInput`, `TextArea`): U+0020–U+007E (as
+  today) plus code points ≥ U+00A0, inserted as a BMP code unit.
+  Non-BMP code points (> U+FFFF) are dropped in this batch — the
+  caret is a u16 index, and the cluster/advance extension is A-25
+  territory. No other gate: an uncovered code unit renders through
+  the normal fallback chain (primary → 5×7 → skip), which is a
+  font-coverage concern, not an input concern.
+- **IME stays a declared non-goal**: desktop shells never compose;
+  composition is the terminal's (or the host's) job, and the editor
+  only ever sees finished code points. Desktop shells keep
+  ASCII-only `ch` emission (their keymaps do not produce more).
+
+**Multi-line editor (T-4, `TextArea`)**: the wrapping paragraph plus
+the editing core, for free-form multi-line input.
+
+- `zb::ui::TextArea` (new widget, imui): wrap always on
+  (`set_line_height` applies), text through the inherited UTF-8
+  `set_text`, `\n` inside the text is a hard break and enter inserts
+  one. **No `submitted` event** — submit affordances are app-side
+  (a button); `changed` fires with the whole text after every edit,
+  exactly like `TextInput`.
+- Caret semantics are `TextInput`'s (a u16 index, clamped on every
+  edit) plus vertical movement: up/down move the caret between the
+  lines `wrap_spans` reports, keeping a pixel column goal across
+  lines; click placement maps (x, y) through the spans. Horizontal
+  overflow within a line clips (no horizontal scrolling).
+- Viewport: an internal vertical scroll offset; any caret move
+  scrolls minimally so the caret's line is visible, and mouse wheel
+  deltas scroll without moving the caret. Focus ring as
+  `TextInput`.
+- No undo/redo and no selection in this batch (caret only); both
+  are additive later without a contract change. `TextInput`
+  behavior is unchanged — the single-line editor keeps its event
+  shape with only the acceptance rule above widened.
 
 ---
 

@@ -9,16 +9,21 @@
 > Completed items are removed upon completion (A-numbering is stable, gaps
 > represent finished work; history lives in `git log`).
 
-## 0. Execution Order (2026-09-10 map; completed steps removed; A-26 added 2026-10-03)
+## 0. Execution Order (2026-09-10 map; completed steps removed; A-26 added 2026-10-03; Batch T added 2026-11-01)
 
 Agreed sequence — a map through the backlog, not a new state machine.
 Dependency-driven: each tier unlocks what follows.
 
-1. **A-29. fps consumption-report absorption** — Phase 2 landed
+1. **Batch T. Text capability for CJK products** (added 2026-11-01,
+   the 剧本杀 front-end ruling): T-1 (CJK wrap) → T-2 (terminal UTF-8
+   input) → T-3 (styled runs) → T-4 (`TextArea`) → T-5 (HTML inline
+   spans), each contract-first with its own step commit — details in
+   Batch T below.
+2. **A-29. fps consumption-report absorption** — Phase 2 landed
    2026-10-30: R6 (deterministic frame contract) implemented, R8 and
    R12/R13 closed against the tree (evidence in §1 A-29). The remaining
    A-29 thread is the condition-triggered R5 scratch allocator.
-2. **A-26. imcore primitive throughput** — the open item is ② (SIMD
+3. **A-26. imcore primitive throughput** — the open item is ② (SIMD
    inner loops); its decision point is a 1080p-class consumer
    re-measure against the R1 zero-copy build. fps is paused (2026-10-24
    ruling); when it resumes it rebuilds against current imprint anyway
@@ -27,7 +32,7 @@ Dependency-driven: each tier unlocks what follows.
    discipline (interleaved, rotating arm order, min-of-N, null A/B for
    host resolution — fps IMPRINT-RUNTIME R15/R18), never
    `cpu.pressure`.
-3. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
+4. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
    items stay trigger-gated.
 
@@ -98,6 +103,44 @@ image build. Consumer-side, not a new C-ABI surface at this stage.
   full-bleed); body gradient backgrounds have no `html_page` carrier
   (H-8 holds colors only); GIF review captures band smooth ramps (216-cube) —
   review from the raw framebuffer.
+
+### Batch T — Text Capability for CJK Products (added 2026-11-01; active)
+
+Origin: the 剧本杀 (script-murder game) front-end decision — the left
+pane is large-flow Chinese narrative text with sentence emphasis and
+occasional input (operator ruling 2026-11-01: build the capability,
+contract-first, as independent gated steps; the 5x7 embedded fallback
+is out of scope by construction — provider conditional compilation
+already isolates it, code-contract §2.4). Each step lands with its
+contract amendment first, a filtered suite gate, and its own step
+commit.
+
+- **T-1. CJK line breaking in wrapped text** (contract §2 "Wrapped
+  text" amended): break candidates between adjacent CJK break-set
+  code units, surrogate-pair atomicity, one-unit kinsoku-lite
+  retraction (two pinned punctuation sets). The engine change is
+  local to `greedy_wrap`; `wrap_spans` shape, cache keys, and the
+  space/`\n` rules are unchanged.
+- **T-2. Terminal UTF-8 text input** (contract §2 "Text input
+  scope"): `term_input` assembles multibyte sequences into code
+  points (U+FFFD resync rule, streaming across feeds); editor
+  acceptance widened to code points ≥ U+00A0 (BMP); desktop shells
+  stay ASCII-only — IME stays the declared non-goal, composition is
+  the terminal's job.
+- **T-3. Styled text runs** (contract §2 "Styled text runs"):
+  `text_style_run` + `Widget::set_text_runs` — per-unit color /
+  provider (borrowed) / bold intervals; runs ride wrapping untouched,
+  measurement matches draw. The C-ABI and `.ui` do not carry runs
+  this batch.
+- **T-4. `TextArea` multi-line editor** (contract §2 "Multi-line
+  editor"): wrap-on editor reusing the wrap spans and the
+  `TextInput` editing core; caret column-goal vertical movement,
+  caret-following viewport, wheel scroll; enter inserts `\n`, no
+  `submitted` event, no undo/selection this batch.
+- **T-5. HTML inline text styling** (html-path.md whitelist text):
+  inside a wrapping `p`, a styled `span` contributes styled runs to
+  the paragraph instead of a separate label — one inline mechanism,
+  no nested boxes. Depends on T-3; spans outside `p` unchanged.
 
 ### Batch I — Tooling & Inspection (Unscheduled)
 
