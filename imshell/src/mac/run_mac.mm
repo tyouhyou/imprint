@@ -110,6 +110,26 @@ namespace
                 }
             }
         }
+        // FI-01 committed-text relay (macOS half): the platform IM owns
+        // composition and hands the committed text back in the characters
+        // string; the shell relays it. key_down only (key_up carries no
+        // ch, U-1): the first UTF-16 unit outside the ASCII and C1 control
+        // areas relays as ch = code point with key = 0 (the T-2 /
+        // term_input precedent). A committed astral character arrives as
+        // a surrogate pair and its lead unit is dropped until the
+        // cluster/advance extension (A-25).
+        if (out.type == zb::input::input_type::key_down)
+        {
+            NSString *chars = nse.characters;
+            if (chars.length > 0)
+            {
+                const unichar c = [chars characterAtIndex:0];
+                if ((c >= 0xA0 && c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFF))
+                {
+                    out.ch = c;
+                }
+            }
+        }
         return out.key != 0 || out.ch != 0;
     }
 
