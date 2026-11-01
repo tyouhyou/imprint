@@ -359,6 +359,31 @@ namespace zb::ui
         // color value parsing lives at zb::ui scope below (parse_color,
         // shared by the background/color props and the HTML page box).
 
+        // a bare non-negative integer (the text_run grammar's numeric
+        // fields; the html emitter never writes anything else)
+        bool parse_run_number(const std::string &s, long long &out)
+        {
+            if (s.empty())
+            {
+                return false;
+            }
+            long long n = 0;
+            for (const char c : s)
+            {
+                if (c < '0' || c > '9')
+                {
+                    return false;
+                }
+                if (n > (9223372036854775807LL - (c - '0')) / 10)
+                {
+                    return false;  // overflow: malformed for this grammar
+                }
+                n = n * 10 + (c - '0');
+            }
+            out = n;
+            return true;
+        }
+
         // P-3 offset form: "N%" percent, "Npx"/bare pixels (signed);
         // false = malformed/unset. Range fits the int16 spec (the
         // Widget setter clamps percent/pixel ranges).
@@ -1080,6 +1105,105 @@ namespace zb::ui
             if (has_prop(n, "line_h"))
             {
                 w.set_line_height(px_of(n, "line_h"));
+            }
+            // T-5 styled runs (html inline spans, code-contract §2): one
+            // "text_run" prop per run — "off|len|color|font-size|bold"
+            // with '-' marking an absent field, indices addressing the
+            // stored u16 text. Emitted by the html front-end only (the
+            // .ui grammar carries no run syntax); applied after the text
+            // so set_text's re-clamp never sees them half-installed.
+            {
+                std::vector<text_style_run> runs;
+                for (const auto &p : n.props)
+                {
+                    if (p.first != "text_run")
+                    {
+                        continue;
+                    }
+                    const std::string *s =
+                        std::get_if<std::string>(&p.second);
+                    if (s == nullptr)
+                    {
+                        continue;
+                    }
+                    std::string fields[5];
+                    int f = 0;
+                    std::string::size_type begin = 0;
+                    while (f < 5)
+                    {
+                        const std::string::size_type bar =
+                            s->find('|', begin);
+                        if (bar == std::string::npos)
+                        {
+                            fields[f++] = s->substr(begin);
+                            break;
+                        }
+                        fields[f++] = s->substr(begin, bar - begin);
+                        begin = bar + 1;
+                    }
+                    if (f < 5)
+                    {
+                        continue;  // malformed: dropped, like any prop
+                    }
+                    long long off = 0;
+                    long long len = 0;
+                    if (!parse_run_number(fields[0], off) ||
+                        !parse_run_number(fields[1], len) || off < 0 ||
+                        len <= 0 || off > 65535 || len > 65535)
+                    {
+                        continue;  // cannot address the u16 text: dropped
+                    }
+                    text_style_run r;
+                    r.offset = static_cast<uint16_t>(off);
+                    r.len = static_cast<uint16_t>(len);
+                    if (fields[2] != "-")
+                    {
+                        core::Color rc;
+                        if (parse_color(fields[2], rc))
+                        {
+                            r.color = rc;
+                        }
+                    }
+                    if (fields[3] != "-")
+                    {
+                        long long px = 0;
+                        if (!parse_run_number(fields[3], px) || px < 1 ||
+                            px > 128 || !has_font_family())
+                        {
+                            // the set_font_size tolerance: out of range
+                            // or no family installed — warn once and
+                            // keep the base style (a build without the
+                            // TTF runtime never has a family)
+                            static bool warned = false;
+                            if (!warned)
+                            {
+                                warned = true;
+                                LW << "ui_builder: run font_size out of "
+                                      "range 1..128 or no font family "
+                                      "installed; kept the base style";
+                            }
+                        }
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+                        else
+                        {
+                            // the family state's per-size memo owns the
+                            // provider; the borrowed pointer lives as
+                            // long as the installed family (see
+                            // TtfFamily::provider_for)
+                            r.provider =
+                                font_family()
+                                    .provider_for(static_cast<int>(px))
+                                    .get();
+                        }
+#endif
+                    }
+                    r.bold = fields[4] == "1";
+                    runs.push_back(r);
+                }
+                if (!runs.empty())
+                {
+                    w.set_text_runs(std::move(runs));
+                }
             }
             if (has_prop(n, "halign"))
             {

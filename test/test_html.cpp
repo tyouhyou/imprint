@@ -3171,5 +3171,214 @@ int test_html()
         EXPECT(!threw);
     }
 
+    // T-5 (html-path.md element table): inside a wrapping p a styled
+    // span is not a child label — its text merges in document order and
+    // its style lands as styled runs on the paragraph's own text
+    {
+        ui_node r = parse_html(
+            "<p>plain <span style=\"color: red\">red</span> mid "
+            "<span style=\"font-weight: bold\">bold</span></p>\n",
+            nullptr);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "plain red mid bold");
+        std::vector<std::string> run_props;
+        for (const auto &p : r.children[0].props)
+        {
+            if (p.first == "text_run")
+            {
+                run_props.push_back(test::vget<std::string>(p.second));
+            }
+        }
+        EXPECT(run_props.size() == 2);
+        if (run_props.size() == 2)
+        {
+            // "off|len|color|font-size|bold" — u16 indices; the two
+            // segments sit at "red" (6..8) and "bold" (14..17)
+            EXPECT(run_props[0] == "6|3|red|-|0");
+            EXPECT(run_props[1] == "14|4|-|-|1");
+        }
+    }
+
+    // T-5: an unstyled span inside a p still merges (no run emitted),
+    // and a span outside a p stays the single-line label it always was
+    {
+        ui_node r = parse_html("<p>a<span>b</span>c</p>\n", nullptr);
+        EXPECT(r.children.size() == 1);
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "abc");
+        EXPECT(find_prop(r.children[0], "text_run") < 0);
+
+        ui_node r2 = parse_html("<span>a<span>b</span>c</span>\n", nullptr);
+        EXPECT(r2.children.size() == 1);
+        EXPECT(r2.children[0].type == "label");
+        EXPECT(test::vget<std::string>(node_prop_v(r2.children[0], "text")) ==
+               "abc");
+        EXPECT(find_prop(r2.children[0], "text_run") < 0);
+    }
+
+    // T-5: a span-level letter-spacing warns once and is ignored — the
+    // unstyled remainder merges with no run
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        ui_node r = parse_html(
+            "<p>a<span style=\"letter-spacing: 2px\">b</span>c "
+            "<span style=\"letter-spacing: 3px\">d</span></p>\n",
+            nullptr);
+        zb::Logging::set_log_handle();
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "abc d");
+        EXPECT(find_prop(r.children[0], "text_run") < 0);
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("letter-spacing") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 1);  // warns once across the whole parse
+    }
+
+    // T-5 end-to-end: the emphasized part draws in the run color, the
+    // base text keeps the paragraph color (pixel assertion)
+    {
+        ui_node root = parse_html(
+            "<p id=\"para\" style=\"width: 80px; height: 14px; "
+            "color: blue\">aa <span style=\"color: red\">bb</span></p>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(200, 60);
+        build(host, root);
+        host.layout();
+        auto *para = static_cast<Label *>(host.find_by_id("para"));
+        EXPECT(para != nullptr);
+
+        core::Graphics g(200, 60, nullptr);
+        host.draw(g);
+        const auto cp = para->get_position();
+        // the 5x7 pen: "aa bb" runs 6px per unit, so the run units (the
+        // two b's) own columns 18..29 of the paragraph's text
+        int red_in_run = 0;
+        int red_outside = 0;
+        int blue_base = 0;
+        for (int dy = 0; dy < 7; ++dy)
+        {
+            for (int dx = 0; dx < 80; ++dx)
+            {
+                const uint32_t px = test::pixel_at(g, cp.x + dx, cp.y + dy);
+                if (px == core::colors::Red.pixel)
+                {
+                    if (dx >= 18 && dx <= 29)
+                    {
+                        ++red_in_run;
+                    }
+                    else
+                    {
+                        ++red_outside;
+                    }
+                }
+                else if (px == core::colors::Blue.pixel && dx < 12)
+                {
+                    ++blue_base;  // the "aa" base units
+                }
+            }
+        }
+        EXPECT(red_in_run > 0);    // the span drew red
+        EXPECT(red_outside == 0);  // nothing else did
+        EXPECT(blue_base > 0);     // the base color kept the rest
+    }
+
+    // T-5: a span font-size rides the run prop; without a family (or
+    // without the TTF runtime) materialization degrades to the base
+    // style with one warning, exactly like the node font-size
+    {
+        ui_node r = parse_html(
+            "<p>a<span style=\"font-size: 24px\">b</span>c</p>\n", nullptr);
+        const int i = find_prop(r.children[0], "text_run");
+        EXPECT(i >= 0);
+        if (i >= 0)
+        {
+            EXPECT(test::vget<std::string>(
+                       r.children[0].props[static_cast<std::size_t>(i)].second) == "1|1|-|24|0");
+        }
+
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        FlexPanel host;
+        host.set_size(200, 60);
+        build(host, r);
+        zb::Logging::set_log_handle();
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("run font_size") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 1);  // the tolerance warned once and kept the base
+    }
+
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+    // T-5 gated: with a family installed the run's font-size resolves a
+    // real provider — the 8px run draws visibly less ink than the 16px
+    // base text on the shared baseline
+    {
+        const TtfFamily family =
+            TtfFamily::from_file(IM_TEST_RUNTIME_TTF_FONT);
+        set_font_family(family);
+        ui_node root = parse_html(
+            "<p id=\"para\" style=\"width: 120px; height: 40px; "
+            "font-size: 16px\">xx <span style=\"font-size: 8px\">HH</span>"
+            "</p>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(200, 80);
+        build(host, root);
+        host.layout();
+        auto *para = static_cast<Label *>(host.find_by_id("para"));
+        EXPECT(para != nullptr);
+        core::Graphics g(200, 80, nullptr);
+        host.draw(g);
+        const auto cp = para->get_position();
+        // the base units occupy the first ~20px, the run follows; count
+        // the inked rows per band (both share the baseline, so the
+        // smaller run size means fewer inked rows)
+        int base_rows = 0;
+        int run_rows = 0;
+        for (int dy = 0; dy < 40; ++dy)
+        {
+            bool base_ink = false;
+            bool run_ink = false;
+            for (int dx = 0; dx < 20; ++dx)
+            {
+                if (test::pixel_at(g, cp.x + dx, cp.y + dy) != 0)
+                {
+                    base_ink = true;
+                }
+            }
+            for (int dx = 22; dx < 60; ++dx)
+            {
+                if (test::pixel_at(g, cp.x + dx, cp.y + dy) != 0)
+                {
+                    run_ink = true;
+                }
+            }
+            base_rows += base_ink ? 1 : 0;
+            run_rows += run_ink ? 1 : 0;
+        }
+        EXPECT(base_rows > run_rows);
+        EXPECT(run_rows > 0);
+        clear_font_family();
+    }
+#endif
+
     return test::report("html");
 }

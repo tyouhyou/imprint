@@ -13,6 +13,7 @@
 
 #include "logging.hpp"
 #include "svg_canvas.hpp"
+#include "text/utf8.hpp"
 
 namespace zb::ui
 {
@@ -46,6 +47,12 @@ namespace zb::ui
         bool is_container_html(const std::string &t)
         {
             return t == "div" || t == "body";
+        }
+        // T-5: the inline text elems that contribute styled runs inside
+        // a wrapping paragraph (html-path.md element table)
+        bool is_inline_text_tag(const std::string &t)
+        {
+            return t == "span" || t == "label" || t == "small";
         }
         // presentation attributes a transparent svg <g> folds onto its
         // descendant line/text (nearest ancestor wins; the element's own
@@ -567,6 +574,11 @@ namespace zb::ui
             std::vector<std::pair<std::string, std::string>> attrs;
             std::string text;  // raw accumulation (leaves), normalized at close
             std::vector<std::unique_ptr<Elem>> children;
+            // T-5: the styled inline elems (span/label/small) whose text
+            // merged into a wrapping paragraph — kept so the converter
+            // can fold their CSS and turn each merged segment into a
+            // styled run of the paragraph's own text
+            std::vector<Elem> inlines;
             int line = 1;  // 1-based source line of the open tag (B6)
 
             const std::string &attr(const std::string &name) const
@@ -5123,6 +5135,100 @@ namespace zb::ui
             }
         }
 
+        // T-5 (html-path.md element table): inside a wrapping p a
+        // span/label/small is not a child label — its text already merged
+        // into the paragraph in document order, and its style lands as
+        // styled runs (code-contract §2 "Styled text runs"). The run
+        // indices address the u16 text, so each segment relocates by
+        // content in the finalized paragraph text (document order, one
+        // moving cursor). The run props carry the raw CSS strings; the
+        // builder parses them with the node-color/font-size tolerance.
+        void convert_inline_runs(ui_node &n, const Elem &e,
+                                 const Rules &rules, const VarMap &vars,
+                                 const std::vector<Ancestor> &below,
+                                 VarWarnState &warn_state)
+        {
+            static bool letter_spacing_warned = false;
+            std::size_t from = 0;
+            for (const Elem &in : e.inlines)
+            {
+                if (in.text.empty())
+                {
+                    continue;  // no segment: nothing to style
+                }
+                const std::size_t pos = e.text.find(in.text, from);
+                if (pos == std::string::npos)
+                {
+                    // unreachable for a finalized paragraph; skip rather
+                    // than style the wrong units
+                    continue;
+                }
+                from = pos + in.text.size();
+
+                std::vector<Decl> folded;
+                fold_style(in, rules, vars, below, folded, warn_state);
+                // span-level letter-spacing warns once and is ignored —
+                // letter-spacing stays the paragraph's whole-text dressing
+                if (!letter_spacing_warned &&
+                    fold_lookup(folded, "letter-spacing") != nullptr)
+                {
+                    letter_spacing_warned = true;
+                    LW << "html: inline letter-spacing inside a paragraph "
+                          "is ignored; the paragraph letter-spacing applies";
+                }
+                const std::string *color =
+                    fold_lookup(folded, "color");
+                long long font = 0;
+                if (const std::string *fs = fold_lookup(folded, "font-size"))
+                {
+                    std::string t = css_trim(ascii_lower(*fs));
+                    if (t.size() > 2 && t.compare(t.size() - 2, 2, "px") == 0)
+                    {
+                        t = t.substr(0, t.size() - 2);
+                    }
+                    long long px = 0;
+                    if (parse_svg_num(css_trim(t), px) && px > 0)
+                    {
+                        font = px;
+                    }
+                }
+                bool bold = false;
+                if (const std::string *fw = fold_lookup(folded, "font-weight"))
+                {
+                    const std::string t = css_trim(ascii_lower(*fw));
+                    if (t == "bold")
+                    {
+                        bold = true;
+                    }
+                    else
+                    {
+                        long long w = 0;
+                        bold = parse_svg_num(t, w) && w >= 600;
+                    }
+                }
+                if (color == nullptr && font == 0 && !bold)
+                {
+                    continue;  // an unstyled span: no run to carry
+                }
+
+                const long long off =
+                    static_cast<long long>(utf8_to_utf16(e.text.data(), pos)
+                                               .size());
+                const long long len = static_cast<long long>(
+                    utf8_to_utf16(in.text.data(), in.text.size()).size());
+                // one prop per run; the builder owns the grammar
+                // (off|len|color|font-size|bold, '-' = absent)
+                n.prop("text_run",
+                       std::to_string(off) + "|" + std::to_string(len) +
+                           "|" +
+                           (color != nullptr ? *color : std::string("-")) +
+                           "|" +
+                           (font > 0 ? std::to_string(font)
+                                     : std::string("-")) +
+                           "|" + (bold ? "1" : "0"));
+            }
+        }
+
         void convert_elem_svg(ui_node &n, const Elem &e)
         {
             // the vector-dial subset: viewBox mapping plus strokes;
@@ -5215,6 +5321,13 @@ namespace zb::ui
             Ancestor self{e.tag, e.attr("id"), class_list(e.attr("class"))};
             std::vector<Ancestor> below = ancestors;
             below.push_back(std::move(self));
+            // T-5: the wrapping paragraph turns its merged inline elems
+            // into styled runs (folded against the paragraph's own chain,
+            // so the cascade and inheritance match a child element's)
+            if (e.tag == "p")
+            {
+                convert_inline_runs(n, e, rules, vars, below, warn_state);
+            }
             for (const auto &c : e.children)
             {
                 n.children.push_back(
@@ -5511,7 +5624,23 @@ namespace zb::ui
                     if (par.mode == k_build && par.elem != nullptr &&
                         is_leaf(*par.elem))
                     {
-                        par.elem->text += f.elem->text;
+                        // T-5: a styled inline inside a wrapping paragraph
+                        // contributes a run to the paragraph's own text.
+                        // The segment is appended first, then the elem is
+                        // kept (its attrs feed the CSS fold at convert
+                        // time) — inlines.back().text equals the appended
+                        // bytes, which is what the converter locates
+                        if (par.elem->tag == "p" &&
+                            is_inline_text_tag(f.elem->tag))
+                        {
+                            par.elem->text += f.elem->text;
+                            par.elem->inlines.push_back(
+                                std::move(*f.elem));
+                        }
+                        else
+                        {
+                            par.elem->text += f.elem->text;
+                        }
                     }
                 }
             }
