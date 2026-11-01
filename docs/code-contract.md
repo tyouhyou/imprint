@@ -491,10 +491,16 @@ the characters come from.
   territory. No other gate: an uncovered code unit renders through
   the normal fallback chain (primary → 5×7 → skip), which is a
   font-coverage concern, not an input concern.
-- **IME stays a declared non-goal**: desktop shells never compose;
-  composition is the terminal's (or the host's) job, and the editor
-  only ever sees finished code points. Desktop shells keep
-  ASCII-only `ch` emission (their keymaps do not produce more).
+- **IME composition stays a declared non-goal**: the framework never
+  composes; composition is the platform IME's (or the host's) job, and
+  the editor only ever sees finished code points. Desktop shells relay
+  the platform IME's **committed** text (FI-01, 2026-11-01): X11
+  through an XIM input context with root-window preedit, win32 through
+  `WM_CHAR` on a W-variant window, mac through the key event's
+  `characters` string — BMP code points relay as `ch` with key = 0
+  (T-2), surrogate lead units stay dropped (A-25), and a shell without
+  a working input method keeps the legacy ASCII-only emission
+  unchanged.
 
 **Multi-line editor (T-4, `TextArea`)**: the wrapping paragraph plus
 the editing core, for free-form multi-line input.

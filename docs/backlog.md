@@ -43,7 +43,9 @@ frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
   (ARCHITECTURE §4.9.1 carries the measured codec cost of the SHARED
   `libimcore.so`): both codecs stay OFF until the first real
   compressed-asset use case appears; until then the procedural
-  generator covers the demo.
+  generator covers the demo. **The trigger now has a consumer**:
+  tianji's StageView scene art (Batch FI / FI-09, 2026-11-01) is the
+  first real compressed-asset use case — V-4 lands with it.
 
 ### Batch H — HTML/CSS Rendering Path (landed end to end; open remainder only)
 
@@ -252,6 +254,53 @@ rationale in `reports/audit-2026-10-15.md` §5.
   the missing proof for the "embedded" tag this batch itself marks as
   partially earned.
 
+### Batch FI — Consumer Batch: tianji (added 2026-11-01)
+
+The tianji theater platform (`../tianji`, an AI-driven multiplayer
+narrative / murder-mystery engine) builds its release client on
+imprint: a **native C++ application** (2026-11-01 ruling — one shell
+carries text and imagery; the SIXEL terminal shell is not on its
+deployment path, and no dynamic C-ABI surface is built, closing
+tianji's FI-07 by route decision). Requirements letter: tianji-side
+`docs/for_imprint.md` (FI-01…FI-10, each with file:line evidence;
+statuses tracked in its §5 table). Items below carry tianji's IDs;
+accepted ones land contract-first where they touch an API.
+
+- **FI-01 — landed (2026-11-01).** Committed-text relay in all three
+  desktop shells: X11 gained an XIM input context (root-window
+  preedit — the platform IME composes, the shell relays committed
+  text); win32 moved to W-variant windows and relays BMP code points
+  from `WM_CHAR`; mac relays the first BMP unit of the key event's
+  `characters` string. Degradation to the legacy ASCII-only path is
+  unchanged when no input method is present. Two review passes (mac
+  function-key band exclusion, `ime_owner` RAII guard, one key_down
+  per press, surrogate exclusion preserved). **Standing re-verification
+  item:** real-IME behavior (ibus/fcitx, Windows IME, mac IME —
+  including whether mac commits reach keyDown at all or only
+  `insertText:`) needs on-machine confirmation.
+- **FI-02. Text selection + clipboard seam** (accepted, unscheduled).
+  Selection is the already-declared additive shape (no contract
+  change); the clipboard seam is new — design before code.
+- **FI-05. ScrollPanel stick-to-bottom primitive** (accepted,
+  unscheduled). Follow-bottom or follow policy over the existing
+  re-clamping `layout()`; additive, no contract change.
+- **FI-06. Variable-height ListBox rows** (accepted, unscheduled). The
+  visible-window row-bitmap cache already virtualizes; the work is the
+  offset math (prefix sums). Extend ListBox, no new control.
+- **FI-04. CJK runtime-font recipe** (accepted, unscheduled;
+  document-only). Runtime full font + `cache_budget` guidance (the
+  64KB default ≈ a few dozen hanzi) vs build-time subsets.
+- **FI-09. Image path** (accepted, unscheduled; the largest item;
+  fires V-4). ImageView with deterministic nearest-neighbor scaling
+  (the presentation-resample style) + `<img>` in the build-time HTML
+  path (html-path.md whitelist change) + runtime `set_image`; needs
+  `USE_PNG` and V-4's memory-source decode. Contract-first.
+- **FI-03 → A-25.** Non-BMP pairing rendering: the A-25 trigger has
+  fired (chat-style emoji); contract-first there, no separate item.
+- **FI-08** (tab/split containers) recorded far-term, unscheduled.
+  **FI-10** (SIXEL quantizer) de-prioritized: SIXEL is not on this
+  consumer's path.
+
 ## 1. Architecture Backlog
 
 ### A-4. Smaller Items
@@ -281,8 +330,12 @@ rationale in `reports/audit-2026-10-15.md` §5.
   cluster/advance (or host glyph-feed) shape — contract-first, touches
   code-contract §2.4 and possibly ARCHITECTURE §4.8.
 - **Trigger:** a real embedding needs dynamic complex-script text the
-  subset + runtime-TTF paths cannot serve. IME and RTL themselves stay
-  declared non-goals (the host owns them).
+  subset + runtime-TTF paths cannot serve — **fired 2026-11-01** by
+  tianji (Batch FI / FI-03: chat-style emoji in the message stream).
+  The framework still does no IME composition UI and no RTL: desktop
+  shells relay the platform IME's **committed** text (2026-11-01
+  ruling, code-contract "input"), and composition/RTL stay with the
+  platform.
 
 ### A-26. imcore primitive throughput (② SIMD; gated on the fps re-measure)
 

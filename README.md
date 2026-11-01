@@ -39,7 +39,9 @@ Imprint's own rasterizer — the same tree your C++ ships on every target.
 
 GPU-accelerated drawing (the render kernel stays CPU software rasterization) ·
 animation/transition system · runtime backend switching · multithreaded
-rendering · IME composition · RTL layout. Imprint deliberately stays small:
+rendering · IME composition (desktop shells relay the platform IME's
+committed text; composing stays with the platform) · RTL layout. Imprint
+deliberately stays small:
 one widget tree, one pixel buffer, one input stream — everything else is the
 host's job.
 

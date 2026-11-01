@@ -831,7 +831,9 @@ library-mode consumer exists today (§4.9.1 records the decision).
   soft-float glyph rasterization cost on the DS is unmeasured.
 - By design: no GPU acceleration (rendering stays CPU; future "GPU support"
   would be presentation-only), no animation/transition system, no runtime
-  backend switching, no multi-threaded rendering, no IME, no RTL/bidi.
+  backend switching, no multi-threaded rendering, no IME composition UI,
+  no RTL/bidi (desktop shells relay the platform IME's committed text;
+  composition stays with the platform).
 - **Widget/container surface (X-16).** The container set is Panel /
   FlexPanel / Dialog / scroller; there is **no grid layout** and no
   table / tree / tab / menu-style container, and no accessibility
