@@ -438,6 +438,10 @@ colored, bolded, or drawn through another glyph provider.
   review-4 `GifWriter` rule; the header states it). The C-ABI does
   not carry runs in this batch, and `.ui` documents do not grow run
   syntax — html inline spans are the declarative carrier (T-5).
+  Internally runs ride the shared design-file IR as one string
+  property per run (`text_run`: `off|len|color|font-size|bold`),
+  consumed by the builder — a builder-internal key: no design-file
+  table row, no `.ui` authoring syntax, no C-ABI export.
 - Indices address the stored u16 text. `set_text_runs` sorts by
   offset and drops zero-length entries at set time (the stored form
   is the normalized list; setters never throw). `set_text`
@@ -445,9 +449,12 @@ colored, bolded, or drawn through another glyph provider.
   drops.
 - **Coverage**: a unit takes the first run (by offset) that covers
   it; uncovered units keep the widget's base style. Runs never
-  affect wrapping or the text itself — `wrap_spans` output and
-  every break rule above are run-agnostic; runs decide only *how*
-  a wrapped line is drawn and measured.
+  change the text or the break *rules* themselves — but a run's
+  provider changes measured widths, so break positions can move,
+  through the same greedy rules and the same `wrap_spans` shape and
+  cache keys; `set_text_runs` marks the span cache stale like every
+  text setter. Runs decide how a wrapped line is drawn and
+  measured.
 - **Measurement matches draw**: a run's `provider` overrides the
   primary/fallback pick for its units in measure, wrap, and draw
   alike (the per-unit pick consults runs first); a line's advance
@@ -467,7 +474,10 @@ the characters come from.
   key_down, buffering a truncated sequence across `feed()` calls
   exactly like the escape parser; an invalid or overlong sequence
   emits U+FFFD once and resynchronizes at the next lead byte
-  (deterministic — the stream is never dropped).
+  (deterministic — the stream is never dropped): a lead byte outside
+  C2–F4 and each stray continuation byte (80–C1) is one U+FFFD of
+  its own, re-parsed from the ground state — no byte is ever
+  swallowed.
 - Editor acceptance (`TextInput`, `TextArea`): U+0020–U+007E (as
   today) plus code points ≥ U+00A0, inserted as a BMP code unit.
   Non-BMP code points (> U+FFFF) are dropped in this batch — the

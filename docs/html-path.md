@@ -420,7 +420,9 @@ seam (code-contract §2 "Wrapped text"):
   (T-5): `p` wraps (§Text wrapping); inside a wrapping `p`, an inline
   `span` contributes styled runs to the paragraph's own text instead
   of a separate label — the one inline mechanism, no nested boxes, no
-  inline images/links. `span`/`label`/`small` outside a `p` stay
+  inline images/links. Nested inline spans fold to the outer span's
+  run (the inner span's own style is not applied — the text-children
+  flattening). `span`/`label`/`small` outside a `p` stay
   single-line, container bare text stays single-line anonymous
   labels, and a `br` is a hard break in a `p` or a one-line spacer as
   a container child.
