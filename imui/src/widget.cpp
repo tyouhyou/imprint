@@ -1208,12 +1208,108 @@ namespace zb::ui
         return visible && x >= 0 && y >= 0 && x < size.width && y < size.height;
     }
 
-    // H-1 greedy word wrap (code-contract §2 "Wrapped text"): breaks only
-    // at U+0020 and '\n', a line trims its leading/trailing spaces, the
-    // break space drops at a wrap, a word wider than the whole width sits
-    // alone on its line (the draw clip keeps the edge), and consecutive
-    // hard breaks keep their empty lines. Per-unit advances match the
-    // draw pen exactly (letter-spacing rides every covered unit).
+    // T-1 CJK break set (code-contract §2 "Wrapped text"): radicals, CJK
+    // punctuation, kana, ideographs, compatibility ideographs, fullwidth
+    // forms. Surrogates (U+D800..DFFF) fall outside all three ranges, so a
+    // surrogate pair is never a break unit and never breaks inside.
+    static bool is_cjk_break_unit(const char16_t ch)
+    {
+        return (ch >= 0x2E80 && ch <= 0x9FFF) ||
+               (ch >= 0xF900 && ch <= 0xFAFF) ||
+               (ch >= 0xFF00 && ch <= 0xFFEF);
+    }
+
+    static bool is_high_surrogate(const char16_t ch)
+    {
+        return ch >= 0xD800 && ch <= 0xDBFF;
+    }
+
+    static bool is_low_surrogate(const char16_t ch)
+    {
+        return ch >= 0xDC00 && ch <= 0xDFFF;
+    }
+
+    // kinsoku-lite pinned sets (T-1): exactly the strings the contract
+    // pins — do not edit without the contract amendment
+    const char16_t kLineHeadForbidden[] =
+        u"、。，．：；？！）］｝〉》」』”’…‥";
+    const char16_t kLineTailForbidden[] = u"（［｛〈《「『“‘";
+
+    static bool in_pinned_set(const char16_t ch, const char16_t *set)
+    {
+        for (int i = 0; set[i] != u'\0'; ++i)
+        {
+            if (set[i] == ch)
+            {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // T-1: is there a break candidate between the units ending at i-1 and
+    // starting at i? CJK|CJK, and a surrogate pair is break-atomic: no
+    // candidate inside a pair, but a pair adjacent to a CJK unit breaks at
+    // the pair edge (either side).
+    static bool cjk_breakable(const std::u16string &text, const int i)
+    {
+        const char16_t prev = text[static_cast<std::size_t>(i) - 1];
+        const char16_t next = text[static_cast<std::size_t>(i)];
+        if (is_low_surrogate(next))
+        {
+            return false;  // inside a surrogate pair
+        }
+        if (is_high_surrogate(next))
+        {
+            return is_cjk_break_unit(prev);  // CJK unit | pair start
+        }
+        if (is_high_surrogate(prev) || is_low_surrogate(prev))
+        {
+            return is_cjk_break_unit(next);  // pair end | CJK unit
+        }
+        return is_cjk_break_unit(prev) && is_cjk_break_unit(next);
+    }
+
+    // kinsoku-lite single-step retraction (T-1): a CJK break at `k` that
+    // would start the next line on a head-forbidden unit or end the line
+    // on a tail-forbidden unit retracts to before the previous unit
+    // (stepping over a surrogate pair when the retraction would split
+    // one). One step only — no chains — and a retraction that cannot
+    // produce a shorter non-empty line leaves the break where it is.
+    static int kinsoku_retract(const std::u16string &text, const int line_top,
+                               const int k)
+    {
+        const int n = static_cast<int>(text.size());
+        const bool head_bad =
+            k < n && in_pinned_set(text[static_cast<std::size_t>(k)],
+                                   kLineHeadForbidden);
+        const bool tail_bad =
+            k > 0 && in_pinned_set(text[static_cast<std::size_t>(k) - 1],
+                                   kLineTailForbidden);
+        if (!head_bad && !tail_bad)
+        {
+            return k;
+        }
+        int k2 = k - 1;
+        if (k2 > 0 && is_low_surrogate(text[static_cast<std::size_t>(k2)]))
+        {
+            // the previous unit is a surrogate pair: retract before the pair
+            --k2;
+        }
+        if (k2 <= line_top)
+        {
+            return k;  // no room: the break stays
+        }
+        return k2;
+    }
+
+    // H-1 greedy word wrap (code-contract §2 "Wrapped text"): breaks at
+    // U+0020, '\n', and (T-1) between adjacent CJK break-set units, a line
+    // trims its leading/trailing spaces, the break space drops at a wrap,
+    // a run with no break candidate wider than the whole width sits alone
+    // on its line (the draw clip keeps the edge), and consecutive hard
+    // breaks keep their empty lines. Per-unit advances match the draw pen
+    // exactly (letter-spacing rides every covered unit).
     static void greedy_wrap(const std::u16string &text,
                             const GlyphProvider *primary,
                             const GlyphProvider *fallback, const int letter,
@@ -1252,17 +1348,20 @@ namespace zb::ui
         int line_top = 0;
         int p = 0;
         int acc = 0;
-        int break_before = -1;
+        int break_before = -1;  // U+0020: the break space drops at the wrap
+        int cjk_before = -1;    // T-1 CJK boundary: the break keeps both units
         while (p < n)
         {
             const char16_t ch = text[static_cast<std::size_t>(p)];
             if (p == line_top && ch == ' ')
             {
-                // leading whitespace collapses off a fresh line
+                // leading whitespace collapses off a fresh line (U+3000 is
+                // an ordinary CJK unit, never this path)
                 ++p;
                 line_top = p;
                 acc = 0;
                 break_before = -1;
+                cjk_before = -1;
                 continue;
             }
             if (ch == '\n')
@@ -1272,6 +1371,7 @@ namespace zb::ui
                 line_top = p;
                 acc = 0;
                 break_before = -1;
+                cjk_before = -1;
                 continue;
             }
             if (ch == ' ')
@@ -1282,28 +1382,67 @@ namespace zb::ui
             ++p;
             if (acc > width)
             {
-                if (break_before != -1)
+                // greedy: the later candidate fills the line further; a
+                // space break drops the space, a CJK boundary breaks
+                // between the units (kinsoku-lite may retract one). Only
+                // candidates recorded before the overflowing unit count —
+                // a boundary past it would carry the unit that did not fit
+                if (cjk_before != -1 &&
+                    (break_before == -1 || cjk_before > break_before))
+                {
+                    const int k = kinsoku_retract(text, line_top, cjk_before);
+                    emit_line(line_top, k);
+                    p = k;
+                    line_top = p;
+                    acc = 0;
+                    break_before = -1;
+                    cjk_before = -1;
+                }
+                else if (break_before != -1)
                 {
                     out.emplace_back(line_top, break_before - line_top);
                     p = break_before + 1;  // the break space drops
                     line_top = p;
                     acc = 0;
                     break_before = -1;
+                    cjk_before = -1;
                 }
                 else
                 {
-                    // an over-wide word: it sits alone on its own line
-                    int next = line_top;
-                    while (next < n && text[static_cast<std::size_t>(next)] != ' ' && text[static_cast<std::size_t>(next)] != '\n')
+                    // an over-wide run: it ends at the next space, hard
+                    // break, or (T-1) the first CJK boundary after the
+                    // line start, and sits alone on its line
+                    int next = line_top + 1;
+                    while (next < n &&
+                           text[static_cast<std::size_t>(next)] != ' ' &&
+                           text[static_cast<std::size_t>(next)] != '\n' &&
+                           !cjk_breakable(text, next))
                     {
                         ++next;
                     }
-                    out.emplace_back(line_top, next - line_top);
-                    p = next + (next < n ? 1 : 0);
+                    if (next < n &&
+                        text[static_cast<std::size_t>(next)] != ' ' &&
+                        text[static_cast<std::size_t>(next)] != '\n')
+                    {
+                        // CJK-boundary stop: nothing drops, kinsoku applies
+                        const int k = kinsoku_retract(text, line_top, next);
+                        emit_line(line_top, k);
+                        p = k;
+                    }
+                    else
+                    {
+                        out.emplace_back(line_top, next - line_top);
+                        p = next + (next < n ? 1 : 0);  // the break space drops
+                    }
                     line_top = p;
                     acc = 0;
                     break_before = -1;
+                    cjk_before = -1;
                 }
+            }
+            else if (p < n && cjk_breakable(text, p))
+            {
+                cjk_before = p;
             }
         }
         if (line_top < n || out.empty())

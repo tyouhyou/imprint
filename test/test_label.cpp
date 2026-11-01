@@ -13,6 +13,24 @@ namespace
         using Label::text_advance;
         using Label::text_height;
     };
+
+    // T-1: a uniform 4px-advance provider covering every code unit. The
+    // 5x7 fallback leaves CJK units uncovered (zero advance), so the CJK
+    // wrap suites drive the engine through this stub; the wrap rules are
+    // provider-agnostic, only the widths matter here.
+    struct WideStubProvider : GlyphProvider
+    {
+        bool covers(const char16_t) const override { return true; }
+        text_metrics measure(const char16_t *, const int len) const override
+        {
+            return {4 * len, 7, 7};
+        }
+        text_metrics line_metrics() const override { return {0, 7, 7}; }
+        void write(core::Graphics &, const char16_t *, const int, const int,
+                   const int, const core::Color &) const override
+        {
+        }
+    };
 }  // namespace
 
 int test_label()
@@ -206,6 +224,172 @@ int test_label()
         l.set_size(7, 7);
         EXPECT(l.measure().width == 7);
         EXPECT(l.measure().height == 2 * l.text_height());
+    }
+
+    // T-1: a pure-CJK paragraph wraps unit-by-unit at the assigned width
+    // instead of sitting on one clipped line
+    {
+        Label l;
+        l.set_glyph_provider(zb::make_shared<WideStubProvider>());
+        l.set_text(std::u16string(u"中文段落测试"));
+        l.set_text_wrap(true);
+        const auto &sp = l.wrap_spans(8);  // 2 units x 4px per line
+        EXPECT(sp.size() == 3);
+        if (sp.size() == 3)
+        {
+            const std::u16string &t = l.get_text();
+            EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
+                            static_cast<std::size_t>(sp[0].second)) == u"中文");
+            EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
+                            static_cast<std::size_t>(sp[1].second)) == u"段落");
+            EXPECT(t.substr(static_cast<std::size_t>(sp[2].first),
+                            static_cast<std::size_t>(sp[2].second)) == u"测试");
+        }
+    }
+
+    // T-1: mixed Latin/CJK text breaks only at the CJK boundary — the
+    // Latin run stays attached to the CJK unit it precedes
+    {
+        Label l;
+        l.set_glyph_provider(zb::make_shared<WideStubProvider>());
+        l.set_text(std::u16string(u"ab中文字"));
+        l.set_text_wrap(true);
+        const auto &sp = l.wrap_spans(12);
+        EXPECT(sp.size() == 2);
+        if (sp.size() == 2)
+        {
+            const std::u16string &t = l.get_text();
+            EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
+                            static_cast<std::size_t>(sp[0].second)) == u"ab中");
+            EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
+                            static_cast<std::size_t>(sp[1].second)) == u"文字");
+        }
+    }
+
+    // T-1 kinsoku-lite: the pinned head set never starts a line, the
+    // pinned tail set never ends one. The literals below must equal the
+    // contract strings (code-contract §2 "Wrapped text") character for
+    // character. Members outside the CJK break set (”’…‥“‘) cannot sit on
+    // a CJK candidate boundary at all, so only CJK-set members exercise
+    // the retraction.
+    {
+        const char16_t head[] = u"、。，．：；？！）］｝〉》」』”’…‥";
+        const char16_t tail[] = u"（［｛〈《「『“‘";
+        for (int i = 0; head[i] != u'\0'; ++i)
+        {
+            const char16_t x = head[i];
+            std::u16string s = u"中中";
+            s += x;
+            s += u"中中中";
+            Label l;
+            l.set_glyph_provider(zb::make_shared<WideStubProvider>());
+            l.set_text(s);
+            l.set_text_wrap(true);
+            const auto &sp = l.wrap_spans(8);
+            for (const auto &line : sp)
+            {
+                EXPECT(l.get_text()[static_cast<std::size_t>(line.first)] != x);
+            }
+        }
+        for (int i = 0; tail[i] != u'\0'; ++i)
+        {
+            const char16_t x = tail[i];
+            std::u16string s = u"中";
+            s += x;
+            s += u"中中中";
+            Label l;
+            l.set_glyph_provider(zb::make_shared<WideStubProvider>());
+            l.set_text(s);
+            l.set_text_wrap(true);
+            const auto &sp = l.wrap_spans(8);
+            for (const auto &line : sp)
+            {
+                EXPECT(l.get_text()[static_cast<std::size_t>(line.first +
+                                                             line.second) -
+                                    1] != x);
+            }
+        }
+
+        // the named cases, spelled out: no line starts with 、 or 。, and
+        // none ends with 「 or （
+        Label h;
+        h.set_glyph_provider(zb::make_shared<WideStubProvider>());
+        h.set_text(std::u16string(u"中中。文文"));
+        h.set_text_wrap(true);
+        const auto &hs = h.wrap_spans(8);
+        EXPECT(hs.size() == 3);
+        for (const auto &line : hs)
+        {
+            const char16_t c =
+                h.get_text()[static_cast<std::size_t>(line.first)];
+            EXPECT(c != u'。' && c != u'、');
+        }
+        Label t;
+        t.set_glyph_provider(zb::make_shared<WideStubProvider>());
+        t.set_text(std::u16string(u"中「中（中"));
+        t.set_text_wrap(true);
+        const auto &ts = t.wrap_spans(8);
+        for (const auto &line : ts)
+        {
+            const char16_t c = t.get_text()[static_cast<std::size_t>(
+                line.first + line.second - 1)];
+            EXPECT(c != u'「' && c != u'（');
+        }
+    }
+
+    // T-1 surrogate atomicity: a non-BMP character is one break unit —
+    // no line ever splits its two code units, while the pair edges break
+    // against an adjacent CJK unit
+    {
+        std::u16string s = u"中";
+        s += static_cast<char16_t>(0xD83D);
+        s += static_cast<char16_t>(0xDE00);  // U+1F600 as a surrogate pair
+        s += u"文";
+        Label l;
+        l.set_glyph_provider(zb::make_shared<WideStubProvider>());
+        l.set_text(s);
+        l.set_text_wrap(true);
+        // 12px holds unit+pair; the 文 overflow breaks at pair end | CJK
+        const auto &sp = l.wrap_spans(12);
+        EXPECT(sp.size() == 2);
+        if (sp.size() == 2)
+        {
+            EXPECT(sp[0].first == 0 && sp[0].second == 3);
+            EXPECT(sp[1].first == 3 && sp[1].second == 1);
+        }
+        // 8px holds one unit: the pair moves whole to the next line
+        const auto &sp2 = l.wrap_spans(8);
+        EXPECT(sp2.size() == 3);
+        if (sp2.size() == 3)
+        {
+            EXPECT(sp2[0].first == 0 && sp2[0].second == 1);
+            EXPECT(sp2[1].first == 1 && sp2[1].second == 2);
+            EXPECT(sp2[2].first == 3 && sp2[2].second == 1);
+        }
+    }
+
+    // T-1: U+3000 (ideographic space) is an ordinary CJK unit — it takes
+    // width, breaks like one, and never collapses off a line start the
+    // way U+0020 does
+    {
+        Label l;
+        l.set_glyph_provider(zb::make_shared<WideStubProvider>());
+        std::u16string s = u"中";
+        s += static_cast<char16_t>(0x3000);
+        s += u"中中";
+        l.set_text(s);
+        l.set_text_wrap(true);
+        const auto &sp = l.wrap_spans(8);
+        EXPECT(sp.size() == 2);
+        if (sp.size() == 2)
+        {
+            const std::u16string &t = l.get_text();
+            EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
+                            static_cast<std::size_t>(sp[0].second)) ==
+                   (std::u16string(u"中") + static_cast<char16_t>(0x3000)));
+            EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
+                            static_cast<std::size_t>(sp[1].second)) == u"中中");
+        }
     }
 
     return test::report("label");
