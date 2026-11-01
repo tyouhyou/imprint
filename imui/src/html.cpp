@@ -184,13 +184,40 @@ namespace zb::ui
         // break and swallows the pending whitespace around it, so <br>
         // never double-spaces (html-path §Text wrapping: consecutive breaks
         // keep their empty lines).
-        std::string normalize_wrapped(const char *begin, const char *end)
+        //
+        // T-5: `bounds`/`marks` map positions of the raw text to the output.
+        // A bound is the raw byte offset where an inline segment was
+        // appended (kept verbatim by this scan — it is already
+        // normalize_text output); its mark records the output length and
+        // whether the segment's first character will trigger the pending
+        // space, so the caller can resolve each segment's exact offset in
+        // the finalized text without a content search.
+        std::string normalize_wrapped(const char *begin, const char *end,
+                                      const std::vector<std::size_t> *bounds = nullptr,
+                                      std::vector<std::pair<std::size_t, bool>> *marks = nullptr)
         {
             std::string out;
             bool pending_space = false;
+            std::size_t bi = 0;
+            const auto flush_bounds = [&](const char *at)
+            {
+                if (bounds == nullptr)
+                {
+                    return;
+                }
+                while (bi < bounds->size() &&
+                       begin + (*bounds)[bi] <= at)
+                {
+                    const bool would_emit =
+                        pending_space && !out.empty() && out.back() != '\n';
+                    marks->emplace_back(out.size(), would_emit);
+                    ++bi;
+                }
+            };
             const char *p = begin;
             while (p != end)
             {
+                flush_bounds(p);
                 const char c = *p;
                 if (c == '\n')
                 {
@@ -217,6 +244,7 @@ namespace zb::ui
                 out += c;
                 ++p;
             }
+            flush_bounds(end);  // bounds at the raw end (empty segments)
             return out;
         }
 
@@ -577,8 +605,14 @@ namespace zb::ui
             // T-5: the styled inline elems (span/label/small) whose text
             // merged into a wrapping paragraph — kept so the converter
             // can fold their CSS and turn each merged segment into a
-            // styled run of the paragraph's own text
+            // styled run of the paragraph's own text. Parallel to
+            // `inlines`: until the paragraph finalizes, each entry is the
+            // segment's RAW byte offset (recorded at append time); at
+            // finalize it resolves to the offset in the finalized text,
+            // or npos when the segment cannot be located there (degenerate
+            // entity re-decode) and the converter must skip it.
             std::vector<Elem> inlines;
+            std::vector<std::size_t> inline_offs;
             int line = 1;  // 1-based source line of the open tag (B6)
 
             const std::string &attr(const std::string &name) const
@@ -5135,35 +5169,73 @@ namespace zb::ui
             }
         }
 
+        // T-5: resolves a paragraph's recorded raw segment offsets (see
+        // Elem::inline_offs) to offsets in the finalized paragraph text.
+        // The raw text still holds the segments verbatim at those offsets;
+        // the p-level normalize_wrapped pass is the only thing between, so
+        // one fused scan produces the final text AND each segment's exact
+        // byte offset — no content search, which would mislocate a segment
+        // whose text also occurs in the bare text before it (e.g.
+        // <p>Ctrl+<span>C</span></p>). A segment the scan cannot vouch for
+        // (degenerate entity re-decode across the segment edge) resolves
+        // to npos and the converter skips it.
+        void resolve_inline_offsets(Elem &e)
+        {
+            const std::string raw = std::move(e.text);
+            std::vector<std::pair<std::size_t, bool>> marks;
+            e.text = normalize_wrapped(raw.data(),
+                                       raw.data() + raw.size(),
+                                       &e.inline_offs, &marks);
+            for (std::size_t i = 0; i < e.inlines.size(); ++i)
+            {
+                std::size_t at = std::string::npos;
+                if (i < marks.size() && !e.inlines[i].text.empty())
+                {
+                    const std::size_t byte =
+                        marks[i].first + (marks[i].second ? 1u : 0u);
+                    if (byte + e.inlines[i].text.size() <= e.text.size() &&
+                        e.text.compare(byte, e.inlines[i].text.size(),
+                                       e.inlines[i].text) == 0)
+                    {
+                        at = byte;
+                    }
+                }
+                e.inline_offs[i] = at;
+            }
+        }
+
         // T-5 (html-path.md element table): inside a wrapping p a
         // span/label/small is not a child label — its text already merged
         // into the paragraph in document order, and its style lands as
         // styled runs (code-contract §2 "Styled text runs"). The run
-        // indices address the u16 text, so each segment relocates by
-        // content in the finalized paragraph text (document order, one
-        // moving cursor). The run props carry the raw CSS strings; the
-        // builder parses them with the node-color/font-size tolerance.
+        // indices address the u16 text; each segment's offset comes from
+        // the exact append-time relocation resolved at finalize (see
+        // resolve_inline_offsets) — never a content search. The run props
+        // carry the raw CSS strings; the builder parses them with the
+        // node-color/font-size tolerance.
         void convert_inline_runs(ui_node &n, const Elem &e,
                                  const Rules &rules, const VarMap &vars,
                                  const std::vector<Ancestor> &below,
                                  VarWarnState &warn_state)
         {
             static bool letter_spacing_warned = false;
-            std::size_t from = 0;
-            for (const Elem &in : e.inlines)
+            for (std::size_t seg = 0; seg < e.inlines.size(); ++seg)
             {
+                const Elem &in = e.inlines[seg];
                 if (in.text.empty())
                 {
                     continue;  // no segment: nothing to style
                 }
-                const std::size_t pos = e.text.find(in.text, from);
+                const std::size_t pos =
+                    seg < e.inline_offs.size()
+                        ? e.inline_offs[seg]
+                        : std::string::npos;
                 if (pos == std::string::npos)
                 {
-                    // unreachable for a finalized paragraph; skip rather
-                    // than style the wrong units
+                    // unresolvable segment: skip rather than style the
+                    // wrong units
                     continue;
                 }
-                from = pos + in.text.size();
 
                 std::vector<Decl> folded;
                 fold_style(in, rules, vars, below, folded, warn_state);
@@ -5607,16 +5679,26 @@ namespace zb::ui
                 if (is_leaf(*f.elem))
                 {
                     // H-1: a paragraph keeps its hard breaks; every other
-                    // leaf collapses like before
-                    f.elem->text = (f.elem->tag == "p"
-                                        ? normalize_wrapped(
-                                              f.elem->text.data(),
-                                              f.elem->text.data() +
-                                                  f.elem->text.size())
-                                        : normalize_text(
-                                              f.elem->text.data(),
-                                              f.elem->text.data() +
-                                                  f.elem->text.size()));
+                    // leaf collapses like before. A paragraph with merged
+                    // inline segments resolves their append-time raw
+                    // offsets in the same pass (T-5, resolve_inline_offsets)
+                    if (f.elem->tag == "p" && !f.elem->inline_offs.empty())
+                    {
+                        resolve_inline_offsets(*f.elem);
+                    }
+                    else
+                    {
+                        f.elem->text =
+                            (f.elem->tag == "p"
+                                 ? normalize_wrapped(
+                                       f.elem->text.data(),
+                                       f.elem->text.data() +
+                                           f.elem->text.size())
+                                 : normalize_text(
+                                       f.elem->text.data(),
+                                       f.elem->text.data() +
+                                           f.elem->text.size()));
+                    }
                 }
                 if (!f.pushed && frames.size() > 1)
                 {
@@ -5626,13 +5708,15 @@ namespace zb::ui
                     {
                         // T-5: a styled inline inside a wrapping paragraph
                         // contributes a run to the paragraph's own text.
-                        // The segment is appended first, then the elem is
-                        // kept (its attrs feed the CSS fold at convert
-                        // time) — inlines.back().text equals the appended
-                        // bytes, which is what the converter locates
+                        // The raw byte offset is recorded before the
+                        // append, then the elem is kept (its attrs feed the
+                        // CSS fold at convert time); finalize resolves the
+                        // offsets against the normalized paragraph text
                         if (par.elem->tag == "p" &&
                             is_inline_text_tag(f.elem->tag))
                         {
+                            par.elem->inline_offs.push_back(
+                                par.elem->text.size());
                             par.elem->text += f.elem->text;
                             par.elem->inlines.push_back(
                                 std::move(*f.elem));

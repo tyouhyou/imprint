@@ -1084,6 +1084,18 @@ namespace zb::ui
          */
         void set_font_size(int px);
         void set_font_size(int px, const TtfFamily &family);
+        /*
+         * Anchors a copy of `family` on the widget WITHOUT touching any
+         * rendering state (no primary provider, no size declaration). The
+         * anchor keeps the family's shared state — and every provider
+         * borrowed from it — alive for the widget's lifetime, so a
+         * `text_style_run::provider` resolved from the process family
+         * (the T-5 builder path) survives a later set_font_family /
+         * clear_font_family. This is the review-4 borrow rule's keeper
+         * half: a borrowed run provider must have an owner that outlives
+         * the widget's use of it.
+         */
+        void anchor_font_family(const TtfFamily &family);
         [[nodiscard]] int font_size() const
         {
             return (ext_ != nullptr && ext_->has_font != 0)

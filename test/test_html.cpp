@@ -3218,6 +3218,34 @@ int test_html()
         EXPECT(find_prop(r2.children[0], "text_run") < 0);
     }
 
+    // T-5 review fix: a segment whose text also occurs in the bare text
+    // before it must style its OWN copy — the append-time relocation, not
+    // a content search (which matched the "C" inside "Ctrl")
+    {
+        ui_node r = parse_html(
+            "<p>Ctrl+<span style=\"color:red\">C</span></p>\n", nullptr);
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "Ctrl+C");
+        int i = find_prop(r.children[0], "text_run");
+        EXPECT(i >= 0);
+        if (i >= 0)
+        {
+            EXPECT(test::vget<std::string>(
+                       r.children[0].props[static_cast<std::size_t>(i)].second) == "5|1|red|-|0");
+        }
+
+        ui_node r2 = parse_html(
+            "<p>Knock<span style=\"color:red\">Knock</span></p>\n",
+            nullptr);
+        i = find_prop(r2.children[0], "text_run");
+        EXPECT(i >= 0);
+        if (i >= 0)
+        {
+            EXPECT(test::vget<std::string>(
+                       r2.children[0].props[static_cast<std::size_t>(i)].second) == "5|5|red|-|0");
+        }
+    }
+
     // T-5: a span-level letter-spacing warns once and is ignored — the
     // unstyled remainder merges with no run
     {
@@ -3377,6 +3405,46 @@ int test_html()
         EXPECT(base_rows > run_rows);
         EXPECT(run_rows > 0);
         clear_font_family();
+    }
+
+    // T-5/T-3 review fix: a run provider resolved from the process family
+    // is anchored on the widget (anchor_font_family) — clearing the
+    // process family afterwards cannot strand the borrow, so the page
+    // still draws pixel-identically (the review-4 GifWriter rule;
+    // regression lock for the use-after-free)
+    {
+        const TtfFamily family =
+            TtfFamily::from_file(IM_TEST_RUNTIME_TTF_FONT);
+        set_font_family(family);
+        // no font-size anywhere in the paragraph's cascade: the label
+        // holds NO family anchor of its own — the run is the only borrow
+        ui_node root = parse_html(
+            "<p id=\"para\" style=\"width: 160px; height: 40px\">"
+            "xx <span style=\"font-size: 8px\">HH</span></p>\n",
+            nullptr);
+        FlexPanel host;
+        host.set_size(200, 80);
+        build(host, root);
+        host.layout();
+        auto *para = static_cast<Label *>(host.find_by_id("para"));
+        EXPECT(para != nullptr);
+        core::Graphics g(200, 80, nullptr);
+        host.draw(g);
+        clear_font_family();
+        core::Graphics g2(200, 80, nullptr);
+        host.draw(g2);  // dangling without the anchor (ASan-visible)
+        std::size_t diffs = 0;
+        for (int y = 0; y < 80; ++y)
+        {
+            for (int x = 0; x < 200; ++x)
+            {
+                if (test::pixel_at(g, x, y) != test::pixel_at(g2, x, y))
+                {
+                    ++diffs;
+                }
+            }
+        }
+        EXPECT(diffs == 0);
     }
 #endif
 

@@ -435,9 +435,13 @@ colored, bolded, or drawn through another glyph provider.
   (a content setter: damage + layout invalidation, clears
   `advance_cache_`; an empty vector clears all runs). `provider` is
   **borrowed** — it must outlive the widget's use of it (the
-  review-4 `GifWriter` rule; the header states it). The C-ABI does
-  not carry runs in this batch, and `.ui` documents do not grow run
-  syntax — html inline spans are the declarative carrier (T-5).
+  review-4 `GifWriter` rule; the header states it). The builder path
+  satisfies the rule with `Widget::anchor_font_family(const
+  TtfFamily &)` — an anchor copy holding no rendering state — which
+  keeps a run provider resolved from the process family alive even
+  after a later `set_font_family`/`clear_font_family` (T-5). The C-ABI
+  does not carry runs in this batch, and `.ui` documents do not grow
+  run syntax — html inline spans are the declarative carrier (T-5).
   Internally runs ride the shared design-file IR as one string
   property per run (`text_run`: `off|len|color|font-size|bold`),
   consumed by the builder — a builder-internal key: no design-file

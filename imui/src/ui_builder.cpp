@@ -1114,6 +1114,9 @@ namespace zb::ui
             // so set_text's re-clamp never sees them half-installed.
             {
                 std::vector<text_style_run> runs;
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+                bool run_provider = false;  // any run resolved a family provider
+#endif
                 for (const auto &p : n.props)
                 {
                     if (p.first != "text_run")
@@ -1186,14 +1189,18 @@ namespace zb::ui
 #if defined(IMCORE_HAS_TTF_RUNTIME)
                         else
                         {
-                            // the family state's per-size memo owns the
-                            // provider; the borrowed pointer lives as
-                            // long as the installed family (see
-                            // TtfFamily::provider_for)
+                            // the provider is BORROWED from the process
+                            // family's per-size memo (TtfRuntimeProvider is
+                            // non-owning toward its family state); the
+                            // anchor below keeps that family — and the
+                            // borrowed pointer — alive on the widget itself,
+                            // so a later set_font_family/clear_font_family
+                            // cannot strand it (the review-4 borrow rule)
                             r.provider =
                                 font_family()
                                     .provider_for(static_cast<int>(px))
                                     .get();
+                            run_provider = true;
                         }
 #endif
                     }
@@ -1202,6 +1209,12 @@ namespace zb::ui
                 }
                 if (!runs.empty())
                 {
+#if defined(IMCORE_HAS_TTF_RUNTIME)
+                    if (run_provider)
+                    {
+                        w.anchor_font_family(font_family());
+                    }
+#endif
                     w.set_text_runs(std::move(runs));
                 }
             }

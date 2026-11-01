@@ -557,6 +557,15 @@ namespace zb::ui
         ext_->font_family = family;
         set_glyph_provider(provider);
     }
+
+    void Widget::anchor_font_family(const TtfFamily &family)
+    {
+        // anchor copy only (the T-3 borrow rule's keeper half): the family
+        // handle keeps its shared state — and the run providers resolved
+        // from it — alive; rendering state is untouched
+        ensure_ext();
+        ext_->font_family = family;
+    }
 #endif
 
     Widget::Widget()
