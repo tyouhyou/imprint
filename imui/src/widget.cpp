@@ -572,9 +572,76 @@ namespace zb::ui
         text_.clear();
         if (nullptr == text)
         {
+            clamp_text_runs();
             return;
         }
         text_ = utf8_to_utf16(text);
+        clamp_text_runs();
+    }
+
+    // T-3: runs are indices into text_ — after the text changed, a run
+    // left past the new end drops and one crossing the end truncates
+    // (code-contract §2 "Styled text runs")
+    void Widget::clamp_text_runs()
+    {
+        if (ext_ == nullptr || ext_->runs.empty())
+        {
+            return;
+        }
+        const int n = static_cast<int>(text_.size());
+        std::vector<text_style_run> kept;
+        kept.reserve(ext_->runs.size());
+        for (const text_style_run &r : ext_->runs)
+        {
+            if (static_cast<int>(r.offset) >= n)
+            {
+                continue;  // past the new end: dropped
+            }
+            text_style_run c = r;
+            const int room = n - static_cast<int>(r.offset);
+            if (static_cast<int>(c.len) > room)
+            {
+                // room < c.len <= 65535 here, so the cast cannot narrow
+                c.len = static_cast<uint16_t>(room);
+            }
+            kept.push_back(c);
+        }
+        ext_->runs = std::move(kept);
+    }
+
+    // T-3 (code-contract §2 "Styled text runs"): the stored form is the
+    // normalized list — sorted by offset (ties keep set order, so the
+    // first-set run wins an overlap), zero-length entries dropped
+    void Widget::set_text_runs(std::vector<text_style_run> runs)
+    {
+        if (runs.empty())
+        {
+            // a bare widget stays allocation-free on the clear path
+            if (ext_ != nullptr)
+            {
+                ext_->runs.clear();
+            }
+        }
+        else
+        {
+            ensure_ext();
+            runs.erase(std::remove_if(runs.begin(), runs.end(),
+                                      [](const text_style_run &r)
+                                      {
+                                          return r.len == 0;
+                                      }),
+                       runs.end());
+            std::stable_sort(runs.begin(), runs.end(),
+                             [](const text_style_run &a,
+                                const text_style_run &b)
+                             {
+                                 return a.offset < b.offset;
+                             });
+            ext_->runs = std::move(runs);
+        }
+        reset_wrap_cache();
+        mark_dirty();
+        mark_layout_dirty();
     }
 
     void Widget::draw(core::Graphics &g) const
@@ -1303,17 +1370,38 @@ namespace zb::ui
         return k2;
     }
 
+    // T-3: the first run (offset-sorted, ties keep set order) covering
+    // `idx`, or nullptr — the shared lookup for measure, wrap, and draw
+    static const text_style_run *covering_run(
+        const std::vector<text_style_run> &runs, const int idx)
+    {
+        for (const text_style_run &r : runs)
+        {
+            if (r.offset > idx)
+            {
+                break;  // sorted by offset: no later run can cover
+            }
+            if (idx < static_cast<int>(r.offset) + r.len)
+            {
+                return &r;
+            }
+        }
+        return nullptr;
+    }
+
     // H-1 greedy word wrap (code-contract §2 "Wrapped text"): breaks at
     // U+0020, '\n', and (T-1) between adjacent CJK break-set units, a line
     // trims its leading/trailing spaces, the break space drops at a wrap,
     // a run with no break candidate wider than the whole width sits alone
     // on its line (the draw clip keeps the edge), and consecutive hard
     // breaks keep their empty lines. Per-unit advances match the draw pen
-    // exactly (letter-spacing rides every covered unit).
+    // exactly (letter-spacing rides every covered unit; T-3: a covering
+    // style run's provider overrides the primary/fallback pick).
     static void greedy_wrap(const std::u16string &text,
                             const GlyphProvider *primary,
                             const GlyphProvider *fallback, const int letter,
                             const int width,
+                            const std::vector<text_style_run> *runs,
                             std::vector<std::pair<int, int>> &out)
     {
         const auto pick = [&](const char16_t ch) -> const GlyphProvider *
@@ -1331,7 +1419,20 @@ namespace zb::ui
         const int n = static_cast<int>(text.size());
         const auto w_of = [&](const int i) -> int
         {
-            const GlyphProvider *const p = pick(text[static_cast<std::size_t>(i)]);
+            const GlyphProvider *p = nullptr;
+            if (runs != nullptr)
+            {
+                if (const text_style_run *const r =
+                        covering_run(*runs, i);
+                    r != nullptr && r->provider != nullptr)
+                {
+                    p = r->provider;
+                }
+            }
+            if (p == nullptr)
+            {
+                p = pick(text[static_cast<std::size_t>(i)]);
+            }
             return p != nullptr
                      ? p->measure(text.data() + i, 1).width + letter
                      : 0;
@@ -1477,7 +1578,7 @@ namespace zb::ui
             const GlyphProvider *const primary = primary_provider();
             const GlyphProvider *const fallback = bitmap_fallback_.get();
             greedy_wrap(text_, primary, fallback, e->letter_px, width,
-                        e->spans);
+                        &e->runs, e->spans);
             if (e->spans.empty())
             {
                 e->spans.emplace_back(0, 0);  // empty paragraph: one empty line
@@ -1553,29 +1654,55 @@ namespace zb::ui
         return m.ascent;
     }
 
+    // T-3: the provider for the code unit at relative index i of `data` —
+    // the first covering style run's provider wins over the primary /
+    // fallback chain. Runs apply only when `data` addresses this
+    // widget's own text_ (advance_of/draw_text_at stay generic helpers);
+    // a covering run without a provider leaves the base chain in charge.
+    // nullptr means "not covered" — the pen keeps its position.
+    const GlyphProvider *Widget::pick_provider(const char16_t *data,
+                                               const int i) const
+    {
+        if (ext_ != nullptr && !ext_->runs.empty() && !text_.empty())
+        {
+            const char16_t *const begin = text_.data();
+            if (data >= begin && data <= begin + text_.size())
+            {
+                const int idx = static_cast<int>(data - begin) + i;
+                if (const text_style_run *const r =
+                        covering_run(ext_->runs, idx);
+                    r != nullptr && r->provider != nullptr)
+                {
+                    return r->provider;
+                }
+            }
+        }
+        const char16_t ch = data[i];
+        const GlyphProvider *const primary = primary_provider();
+        if (primary != nullptr && primary->covers(ch))
+        {
+            return primary;
+        }
+        if (bitmap_fallback_->covers(ch))
+        {
+            return bitmap_fallback_.get();
+        }
+        return nullptr;
+    }
+
     int Widget::advance_of(const char16_t *data, const int len) const
     {
-        const GlyphProvider *const primary = primary_provider();
-        const GlyphProvider *const fallback = bitmap_fallback_.get();
-
-        // pick the provider for a code unit; nullptr means "not covered"
-        const auto pick = [&](const char16_t ch) -> const GlyphProvider *
-        {
-            if (primary != nullptr && primary->covers(ch))
-            {
-                return primary;
-            }
-            if (fallback->covers(ch))
-            {
-                return fallback;
-            }
-            return nullptr;
-        };
-
         if (len <= 0)
         {
             return 0;
         }
+        // pick the provider for a code unit (T-3: style runs first);
+        // nullptr means "not covered"
+        const auto pick = [&](const int i) -> const GlyphProvider *
+        {
+            return pick_provider(data, i);
+        };
+
         // letter-spacing (P-2a): per covered code unit, trailing unit
         // included. The zero-spacing run path below stays untouched so
         // plain text is bit-identical (splitting is safe — no provider
@@ -1587,7 +1714,7 @@ namespace zb::ui
             int spaced = 0;
             for (int i = 0; i < len; ++i)
             {
-                const GlyphProvider *const p = pick(data[i]);
+                const GlyphProvider *const p = pick(i);
                 if (p != nullptr)
                 {
                     spaced += p->measure(data + i, 1).width + letter;
@@ -1598,9 +1725,9 @@ namespace zb::ui
         int total = 0;
         for (int i = 0; i < len;)
         {
-            const GlyphProvider *cur = pick(data[i]);
+            const GlyphProvider *cur = pick(i);
             int j = i;
-            while (j < len && pick(data[j]) == cur)
+            while (j < len && pick(j) == cur)
             {
                 ++j;
             }
@@ -1622,22 +1749,6 @@ namespace zb::ui
     void Widget::draw_text_at(core::Graphics &area, const char16_t *data, const int len,
                               const int x, const int y, const core::Color &color) const
     {
-        const GlyphProvider *const primary = primary_provider();
-        const GlyphProvider *const fallback = bitmap_fallback_.get();
-
-        const auto pick = [&](const char16_t ch) -> const GlyphProvider *
-        {
-            if (primary != nullptr && primary->covers(ch))
-            {
-                return primary;
-            }
-            if (fallback->covers(ch))
-            {
-                return fallback;
-            }
-            return nullptr;
-        };
-
         // one run of glyphs at (x0, y0): the provider-run fast path
         // when tracking is off, per-unit pen (unit advance + spacing)
         // when on. Uncovered units keep the pen position either way
@@ -1650,16 +1761,22 @@ namespace zb::ui
             has_text_shadow() ? static_cast<int>(ext_->shadow_dx) : 0;
         const int sh_dy =
             has_text_shadow() ? static_cast<int>(ext_->shadow_dy) : 0;
-        const auto pass = [&](const int x0, const int y0, const core::Color &c)
+        const auto pick = [&](const int i) -> const GlyphProvider *
         {
+            return pick_provider(data, i);
+        };
+        const auto pass = [&](const int i0, const int i1, const int x0,
+                              const int y0, const core::Color &c)
+        {
+            // units [i0, i1) at (x0, y0)
             if (letter <= 0)
             {
                 int pen = 0;
-                for (int i = 0; i < len;)
+                for (int i = i0; i < i1;)
                 {
-                    const GlyphProvider *cur = pick(data[i]);
+                    const GlyphProvider *cur = pick(i);
                     int j = i;
-                    while (j < len && pick(data[j]) == cur)
+                    while (j < i1 && pick(j) == cur)
                     {
                         ++j;
                     }
@@ -1673,9 +1790,9 @@ namespace zb::ui
                 return;
             }
             int pen = 0;
-            for (int i = 0; i < len; ++i)
+            for (int i = i0; i < i1; ++i)
             {
-                const GlyphProvider *const p = pick(data[i]);
+                const GlyphProvider *const p = pick(i);
                 if (p != nullptr)
                 {
                     p->write(area, data + i, 1, x0 + pen, y0, c);
@@ -1684,31 +1801,99 @@ namespace zb::ui
             }
         };
 
+        // T-3: [0, len) splits at style-run boundaries — each part draws
+        // with its run's color and bold (the provider rides the per-unit
+        // pick); uncovered units keep the base style. Runs never change
+        // the pen math, only what a part looks like.
+        const bool has_runs = ext_ != nullptr && !ext_->runs.empty();
+        const auto run_at = [&](const int i) -> const text_style_run *
+        {
+            if (!has_runs)
+            {
+                return nullptr;
+            }
+            const char16_t *const begin = text_.data();
+            if (data < begin || data > begin + text_.size())
+            {
+                return nullptr;  // foreign data: no run context applies
+            }
+            return covering_run(ext_->runs, static_cast<int>(data - begin) + i);
+        };
+        const auto for_each_part = [&](const auto &fn)
+        {
+            int i = 0;
+            while (i < len)
+            {
+                const text_style_run *const r = run_at(i);
+                int j = i + 1;
+                while (j < len && run_at(j) == r)
+                {
+                    ++j;
+                }
+                core::Color c = color;
+                bool b = is_bold;
+                if (r != nullptr)
+                {
+                    if (r->color.has_value())
+                    {
+                        c = *r->color;
+                    }
+                    b = is_bold || r->bold;
+                }
+                // the part's pen starts where the preceding units ended:
+                // the prefix advance uses the same picks and batching as
+                // the per-part pen math, so the seams stay exact
+                fn(i, j, x + advance_of(data, i), c, b);
+                i = j;
+            }
+        };
+
         // the bitmap provider plots without blending, so a translucent
-        // pass color (the title's rgba shadow) needs the enable here;
-        // the TTF providers self-enable (their own save/restore nests)
-        const bool blend =
-            color.a() < 255 || (has_text_shadow() && shadow.a() < 255);
+        // pass color (the title's rgba shadow, a translucent run color)
+        // needs the enable here; the TTF providers self-enable (their
+        // own save/restore nests)
+        bool run_alpha = false;
+        if (has_runs)
+        {
+            for (const text_style_run &r : ext_->runs)
+            {
+                if (r.color.has_value() && r.color->a() < 255)
+                {
+                    run_alpha = true;
+                    break;
+                }
+            }
+        }
+        const bool blend = color.a() < 255 || run_alpha ||
+                           (has_text_shadow() && shadow.a() < 255);
         const bool bak = area.is_alpha_enabled();
         if (blend)
         {
             area.enable_alpha(true);
         }
         // shadow first (spacing + double-strike included), then the
-        // face; bold adds a +1px second face pass (P-2a double-strike)
+        // face; bold adds a +1px second pass (P-2a double-strike, per
+        // part for run bold). Every part's shadow lands before any face
+        // pass, so the paint order matches the no-runs path exactly
         if (has_text_shadow())
         {
-            pass(x + sh_dx, y + sh_dy, shadow);
-            if (is_bold)
+            for_each_part([&](const int i0, const int i1, const int px,
+                              const core::Color &, const bool b)
+                          {
+                pass(i0, i1, px + sh_dx, y + sh_dy, shadow);
+                if (b)
+                {
+                    pass(i0, i1, px + sh_dx + 1, y + sh_dy, shadow);
+                } });
+        }
+        for_each_part([&](const int i0, const int i1, const int px,
+                          const core::Color &c, const bool b)
+                      {
+            pass(i0, i1, px, y, c);
+            if (b)
             {
-                pass(x + sh_dx + 1, y + sh_dy, shadow);
-            }
-        }
-        pass(x, y, color);
-        if (is_bold)
-        {
-            pass(x + 1, y, color);
-        }
+                pass(i0, i1, px + 1, y, c);
+            } });
         if (blend)
         {
             area.enable_alpha(bak);

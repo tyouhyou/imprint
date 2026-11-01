@@ -31,6 +31,50 @@ public:
     }
 };
 
+// like StubProvider but the glyph face leaves its last column empty, so
+// the +1px double-strike of a unit lands on an unpainted column
+class GappedProvider : public GlyphProvider
+{
+public:
+    bool covers(const char16_t ch) const override { return ch == u'A'; }
+    text_metrics measure(const char16_t *, const int len) const override
+    {
+        return {4 * len, 7, 7};
+    }
+    text_metrics line_metrics() const override { return {0, 7, 7}; }
+    void write(core::Graphics &g, const char16_t *, const int len,
+               const int x, const int y, const core::Color &color) const override
+    {
+        for (int i = 0; i < len; ++i)
+        {
+            g.fill_rect(x + i * 4, y - 7, x + i * 4 + 2, y - 1, color);
+        }
+    }
+};
+
+// double-advance stub: the run-provider suite drives it through
+// text_style_run (borrowed, stack-scoped)
+class WideAProvider : public GlyphProvider
+{
+public:
+    bool covers(const char16_t ch) const override { return ch == u'A'; }
+    text_metrics measure(const char16_t *, const int len) const override
+    {
+        return {8 * len, 7, 7};
+    }
+    text_metrics line_metrics() const override { return {0, 7, 7}; }
+    void write(core::Graphics &, const char16_t *, const int, const int,
+               const int, const core::Color &) const override
+    {
+    }
+};
+
+// lifts the protected measure seam for the style-run suites
+struct ProbeWidget : Widget
+{
+    using Widget::text_advance;
+};
+
 int test_text()
 {
     // UTF-8 decoding: ASCII stays itself
@@ -300,6 +344,124 @@ int test_text()
         EXPECT(test::pixel_at(*g, 5, 6) == core::colors::White.pixel);  // 'B' bottom row
         EXPECT(test::pixel_at(*g, 7, 4) != core::colors::White.pixel);  // 'B' right side is empty
         EXPECT(test::pixel_at(*g, 2, 7) != core::colors::White.pixel);  // below the baseline
+    }
+
+    // T-3: a run recolors only its units — the rest keeps the base color
+    {
+        auto g = core::Graphics::make_ptr(16, 8);
+        g->fill(core::colors::Black);
+        Widget w;
+        w.set_size(16, 8);
+        w.set_glyph_provider(zb::make_shared<StubProvider>());
+        w.set_text(std::u16string(u"AAAA"));
+        w.set_text_color(core::colors::White);
+        w.set_text_runs({text_style_run{1, 2, core::colors::Red}});
+        w.draw(*g);
+        EXPECT(test::pixel_at(*g, 1, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 5, 3) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 9, 3) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 13, 3) == core::colors::White.pixel);
+    }
+
+    // T-3: a run's provider overrides the pick for its units in measure
+    // (borrowed, stack-scoped); an empty vector clears the runs
+    {
+        WideAProvider wide;
+        ProbeWidget w;
+        w.set_glyph_provider(zb::make_shared<StubProvider>());
+        w.set_text(std::u16string(u"AAAA"));
+        EXPECT(w.text_advance() == 16);
+        w.set_text_runs({text_style_run{0, 2, std::nullopt, &wide}});
+        EXPECT(w.text_advance() == 24);  // 8+8 for the run units
+        w.set_text_runs({});
+        EXPECT(w.text_advance() == 16);
+    }
+
+    // T-3: run bold double-strikes only that part (P-2a, per part) —
+    // the gapped face makes the +1px strike observable
+    {
+        auto g = core::Graphics::make_ptr(16, 8);
+        g->fill(core::colors::Black);
+        Widget w;
+        w.set_size(16, 8);
+        w.set_glyph_provider(zb::make_shared<GappedProvider>());
+        w.set_text(std::u16string(u"AAA"));
+        w.set_text_color(core::colors::White);
+        w.set_text_runs({text_style_run{2, 1, std::nullopt, nullptr, true}});
+        w.draw(*g);
+        // unit 2's strike lands in its trailing gap column (x=11)
+        EXPECT(test::pixel_at(*g, 11, 3) == core::colors::White.pixel);
+        // the base units are not bold: their strike columns stay empty
+        EXPECT(test::pixel_at(*g, 3, 3) != core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 7, 3) != core::colors::White.pixel);
+    }
+
+    // T-3: set_text re-clamps runs to the new length — a run left past
+    // the end drops, one crossing the end truncates
+    {
+        auto g = core::Graphics::make_ptr(16, 8);
+        Widget w;
+        w.set_size(16, 8);
+        w.set_glyph_provider(zb::make_shared<StubProvider>());
+        w.set_text(std::u16string(u"AAAA"));
+        w.set_text_color(core::colors::White);
+        w.set_text_runs({text_style_run{1, 3, core::colors::Red}});
+        w.draw(*g);
+        EXPECT(test::pixel_at(*g, 5, 3) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 13, 3) == core::colors::Red.pixel);
+
+        // two units left: the run truncates to {1,1}
+        w.set_text(std::u16string(u"AA"));
+        g->fill(core::colors::Black);
+        w.draw(*g);
+        EXPECT(test::pixel_at(*g, 5, 3) == core::colors::Red.pixel);
+
+        // one unit left: the run sits past the end and drops
+        w.set_text(std::u16string(u"A"));
+        g->fill(core::colors::Black);
+        w.draw(*g);
+        EXPECT(test::pixel_at(*g, 1, 3) == core::colors::White.pixel);
+    }
+
+    // T-3: overlapping runs — the first run by offset wins
+    {
+        auto g = core::Graphics::make_ptr(16, 8);
+        g->fill(core::colors::Black);
+        Widget w;
+        w.set_size(16, 8);
+        w.set_glyph_provider(zb::make_shared<StubProvider>());
+        w.set_text(std::u16string(u"AAAA"));
+        w.set_text_color(core::colors::White);
+        w.set_text_runs({text_style_run{0, 4, core::colors::Red},
+                         text_style_run{2, 2, core::colors::Blue}});
+        w.draw(*g);
+        EXPECT(test::pixel_at(*g, 1, 3) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 9, 3) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 13, 3) == core::colors::Red.pixel);
+    }
+
+    // T-3: a wrapped paragraph splits every line at the run boundaries —
+    // a run straddling the wrap colors both of its parts, and a
+    // mid-line run end splits its line
+    {
+        auto g = core::Graphics::make_ptr(8, 21);
+        g->fill(core::colors::Black);
+        Widget w;
+        w.set_size(8, 21);
+        w.set_glyph_provider(zb::make_shared<GappedProvider>());
+        w.set_text(std::u16string(u"AA AA AA"));
+        w.set_text_wrap(true);
+        w.set_text_color(core::colors::White);
+        // units 1..3: the tail of line 1 and the head of line 2
+        w.set_text_runs({text_style_run{1, 3, core::colors::Red}});
+        w.draw(*g);
+        // line 1 = units 0-1, line 2 = units 3-4, line 3 = units 6-7
+        EXPECT(test::pixel_at(*g, 1, 3) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 5, 3) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 1, 10) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 5, 10) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 1, 17) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(*g, 5, 17) == core::colors::White.pixel);
     }
 
     return test::report("text");

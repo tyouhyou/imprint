@@ -18,6 +18,32 @@
 namespace zb::ui
 {
     /*
+     * Per-unit style intervals on the text seam (T-3, code-contract §2
+     * "Styled text runs"). Indices address the stored u16 text; a unit
+     * takes the first run (by offset) that covers it, and uncovered units
+     * keep the widget's base style. Runs decide only how the text draws
+     * and measures — the text itself and the wrap break rules stay
+     * run-agnostic.
+     *
+     * `provider` is BORROWED: it must outlive the widget's every use of
+     * it (the review-4 GifWriter rule) — typically a static font, an
+     * app-scoped TtfFamily, or a provider kept alive by the owner of the
+     * widget. A run without a provider carries only color/bold and
+     * leaves the provider chain alone.
+     *
+     * The C-ABI and .ui documents carry no runs (html inline spans are
+     * the declarative carrier, T-5).
+     */
+    struct text_style_run
+    {
+        uint16_t offset = 0;
+        uint16_t len = 0;
+        std::optional<core::Color> color;
+        const GlyphProvider *provider = nullptr;
+        bool bold = false;
+    };
+
+    /*
      * Base class of a widget.
      *
      * Geometry:
@@ -902,10 +928,21 @@ namespace zb::ui
         void set_text(const std::u16string &text)
         {
             text_ = text;
+            clamp_text_runs();
             reset_wrap_cache();
             mark_dirty();
             mark_layout_dirty();
         }
+        /*
+         * Styled text runs (T-3): per-unit color / provider / bold
+         * intervals over the stored u16 text (see text_style_run). A
+         * content setter like set_text: normalized at set time (sorted
+         * by offset, zero-length entries dropped), damage + layout
+         * invalidation, advance and wrap caches cleared. An empty vector
+         * clears all runs. `provider` is borrowed — it must outlive the
+         * widget's use of it (see text_style_run).
+         */
+        void set_text_runs(std::vector<text_style_run> runs);
         [[nodiscard]] const std::u16string &get_text() const { return text_; }
         // per-widget override of the theme's `text` token (contract 10.3)
         void set_text_color(const core::Color &c)
@@ -1498,6 +1535,10 @@ namespace zb::ui
             core::Color shadow_color{};
             int8_t shadow_dx = 0;
             int8_t shadow_dy = 0;
+            // T-3 styled runs (offset-sorted at set time). The run
+            // providers are borrowed pointers — they must outlive the
+            // widget's use of them (text_style_run header note)
+            std::vector<text_style_run> runs{};
 #if defined(IMCORE_HAS_TTF_RUNTIME)
             TtfFamily font_family{};  // anchor copy: the sized provider
                                       // never outlives its family (§2.4)
@@ -1568,6 +1609,13 @@ namespace zb::ui
         }
 
         // text
+        // T-3 helpers: pick_provider resolves the per-unit provider with
+        // the style runs consulted first; clamp_text_runs re-clamps the
+        // stored runs after text_ changed (a run left past the new end
+        // drops, one crossing it truncates)
+        [[nodiscard]] const GlyphProvider *
+        pick_provider(const char16_t *data, const int i) const;
+        void clamp_text_runs();
         std::u16string text_;
         // unset = follow the active theme's `text` token (contract 10.3)
         std::optional<core::Color> text_color_;
