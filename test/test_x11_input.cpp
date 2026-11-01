@@ -183,8 +183,8 @@ int test_x11_input()
         EXPECT(ev[0].ch == 0);
     }
 
-    // navigation keys stay reachable through the input context: the
-    // keysym appends one ch=0 key event; XLookupBoth produces both halves
+    // navigation keys stay reachable through the input context: when the
+    // text side produces nothing, the keysym supplies the ch=0 key event
     {
         zb::input::input_event ev[4];
         // Enter: the committed "\n" is a control character and drops
@@ -192,11 +192,11 @@ int test_x11_input()
         EXPECT(ev[0].key == static_cast<int>(zb::input::key_code::enter));
         EXPECT(ev[0].ch == 0);
 
-        // a letter as XLookupBoth: text event first, keysym event (ch = 0)
-        // appended after it
-        EXPECT(commit_events(XK_a, "a", 1, ev, 4) == 2);
+        // a letter as XLookupBoth: the text event already carries key+ch
+        // (the legacy shape), and the keysym half must not double the
+        // key_down (one key_down per press, U-1)
+        EXPECT(commit_events(XK_a, "a", 1, ev, 4) == 1);
         EXPECT(ev[0].ch == 'a' && ev[0].key == 'a');
-        EXPECT(ev[1].key == 'a' && ev[1].ch == 0);
 
         // an unmapped keysym adds nothing
         EXPECT(commit_events(XK_Home, "x", 1, ev, 4) == 1);

@@ -115,16 +115,18 @@ namespace
         // string; the shell relays it. key_down only (key_up carries no
         // ch, U-1): the first UTF-16 unit outside the ASCII and C1 control
         // areas relays as ch = code point with key = 0 (the T-2 /
-        // term_input precedent). A committed astral character arrives as
-        // a surrogate pair and its lead unit is dropped until the
-        // cluster/advance extension (A-25).
+        // term_input precedent). The AppKit function-key band
+        // (0xF700-0xF8FF: arrows, F-keys, forward-delete) carries key
+        // semantics, not committed text, and stays ch = 0. A committed
+        // astral character arrives as a surrogate pair and its lead unit
+        // is dropped until the cluster/advance extension (A-25).
         if (out.type == zb::input::input_type::key_down)
         {
             NSString *chars = nse.characters;
             if (chars.length > 0)
             {
                 const unichar c = [chars characterAtIndex:0];
-                if ((c >= 0xA0 && c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFF))
+                if (c >= 0xA0 && c <= 0xFFFF && !(c >= 0xF700 && c <= 0xF8FF))
                 {
                     out.ch = c;
                 }

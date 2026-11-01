@@ -36,7 +36,10 @@ namespace zb::shell::x11_ime
 #else
         // only LC_CTYPE moves to the user's locale: LC_NUMERIC must stay
         // "C" or the framework's number formatting and the design-file
-        // parsers change under the whole process
+        // parsers change under the whole process. LC_CTYPE is process-
+        // global state too (XOpenIM requires it); no first-party code
+        // consumes locale-dependent ctype behavior -- every text path
+        // decodes UTF-8 manually
         setlocale(LC_CTYPE, "");
         // empty modifiers honor XMODIFIERS (ibus/fcitx/uim announce here)
         XSetLocaleModifiers("");

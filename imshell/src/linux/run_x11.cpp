@@ -140,11 +140,20 @@ namespace zb::shell
 
         // FI-01: the platform IME owns composition (root-window preedit --
         // the IM server paints its own window); the shell only relays
-        // committed text. Opened after the last throwing init step, so the
-        // teardown close() below cannot be skipped by an init-path throw
+        // committed text. The owner guard releases the IC/IM in its
+        // destructor: declared after display_owner, it is destroyed before
+        // it (XDestroyIC/XCloseIM before XCloseDisplay), and no throwing
+        // step between here and the loop's end can skip the release
         // (code-contract §11.2). A failed open degrades to the legacy
         // XLookupString path with one warning.
-        zb::shell::x11_ime::context ime;
+        struct ime_owner
+        {
+            zb::shell::x11_ime::context ctx;
+            ~ime_owner() { zb::shell::x11_ime::close(ctx); }
+            ime_owner(const ime_owner &) = delete;
+            ime_owner &operator=(const ime_owner &) = delete;
+        } ime_guard{};
+        zb::shell::x11_ime::context &ime = ime_guard.ctx;
         const bool ime_active = zb::shell::x11_ime::open(display, window, ime);
         if (ime_active)
         {
@@ -408,10 +417,6 @@ namespace zb::shell
             XNextEvent(display, &event);
             keep_running = handle_event(event);
         }
-
-        // the IM's X resources must go before XCloseDisplay runs in
-        // display_guard's destructor
-        zb::shell::x11_ime::close(ime);
 
         // XDestroyImage frees ximage->data with Xfree; the buffer belongs to
         // the app's Graphics (delete[]) and is freed again by its destructor.

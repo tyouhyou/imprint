@@ -213,7 +213,12 @@ namespace zb::shell::x11_input
                 ++total;
             }
         }
-        if (keysym != 0)
+        // navigation keys reach the IC path as bare keysyms (no chars);
+        // when the text side already produced this key's event
+        // (XLookupBoth printable ASCII) the keysym half is the same
+        // physical key and must not double the key_down (U-1 pairs one
+        // key_down with one key_up)
+        if (total == 0 && keysym != 0)
         {
             const int key = key_from_keysym(keysym);
             if (key != 0)
