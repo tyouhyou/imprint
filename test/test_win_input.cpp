@@ -136,6 +136,38 @@ int test_win_input()
         EXPECT(translate(WM_CHAR, '\t', 0, wheel_client, ev) == result::swallowed);
     }
 
+    // FI-01 committed-text relay: a Unicode window posts one WM_CHAR per
+    // UTF-16 unit; BMP code points outside ASCII/C1 relay as ch with
+    // key = 0 (the T-2/term_input precedent)
+    {
+        const zb::input::input_event cjk = run(WM_CHAR, 0x4E2D);  // U+4E2D
+        EXPECT(cjk.type == zb::input::input_type::key_down);
+        EXPECT(cjk.ch == 0x4E2D);
+        EXPECT(cjk.key == 0);
+        const zb::input::input_event acc = run(WM_CHAR, 0xE9);  // U+00E9 é
+        EXPECT(acc.ch == 0xE9 && acc.key == 0);
+        const zb::input::input_event nbsp = run(WM_CHAR, 0xA0);  // range floor
+        EXPECT(nbsp.ch == 0xA0 && nbsp.key == 0);
+        const zb::input::input_event pua = run(WM_CHAR, 0xE000);  // private-use floor
+        EXPECT(pua.ch == 0xE000 && pua.key == 0);
+    }
+    // surrogate units are not standalone code points: a committed astral
+    // character arrives as a pair and is dropped until A-25
+    {
+        const POINT wheel_client{0, 0};
+        zb::input::input_event ev;
+        EXPECT(translate(WM_CHAR, 0xD83D, 0, wheel_client, ev) == result::swallowed);
+        EXPECT(translate(WM_CHAR, 0xDE00, 0, wheel_client, ev) == result::swallowed);
+    }
+    // C1 controls (0x7F-0x9F) stay dropped
+    {
+        const POINT wheel_client{0, 0};
+        zb::input::input_event ev;
+        EXPECT(translate(WM_CHAR, 0x7F, 0, wheel_client, ev) == result::swallowed);
+        EXPECT(translate(WM_CHAR, 0x85, 0, wheel_client, ev) == result::swallowed);
+        EXPECT(translate(WM_CHAR, 0x9F, 0, wheel_client, ev) == result::swallowed);
+    }
+
     // wheel: normalized to signed notches, sub-notch deltas dropped,
     // coordinates from the pre-converted client point
     {

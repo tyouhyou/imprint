@@ -123,16 +123,31 @@ namespace zb::shell::win_input
             // navigation activation (dispatcher B1), other printable
             // ASCII becomes a character event
             const int c = static_cast<int>(wparam);
-            if (c < 0x20 || c > 0x7e || c == ' ')
+            if (c >= 0x20 && c <= 0x7e && c != ' ')
             {
-                return result::swallowed;
+                out.type = zb::input::input_type::key_down;
+                // U-1: letters/digits also carry the platform-independent
+                // key code (lowercase), so this single event pairs with
+                // its WM_KEYUP; punctuation stays key == 0 (layout-bound)
+                zb::input::decorate_printable_key(out, c);
+                return result::handled;
             }
-            out.type = zb::input::input_type::key_down;
-            // U-1: letters/digits also carry the platform-independent
-            // key code (lowercase), so this single event pairs with
-            // its WM_KEYUP; punctuation stays key == 0 (layout-bound)
-            zb::input::decorate_printable_key(out, c);
-            return result::handled;
+            // FI-01 committed-text relay: a Unicode window posts one
+            // WM_CHAR per UTF-16 unit, so IME commits reach this branch
+            // whole. BMP code points outside the ASCII and C1 control
+            // areas relay as ch = code point with key = 0 (the
+            // T-2/term_input precedent)
+            if ((c >= 0xA0 && c <= 0xD7FF) || (c >= 0xE000 && c <= 0xFFFF))
+            {
+                out.type = zb::input::input_type::key_down;
+                out.ch = c;
+                return result::handled;
+            }
+            // surrogate units are not standalone code points: a committed
+            // astral character arrives as a pair and is dropped until the
+            // cluster/advance extension (A-25); C1 controls (0x7F-0x9F)
+            // and C0 keep the long-standing drop rule
+            return result::swallowed;
         }
         case WM_MOUSEWHEEL:
         {
