@@ -115,6 +115,9 @@ namespace zb::shell::x11_ime
         // first attempt on a stack buffer; on XBufferOverflow the IC
         // reports the size it needs and the lookup is retried once
         char small_buf[128];
+        // outlives the overflow branch: `chars` points here for the
+        // status switch below
+        char retry[max_commit_bytes];
         KeySym keysym = NoSymbol;
         Status status = XLookupNone;
         const char *chars = small_buf;
@@ -128,7 +131,6 @@ namespace zb::shell::x11_ime
                    << max_commit_bytes << " byte cap: dropped";
                 return 0;
             }
-            char retry[max_commit_bytes];
             chars = retry;
             len = Xutf8LookupString(ctx.ic, &event->xkey, retry, max_commit_bytes, &keysym, &status);
             if (status == XBufferOverflow)
