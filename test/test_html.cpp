@@ -3537,5 +3537,76 @@ int test_html()
     }
 #endif
 
+    // FI-09: <img src> builds an image_view carrying the resource name
+    // (stored, never resolved); sizes flow through the shared lengths.
+    // A single top-level container becomes the document root itself (the
+    // shared re-root rule), so the div here IS the returned node.
+    {
+        ui_node r = parse_html(
+            "<body><div><img src=\"art/scene.png\" style=\"width: 40px; height: 20px\"/></div></body>",
+            nullptr);
+        EXPECT(r.type == "column");
+        EXPECT(r.children.size() == 1);
+        const ui_node &im = r.children[0];
+        EXPECT(im.type == "image_view");
+        const int si = find_prop(im, "src");
+        EXPECT(si >= 0 &&
+               test::vget<std::string>(im.props[static_cast<std::size_t>(si)].second) == "art/scene.png");
+        // sizes through the shared width/height lengths
+        EXPECT(find_prop(im, "width") >= 0);
+        EXPECT(find_prop(im, "height") >= 0);
+    }
+
+    // html-path tolerance: an <img> without a usable src (absent or
+    // empty) is an authoring error — one LW, element skipped
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { warns.push_back(m); });
+
+        ui_node r1 = parse_html("<body><div><img/></div></body>", nullptr);
+        ui_node r2 = parse_html("<body><div><img src=\"\"/></div></body>", nullptr);
+        zb::Logging::set_log_handle();
+
+        EXPECT(r1.type == "column" && r1.children.empty());
+        EXPECT(r2.type == "column" && r2.children.empty());
+        EXPECT(warns.size() == 2);  // one LW per skipped element
+    }
+
+    // block-level like svg: inside a wrapping p the img hits the
+    // leaf-children rule and is dropped with a warning
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { warns.push_back(m); });
+
+        ui_node r = parse_html(
+            "<body><p id=\"para\">before<img src=\"x.png\"/>after</p></body>",
+            nullptr);
+        zb::Logging::set_log_handle();
+
+        // the paragraph materializes as a label; no image_view anywhere
+        EXPECT(r.children.size() == 1);
+        bool image_view_found = false;
+        std::vector<const ui_node *> stack{&r};
+        while (!stack.empty())
+        {
+            const ui_node *n = stack.back();
+            stack.pop_back();
+            if (n->type == "image_view")
+            {
+                image_view_found = true;
+            }
+            for (const auto &c : n->children)
+            {
+                stack.push_back(&c);
+            }
+        }
+        EXPECT(!image_view_found);
+        EXPECT(!warns.empty());
+    }
+
     return test::report("html");
 }

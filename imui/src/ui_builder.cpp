@@ -4,6 +4,7 @@
 #include "checkbox.hpp"
 #include "flex_panel.hpp"
 #include "gauge_dial.hpp"
+#include "image_view.hpp"
 #include "knob.hpp"
 #include "label.hpp"
 #include "list_box.hpp"
@@ -256,6 +257,10 @@ namespace zb::ui
             {
                 return std::make_unique<SvgCanvas>();
             }
+            if (t == "image_view")
+            {
+                return std::make_unique<ImageView>();
+            }
             if (t == "list_box")
             {
                 return std::make_unique<ListBox>();
@@ -311,6 +316,10 @@ namespace zb::ui
         SvgCanvas *as_svg(Widget &w)
         {
             return static_cast<SvgCanvas *>(&w);
+        }
+        ImageView *as_image_view(Widget &w)
+        {
+            return static_cast<ImageView *>(&w);
         }
         ListBox *as_list(Widget &w)
         {
@@ -1391,6 +1400,15 @@ namespace zb::ui
                             static_cast<int>(prop_of(n, "max", 100LL)));
                 k.set_step(static_cast<int>(prop_of(n, "step", 1LL)));
                 k.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                return;
+            }
+            if (t == "image_view")
+            {
+                // src is stored and exposed on the widget, never resolved
+                // by the framework (code-contract §3.5); pixels arrive at
+                // runtime through set_image / set_image_png
+                ImageView &iv = *as_image_view(w);
+                iv.set_src(prop_of(n, "src", std::string{}));
                 return;
             }
             if (t == "svg")

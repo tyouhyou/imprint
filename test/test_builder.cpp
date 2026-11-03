@@ -347,6 +347,34 @@ int test_builder()
         }
 #endif
 
+        // image_view (FI-09): the .ui tag materializes, src is stored on
+        // the widget (never resolved), explicit size wins over measure
+#if IMUI_HAS_UI_FILE
+        {
+            bool ok = false;
+            zb::ui::ui_node tree = parse_ui_text(
+                "column spacing=0\n"
+                "  image_view id=\"iv\" src=\"scene_art\" width=64 height=32\n"
+                "  image_view id=\"ivn\" src=\"\" width=64 height=32\n",
+                &ok);
+            EXPECT(ok);
+            FlexPanel host;
+            host.set_size(300, 240);
+            build(host, tree);
+            host.layout();
+            auto *iv = static_cast<ImageView *>(host.find_by_id("iv"));
+            auto *ivn = static_cast<ImageView *>(host.find_by_id("ivn"));
+            EXPECT(iv != nullptr && ivn != nullptr);
+            EXPECT(iv->get_src() == "scene_art");
+            EXPECT(iv->get_size().width == 64 && iv->get_size().height == 32);
+            EXPECT(!iv->has_image());
+            EXPECT(iv->measure().width == 0 && iv->measure().height == 0);
+            // an empty src on the .ui side is tolerated (the html-path
+            // authoring-error rule is the HTML front-end's)
+            EXPECT(ivn->get_src().empty());
+        }
+#endif
+
         // a one-axis size declaration keeps the other axis's own measure
         // (regression: width= only used to force the height to an explicit
         // 0 -- buttons and sliders collapsed flat and became unclickable)

@@ -36,11 +36,24 @@ namespace zb::ui
                    t == "small" || t == "button" || t == "checkbox" || t == "radio" ||
                    t == "br" || t == "toggle" || t == "gauge" ||
                    t == "knob" || t == "slider" || t == "trend" || t == "meter" ||
-                   t == "svg" || t == "vectordial";
+                   t == "svg" || t == "vectordial" || t == "img";
             // NOTE: line/text and the static geometry elements are
             // svg-context only (handled in handle_open while
             // in_svg()); elsewhere they stay off-whitelist and skip
             // with content dropped
+        }
+        // img's src: usable = present and non-empty (html-path tolerance:
+        // an image without a source is an authoring error)
+        bool has_usable_src(const std::vector<std::pair<std::string, std::string>> &attrs)
+        {
+            for (const auto &a : attrs)
+            {
+                if (a.first == "src" && !a.second.empty())
+                {
+                    return true;
+                }
+            }
+            return false;
         }
         // elements whose bare text becomes an anonymous label: the container
         // tags, and body (the document container)
@@ -2958,6 +2971,10 @@ namespace zb::ui
             {
                 return "svg";
             }
+            if (e.tag == "img")
+            {
+                return "image_view";
+            }
             return e.tag;  // button/checkbox/radio/toggle/gauge/knob/trend
         }
 
@@ -4405,6 +4422,12 @@ namespace zb::ui
                         n.prop("group", g);
                     }
                 }
+                else if (k == "src" && n.type == "image_view")
+                {
+                    // stored and exposed, never resolved by the framework
+                    // (code-contract §3.5)
+                    n.prop("src", a.second);
+                }
                 else if ((k == "min" || k == "max" || k == "step" ||
                           k == "value") &&
                          (n.type == "gauge" || n.type == "knob" ||
@@ -5737,6 +5760,15 @@ namespace zb::ui
                         }
                         else
                         {
+                            if (f.elem->tag == "img")
+                            {
+                                // html-path: block-level like svg — no
+                                // inline images; the held img (explicit
+                                // close form) is dropped with a warning
+                                LW << "html: line " << f.elem->line
+                                   << ": <img> inside a text leaf is "
+                                      "dropped (no inline images)";
+                            }
                             par.elem->text += f.elem->text;
                         }
                     }
@@ -5865,6 +5897,14 @@ namespace zb::ui
                            << "> is not in the whitelist; skipped";
                         mode = k_skip;
                     }
+                }
+                else if (name == "img" && !has_usable_src(t.attrs))
+                {
+                    // html-path tolerance: an image without a source is an
+                    // authoring error, the same class as an off-whitelist
+                    // element
+                    LW << "html: line " << t.line << ": <img> without a usable src; skipped";
+                    mode = k_skip;
                 }
 
                 Elem *elem = nullptr;
@@ -6007,6 +6047,13 @@ namespace zb::ui
                     // no frame is pushed for a self-closing tag
                     if (mode == k_build && !pushed)
                     {
+                        if (elem != nullptr && elem->tag == "img")
+                        {
+                            // html-path: block-level like svg — no inline
+                            // images, the held img is dropped with a warning
+                            LW << "html: line " << t.line << ": <img> inside "
+                               << "a text leaf is dropped (no inline images)";
+                        }
                         frames.back().owned.reset();  // held temp: discard
                     }
                     return;

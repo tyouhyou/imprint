@@ -39,6 +39,7 @@ add_library(
     src/knob.cpp
     src/trend_line.cpp
     src/svg_canvas.cpp
+    src/image_view.cpp
 )
 
 # PUBLIC 0/1 (not presence-only) so consumers and tests can branch on the
