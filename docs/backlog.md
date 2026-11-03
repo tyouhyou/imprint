@@ -27,9 +27,15 @@ Dependency-driven: each tier unlocks what follows.
    discipline (interleaved, rotating arm order, min-of-N, null A/B for
    host resolution — fps IMPRINT-RUNTIME R15/R18), never
    `cpu.pressure`.
-3. **Explicitly NOT now**: F-1/F-2, I-1, V-4, A-4/A-21, D-*, A-27, and
+3. **Batch FI — tianji client (active; restructured 2026-11-03)**:
+   framework modules first (Part 1 order: FI-09+V-4 → FI-10 →
+   annotation canvas → stream trio → text readiness), then the
+   composition under `tianji/` (Part 2). Display path: SIXEL first.
+4. **Explicitly NOT now**: F-1/F-2, I-1, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
-   items stay trigger-gated.
+   items stay trigger-gated. (V-4 moved out 2026-11-03: it fires with
+   Batch FI FI-09 — tianji scene art is the first real
+   compressed-asset consumer.)
 
 ### Batch V — Visual Presentation (open remainder only)
 
@@ -254,17 +260,132 @@ rationale in `reports/audit-2026-10-15.md` §5.
   the missing proof for the "embedded" tag this batch itself marks as
   partially earned.
 
-### Batch FI — Consumer Batch: tianji (added 2026-11-01)
+### Batch FI — Consumer Batch: tianji (added 2026-11-01; restructured 2026-11-03)
 
 The tianji theater platform (`../tianji`, an AI-driven multiplayer
-narrative / murder-mystery engine) builds its release client on
-imprint: a **native C++ application** (2026-11-01 ruling — one shell
-carries text and imagery; the SIXEL terminal shell is not on its
-deployment path, and no dynamic C-ABI surface is built, closing
-tianji's FI-07 by route decision). Requirements letter: tianji-side
+narrative / murder-mystery engine) is imprint's first production
+consumer. **2026-11-03 ruling (supersedes the deployment-path part of
+the 2026-11-01 ruling):** imprint's role is to provide the UI —
+widgets, shells, and a feed interface — and the kernel side stays with
+the consumer; the integration shape (native app / SIXEL terminal / wasm
+browser) is the consumer's choice, and all three are the same widget
+tree to us (NDS excluded). Our build order puts **SIXEL first**: the
+SIXEL terminal shell has never had a serious demo, and this client is
+its proving ground. The client composition lives in-tree under
+`tianji/` (including `tianji/for_tianji.md` — the decisions / progress
+/ open-questions doc tianji reads); `apps/` stays demo-only. The
+interface is message-level (a subset aligned with tianji's v1 JSON
+protocol over its Unix-socket server); **FI-07 stays closed** — no
+dynamic C-ABI surface. Requirements letter: tianji-side
 `docs/for_imprint.md` (FI-01…FI-10, each with file:line evidence;
 statuses tracked in its §5 table). Items below carry tianji's IDs;
-accepted ones land contract-first where they touch an API.
+accepted ones land contract-first where they touch an API. **This
+section is deliberately self-contained: read it instead of visiting
+the tianji repo; go there only to confirm specifics.**
+
+#### The client, as specified (2026-11-03)
+
+- **Left pane — message stream.** Legal actions are enumerated by the
+  server (speak/move/search/take/drop/use/give/attack/observe/accuse/
+  vote/end_turn) — the client never invents actions. Message
+  categories 旁白 / 发言（说话人+内容）/ 动作成败（含拒绝码）/ 线索发现 /
+  系统提示 / 终局卡, one visual treatment each, seat-stable coloring
+  via styled runs. A game reaches thousand-scale events; messages
+  typically 25–60 hanzi. Follow-bottom (scroll-up pauses, returning to
+  bottom re-follows), selection + copy, bottom command-input line.
+- **Right pane — stage canvas.** Fixed logical canvas 800×600 (480×360
+  allowed as an alternative): background image scaled-to-fit +
+  letterbox, props, overlays, **annotation strokes** drawn by the user
+  (freehand lines, per-stroke color, undo) — stroke coordinates are
+  always logical-canvas coordinates, independent of presentation
+  scaling. **Scene-replay animation** (还原现场) = beat-driven
+  repositioning of props/actors derived from the event stream,
+  deterministic (frame = f(event sequence)).
+- **Interface.** Message-level feed over tianji's Unix-socket server
+  (JSON lines v1: `subscribe` with `after_seq` resume; view/stage/event
+  messages). A mock feeder replays tianji's own `samples/` transcripts,
+  so end-to-end self-testing never blocks on tianji.
+- **Display priority.** 1) SIXEL terminal shell (this batch's proving
+  ground), 2) desktop shells X11/win/mac (same widget tree), 3) wasm
+  (later batch; needs a tianji-side WebSocket gateway). NDS excluded.
+- **Determinism through-line.** Same event sequence → same frame
+  bytes, including the SIXEL DCS output (replay 存证 / AI-eval
+  screenshots).
+
+#### Part 1 — Framework modules (build in this order)
+
+- **FI-09 — ImageView & image plumbing** (the largest item; fires
+  V-4). ImageView with deterministic nearest-neighbor scaling (the
+  presentation-resample style) + letterbox + runtime `set_image`,
+  decode cache keyed by content id; `<img>` in the build-time HTML
+  path (html-path.md whitelist change); needs V-4's memory-source
+  decode and the `USE_PNG` consumer decision (codecs stay default-OFF
+  per ARCHITECTURE §4.9.1; the tianji app opts in). Contract-first.
+- **FI-10 — deterministic SIXEL quantizer** (revived 2026-11-03; was
+  de-prioritized under the old ruling). Replace per-band color-drop at
+  `kMaxRegisters=250` with a deterministic quantizer (fixed palette /
+  median cut) so photo-grade scene art plus UI colors survive one
+  frame. Determinism lock: same frame → same DCS bytes. Extend the pty
+  smoke with an image-bearing frame. Also covers the
+  buffer-geometry ↔ terminal-cell mapping a real client frame needs
+  (the current P4 demo target is a fixed buffer).
+- **TJ-NEW — annotation canvas widget** (new widget, framework-style;
+  final name lands at implementation). A widget with a fixed
+  logical-canvas coordinate space: background layer over the FI-09
+  machinery; pointer-captured stroke layer (freehand polylines through
+  AA primitives, per-stroke color/width); stroke model as data
+  (add/query/clear — the feed can inject strokes from other seats);
+  stroke listener for the I/F relay. Deterministic pixels for
+  identical stroke sets; 16bpp plot_aa rule compliance; undo stays
+  host-side over the stroke-list ops. Contract-first (widget contract
+  section of code-contract.md).
+- **FI-05 — ScrollPanel stick-to-bottom primitive** (accepted).
+  Follow-bottom or follow policy over the existing re-clamping
+  `layout()`; additive, no contract change.
+- **FI-06 — variable-height ListBox rows** (accepted). The
+  visible-window row-bitmap cache already virtualizes; the work is the
+  offset math (prefix sums). Extend ListBox, no new control.
+- **FI-02 — text selection + clipboard seam** (accepted). Selection is
+  the already-declared additive shape (no contract change); the
+  clipboard seam is new — design before code, and design it so the
+  shell supplies the sink (over SIXEL the natural sink is OSC 52).
+- **FI-04 — CJK runtime-font recipe** (document-only). Runtime full
+  font + `cache_budget` guidance (the 64KB default ≈ a few dozen
+  hanzi; recommend 2–8MB) vs build-time subsets.
+- **FI-03 → A-25 — non-BMP pairing rendering** (trigger fired). Late
+  in this batch: engine-side text is all-BMP today; AI-generated
+  dialogue emoji is the residual risk. Contract-first at A-25, no
+  separate item here.
+
+#### Part 2 — Composition (`tianji/` folder)
+
+- **TJ-C1 — folder + `for_tianji.md`.** Done 2026-11-03 (doc only; no
+  code yet, per ruling).
+- **TJ-C2 — message-level I/F + mock feeder.** Feed client (connect,
+  hello/join_room/subscribe, `after_seq` resume, reconnect) + view
+  builder (v1 messages → widget tree) + a feeder that replays
+  transcripts shaped like tianji's `samples/run_子夜客栈.json`. The
+  exact message subset is written into `tianji/for_tianji.md` for
+  tianji to confirm.
+- **TJ-C3 — SIXEL-first client app.** FlexPanel layout (left stream +
+  right stage canvas), command input → legal-action proposals,
+  assembled like `${STORY}` (`shell_backend` + `tianji_app`) but
+  sourced from `tianji/`; first target `IM_SHELL_BACKEND=SIXEL`;
+  verify via pty smoke + a real terminal. FI-01's standing
+  re-verification (real IME) and SIXEL terminal Chinese input close
+  here. CMake wiring touches the top-level composition — ARCHITECTURE
+  §2/§3 updates land with the step (contract-before-API).
+- **TJ-C4 — desktop shells.** Same tree under X11/win/mac; no new
+  framework work expected beyond FI-01 re-verification.
+- **TJ-C5 — scene-replay animation.** Beat-driven repositioning from
+  the feed/event state, step-driven via the A-29 deterministic step
+  contract; **no framework animation system** (transition animations
+  remain a ratified non-goal — this is application content); optional
+  GIF snapshot export for replay 存证 (GIF89a writer exists).
+- **TJ-C6 — wasm path.** Later batch: transport seam + tianji-side
+  WebSocket gateway; unscheduled.
+
+#### Reconciliation with the FI letter (2026-11-03)
 
 - **FI-01 — landed (2026-11-01).** Committed-text relay in all three
   desktop shells: X11 gained an XIM input context (root-window
@@ -274,32 +395,14 @@ accepted ones land contract-first where they touch an API.
   `characters` string. Degradation to the legacy ASCII-only path is
   unchanged when no input method is present. Two review passes (mac
   function-key band exclusion, `ime_owner` RAII guard, one key_down
-  per press, surrogate exclusion preserved). **Standing re-verification
-  item:** real-IME behavior (ibus/fcitx, Windows IME, mac IME —
-  including whether mac commits reach keyDown at all or only
-  `insertText:`) needs on-machine confirmation.
-- **FI-02. Text selection + clipboard seam** (accepted, unscheduled).
-  Selection is the already-declared additive shape (no contract
-  change); the clipboard seam is new — design before code.
-- **FI-05. ScrollPanel stick-to-bottom primitive** (accepted,
-  unscheduled). Follow-bottom or follow policy over the existing
-  re-clamping `layout()`; additive, no contract change.
-- **FI-06. Variable-height ListBox rows** (accepted, unscheduled). The
-  visible-window row-bitmap cache already virtualizes; the work is the
-  offset math (prefix sums). Extend ListBox, no new control.
-- **FI-04. CJK runtime-font recipe** (accepted, unscheduled;
-  document-only). Runtime full font + `cache_budget` guidance (the
-  64KB default ≈ a few dozen hanzi) vs build-time subsets.
-- **FI-09. Image path** (accepted, unscheduled; the largest item;
-  fires V-4). ImageView with deterministic nearest-neighbor scaling
-  (the presentation-resample style) + `<img>` in the build-time HTML
-  path (html-path.md whitelist change) + runtime `set_image`; needs
-  `USE_PNG` and V-4's memory-source decode. Contract-first.
-- **FI-03 → A-25.** Non-BMP pairing rendering: the A-25 trigger has
-  fired (chat-style emoji); contract-first there, no separate item.
-- **FI-08** (tab/split containers) recorded far-term, unscheduled.
-  **FI-10** (SIXEL quantizer) de-prioritized: SIXEL is not on this
-  consumer's path.
+  per press, surrogate exclusion preserved). Standing re-verification
+  (real IME: ibus/fcitx, Windows IME, mac IME — including whether mac
+  commits reach keyDown at all or only `insertText:`; plus SIXEL
+  terminal Chinese input) closes with TJ-C3.
+- **FI-07 — stays closed.** The I/F is message-level, not C-ABI.
+- **FI-08** (tab/split containers) — recorded far-term, unchanged.
+- **V-4** moved out of §0's "NOT now": it fires with FI-09 (tianji
+  scene art is the first real compressed-asset consumer).
 
 ## 1. Architecture Backlog
 
