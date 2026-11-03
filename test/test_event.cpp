@@ -330,6 +330,27 @@ static void test_handler_exception_no_table_growth()
     EXPECT(bool(ev));  // the thrower itself stays subscribed
 }
 
+static void test_self_sub_reset_during_invoke()
+{
+    // a handler that unsubscribes itself through its own RAII guard
+    // must not destroy the std::function currently on the stack (H1)
+    Event<> ev;
+    int calls = 0;
+    Subscription<> self_sub;
+    self_sub = ev.subscribe([&]()
+                            {
+        ++calls;
+        self_sub.reset(); });
+
+    ev();
+    EXPECT(calls == 1);
+    EXPECT(!bool(self_sub));
+    EXPECT(!bool(ev));
+
+    ev();
+    EXPECT(calls == 1);
+}
+
 int test_event()
 {
     test_basic_subscribe_invoke_unsub();
@@ -342,6 +363,7 @@ int test_event()
     test_subscription_move();
     test_subscription_event_destroyed_first();
     test_subscription_unsub_during_invoke_via_raii();
+    test_self_sub_reset_during_invoke();
     test_subscription_must_be_held();
     test_handler_exception_keeps_event_consistent();
     test_handler_exception_no_table_growth();

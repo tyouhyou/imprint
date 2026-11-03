@@ -59,10 +59,11 @@ namespace zb::raster
         const float rel_x = x - cam.ox;
         const float rel_y = y - cam.oy;
         const float rel_z = z - cam.oz;
+        const float nc = cam.near_clip > 0.f ? cam.near_clip : 0.05f;
         float v = rel_x * cam.fx + rel_y * cam.fy + rel_z * cam.fz;
-        if (v < cam.near_clip)
+        if (v < nc)
         {
-            v = cam.near_clip;
+            v = nc;
         }
         const float u = rel_x * cam.rx + rel_y * cam.ry + rel_z * cam.rz;
         const float up = rel_x * cam.ux + rel_y * cam.uy + rel_z * cam.uz;

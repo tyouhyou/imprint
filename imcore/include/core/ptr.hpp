@@ -130,6 +130,10 @@ namespace zb
         }
         void reset(T *p)
         {
+            if (p == ptr_)
+            {
+                return;
+            }
             int *c = make_count(p);  // throws -> p deleted, *this unchanged
             release();
             ptr_ = p;

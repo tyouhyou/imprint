@@ -50,6 +50,7 @@ namespace zb::shell::x11_ime
         {
             LW << "XOpenIM failed: no input method on this display, "
                   "committed text stays on the legacy XLookupString path";
+            ctx.client = 0;
             return false;
         }
         // root-window preedit (2026-11-01 ruling): the IM server paints

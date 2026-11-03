@@ -83,8 +83,9 @@ namespace zb::ui
         if (pressed_target != nullptr &&
             (pressed_target == w || pressed_target->is_descendant_of(w)))
         {
-            pressed_target->on_cancel();
+            Widget *pt = pressed_target;
             pressed_target = nullptr;
+            pt->on_cancel();
         }
         // the focus target is a single widget: either the removed widget
         // itself or one of its descendants

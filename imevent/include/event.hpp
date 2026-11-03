@@ -80,7 +80,7 @@ namespace zb::event
         {
             for (const auto &entry : handlers)
             {
-                if (entry.second)
+                if (entry.first != INVALID_EVENT_ID)
                 {
                     return true;
                 }
@@ -147,7 +147,7 @@ namespace zb::event
                     {
                         // during invoke: tombstone; the final compaction
                         // below removes the dead entries
-                        handlers[i].second = EventHandler();
+                        handlers[i].first = INVALID_EVENT_ID;
                     }
                     else
                     {
@@ -174,7 +174,7 @@ namespace zb::event
             const std::size_t n = handlers.size();
             for (std::size_t i = 0; i < n; ++i)
             {
-                if (handlers[i].second)
+                if (handlers[i].first != INVALID_EVENT_ID && handlers[i].second)
                 {
                     handlers[i].second(args...);
                 }
@@ -234,7 +234,7 @@ namespace zb::event
             std::size_t write = 0;
             for (std::size_t read = 0; read < handlers.size(); ++read)
             {
-                if (handlers[read].second)
+                if (handlers[read].first != INVALID_EVENT_ID)
                 {
                     if (write != read)
                     {
