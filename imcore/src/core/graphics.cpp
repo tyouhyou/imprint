@@ -655,6 +655,61 @@ void Graphics::draw_image(
     draw_image(img.pixels, img.width, img.height, stride, start_x, start_y);
 }
 
+void Graphics::draw_image_scaled(
+    const image_t &img,
+    int dst_x,
+    int dst_y,
+    int dst_w,
+    int dst_h)
+{
+    const int stride = img.row_stride > 0 ? img.row_stride : img.width;
+    // malformed view or degenerate rectangle: draw nothing
+    if (img.pixels == nullptr || stride < img.width ||
+        img.width <= 0 || img.height <= 0 ||
+        dst_w <= 0 || dst_h <= 0)
+    {
+        return;
+    }
+
+    int64_t sx = dst_x, sy = dst_y;
+    if (draw_area_offset_enabled)
+    {
+        sx += draw_area_offset.x;
+        sy += draw_area_offset.y;
+    }
+    int c0, c1, r0, r1;
+    if (!blit_rect_intersect(sx, sy, dst_w, dst_h, c0, c1, r0, r1))
+    {
+        return;
+    }
+
+    // nearest-neighbor mapping (code-contract §9): source index =
+    // dst_index * src_dim / dst_dim, truncated toward zero, 64-bit
+    // intermediates. dst_index counts from the unclipped rectangle origin
+    // (sx/sy carry the draw_area offset), so a damage-clipped partial
+    // repaint samples exactly what the full repaint put there.
+    const int64_t sw = img.width, sh = img.height;
+    for (int row = r0; row <= r1; row++)
+    {
+        const int64_t dy = row - sy;
+        const Color *src = img.pixels + (dy * sh / dst_h) * stride;
+        Color *px = pixels + imsize.width * row + c0;
+        for (int col = c0; col <= c1; ++col, ++px)
+        {
+            const int64_t dx = col - sx;
+            const Color *sp = src + (dx * sw / dst_w);
+            if (!alpha_enabled)
+            {
+                *px = *sp;
+            }
+            else
+            {
+                *px = alpha_blend(*sp, *px);
+            }
+        }
+    }
+}
+
 void Graphics::draw_image(
     const Color *img,
     int img_width,

@@ -530,6 +530,28 @@ namespace zb::ui::core
             int start_y);      // widget-local destination y
 
         /*
+         * Scaled image blit (FI-09): fills the destination rectangle from
+         * an image_t view with nearest-neighbor sampling — source index =
+         * dst_index * src_dim / dst_dim per axis (integer division
+         * truncating toward zero, 64-bit intermediates, no float), the
+         * same up- and down-scale rule. Blending follows draw_image (the
+         * alpha_enabled policy — an opaque source overwrites); start_x/
+         * start_y are widget-local like every primitive (draw_area_offset
+         * applies); clipping is the same block-granularity intersection as
+         * draw_image (surface / draw area / damage). A malformed view or a
+         * degenerate rectangle draws nothing; the sampling basis is the
+         * unclipped rectangle origin, so a partial repaint reproduces the
+         * full repaint's pixels exactly.
+         * Contract: code-contract §9.
+         */
+        void draw_image_scaled(
+            const image_t &img,
+            int dst_x,   // widget-local destination x
+            int dst_y,   // widget-local destination y
+            int dst_w,   // destination width in pixels
+            int dst_h);  // destination height in pixels
+
+        /*
          * WIREFRAME companion (S-1, opt-in): 1px dots every `spacing`
          * pixels across the draw area. Mode-independent (the app calls
          * it when wireframing); spacing <= 0 draws nothing. Plots

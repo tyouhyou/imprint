@@ -110,7 +110,7 @@ namespace
 
     // memory-source decode must match the file decode exactly (deterministic
     // decode identity): same dims, same stride, same pixels
-    void expect_same_decode(const ReadResult &file_dec, const ReadResult &mem_dec)
+    [[maybe_unused]] void expect_same_decode(const ReadResult &file_dec, const ReadResult &mem_dec)
     {
         EXPECT(mem_dec.info_received);
         EXPECT(mem_dec.info.image_width == file_dec.info.image_width);
