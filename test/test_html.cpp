@@ -4,6 +4,10 @@
 #include "imui.hpp"
 #include "logging.hpp"
 
+#include "html_embed_test.gen.hpp"  // packed by html_embed at build time
+
+#include <cstring>
+
 using namespace zb::ui;
 
 namespace
@@ -3606,6 +3610,33 @@ int test_html()
         }
         EXPECT(!image_view_found);
         EXPECT(!warns.empty());
+    }
+
+    // the html_embed-packed example (html-path "Build-time images"): the
+    // tool packed the document and its <img> payload at build time; the
+    // round-trip parses the document back and reads the image bytes
+    {
+        EXPECT(sizeof(kHtmlFiles) / sizeof(kHtmlFiles[0]) == 1);
+        const embedded_html_file &packed = kHtmlFiles[0];
+        EXPECT(packed.data != nullptr && packed.size > 0);
+        EXPECT(packed.data[packed.size] == 0);  // NUL sentinel beyond the bytes
+
+        bool ok = false;
+        ui_node r = parse_html(reinterpret_cast<const char *>(packed.data), &ok);
+        EXPECT(ok);
+        EXPECT(r.type == "column");  // the single top-level container IS the root
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "image_view");
+        EXPECT(find_html_file("img_sample.html") == &kHtmlFiles[0]);
+        EXPECT(find_html_file("no_such.html") == nullptr);
+
+        EXPECT(sizeof(kImages) / sizeof(kImages[0]) == 1);
+        const embedded_image_file &img = kImages[0];
+        EXPECT(img.data != nullptr && img.size > 4);
+        const unsigned char png_sig[4] = {0x89, 'P', 'N', 'G'};
+        EXPECT(std::memcmp(img.data, png_sig, 4) == 0);
+        EXPECT(find_image_file("img_sample.png") == &kImages[0]);
+        EXPECT(find_image_file("no_such.png") == nullptr);
     }
 
     return test::report("html");

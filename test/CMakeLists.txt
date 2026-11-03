@@ -169,6 +169,38 @@ add_dependencies(test_imui ui_embed_test_gen)
 target_include_directories(test_imui PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 endif()
 
+# build-time image packing smoke (FI-09): html_embed packs the example
+# document and its <img> payload; test_html parses the document back and
+# reads the packed image bytes (A-28: the tool exists only with the HTML
+# front-end)
+if (IMPRINT_FEATURE_HTML)
+set(HTML_EMBED_TEST_HEADER ${CMAKE_CURRENT_BINARY_DIR}/html_embed_test.gen.hpp)
+add_custom_command(
+    OUTPUT ${HTML_EMBED_TEST_HEADER}
+    COMMAND html_embed ${HTML_EMBED_TEST_HEADER} ${PROJECT_SOURCE_DIR}/tools/examples/img_sample.html
+    DEPENDS html_embed
+            ${PROJECT_SOURCE_DIR}/tools/examples/img_sample.html
+            ${PROJECT_SOURCE_DIR}/tools/examples/img_sample.png
+    VERBATIM
+)
+add_custom_target(html_embed_test_gen DEPENDS ${HTML_EMBED_TEST_HEADER})
+add_dependencies(test_imui html_embed_test_gen)
+target_include_directories(test_imui PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
+# negative gate: an <img> whose file is missing must exit non-zero (the
+# authoring-error gate, html-path "Build-time images"). The sh wrapper
+# inverts the exit code, so the build fails when the tool wrongly
+# succeeds. POSIX-only: the Windows job's tool run mirrors the tool's
+# own validation, and the NDS cross build consumes a host-built tool.
+if (NOT WIN32 AND NOT NDS_PLATFORM)
+add_custom_target(html_embed_negative_check
+    COMMAND sh -c "! $<TARGET_FILE:html_embed> ${CMAKE_CURRENT_BINARY_DIR}/html_embed_negative.gen.hpp ${PROJECT_SOURCE_DIR}/tools/examples/img_missing.html"
+    VERBATIM
+)
+add_dependencies(test_imui html_embed_negative_check)
+endif()
+endif()
+
 # C8: register with CTest so desktop builds can `ctest -R test_imui`
 # (CI still invokes the binary directly; this wires the local path.
 # enable_testing() lives in the top-level CMakeLists)

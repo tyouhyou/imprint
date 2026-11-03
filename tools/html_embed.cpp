@@ -10,23 +10,35 @@
  *   static const embedded_html_file kHtmlFiles[] = { {"space.html", ...}, ... };
  *   static inline const embedded_html_file *find_html_file(const char *name);
  *
- * A document that does not parse (yields no widget) makes the tool exit
- * non-zero, so the CMake custom command fails the build: the
- * "build-time validation" guarantee, without a second parser. Embedded
- * bytes are the raw UTF-8 text plus one trailing 0x00 sentinel (the size
- * field excludes the sentinel): parse_html scans for a NUL terminator,
- * so the embedded array must carry the same shape pass 1 validated. At
- * runtime the app feeds them to parse_html + build() — the exact code
- * path desktop apps use with external files, so NDS (no filesystem) is
- * just another source.
+ * Every <img src> in a document names a file next to that document
+ * (docs/html-path.md "Build-time images"); the referenced files are
+ * packed into a parallel name -> bytes table beside the document bytes:
  *
- * The generated header only needs the struct below; it does not include
+ *   static const embedded_image_file kImages[] = { {"art.png", ...}, ... };
+ *   static inline const embedded_image_file *find_image_file(const char *name);
+ *
+ * A document that does not parse (yields no widget), carries a tolerance
+ * warning, or references an image the build cannot read makes the tool
+ * exit non-zero, so the CMake custom command fails the build: the
+ * "build-time validation" guarantee, without a second parser. Embedded
+ * document bytes are the raw UTF-8 text plus one trailing 0x00 sentinel
+ * (the size field excludes the sentinel): parse_html scans for a NUL
+ * terminator, so the embedded array must carry the same shape pass 1
+ * validated. Image bytes are packed raw (no sentinel). At runtime the
+ * app feeds the documents to parse_html + build() and attaches the
+ * images itself (find_image_file + set_image_png) — the exact code path
+ * desktop apps use with external files, so NDS (no filesystem) is just
+ * another source.
+ *
+ * The generated header only needs the structs below; it does not include
  * any framework header (the consumer decides how to parse the bytes).
  */
+#include <algorithm>
 #include <cctype>
 #include <cstdio>
 #include <cstring>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include "html.hpp"
@@ -98,6 +110,56 @@ namespace
         return slash == std::string::npos ? path : path.substr(slash + 1);
     }
 
+    // "dir/space.html" -> "dir": image srcs resolve relative to the
+    // document's directory (html-path "Build-time images")
+    std::string dir_of(const std::string &path)
+    {
+        const std::size_t slash = path.find_last_of("/\\");
+        return slash == std::string::npos ? std::string() : path.substr(0, slash);
+    }
+
+    // the image_view srcs of one parsed document, first-seen order,
+    // deduped. The parse gate has already rejected any document carrying
+    // an img without a usable src, so every hit here has content.
+    void collect_image_srcs(const zb::ui::ui_node &n, std::vector<std::string> &out)
+    {
+        if (n.type == "image_view")
+        {
+            for (const auto &p : n.props)
+            {
+                if (p.first == "src")
+                {
+                    if (const auto *s = std::get_if<std::string>(&p.second))
+                    {
+                        if (!s->empty() &&
+                            std::find(out.begin(), out.end(), *s) == out.end())
+                        {
+                            out.push_back(*s);
+                        }
+                    }
+                }
+            }
+        }
+        for (const auto &c : n.children)
+        {
+            collect_image_srcs(c, out);
+        }
+    }
+
+    // the table key becomes a C string literal: reject anything the
+    // generator cannot spell safely
+    bool spellable_name(const std::string &name)
+    {
+        for (const char c : name)
+        {
+            if (c == '"' || c == '\\' || static_cast<unsigned char>(c) < 0x20)
+            {
+                return false;
+            }
+        }
+        return !name.empty();
+    }
+
     bool read_file(const char *path, std::vector<unsigned char> &out)
     {
         FILE *f = std::fopen(path, "rb");
@@ -130,12 +192,15 @@ int main(int argc, char **argv)
 
     // pass 1: validate every document with the library parser — the
     // document must parse AND yield at least one known widget (the
-    // runtime zb_app_create_from_ui gate), not merely carry nodes
+    // runtime zb_app_create_from_ui gate), not merely carry nodes. The
+    // image_view srcs are collected in the same walk (first-seen order).
+    std::vector<std::vector<std::string>> doc_images;
     for (const std::string &path : inputs)
     {
         std::vector<unsigned char> bytes;
         bool ok_read = read_file(path.c_str(), bytes);
         bool ok_parse = false;
+        std::vector<std::string> srcs;
         if (ok_read)
         {
             bytes.push_back(0);  // NUL-terminate for the parser
@@ -143,6 +208,10 @@ int main(int argc, char **argv)
             const zb::ui::ui_node doc = zb::ui::parse_html(
                 reinterpret_cast<const char *>(bytes.data()), &ok);
             ok_parse = ok && zb::ui::materializes_widget(doc);
+            if (ok_parse)
+            {
+                collect_image_srcs(doc, srcs);
+            }
         }
         if (!ok_read || !ok_parse)
         {
@@ -150,6 +219,7 @@ int main(int argc, char **argv)
                          ok_read ? "document yields no widget" : "cannot read file");
             return 1;
         }
+        doc_images.push_back(std::move(srcs));
     }
 
     // a document that parsed but produced warnings is still drift: every
@@ -166,6 +236,80 @@ int main(int argc, char **argv)
         return 1;
     }
 
+    // pass 1.5: pack the <img> images (html-path "Build-time images").
+    // Each src is read relative to its document's directory; the same
+    // src name in two documents must resolve to the same file. A missing
+    // or unreadable file exits non-zero — the same authoring-error gate
+    // as the parser warnings: an embedded document cannot reference an
+    // image the build did not pack.
+    struct packed_image
+    {
+        std::string name;  // the src value as the document wrote it
+        std::string sym;
+        std::string resolved;  // the document-relative resolution
+        std::vector<unsigned char> bytes;
+    };
+    std::vector<packed_image> images;
+    for (std::size_t i = 0; i < inputs.size(); ++i)
+    {
+        const std::string &path = inputs[i];
+        const std::string dir = dir_of(path);
+        for (const std::string &src : doc_images[i])
+        {
+            if (!spellable_name(src))
+            {
+                std::fprintf(stderr,
+                             "html_embed: %s: image src is not a usable resource name\n",
+                             path.c_str());
+                return 1;
+            }
+            const std::string resolved = dir.empty() ? src : dir + "/" + src;
+
+            bool packed = false;
+            for (const packed_image &prev : images)
+            {
+                if (prev.name == src)
+                {
+                    if (prev.resolved != resolved)
+                    {
+                        std::fprintf(stderr,
+                                     "html_embed: src \"%s\" resolves to two files (%s, %s)\n",
+                                     src.c_str(), prev.resolved.c_str(), resolved.c_str());
+                        return 1;
+                    }
+                    packed = true;  // same name, same file: pack once
+                    break;
+                }
+            }
+            if (packed)
+            {
+                continue;
+            }
+
+            packed_image img;
+            img.name = src;
+            img.resolved = resolved;
+            if (!read_file(resolved.c_str(), img.bytes) || img.bytes.empty())
+            {
+                std::fprintf(stderr, "html_embed: %s: image \"%s\" cannot be read (%s)\n",
+                             path.c_str(), src.c_str(), resolved.c_str());
+                return 1;
+            }
+            img.sym = symbol_of(src) + "_img";
+            for (const packed_image &prev : images)
+            {
+                if (prev.sym == img.sym)
+                {
+                    std::fprintf(stderr,
+                                 "html_embed: images %s and %s collide (same symbol)\n",
+                                 prev.resolved.c_str(), resolved.c_str());
+                    return 1;
+                }
+            }
+            images.push_back(std::move(img));
+        }
+    }
+
     // pass 2: emit the header
     FILE *out = std::fopen(argv[1], "w");
     if (out == nullptr)
@@ -176,8 +320,8 @@ int main(int argc, char **argv)
 
     std::fprintf(out, "#pragma once\n");
     std::fprintf(out, "// generated by html_embed — do not edit\n");
-    std::fprintf(out, "// each data[] ends with one 0x00 sentinel beyond size;\n");
-    std::fprintf(out, "// parse_html scans for the NUL terminator\n");
+    std::fprintf(out, "// each document data[] ends with one 0x00 sentinel beyond size;\n");
+    std::fprintf(out, "// parse_html scans for the NUL terminator. Image data[] is raw.\n");
     std::fprintf(out, "#include <cstddef>\n");
     std::fprintf(out, "#include <cstring>\n");
     std::fprintf(out, "struct embedded_html_file\n{\n"
@@ -257,6 +401,50 @@ int main(int argc, char **argv)
                       "    }\n"
                       "    return nullptr;\n"
                       "}\n");
+
+    // the image table lands beside the document bytes, in the same
+    // self-contained style; emitted only when the build packed images
+    if (!images.empty())
+    {
+        std::fprintf(out, "struct embedded_image_file\n{\n"
+                          "    const char *name;\n"
+                          "    const unsigned char *data;\n"
+                          "    const std::size_t size;\n"
+                          "};\n\n");
+        for (const packed_image &img : images)
+        {
+            std::fprintf(out, "static const unsigned char %s[] =\n{\n", img.sym.c_str());
+            for (std::size_t i = 0; i < img.bytes.size(); ++i)
+            {
+                std::fprintf(out, "0x%02x,", img.bytes[i]);
+                if (i % 16 == 15)
+                {
+                    std::fprintf(out, "\n");
+                }
+            }
+            std::fprintf(out, "\n};\n\n");
+        }
+        std::fprintf(out, "static const embedded_image_file kImages[] =\n{\n");
+        for (const packed_image &img : images)
+        {
+            // image bytes are raw: sizeof covers exactly the packed size
+            std::fprintf(out, "    {\"%s\", %s, sizeof(%s)},\n", img.name.c_str(),
+                         img.sym.c_str(), img.sym.c_str());
+        }
+        std::fprintf(out, "};\n\n");
+        std::fprintf(out, "static inline const embedded_image_file *find_image_file(const char *name)\n"
+                          "{\n"
+                          "    for (const auto &f : kImages)\n"
+                          "    {\n"
+                          "        if (f.name != nullptr && name != nullptr\n"
+                          "            && std::strcmp(f.name, name) == 0)\n"
+                          "        {\n"
+                          "            return &f;\n"
+                          "        }\n"
+                          "    }\n"
+                          "    return nullptr;\n"
+                          "}\n");
+    }
     std::fclose(out);
     return 0;
 }
