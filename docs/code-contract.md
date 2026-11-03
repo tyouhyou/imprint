@@ -1127,6 +1127,55 @@ instead of clipping**. What the offset does and does not touch:
   html-path.md), which swaps the container type — the scroll container
   is always a column even with `flex-direction: row` markup.
 
+### 3.5 ImageView and the scaled blit (FI-09)
+
+`zb::ui::ImageView` displays a decoded image; `Graphics::draw_image_scaled`
+is its kernel primitive and the reusable scaled-blit seam. Everything
+here is additive: no C-ABI surface (FI-07 stays closed), no new build
+option — decode entry points live under the existing `USE_PNG` /
+`USE_JPEG` gates (V-4's memory-source reads), and the widget itself
+builds on every target (a buffer fed through `set_image` renders on
+NDS too).
+
+- **Scaled blit (kernel; detailed contract in §9)** —
+  `draw_image_scaled(img, dst_x, dst_y, dst_w, dst_h)`: a
+  nearest-neighbor fill of the destination rectangle from an
+  `image_t` view. Deterministic by construction (pure integer math,
+  no float); blending and clipping follow `draw_image`.
+- **ImageView owns its pixels.** A copy is taken at set time (a
+  load-time operation, never on the frame path); the widget never
+  borrows host pixel memory.
+  - `set_image(const core::image_t &view)` — copies the view. A
+    malformed view (null pixels, stride < width, non-positive
+    extents) logs one LW and changes nothing.
+  - `set_image_png(content_id, bytes, n)` (`USE_PNG` only; JPEG
+    mirrors it as `set_image_jpeg` under `USE_JPEG`) — decodes once
+    into a **per-widget single-entry cache keyed by the content id**:
+    a repeated id is a no-op whatever the bytes (the
+    deterministic-decode identity — same id means same image), a new
+    id replaces the cached decode. A decode failure logs one LW and
+    keeps the previous image.
+  - `clear_image()` resets to the empty state; `has_image()` /
+    `content_id()` report it (`content_id()` is empty for view-set
+    images).
+- **Geometry.** Explicit width/height win (the shared length rules);
+  otherwise the widget measures the image's natural size (0×0 while
+  empty). The draw letterboxes: scale-to-fit
+  (`dst_w = min(bw, sw*bh/sh)`, `dst_h = min(bh, sh*bw/sw)`, 64-bit
+  intermediates), centered in the content box; uncovered margins stay
+  the widget background, and the image never overflows the widget box.
+- **Declarative surfaces.** The widget tag is `image_view` (the `.ui`
+  grammar and the shared tag table); the HTML element is
+  `<img src="...">` (whitelist: html-path.md). `src` is stored and
+  exposed, never resolved by the framework — pixels arrive through the
+  two sanctioned channels (the html_embed packed table at build time,
+  or the host's runtime feed via `find_by_id` + `set_image_png`), the
+  same "static structure in the document, resources and behavior in
+  C++" line as event wiring.
+- **Allocation.** `set_image` / `set_image_png` are init-path (they
+  may allocate); `draw_at` allocates nothing — the scaled blit walks
+  the destination in place.
+
 ## 4. Declarative UI builder (batch G contract)
 
 - `ui_node` is the sole entry for static descriptions:
@@ -1780,6 +1829,20 @@ obligations:
   damage model (pixels written outside a widget's paint are overdrawn by
   the next repaint) and no ABI host has asked for it; revisit only when
   an ABI-side custom-widget hook exists.
+- **Scaled image blit (FI-09)**: `Graphics::draw_image_scaled(img,
+  dst_x, dst_y, dst_w, dst_h)` fills the destination rectangle from an
+  `image_t` view with **nearest-neighbor sampling**: source index =
+  `dst_index * src_dim / dst_dim`, integer division truncating toward
+  zero, per axis, 64-bit intermediates (no overflow at any legal
+  dimension); up- and down-scaling share the one rule, and the formula
+  is the whole algorithm — no filtering, no dithering, no float.
+  Blending follows `draw_image` (the `alpha_enabled` policy — an
+  opaque source overwrites), coordinates are widget-local through
+  `draw_area_offset`, and clipping is the same block-granularity
+  intersection as `draw_image` (surface / draw area / damage). A
+  malformed view or a degenerate rectangle draws nothing. Determinism:
+  same view + same rectangle → same pixels on every target and depth,
+  locked by a pixel-exact mapping test in the battery.
 - **Zero-copy backing (wrapper mode)**: `Graphics::make_ptr(width, height,
   your_buffer)` wraps the caller's memory instead of allocating. Every
   primitive writes into the provided block, `data()` hands it back, and

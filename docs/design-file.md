@@ -74,7 +74,7 @@ The tag and property set is defined by the factory/property tables in
 `scroll_panel` — a vertical scroll container, H-4) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
-`text_input`, `svg`), with properties including
+`text_input`, `svg`, `image_view`), with properties including
 `id`, `text`, `items`, `width`, `height` (px, or `N%` — see below),
 `min_width` / `max_width` / `min_height` / `max_height` (D-1 flex
 clamps, px; 0 = unconstrained),
@@ -94,7 +94,9 @@ over the uniform share), `wrap`, `flex` (integer grow weight),
 `aspect_w` + `aspect_h` (H-5 aspect ratio pair),
 `position` (`relative` / `absolute`) with `abs_l` / `abs_t` / `abs_r` /
 `abs_b` / `translate_x` / `translate_y` offsets (P-3),
-`elem_opacity` (0–1000: fixed-point paint alpha fold). Unknown
+`elem_opacity` (0–1000: fixed-point paint alpha fold), `src`
+(image_view only: the resource name the widget stores and exposes —
+the framework never resolves it; code-contract §3.5). Unknown
 properties are silently tolerated (only unknown tags warn) — the
 fluent builder's `size()`/`pos()`/`named()` methods are **not** text
 keys (`size`/`pos` emit `width`/`height`/`pos_x`/`pos_y` props;

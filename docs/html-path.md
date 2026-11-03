@@ -33,8 +33,12 @@ applies unchanged.
 - `<html>` / `<head>` containers and their contents **never construct
   widgets**. `<style>` blocks are consumed for rules; everything else in
   the head (`<title>`, `<meta>`, `<link>`, `<script>`, ...) is ignored.
-  There is no resource loading of any kind — no external CSS, fonts,
-  images, or scripts.
+  There is no runtime resource loading of any kind — no external CSS,
+  fonts, or scripts. The one image channel is `<img>` (below): the
+  document only stores `src` names; pixels reach the widget through
+  the build-time packed table (html_embed, §Build-time images) or the
+  host's runtime feed (`ImageView::set_image_png`, code-contract
+  §3.5) — the document itself never loads.
 - Only `<body>`, its text content, `<style>` rules, and the whitelisted
   elements construct.
 - Root handling mirrors the `.ui` convention: when the body has exactly
@@ -130,6 +134,7 @@ applies unchanged.
 | Stray/mismatched closing tag | closes open ancestors up to the match (unbalanced intermediates are finalized along the way); ignored when no open frame matches (HTML5 semantics), silent |
 | Element nesting deeper than 32 | **LW warning (first occurrence per parse) + the deeper subtree dropped**, exactly like an off-whitelist element — the converter/text-inheritance/destructor recursions walk the built depth, and the embedded stack is small |
 | `<body>` not at the document top (inside a dropped subtree, a built container, or a repeated occurrence) | **LW warning + skipped**; only a top-level `<body>` (directly or through the `html`/`head` boilerplate chain) re-roots, and only the first one feeds the page box |
+| `<img>` without a usable `src` (absent or empty) | **LW warning + skipped** — an image without a source is an authoring error, the same class as an off-whitelist element |
 
 Every **LW** row above is an authoring error, not a permission, and
 `html_embed` treats it as one: pass 1 installs a log handler (the logging
@@ -159,6 +164,7 @@ build; this rule governs the build-time gate only.
 | `trend` | `trend` | sized with `width` / `height` |
 | `meter` | `progress_bar` | degraded stand-in (HTML meter is a horizontal scalar); `min` / `max` / `value` |
 | `svg`, `vectordial` | `svg` | vector-dial subset (§SVG subset): `viewBox` + `line`/`text`/`rect`/`circle`/`ellipse`/`polyline`/`polygon` children; `g` folds its presentation attributes onto them; `vectordial` is the same widget under an instrument name (the alias costs one table row, the implementation is shared) |
+| `img` | `image_view` | the image element (FI-09, code-contract §3.5): `src` is required — absent or empty drops the element with one LW (an image without a source is an authoring error); sizes through the shared `width`/`height` lengths (`auto` = the decoded image's natural size, 0×0 until pixels arrive). Block-level like `svg` — inside a wrapping `p` it hits the leaf-children rule (dropped with a warning); there are no inline images. `alt` and every other attribute are off-whitelist (silently tolerated) |
 
 ## Whitelist — attributes
 
@@ -174,6 +180,7 @@ build; this rule governs the build-time gate only.
 | `d` | path (inside svg) | path data, stroke-only (§SVG subset); `M m L l H h V v C c S s Q q T t Z z` with SVG number/separator grammar and implicit repeats; at most 1024 commands and 4096 flattened points per `d`; unsupported, malformed, or over-budget data drops the whole path with one warning |
 | `points` | polyline / polygon (inside svg) | vertex list, viewBox units (decimals accepted, space/comma separators); malformed or <2 points drops the element |
 | `x`/`y`/`width`/`height`, `cx`/`cy`/`r`, `rx`/`ry` | rect / circle / ellipse (inside svg) | static geometry, viewBox units (decimals accepted); non-positive `width`/`height`/`r`/`rx`/`ry` renders nothing (per SVG); rect `rx`/`ry` (corner rounding) is not in the subset — warned and ignored, corners stay square |
+| `src` | img | the resource name — stored on the node, exposed on the widget, never resolved by the framework. html_embed packs the referenced files at build time (relative to the document's directory); runtime hosts feed `set_image_png` themselves (code-contract §3.5) |
 
 ## Whitelist — CSS properties (inline `style=` and `<style>` rules)
 
@@ -438,6 +445,18 @@ seam (code-contract §2 "Wrapped text"):
   after materialization via `find_by_id`, exactly like `.ui`.
 - **Determinism unchanged** (§4.11): the parse runs once at load; nothing
   in the path introduces timers, threads, or background work.
+
+## Build-time images (`html_embed`)
+
+`<img src>` names a file, not a URL. html_embed collects every
+`image_view` node's `src` from the parsed document, reads each file
+relative to the document's directory, and embeds the bytes in the
+generated header as a name → bytes table beside the document bytes. A
+missing or unreadable file exits non-zero — the same authoring-error
+gate as the parser warnings (an embedded document cannot reference an
+image the build did not pack). Attaching pixels stays a C++ act
+(`find_by_id` + `set_image_png` from the table, or the host's own
+feed); no framework path touches a file system at runtime.
 
 ## Adding to the whitelist
 

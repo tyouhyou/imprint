@@ -33,8 +33,8 @@ other target uses the desktop defaults.
 | `imutil`  | Logging macros `LD`/`LI`/`LW`/`LE`/`LF` (level-gated, zero-cost when suppressed)            | INTERFACE    | —                                   |
 | `imevent` | Zero-allocation pub/sub `Event<T...>` + RAII `Subscription`; `PAINT_EVENT`/`CLOSE_EVENT`   | INTERFACE    | —                                   |
 | `iminput` | `input_event` POD + `key_code` enum                                                         | INTERFACE    | —                                   |
-| `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap + optional runtime TTF, UTF-8), codecs (`png`/`jpeg`, vendored stb) | SHARED | `imutil`                            |
-| `imui`    | Widget tree: `Panel`, `FlexPanel`, `ScrollPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, `ToggleSwitch`, `GaugeDial`, `Knob`, `TrendLine` (V-5 composition widgets), `SvgCanvas` (HTML `svg`/`vectordial` vector-dial subset), `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`, `html`) | STATIC | `imcore`, `imevent`, `iminput`      |
+| `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap + optional runtime TTF, UTF-8), codecs (`png`/`jpeg`, vendored stb; file and memory-source reads, V-4) | SHARED | `imutil`                            |
+| `imui`    | Widget tree: `Panel`, `FlexPanel`, `ScrollPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, `ToggleSwitch`, `GaugeDial`, `Knob`, `TrendLine` (V-5 composition widgets), `SvgCanvas` (HTML `svg`/`vectordial` vector-dial subset), `ImageView` (FI-09 scaled image display), `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`, `html`) | STATIC | `imcore`, `imevent`, `iminput`      |
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
 | `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
 | `imapp_snapshot` | Optional snapshot helper (`zb::snap`, header-only): frame hash + baseline record/check + GIF/PNG dumps — the deterministic-test story (code-contract §12) | INTERFACE | `imapp` |
@@ -457,6 +457,12 @@ satisfies. Changing any of these is an architecture change.
   so it is deterministic and 16bpp-safe on every target. C++-level
   only (a widget's `draw_at` hand-off); the ABI note is in
   code-contract §9.
+- **Scaled image blit (FI-09).** `draw_image_scaled` is the
+  nearest-neighbor scaled image hand-off: integer `dst * src / dst`
+  source indexing (truncating), `draw_image` blending and clipping,
+  no float — deterministic on every target. `ImageView` letterboxes
+  through it; the pixel model and the damage gates are untouched.
+  API-level contract: code-contract §3.5/§9.
 - **Optional host depth plane (U-6).** Depth/occlusion semantics are a
   host-owned `float` plane attached to `Graphics` (GL-style LESS test,
   per-pixel z interpolation in `draw_line_depth` / `fill_triangle_depth`,
@@ -611,7 +617,7 @@ code-contract §5.4.
 | HTML/CSS front-end | `imui/src/html.cpp` | `IMPRINT_FEATURE_HTML=OFF` links `html_stub.cpp` | `parse_html` stays link-complete and rejects (`ok=false` + one `LE`); `IMUI_HAS_HTML=0`; C ABI unchanged | 203,359 B wasm (tictactoe, export list unchanged) |
 | `.ui` design-file front-end | `imui/src/ui_file.cpp` | `IMPRINT_FEATURE_UI_FILE=OFF` links `ui_file_stub.cpp` | same contract, `IMUI_HAS_UI_FILE=0` | 11,614 B wasm |
 | SVG canvas | `imui/src/svg_canvas.cpp` | no option: `ui_builder` constructs it (`make_unique<SvgCanvas>`) and `html.cpp` calls its path flatteners | — (inside the declarative closure) | not separable from the front-ends: both reference it, so a front-end-on link always carries it |
-| PNG / JPEG codecs | `imcore/src/codec/{png,jpeg,stb_impl}.cpp` | `USE_PNG` / `USE_JPEG` (both default OFF) | codec entry points are declared under `#if defined(USE_PNG/JPEG)` (`codec/image.hpp`, the existing define pattern); the PUBLIC define keeps consumers consistent | +330,064 B `libimcore.so` for both |
+| PNG / JPEG codecs | `imcore/src/codec/{png,jpeg,stb_impl}.cpp` | `USE_PNG` / `USE_JPEG` (both default OFF) | codec entry points — file and memory-source reads (V-4) — are declared under `#if defined(USE_PNG/JPEG)` (`codec/image.hpp`, the existing define pattern); the PUBLIC define keeps consumers consistent | +330,064 B `libimcore.so` for both |
 | GIF writer | `imcore/src/codec/gif.cpp` | always built (dependency-free, V-0) | — | — |
 | Runtime TTF | `imcore/src/text/{stb_truetype_impl,runtime_ttf_provider}.cpp` | `USE_TTF_RUNTIME` (default OFF) | `TtfFamily` compiles only under the PUBLIC `IMCORE_HAS_TTF_RUNTIME` | +211,416 B `libimcore.so` |
 | Build-time TTF subset | `tools/ttf_subset.cpp` + `imcore/src/text/ttf_provider.cpp` | empty `TTF_FONT` (default) | `IMCORE_HAS_TTF_SUBSET` off | build-time tool; the generated table scales with the code-point set |
