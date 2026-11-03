@@ -6,6 +6,7 @@
 
 #include <stdio.h>
 #include <stdint.h>
+#include <stddef.h>
 #include <functional>
 #include <vector>
 #include <string>
@@ -49,6 +50,17 @@ namespace zb::ui
             on_loading_image file_loaded,
             on_reading_image_row read_row);
 
+        /*
+         * decode a jpeg from an in-memory buffer (V-4): same callback
+         * contract and return codes as read_jpeg_file. `bytes` is only
+         * read, never freed.
+         */
+        int read_jpeg_memory(
+            const uint8_t *bytes,
+            size_t n,
+            on_loading_image image_loaded,
+            on_reading_image_row read_row);
+
         int read_jpg(
             core::Graphics &g,
             const std::string &file_name,
@@ -76,6 +88,17 @@ namespace zb::ui
 
         int read_png_file(
             const std::string file_name,
+            on_loading_image image_loaded,
+            on_reading_image_row read_row);
+
+        /*
+         * decode a png from an in-memory buffer (V-4): same callback
+         * contract and return codes as read_png_file. `bytes` is only
+         * read, never freed.
+         */
+        int read_png_memory(
+            const uint8_t *bytes,
+            size_t n,
             on_loading_image image_loaded,
             on_reading_image_row read_row);
 

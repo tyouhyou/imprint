@@ -14,6 +14,7 @@
 #include "logging.hpp"
 #include "stb_image.h"
 #include "stb_image_write.h"
+#include <climits>
 #include <cstring>
 
 #define PNG_SIG_BYTES 8
@@ -56,6 +57,76 @@ int Image::read_png_file(
     if (img_width <= 0 || img_height <= 0)
     {
         LE << "PNG file reports zero width/height, refusing to process. (" << file_name << ")";
+        stbi_image_free(data);
+        return 4;
+    }
+
+    auto img_width_u = static_cast<uint32_t>(img_width);
+    auto img_height_u = static_cast<uint32_t>(img_height);
+    auto row_stride = img_width_u * 4;  // stb always yields RGBA with req_comp=4
+    image_info iminf{
+        img_width_u,
+        img_height_u,
+        row_stride,
+        4};
+    if (!image_loaded(iminf))
+    {
+        LE << "Error occurred when set image info in image_loaded callback.";
+        stbi_image_free(data);
+        return 5;
+    }
+
+    auto row_pointer = data;
+    for (uint32_t i = 0; i < img_height_u; i++)
+    {
+        if (!read_row(row_pointer))
+        {
+            LE << "Error occurred when processing image row data.";
+            stbi_image_free(data);
+            return 6;
+        }
+        row_pointer += row_stride;
+    }
+
+    stbi_image_free(data);
+    return 0;
+}
+
+int Image::read_png_memory(
+    const uint8_t *bytes,
+    size_t n,
+    on_loading_image image_loaded,
+    on_reading_image_row read_row)
+{
+    if (!bytes || n == 0)
+    {
+        LE << "Reading png from memory failed: empty buffer.";
+        return 1;
+    }
+
+    bool sig_ok = n >= PNG_SIG_BYTES &&
+                  0 == std::memcmp(bytes, kPngSignature, PNG_SIG_BYTES);
+    if (!sig_ok)
+    {
+        LE << "The specified memory buffer is not a PNG image.";
+        return 2;
+    }
+
+    int img_width = 0, img_height = 0, comp = 0;
+    // stb's length parameter is int-bounded; the clamp cannot truncate a
+    // decodable stream (stb consumes only what the image needs)
+    auto len = n > static_cast<size_t>(INT_MAX)
+                 ? INT_MAX
+                 : static_cast<int>(n);
+    unsigned char *data = stbi_load_from_memory(bytes, len, &img_width, &img_height, &comp, 4);
+    if (!data)
+    {
+        LE << "Decoding png from memory failed. reason: " << stbi_failure_reason();
+        return 3;
+    }
+    if (img_width <= 0 || img_height <= 0)
+    {
+        LE << "PNG image reports zero width/height, refusing to process.";
         stbi_image_free(data);
         return 4;
     }

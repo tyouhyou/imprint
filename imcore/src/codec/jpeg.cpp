@@ -14,6 +14,7 @@
 #include "logging.hpp"
 #include "stb_image.h"
 #include "stb_image_write.h"
+#include <climits>
 #include <cstring>
 
 using namespace zb;
@@ -158,6 +159,76 @@ int Image::read_jpg(Graphics &g, const std::string &file_name, int start_x, int 
     }
 
     g.draw_image(jpg_img.data(), static_cast<int>(jpg_inf.image_width), static_cast<int>(jpg_inf.image_height), static_cast<int>(jpg_inf.image_width), start_x, start_y);
+    return 0;
+}
+
+int Image::read_jpeg_memory(
+    const uint8_t *bytes,
+    size_t n,
+    on_loading_image image_loaded,
+    on_reading_image_row read_row)
+{
+    if (!bytes || n == 0)
+    {
+        LE << "Reading jpeg from memory failed: empty buffer.";
+        return 1;
+    }
+
+    // SOI marker (0xFF 0xD8) check for a clearer "not a jpeg" error
+    bool soi_ok = n >= 2 && bytes[0] == 0xFF && bytes[1] == 0xD8;
+    if (!soi_ok)
+    {
+        LE << "The specified memory buffer is not a JPEG image.";
+        return 2;
+    }
+
+    int img_width = 0, img_height = 0, comp = 0;
+    // stb's length parameter is int-bounded; the clamp cannot truncate a
+    // decodable stream (stb consumes only what the image needs)
+    auto len = n > static_cast<size_t>(INT_MAX)
+                 ? INT_MAX
+                 : static_cast<int>(n);
+    unsigned char *data = stbi_load_from_memory(bytes, len, &img_width, &img_height, &comp, 3);
+    if (!data)
+    {
+        LE << "Decoding jpeg from memory failed. reason: " << stbi_failure_reason();
+        return 3;
+    }
+    if (img_width <= 0 || img_height <= 0)
+    {
+        LE << "JPEG image reports zero width/height, refusing to process.";
+        stbi_image_free(data);
+        return 4;
+    }
+
+    auto img_width_u = static_cast<uint32_t>(img_width);
+    auto img_height_u = static_cast<uint32_t>(img_height);
+    auto row_stride = img_width_u * 3;  // stb yields RGB with req_comp=3
+    image_info iminf{
+        img_width_u,
+        img_height_u,
+        row_stride,
+        3};
+    if (!image_loaded(iminf))
+    {
+        LE << "Error occurred when set image info in image_loaded callback.";
+        stbi_image_free(data);
+        return 5;
+    }
+
+    auto row_pointer = data;
+    for (uint32_t i = 0; i < img_height_u; i++)
+    {
+        if (!read_row(row_pointer))
+        {
+            LE << "Error occurred when processing image row data.";
+            stbi_image_free(data);
+            return 6;
+        }
+        row_pointer += row_stride;
+    }
+
+    stbi_image_free(data);
     return 0;
 }
 

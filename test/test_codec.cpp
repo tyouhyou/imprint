@@ -92,6 +92,42 @@ namespace
         b = c.b();
     }
 #endif
+
+    // whole-file bytes (used only by the USE_PNG / USE_JPEG suites)
+    [[maybe_unused]] std::vector<unsigned char> read_file_bytes(const char *path)
+    {
+        std::vector<unsigned char> bytes;
+        FILE *f = std::fopen(path, "rb");
+        if (!f)
+            return bytes;
+        unsigned char chunk[4096];
+        size_t got;
+        while ((got = std::fread(chunk, 1, sizeof(chunk), f)) > 0)
+            bytes.insert(bytes.end(), chunk, chunk + got);
+        std::fclose(f);
+        return bytes;
+    }
+
+    // memory-source decode must match the file decode exactly (deterministic
+    // decode identity): same dims, same stride, same pixels
+    void expect_same_decode(const ReadResult &file_dec, const ReadResult &mem_dec)
+    {
+        EXPECT(mem_dec.info_received);
+        EXPECT(mem_dec.info.image_width == file_dec.info.image_width);
+        EXPECT(mem_dec.info.image_height == file_dec.info.image_height);
+        EXPECT(mem_dec.info.color_components == file_dec.info.color_components);
+        EXPECT(mem_dec.info.row_stride == file_dec.info.row_stride);
+        EXPECT(mem_dec.pixels.size() == file_dec.pixels.size());
+        for (size_t i = 0; i < file_dec.pixels.size() && mem_dec.pixels.size() == file_dec.pixels.size(); i++)
+        {
+            if (mem_dec.pixels[i].pixel != file_dec.pixels[i].pixel)
+            {
+                EXPECT(false);  // report once with position
+                std::printf("  memory decode pixel mismatch at %zu\n", i);
+                break;
+            }
+        }
+    }
 }  // namespace
 
 int test_codec()
@@ -132,12 +168,29 @@ int test_codec()
         { return false; };
         EXPECT(6 == img.read_png_file(PNG_TMP, make_loaded(out), reject_row));
 
+        // memory-source round-trip (V-4): the file's bytes decode to the
+        // exact same image through read_png_memory
+        std::vector<unsigned char> png_bytes = read_file_bytes(PNG_TMP);
+        EXPECT(!png_bytes.empty());
+        ReadResult mem_out;
+        EXPECT(0 == img.read_png_memory(png_bytes.data(), png_bytes.size(), make_loaded(mem_out), make_row_rgba(mem_out)));
+        expect_same_decode(out, mem_out);
+
+        // callbacks may reject from memory too: info rejected (5), row rejected (6)
+        EXPECT(5 == img.read_png_memory(png_bytes.data(), png_bytes.size(), reject_info, make_row_rgba(mem_out)));
+        EXPECT(6 == img.read_png_memory(png_bytes.data(), png_bytes.size(), make_loaded(mem_out), reject_row));
+
         // error codes: missing file (1), not a PNG (2)
         EXPECT(1 == img.read_png_file("test_codec_no_such.png", make_loaded(out), make_row_rgba(out)));
         FILE *f = std::fopen(PNG_TMP, "wb");
         std::fputs("not a png", f);
         std::fclose(f);
         EXPECT(2 == img.read_png_file(PNG_TMP, make_loaded(out), make_row_rgba(out)));
+
+        // memory error contract mirrors the file variant: empty (1), not a PNG (2)
+        EXPECT(1 == img.read_png_memory(nullptr, 0, make_loaded(mem_out), make_row_rgba(mem_out)));
+        const unsigned char not_png[] = "not a png";
+        EXPECT(2 == img.read_png_memory(not_png, sizeof(not_png) - 1, make_loaded(mem_out), make_row_rgba(mem_out)));
     }
     std::remove(PNG_TMP);
 #endif
@@ -200,12 +253,25 @@ int test_codec()
         }
 #endif
 
+        // memory-source round-trip (V-4): the file's bytes decode to the
+        // exact same image through read_jpeg_memory
+        std::vector<unsigned char> jpg_bytes = read_file_bytes(JPG_TMP);
+        EXPECT(!jpg_bytes.empty());
+        ReadResult mem_out;
+        EXPECT(0 == img.read_jpeg_memory(jpg_bytes.data(), jpg_bytes.size(), make_loaded(mem_out), make_row_rgb(mem_out)));
+        expect_same_decode(out, mem_out);
+
         // error codes: missing file (1), not a JPEG (2)
         EXPECT(1 == img.read_jpeg_file("test_codec_no_such.jpg", make_loaded(out), make_row_rgb(out)));
         FILE *f = std::fopen(JPG_TMP, "wb");
         std::fputs("not a jpeg", f);
         std::fclose(f);
         EXPECT(2 == img.read_jpeg_file(JPG_TMP, make_loaded(out), make_row_rgb(out)));
+
+        // memory error contract mirrors the file variant: empty (1), not a JPEG (2)
+        EXPECT(1 == img.read_jpeg_memory(nullptr, 0, make_loaded(mem_out), make_row_rgb(mem_out)));
+        const unsigned char not_jpeg[] = "not a jpeg";
+        EXPECT(2 == img.read_jpeg_memory(not_jpeg, sizeof(not_jpeg) - 1, make_loaded(mem_out), make_row_rgb(mem_out)));
     }
     std::remove(JPG_TMP);
 #endif
