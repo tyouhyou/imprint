@@ -18,7 +18,9 @@ namespace zb::ui
      * USE_PNG / USE_JPEG) decode into a per-widget single-entry cache
      * keyed by the content id: a repeated id is a no-op whatever the
      * bytes (same id means same image), a new id replaces the cached
-     * decode; a decode failure keeps the previous image.
+     * decode; a decode failure keeps the previous image. An empty id is
+     * an unnamed image and always decodes — set_image stores an empty
+     * id, and the same-id identity does not hold across the two paths.
      *
      * Geometry: an explicit size wins (the shared length rules);
      * otherwise measure() is the image's natural size (0x0 while empty).
@@ -49,12 +51,13 @@ namespace zb::ui
 #if defined(USE_PNG)
         /* decodes once into the content-id cache: a repeated id is a
            no-op (true), a decode failure logs one LW, keeps the previous
-           image and returns false. `bytes` is only read. */
-        bool set_image_png(const std::string &content_id, const uint8_t *bytes, size_t n);
+           image and returns false. An empty id is an unnamed image and
+           always decodes (see the class comment). `bytes` is only read. */
+        [[nodiscard]] bool set_image_png(const std::string &content_id, const uint8_t *bytes, size_t n);
 #endif
 #if defined(USE_JPEG)
         /* set_image_png's mirror for baseline jpegs (RGB decode) */
-        bool set_image_jpeg(const std::string &content_id, const uint8_t *bytes, size_t n);
+        [[nodiscard]] bool set_image_jpeg(const std::string &content_id, const uint8_t *bytes, size_t n);
 #endif
 
         void clear_image();

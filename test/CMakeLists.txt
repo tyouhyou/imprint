@@ -198,6 +198,15 @@ add_custom_target(html_embed_negative_check
     VERBATIM
 )
 add_dependencies(test_imui html_embed_negative_check)
+
+# negative gate (FI-09 review): duplicate src attributes — an adopted
+# (first) src of "" and a non-empty second — warn the parse into
+# failure, so the tool exits non-zero and packs no image file
+add_custom_target(html_embed_dual_src_negative_check
+    COMMAND sh -c "! $<TARGET_FILE:html_embed> ${CMAKE_CURRENT_BINARY_DIR}/html_embed_dual_src.gen.hpp ${PROJECT_SOURCE_DIR}/tools/examples/img_dual_src.html"
+    VERBATIM
+)
+add_dependencies(test_imui html_embed_dual_src_negative_check)
 endif()
 endif()
 

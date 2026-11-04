@@ -287,6 +287,7 @@ int test_image_view()
         EXPECT(!good.empty());
 
         ImageView iv;
+        iv.set_size(2, 2);
         EXPECT(iv.set_image_png("art", good.data(), good.size()));
         EXPECT(iv.has_image());
         EXPECT(iv.get_content_id() == "art");
@@ -309,10 +310,17 @@ int test_image_view()
         EXPECT(test::pixel_at(g, 1, 1) == painted1);
 
         // new id + corrupt bytes: decode failure, one LW, previous kept
+        // (only warn-level rows count: the codec's own LE is its separate
+        // diagnostic)
         int warns = 0;
         zb::Logging::set_log_handle(
-            [&](zb::Logging_Level, const std::string &)
-            { ++warns; });
+            [&](zb::Logging_Level level, const std::string &)
+            {
+                if (level == zb::Logging_Level::warn)
+                {
+                    ++warns;
+                }
+            });
         EXPECT(!iv.set_image_png("other", corrupt, sizeof(corrupt) - 1));
         zb::Logging::set_log_handle();
         EXPECT(warns == 1);
@@ -333,12 +341,41 @@ int test_image_view()
         // null/empty bytes fail the same way (one LW, previous kept)
         warns = 0;
         zb::Logging::set_log_handle(
-            [&](zb::Logging_Level, const std::string &)
-            { ++warns; });
+            [&](zb::Logging_Level level, const std::string &)
+            {
+                if (level == zb::Logging_Level::warn)
+                {
+                    ++warns;
+                }
+            });
         EXPECT(!iv.set_image_png("third", nullptr, 0));
         zb::Logging::set_log_handle();
         EXPECT(warns == 1);
         EXPECT(iv.get_content_id() == "other");
+    }
+
+    // an empty content id is an unnamed image: it always decodes. The
+    // no-op corner must not swallow a png fed after a view-set image
+    // (set_image leaves an empty id, and "same id means same image"
+    // does not hold across the two paths).
+    {
+        std::vector<core::Color> px(4, core::colors::Red);
+        ImageView iv;
+        iv.set_size(2, 2);
+        iv.set_image(core::image_t{px.data(), 2, 2, 0});
+        EXPECT(iv.has_image());
+        EXPECT(iv.get_content_id().empty());
+
+        const auto art = make_png_bytes(
+            core::colors::Blue, core::colors::Blue,
+            core::colors::Blue, core::colors::Blue);
+        EXPECT(!art.empty());
+        EXPECT(iv.set_image_png("", art.data(), art.size()));
+        EXPECT(iv.get_content_id().empty());  // unnamed stays unnamed
+        core::Graphics g(2, 2, nullptr);
+        iv.draw(g);
+        EXPECT(test::pixel_at(g, 0, 0) == core::colors::Blue.pixel);
+        EXPECT(test::pixel_at(g, 1, 1) == core::colors::Blue.pixel);
     }
 #endif
 

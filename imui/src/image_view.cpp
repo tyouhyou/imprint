@@ -59,8 +59,10 @@ namespace zb::ui
     bool ImageView::set_image_png(const std::string &id, const uint8_t *bytes, size_t n)
     {
         // repeated id: no-op whatever the bytes (the deterministic-decode
-        // identity — same id means same image)
-        if (id == content_id && has_image())
+        // identity — same id means same image). An empty id is an unnamed
+        // image and never hits the cache: set_image leaves an empty id,
+        // and the identity does not hold across the two paths.
+        if (!id.empty() && id == content_id && has_image())
         {
             return true;
         }
@@ -99,7 +101,9 @@ namespace zb::ui
 #if defined(USE_JPEG)
     bool ImageView::set_image_jpeg(const std::string &id, const uint8_t *bytes, size_t n)
     {
-        if (id == content_id && has_image())
+        // an empty id is an unnamed image and never hits the cache (the
+        // set_image_png mirror comment states why)
+        if (!id.empty() && id == content_id && has_image())
         {
             return true;
         }

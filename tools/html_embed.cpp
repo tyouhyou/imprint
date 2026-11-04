@@ -120,7 +120,10 @@ namespace
 
     // the image_view srcs of one parsed document, first-seen order,
     // deduped. The parse gate has already rejected any document carrying
-    // an img without a usable src, so every hit here has content.
+    // an img without a usable src, so every hit here has content. The
+    // adopted value is the node's FIRST src prop — the prop_of semantics,
+    // the same value the parser's gate validated (a duplicate src
+    // attribute warns the parse into failure before anything is packed).
     void collect_image_srcs(const zb::ui::ui_node &n, std::vector<std::string> &out)
     {
         if (n.type == "image_view")
@@ -137,6 +140,7 @@ namespace
                             out.push_back(*s);
                         }
                     }
+                    break;  // the first src prop is the adopted one
                 }
             }
         }

@@ -42,18 +42,32 @@ namespace zb::ui
             // in_svg()); elsewhere they stay off-whitelist and skip
             // with content dropped
         }
-        // img's src: usable = present and non-empty (html-path tolerance:
-        // an image without a source is an authoring error)
-        bool has_usable_src(const std::vector<std::pair<std::string, std::string>> &attrs)
+        // img's src: usable = the FIRST src attribute is present and
+        // non-empty (html-path tolerance: an image without a source is an
+        // authoring error). The builder adopts the first src prop (prop_of
+        // takes the first prop of that name), so the gate validates
+        // exactly the adopted value; `repeated` reports a duplicate src
+        // attribute for the one-LW call site (first value stands).
+        bool has_usable_src(const std::vector<std::pair<std::string, std::string>> &attrs,
+                            bool &repeated)
         {
+            repeated = false;
+            const std::string *first = nullptr;
             for (const auto &a : attrs)
             {
-                if (a.first == "src" && !a.second.empty())
+                if (a.first == "src")
                 {
-                    return true;
+                    if (first == nullptr)
+                    {
+                        first = &a.second;
+                    }
+                    else
+                    {
+                        repeated = true;
+                    }
                 }
             }
-            return false;
+            return first != nullptr && !first->empty();
         }
         // elements whose bare text becomes an anonymous label: the container
         // tags, and body (the document container)
@@ -5898,13 +5912,22 @@ namespace zb::ui
                         mode = k_skip;
                     }
                 }
-                else if (name == "img" && !has_usable_src(t.attrs))
+                else if (name == "img")
                 {
-                    // html-path tolerance: an image without a source is an
-                    // authoring error, the same class as an off-whitelist
-                    // element
-                    LW << "html: line " << t.line << ": <img> without a usable src; skipped";
-                    mode = k_skip;
+                    bool src_repeated = false;
+                    if (!has_usable_src(t.attrs, src_repeated))
+                    {
+                        // html-path tolerance: an image without a source is
+                        // an authoring error, the same class as an
+                        // off-whitelist element
+                        LW << "html: line " << t.line << ": <img> without a usable src; skipped";
+                        mode = k_skip;
+                    }
+                    else if (src_repeated)
+                    {
+                        LW << "html: line " << t.line
+                           << ": <img> has more than one src attribute; the first one wins";
+                    }
                 }
 
                 Elem *elem = nullptr;

@@ -3576,6 +3576,28 @@ int test_html()
         EXPECT(r1.type == "column" && r1.children.empty());
         EXPECT(r2.type == "column" && r2.children.empty());
         EXPECT(warns.size() == 2);  // one LW per skipped element
+
+        // duplicate src attributes: the builder adopts the FIRST src
+        // value (prop_of takes the first prop of that name), so the gate
+        // validates that same value. A first-empty src skips with one LW
+        // (otherwise the gate passed while the widget ran on the empty
+        // first value and the packer held the second); a duplicate src
+        // over a usable first value is one LW and the first value stands,
+        // so widget src and html_embed's packed file stay the same name.
+        std::vector<std::string> dup_warns;
+        zb::Logging::set_log_handle(
+            [&](zb::Logging_Level, const std::string &m)
+            { dup_warns.push_back(m); });
+
+        ui_node r3 = parse_html("<body><div><img src=\"\" src=\"b.png\"/></div></body>", nullptr);
+        ui_node r4 = parse_html("<body><div><img src=\"a.png\" src=\"b.png\"/></div></body>", nullptr);
+        zb::Logging::set_log_handle();
+
+        EXPECT(r3.type == "column" && r3.children.empty());
+        EXPECT(r4.children.size() == 1);
+        EXPECT(r4.children[0].type == "image_view");
+        EXPECT(test::vget<std::string>(node_prop_v(r4.children[0], "src")) == "a.png");
+        EXPECT(dup_warns.size() == 2);  // one LW per element
     }
 
     // block-level like svg: inside a wrapping p the img hits the

@@ -162,6 +162,29 @@ int Image::read_jpg(Graphics &g, const std::string &file_name, int start_x, int 
     return 0;
 }
 
+namespace
+{
+    // the row callbacks are arbitrary host code: a throw on the way out
+    // (bad_alloc from a caller's push_back, say) must still free the stbi
+    // decode buffer — the buffer is released on every exit path of the
+    // memory-variant readers, exceptions included
+    struct stbi_decode_buffer
+    {
+        explicit stbi_decode_buffer(unsigned char *p)
+            : data(p) {}
+        ~stbi_decode_buffer()
+        {
+            if (data != nullptr)
+            {
+                stbi_image_free(data);
+            }
+        }
+        stbi_decode_buffer(const stbi_decode_buffer &) = delete;
+        stbi_decode_buffer &operator=(const stbi_decode_buffer &) = delete;
+        unsigned char *data;
+    };
+}  // namespace
+
 int Image::read_jpeg_memory(
     const uint8_t *bytes,
     size_t n,
@@ -189,6 +212,7 @@ int Image::read_jpeg_memory(
                  ? INT_MAX
                  : static_cast<int>(n);
     unsigned char *data = stbi_load_from_memory(bytes, len, &img_width, &img_height, &comp, 3);
+    stbi_decode_buffer buffer{data};
     if (!data)
     {
         LE << "Decoding jpeg from memory failed. reason: " << stbi_failure_reason();
@@ -197,7 +221,6 @@ int Image::read_jpeg_memory(
     if (img_width <= 0 || img_height <= 0)
     {
         LE << "JPEG image reports zero width/height, refusing to process.";
-        stbi_image_free(data);
         return 4;
     }
 
@@ -212,7 +235,6 @@ int Image::read_jpeg_memory(
     if (!image_loaded(iminf))
     {
         LE << "Error occurred when set image info in image_loaded callback.";
-        stbi_image_free(data);
         return 5;
     }
 
@@ -222,13 +244,11 @@ int Image::read_jpeg_memory(
         if (!read_row(row_pointer))
         {
             LE << "Error occurred when processing image row data.";
-            stbi_image_free(data);
             return 6;
         }
         row_pointer += row_stride;
     }
 
-    stbi_image_free(data);
     return 0;
 }
 
