@@ -66,6 +66,7 @@ add_executable(
     test_trend_line.cpp
     test_svg.cpp
     test_image_view.cpp
+    test_annotate_canvas.cpp
     test_main_guard.cpp
 )
 

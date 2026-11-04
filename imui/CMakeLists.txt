@@ -40,6 +40,7 @@ add_library(
     src/trend_line.cpp
     src/svg_canvas.cpp
     src/image_view.cpp
+    src/annotate_canvas.cpp
 )
 
 # PUBLIC 0/1 (not presence-only) so consumers and tests can branch on the

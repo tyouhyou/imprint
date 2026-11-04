@@ -76,6 +76,7 @@ int test_knob();
 int test_trend_line();
 int test_svg();
 int test_image_view();
+int test_annotate_canvas();
 int test_main_guard();
 
 #if defined(_WIN32)
@@ -178,6 +179,7 @@ static const suite g_suites[] = {
     {"trend_line", test_trend_line},
     {"svg", test_svg},
     {"image_view", test_image_view},
+    {"annotate", test_annotate_canvas},
     {"main_guard", test_main_guard},
 #if defined(_WIN32)
     {"win_input", test_win_input},

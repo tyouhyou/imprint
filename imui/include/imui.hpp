@@ -1,5 +1,6 @@
 #pragma once
 
+#include "annotate_canvas.hpp"
 #include "button.hpp"
 #include "checkbox.hpp"
 #include "dialog.hpp"

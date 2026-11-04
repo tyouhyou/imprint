@@ -139,16 +139,14 @@ namespace zb::ui
     }
 #endif
 
-    void ImageView::draw_at(core::Graphics &area) const
+    ImageView::letterbox_rect ImageView::image_letterbox() const
     {
-        if (img_width <= 0 || img_height <= 0 || pixels.empty())
-        {
-            return;
-        }
+        letterbox_rect r;
         const auto box = get_size();
-        if (box.width <= 0 || box.height <= 0)
+        if (img_width <= 0 || img_height <= 0 || box.width <= 0 ||
+            box.height <= 0)
         {
-            return;
+            return r;  // no mapped image rect
         }
 
         // letterbox scale-to-fit (code-contract §3.5): dst_w = min(bw,
@@ -159,11 +157,27 @@ namespace zb::ui
         const int64_t sw = img_width, sh = img_height;
         const int64_t dst_w = std::min(bw, sw * bh / sh);
         const int64_t dst_h = std::min(bh, sh * bw / sw);
-        const int x = static_cast<int>((bw - dst_w) / 2);
-        const int y = static_cast<int>((bh - dst_h) / 2);
+        r.x = static_cast<int>((bw - dst_w) / 2);
+        r.y = static_cast<int>((bh - dst_h) / 2);
+        r.w = static_cast<int>(dst_w);
+        r.h = static_cast<int>(dst_h);
+        return r;
+    }
+
+    void ImageView::draw_at(core::Graphics &area) const
+    {
+        if (img_width <= 0 || img_height <= 0 || pixels.empty())
+        {
+            return;
+        }
+        const letterbox_rect r = image_letterbox();
+        if (r.w <= 0 || r.h <= 0)
+        {
+            return;  // a degenerate placement draws nothing (§3.5)
+        }
 
         area.draw_image_scaled(
             core::image_t{pixels.data(), img_width, img_height, 0},
-            x, y, static_cast<int>(dst_w), static_cast<int>(dst_h));
+            r.x, r.y, r.w, r.h);
     }
 }

@@ -75,6 +75,23 @@ namespace zb::ui
     protected:
         void draw_at(core::Graphics &area) const override;
 
+        /*
+         * The letterbox placement of the image inside the content box:
+         * the one letterbox math of the widget (code-contract §3.6 --
+         * one helper, two callers). draw_at paints the image through it,
+         * and AnnotateCanvas maps its logical space through the same
+         * rect. Zero extents mean nothing maps: no image, or a box/image
+         * pair that scales one axis to zero.
+         */
+        struct letterbox_rect
+        {
+            int x = 0;
+            int y = 0;
+            int w = 0;
+            int h = 0;
+        };
+        [[nodiscard]] letterbox_rect image_letterbox() const;
+
     private:
         /* store tail shared by the decode entry points (set_image keeps
            its own path: a view-set image reports an empty content id) */
