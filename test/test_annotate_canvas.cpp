@@ -14,6 +14,7 @@
 #include "imui.hpp"
 #include "logging.hpp"
 
+#include <climits>
 #include <utility>
 #include <vector>
 
@@ -300,8 +301,8 @@ int test_annotate_canvas()
         CaptureLog log;
         log.attach(*t.canvas);
 
-        t.dispatcher.dispatch(t.root, press_at(0, 2));   // clamps to (0,1)
-        t.dispatcher.dispatch(t.root, move_to(5, 2));    // clamps to (1,1)
+        t.dispatcher.dispatch(t.root, press_at(0, 2));  // clamps to (0,1)
+        t.dispatcher.dispatch(t.root, move_to(5, 2));   // clamps to (1,1)
         t.dispatcher.dispatch(t.root, release_at(5, 2));
 
         EXPECT(log.fires == 1);
@@ -369,6 +370,32 @@ int test_annotate_canvas()
         c.clear_strokes();
         EXPECT(c.strokes().empty());
         c.clear_strokes();  // silent on empty
+    }
+
+    // injected (host-forwarded) points clamp into the logical rect
+    // before the device map: a remote stroke cannot escape the canvas
+    // and the device product cannot narrow silently (4x2 logical over
+    // an 8x4 box: INT_MAX maps to 4294967294, far past int)
+    {
+        AnnotateCanvas c;
+        c.set_size(8, 4);
+        feed_white_image(c, 4, 2);
+
+        AnnotateCanvas::Stroke s;
+        s.id = 9;
+        s.color = core::colors::Red;
+        s.width = 1;
+        s.points = {{INT_MAX, 1}, {INT_MIN, 1}};
+        EXPECT(c.add_stroke(std::move(s)));
+
+        core::Graphics g(8, 4, nullptr);
+        g.fill(core::colors::Black);
+        c.draw(g);
+        // both points clamp to logical x 0..3 -> device x 0..6 at y=2
+        EXPECT(test::pixel_at(g, 0, 2) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(g, 6, 2) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(g, 7, 2) == core::colors::White.pixel);
+        EXPECT(test::pixel_at(g, 3, 0) == core::colors::White.pixel);
     }
 
     // disabled (the default): the widget never captures; injected

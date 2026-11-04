@@ -3,6 +3,8 @@
 #include "logging.hpp"
 #include "theme.hpp"
 
+#include <algorithm>
+
 namespace zb::ui
 {
     void AnnotateCanvas::set_canvas_size(const int w, const int h)
@@ -154,12 +156,21 @@ namespace zb::ui
         dev_pts_.clear();
         for (const auto &p : s.points)
         {
+            // injected strokes carry host-forwarded (untrusted) points:
+            // they clamp into the logical rect first, the same "a stroke
+            // cannot escape the canvas" invariant the capture path
+            // enforces in device_to_logical. With lx/ly bounded the
+            // device product below stays < box.w / box.h, so the int
+            // narrowing is provably in range (no silent garbage
+            // coordinates from an out-of-range quotient)
+            const int lx = std::clamp(p.first, 0, logical.width - 1);
+            const int ly = std::clamp(p.second, 0, logical.height - 1);
             dev_pts_.push_back(core::impoint_t{
                 box.x + static_cast<int>(
-                            static_cast<int64_t>(p.first) * box.w /
+                            static_cast<int64_t>(lx) * box.w /
                             logical.width),
                 box.y + static_cast<int>(
-                            static_cast<int64_t>(p.second) * box.h /
+                            static_cast<int64_t>(ly) * box.h /
                             logical.height)});
         }
         return true;

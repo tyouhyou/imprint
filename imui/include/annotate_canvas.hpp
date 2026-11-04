@@ -118,7 +118,10 @@ namespace zb::ui
             int64_t dx, int64_t dy) const;
 
         /* refills dev_pts_ with one stroke's device points (false when
-           nothing maps: no image rect or no logical space) */
+           nothing maps: no image rect or no logical space). Injected
+           points are host-forwarded and untrusted: they clamp into the
+           logical rect first, so a remote stroke cannot escape the
+           canvas and the device narrowing stays in range. */
         bool map_stroke_points(const Stroke &s) const;
 
         /* rasterizes one stroke through draw_polyline_aa */
