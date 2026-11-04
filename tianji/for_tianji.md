@@ -63,3 +63,8 @@
 - 2026-11-03：分工拍板（SIXEL 优先；组合层入树 `tianji/`；FI-07 维持
   关闭）；`docs/backlog.md` Batch FI 重构为「框架模块 → 组合层」两段；
   本文建立。**尚无代码**（先文档与拆解）。
+- 2026-11-04：**FI-09 落地**——`ImageView` 控件（内容标识解码缓存 +
+  letterbox）+ `Graphics::draw_image_scaled`（确定性最近邻）+ 内存源
+  PNG/JPEG 解码 + HTML `<img>` 白名单与 html_embed 构建期打包。评审
+  approve；desktop / codecs / 16bpp 三配置 battery 全绿。舞台画布的
+  图片通道就绪，下一项 FI-10（SIXEL 确定性量化器）。

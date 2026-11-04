@@ -28,9 +28,10 @@ Dependency-driven: each tier unlocks what follows.
    host resolution — fps IMPRINT-RUNTIME R15/R18), never
    `cpu.pressure`.
 3. **Batch FI — tianji client (active; restructured 2026-11-03)**:
-   framework modules first (Part 1 order: FI-09+V-4 → FI-10 →
-   annotation canvas → stream trio → text readiness), then the
-   composition under `tianji/` (Part 2). Display path: SIXEL first.
+   framework modules first — FI-09+V-4 landed 2026-11-04; the Part 1
+   order continues FI-10 → annotation canvas → stream trio → text
+   readiness — then the composition under `tianji/` (Part 2). Display
+   path: SIXEL first.
 4. **Explicitly NOT now**: F-1/F-2, I-1, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
    items stay trigger-gated. (V-4 moved out 2026-11-03: it fires with
@@ -41,17 +42,7 @@ Dependency-driven: each tier unlocks what follows.
 
 Goal: close the "works but looks primitive" gap against other UI
 frameworks. Completed rasterizer/showcase/gif/dashboard work: see `git log`.
-
-- **V-4. codec: memory-source image decode** (condition-triggered):
-  `Image::read_png*` accepts only file names; embedded targets shipping
-  compressed art need `read_png_memory(bytes, n, ...)` (stb offers
-  `stbi_load_from_memory`). The default-OFF decision is on record
-  (ARCHITECTURE §4.9.1 carries the measured codec cost of the SHARED
-  `libimcore.so`): both codecs stay OFF until the first real
-  compressed-asset use case appears; until then the procedural
-  generator covers the demo. **The trigger now has a consumer**:
-  tianji's StageView scene art (Batch FI / FI-09, 2026-11-01) is the
-  first real compressed-asset use case — V-4 lands with it.
+V-4 (memory-source image decode) landed 2026-11-04 with Batch FI FI-09.
 
 ### Batch H — HTML/CSS Rendering Path (landed end to end; open remainder only)
 
@@ -314,13 +305,21 @@ the tianji repo; go there only to confirm specifics.**
 
 #### Part 1 — Framework modules (build in this order)
 
-- **FI-09 — ImageView & image plumbing** (the largest item; fires
-  V-4). ImageView with deterministic nearest-neighbor scaling (the
-  presentation-resample style) + letterbox + runtime `set_image`,
-  decode cache keyed by content id; `<img>` in the build-time HTML
-  path (html-path.md whitelist change); needs V-4's memory-source
-  decode and the `USE_PNG` consumer decision (codecs stay default-OFF
-  per ARCHITECTURE §4.9.1; the tianji app opts in). Contract-first.
+- **FI-09 — landed 2026-11-04.** `ImageView` (owned decoded pixels,
+  per-widget content-id decode cache, letterbox) over the new
+  `Graphics::draw_image_scaled`; V-4 memory-source codec reads
+  (`read_png_memory`/`read_jpeg_memory`); the `image_view`/`src`
+  declarative surface (.ui tag + HTML `img` whitelist); html_embed
+  `<img>` packing with the missing-file authoring-error gate.
+  Contracts: code-contract §3.5 + §9. Verification: imprintUI-review
+  task scope **approve** (0 blocker/0 must; findings fixed — first-src
+  gate consistency, stbi free-guard on the memory decoders,
+  empty-id-always-decodes, `[[nodiscard]]`); battery 68/68 on
+  desktop-test, codecs-test (the new kit target) and desktop-test-16.
+  The review also caught the codec-gated test block's two pre-existing
+  failures (that block had never compiled under `USE_PNG` before) —
+  fixed, not weakened. Unscheduled hardening note: the file-variant
+  decoders carry the same callback-throw free-guard gap.
 - **FI-10 — deterministic SIXEL quantizer** (revived 2026-11-03; was
   de-prioritized under the old ruling). Replace per-band color-drop at
   `kMaxRegisters=250` with a deterministic quantizer (fixed palette /
@@ -328,7 +327,18 @@ the tianji repo; go there only to confirm specifics.**
   frame. Determinism lock: same frame → same DCS bytes. Extend the pty
   smoke with an image-bearing frame. Also covers the
   buffer-geometry ↔ terminal-cell mapping a real client frame needs
-  (the current P4 demo target is a fixed buffer).
+  (the current P4 demo target is a fixed buffer). Design (2026-11-04
+  recon): frames whose every band fits 250 registers keep the current
+  exact per-band encoder **byte-for-byte** (existing test_sixel
+  expectations untouched); only a frame with an overflowing band
+  switches to a frame-level deterministic median-cut palette
+  (integer-only math, stable ordering — first-seen scan, ties broken
+  by lowest register), so photo frames get no band seams and no
+  dropped pixels; the drop path and its LW latch disappear
+  (quantization is normal operation, not a warning). Pixels map to
+  registers by squared-distance nearest with a lower-register
+  tie-break; a color→register memo is legal (pure memoization) but
+  must not change the output.
 - **TJ-NEW — annotation canvas widget** (new widget, framework-style;
   final name lands at implementation). A widget with a fixed
   logical-canvas coordinate space: background layer over the FI-09
