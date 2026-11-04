@@ -73,3 +73,10 @@
   无带间接缝、无告警**（同帧同 DCS 字节）。评审 approve；desktop +
   16bpp battery 全绿。SIXEL 优先路径的两块硬前提（图片缩放 + 保真出图）
   均已就绪。
+- 2026-11-04：**标注画布落地（TJ-NEW）**——`AnnotateCanvas`（ImageView
+  子类）：固定逻辑画布坐标空间（与背景 letterbox 共享同一映射）、笔画即
+  数据（显式 id 注入远程席位标注 / 删除 / `stroke_ended` 中继）、启用时
+  Slider 式指针捕获（默认只读舞台）、`Graphics::draw_polyline_aa` 宽线
+  原语（SvgCanvas 胶囊算法提炼，定点确定性）。评审意见两条已修（注入点
+  int64→int 窄化钳制 + 格式漂移）；desktop + 16bpp battery 全绿。舞台
+  的"画线标注"框架能力就绪。

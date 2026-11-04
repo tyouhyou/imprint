@@ -28,10 +28,10 @@ Dependency-driven: each tier unlocks what follows.
    host resolution — fps IMPRINT-RUNTIME R15/R18), never
    `cpu.pressure`.
 3. **Batch FI — tianji client (active; restructured 2026-11-03)**:
-   framework modules first — FI-09+V-4 and FI-10 landed 2026-11-04;
-   the Part 1 order continues annotation canvas → stream trio → text
-   readiness — then the composition under `tianji/` (Part 2). Display
-   path: SIXEL first.
+   framework modules first — FI-09+V-4, FI-10 and the annotation
+   canvas landed 2026-11-04; the Part 1 order continues stream trio
+   (FI-05/06/02) → text readiness — then the composition under
+   `tianji/` (Part 2). Display path: SIXEL first.
 4. **Explicitly NOT now**: F-1/F-2, I-1, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
    items stay trigger-gated. (V-4 moved out 2026-11-03: it fires with
@@ -342,16 +342,19 @@ the tianji repo; go there only to confirm specifics.**
   register map); battery 68/68 on desktop-test and desktop-test-16.
   Open remainder: the buffer-geometry ↔ terminal-cell mapping for a
   real client frame (rides with TJ-C3).
-- **TJ-NEW — annotation canvas widget** (new widget, framework-style;
-  final name lands at implementation). A widget with a fixed
-  logical-canvas coordinate space: background layer over the FI-09
-  machinery; pointer-captured stroke layer (freehand polylines through
-  AA primitives, per-stroke color/width); stroke model as data
-  (add/query/clear — the feed can inject strokes from other seats);
-  stroke listener for the I/F relay. Deterministic pixels for
-  identical stroke sets; 16bpp plot_aa rule compliance; undo stays
-  host-side over the stroke-list ops. Contract-first (widget contract
-  section of code-contract.md).
+- **TJ-NEW — landed 2026-11-04.** `AnnotateCanvas` (an ImageView
+  subclass, code-contract §3.6): fixed logical-canvas space shared
+  with the background letterbox (one helper, two callers), stroke
+  model as data (inject with explicit ids for remote seats,
+  remove/clear, `stroke_ended` relay), Slider-pattern pointer capture
+  when enabled (read-only stage otherwise), zero-alloc draw. Strokes
+  ride the new `Graphics::draw_polyline_aa` (§9 — the SvgCanvas
+  capsule algorithm generalized; SvgCanvas itself unmigrated).
+  Contracts: code-contract §3.6 + §9. Verification: pipeline review
+  (2 findings — injected-point int64→int narrowing now clamped into
+  the logical rect with INT_MAX/INT_MIN locks, format drift — both
+  fixed and committed in c6aee80); battery PASS on desktop-test and
+  desktop-test-16.
 - **FI-05 — ScrollPanel stick-to-bottom primitive** (accepted).
   Follow-bottom or follow policy over the existing re-clamping
   `layout()`; additive, no contract change.
