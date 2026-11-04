@@ -12,12 +12,16 @@
 namespace zb::shell::sixel
 {
     // Encodes the frame (core::Color pixels, pitch = width) as a
-    // complete sixel DCS sequence (ESC P q ... ESC \). Palette registers
-    // are assigned per sixel band in first-seen order (cap 250; a color
-    // arriving after the budget is spent has no register, so no pass of
-    // that band writes a bit for its pixels and it is not remapped to a
-    // nearest color -- one LW per frame, never one per pixel). Column
-    // runs of 4+ identical cells collapse to `!len`.
+    // complete sixel DCS sequence (ESC P q ... ESC \). While every sixel
+    // band fits the 250-register cap, each band carries its own
+    // first-seen exact palette (the historical byte stream, unchanged).
+    // When any band would exceed the cap, the whole frame switches to a
+    // frame-level deterministic median-cut palette (<= 250 colors,
+    // integer math only): every pixel maps to its nearest register
+    // (squared distance, ties to the lower register), so no pixel is
+    // dropped and no diagnostic fires -- quantization is normal
+    // operation, not a warning. Column runs of 4+ identical cells
+    // collapse to `!len`.
     std::string encode_frame(const void *buffer, int width, int height);
 
     // encode_frame written to out (a write + flush convenience for the

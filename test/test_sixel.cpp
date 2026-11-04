@@ -104,25 +104,27 @@ int test_sixel()
         EXPECT(!a.empty());
     }
 
-    // X-13: the register budget is spent once the band holds 250 distinct
-    // colors, and the diagnostic latches — one LW per frame, not one per
-    // dropped pixel (a photo-like frame used to write a line per pixel).
-    // A band over the budget therefore logs exactly once and still emits a
-    // complete, deterministic DCS sequence.
-    // Depth-aware fixture: 16bpp quantizes a channel to 5 bits, so a gray
-    // ramp holds only 32 distinct colors and would never overflow — the
-    // distinctness has to come from channel spread to be depth-neutral
-    // (the same trap as the palette-percentage expectations above).
+    // X-13, recast by FI-10: a band over the 250-register budget no
+    // longer drops colors — the whole frame switches to the frame-level
+    // deterministic median-cut palette. Quantization is normal
+    // operation: no diagnostic fires (the old one-LW-per-frame latch is
+    // gone), and the stream stays complete and byte-identical across
+    // encodes.
+    // Depth-aware fixture as before: 16bpp quantizes a channel to 5
+    // bits, so a gray ramp holds only 32 distinct colors and would never
+    // overflow — the distinctness has to come from channel spread to be
+    // depth-neutral (the same trap as the palette-percentage expectations
+    // above).
     {
         constexpr int w = 260;  // > 250 distinct colors in one band
         constexpr int h = 6;
         std::vector<core::Color> buf(static_cast<std::size_t>(w) * h);
         for (int i = 0; i < w; ++i)
         {
-            // 260 distinct channel triples that stay distinct after the
-            // 16bpp 5-bit quantization too (r*3, g*5, b*9 mod 256: 256
-            // distinct triples at both depths, so the band overflows in
-            // every configuration)
+            // channel triples that stay distinct after the 16bpp 5-bit
+            // quantization too (r*3, g*5, b*9 mod 256: 256 distinct
+            // triples at both depths, so the band overflows in every
+            // configuration)
             const auto r = static_cast<uint8_t>((i * 3) & 0xFF);
             const auto g = static_cast<uint8_t>((i * 5) & 0xFF);
             const auto b = static_cast<uint8_t>((i * 9) & 0xFF);
@@ -134,18 +136,13 @@ int test_sixel()
         }
         log_probe probe;
         const std::string s = zb::shell::sixel::encode_frame(buf.data(), w, h);
-        EXPECT(probe.messages.size() == 1);
-        if (!probe.messages.empty())
-        {
-            EXPECT(probe.messages[0].find("250") != std::string::npos);
-        }
+        // quantization is normal operation, not a warning: zero LW
+        EXPECT(probe.messages.empty());
         // the frame is still well formed and still deterministic
         EXPECT(s.substr(0, 3) == "\x1bPq");
         EXPECT(s.substr(s.size() - 2) == "\x1b\\");
         const std::string again = zb::shell::sixel::encode_frame(buf.data(), w, h);
         EXPECT(s == again);
-        // a second frame latches again: the probe sees a second line
-        EXPECT(probe.messages.size() == 2);
     }
 
     // X-13: a frame within the budget logs nothing at all

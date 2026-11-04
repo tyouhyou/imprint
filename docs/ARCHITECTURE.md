@@ -816,10 +816,14 @@ library-mode consumer exists today (§4.9.1 records the decision).
   sixel frame at the cursor home (no dirty-region presents, the terminal
   scrolls if it is shorter than the buffer), and the pointer map depends
   on the terminal's cell-size reply (`CSI 16 t`; fallback 10x20 cells).
-  A sixel band holds at most 250 palette registers; a color arriving
-  after the budget is spent has no register and drops out of that band's
-  passes (it is not remapped), and the presenter logs the event once per
-  frame rather than once per pixel. It needs a sixel-capable terminal
+  A sixel band holds at most 250 palette registers. While every band
+  fits the cap, each band carries its own first-seen exact palette; when
+  any band would exceed it, the whole frame switches to a frame-level
+  deterministic median-cut palette (<= 250 colors, integer math only)
+  and every pixel maps to its nearest register (squared distance, ties
+  to the lower register) — no dropped pixels and no diagnostic
+  (quantization is normal operation, not a warning). It needs a
+  sixel-capable terminal
   (WezTerm, foot, mlterm, xterm -ti
   vt340, iTerm2); run it over SSH and it still shows the same UI.
 - Input tracks a single active press even though the data model is
