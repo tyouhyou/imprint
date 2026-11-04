@@ -2736,6 +2736,208 @@ void Graphics::draw_line_aa(int x1, int y1, int x2, int y2, const Color &colr,
     }
 }
 
+void Graphics::draw_polyline_aa(const impoint_t *pts, const int count,
+                                const int width, const Color &colr)
+{
+    if (pts == nullptr || count < 2 || width <= 0)
+    {
+        return;
+    }
+
+    if (width == 1)
+    {
+        // the draw_line_aa chain shape: the first segment plots both
+        // endpoints solid, every later segment skips its start pixel (the
+        // joint already belongs to the previous segment), so nothing
+        // double-blends and the ends stay solid
+        draw_line_aa(pts[0].x, pts[0].y, pts[1].x, pts[1].y, colr);
+        for (int i = 1; i + 1 < count; ++i)
+        {
+            draw_line_aa(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y,
+                         colr, true);
+        }
+        return;
+    }
+
+    /*
+     * The SvgCanvas stroke math (whole-polyline capsule coverage) at
+     * device resolution: Q10 fixed point (1/1024 px -- the 2x2
+     * supersample offsets land on 0.25/0.75 px exactly), no float, and
+     * every intermediate below stays inside int64 because the
+     * coordinates clamp to +-16000 px (an int input can carry any
+     * magnitude; beyond the clamp nothing plots on real surfaces) and
+     * the walk is bounded by the point bbox (see the bounds note at the
+     * bottom). No per-segment storage: the endpoints recompute per
+     * sample from the caller's array (a shift), so draw_at stays
+     * zero-allocation for the annotation canvas.
+     */
+    constexpr int64_t kQ10 = 1024;
+    constexpr int64_t kCoordMax = 16000;
+    constexpr int64_t kQ10Bound = kCoordMax * kQ10;
+    const auto clamp_q10 = [](const int64_t v)
+    {
+        if (v < -kQ10Bound)
+        {
+            return -kQ10Bound;
+        }
+        if (v > kQ10Bound)
+        {
+            return kQ10Bound;
+        }
+        return v;
+    };
+
+    int64_t dev_w = clamp_q10(static_cast<int64_t>(width) * kQ10);
+    const int64_t r = dev_w / 2;
+    const int64_t r2 = r * r;
+
+    // the point bbox inflated by the full width, in Q10 local coordinates
+    int64_t minx = clamp_q10(static_cast<int64_t>(pts[0].x) * kQ10);
+    int64_t maxx = minx;
+    int64_t miny = clamp_q10(static_cast<int64_t>(pts[0].y) * kQ10);
+    int64_t maxy = miny;
+    for (int i = 1; i < count; ++i)
+    {
+        const int64_t qx = clamp_q10(static_cast<int64_t>(pts[i].x) * kQ10);
+        const int64_t qy = clamp_q10(static_cast<int64_t>(pts[i].y) * kQ10);
+        minx = std::min(minx, qx);
+        maxx = std::max(maxx, qx);
+        miny = std::min(miny, qy);
+        maxy = std::max(maxy, qy);
+    }
+    int64_t x0 = minx - dev_w;
+    int64_t x1 = maxx + dev_w;
+    int64_t y0 = miny - dev_w;
+    int64_t y1 = maxy + dev_w;
+
+    // X-18: intersect the declared band with the active clip before
+    // walking it. The draw area is in surface coordinates and the offset
+    // maps the local origin onto the surface, so the local clip bounds
+    // are the draw area minus the offset.
+    {
+        const int64_t lsx = static_cast<int64_t>(draw_area.start_x) -
+                            (draw_area_offset_enabled ? draw_area_offset.x : 0);
+        const int64_t lsy = static_cast<int64_t>(draw_area.start_y) -
+                            (draw_area_offset_enabled ? draw_area_offset.y : 0);
+        const int64_t lex = static_cast<int64_t>(draw_area.end_x) -
+                            (draw_area_offset_enabled ? draw_area_offset.x : 0);
+        const int64_t ley = static_cast<int64_t>(draw_area.end_y) -
+                            (draw_area_offset_enabled ? draw_area_offset.y : 0);
+        if (x0 < lsx * kQ10)
+        {
+            x0 = lsx * kQ10;
+        }
+        if (y0 < lsy * kQ10)
+        {
+            y0 = lsy * kQ10;
+        }
+        if (x1 > lex * kQ10)
+        {
+            x1 = lex * kQ10;
+        }
+        if (y1 > ley * kQ10)
+        {
+            y1 = ley * kQ10;
+        }
+        if (x1 < x0 || y1 < y0)
+        {
+            return;
+        }
+    }
+
+    const int segs = count - 1;
+    for (int64_t py = (y0 / kQ10) - 1; py <= (y1 / kQ10) + 1; ++py)
+    {
+        for (int64_t px = (x0 / kQ10) - 1; px <= (x1 / kQ10) + 1; ++px)
+        {
+            int in = 0;
+            for (const int64_t off_y : {kQ10 / 4, 3 * kQ10 / 4})
+            {
+                for (const int64_t off_x : {kQ10 / 4, 3 * kQ10 / 4})
+                {
+                    const int64_t sxp = px * kQ10 + off_x;
+                    const int64_t syp = py * kQ10 + off_y;
+                    // min squared distance over the segments; the clamped
+                    // projection rounds every joint (the shared endpoint
+                    // disc -- round joins, and no double-blend under
+                    // translucency). Round caps: no beyond-the-end
+                    // rejection, the exposed ends end in a disc.
+                    int64_t best = r2 + 1;
+                    for (int i = 0; i < segs; ++i)
+                    {
+                        const int64_t ax = clamp_q10(static_cast<int64_t>(pts[i].x) * kQ10);
+                        const int64_t ay = clamp_q10(static_cast<int64_t>(pts[i].y) * kQ10);
+                        const int64_t bx = clamp_q10(static_cast<int64_t>(pts[i + 1].x) * kQ10);
+                        const int64_t by = clamp_q10(static_cast<int64_t>(pts[i + 1].y) * kQ10);
+                        if (sxp < std::min(ax, bx) - r || sxp > std::max(ax, bx) + r ||
+                            syp < std::min(ay, by) - r || syp > std::max(ay, by) + r)
+                        {
+                            continue;
+                        }
+                        const int64_t dx = bx - ax;
+                        const int64_t dy = by - ay;
+                        const int64_t seg2 = dx * dx + dy * dy;
+                        if (seg2 == 0)
+                        {
+                            continue;  // collapsed segment: no band
+                        }
+                        const int64_t dot = (sxp - ax) * dx + (syp - ay) * dy;
+                        int64_t t = (dot * kQ10) / seg2;
+                        if (t < 0)
+                        {
+                            t = 0;
+                        }
+                        else if (t > kQ10)
+                        {
+                            t = kQ10;
+                        }
+                        int64_t ex, ey;
+                        if (dy == 0 && t > 0 && t < kQ10)
+                        {
+                            // axis-parallel interior: the foot of the
+                            // perpendicular is the sample itself. The t
+                            // path below rounds the projection into Q10
+                            // and puts up to len/1024 px of noise on
+                            // ex/ey, which flips the exact-boundary
+                            // samples of the band out of the closed test
+                            // (<= r2)
+                            ex = 0;
+                            ey = syp - ay;
+                        }
+                        else if (dx == 0 && t > 0 && t < kQ10)
+                        {
+                            ex = sxp - ax;
+                            ey = 0;
+                        }
+                        else
+                        {
+                            ex = sxp - ax - ((t * dx) / kQ10);
+                            ey = syp - ay - ((t * dy) / kQ10);
+                        }
+                        const int64_t d2 = ex * ex + ey * ey;
+                        if (d2 < best)
+                        {
+                            best = d2;
+                        }
+                    }
+                    if (best <= r2)
+                    {
+                        ++in;
+                    }
+                }
+            }
+            if (in != 0)
+            {
+                // one write per pixel through plot_aa: the coverage is
+                // the weight stacked on the color's own alpha (in/4 of
+                // full); 16bpp quantizes to plot/skip at half (in >= 3)
+                plot_aa(static_cast<int>(px), static_cast<int>(py),
+                        static_cast<int>(in * 0xFF / 4), colr);
+            }
+        }
+    }
+}
+
 void Graphics::draw_circle_aa(int x, int y, int radius, const Color &colr)
 {
     if (radius <= 0)

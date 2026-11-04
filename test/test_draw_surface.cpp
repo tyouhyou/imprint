@@ -326,5 +326,213 @@ int test_draw_surface()
         EXPECT(test::pixel_at(*g, 4, 3) == core::colors::Black.pixel);
     }
 
+    // ---- TJ-NEW: Graphics::draw_polyline_aa (code-contract §9) ----
+
+    // width-3 capsule band, horizontal: the band spans y 2.5..5.5, so the
+    // fully covered rows are 3..4 (row 2/5 carry a half-coverage fringe
+    // the exact assertions stay off), rows 1/6/7 are clear; round caps
+    // reach x 1.5..11.5, so columns 2..10 are solid on the band
+    {
+        const core::impoint_t h[] = {{3, 4}, {10, 4}};
+        auto g = core::Graphics::make_ptr(14, 9);
+        g->fill(core::colors::Black);
+        g->draw_polyline_aa(h, 2, 3, core::colors::Red);
+
+        for (int x = 2; x <= 10; ++x)
+        {
+            EXPECT(test::pixel_at(*g, x, 3) == core::colors::Red.pixel);
+            EXPECT(test::pixel_at(*g, x, 4) == core::colors::Red.pixel);
+            EXPECT(test::pixel_at(*g, x, 1) == core::colors::Black.pixel);
+            EXPECT(test::pixel_at(*g, x, 6) == core::colors::Black.pixel);
+            EXPECT(test::pixel_at(*g, x, 7) == core::colors::Black.pixel);
+        }
+        EXPECT(test::pixel_at(*g, 0, 4) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 13, 4) == core::colors::Black.pixel);
+    }
+
+    // width-3 capsule band, vertical: columns 3..4 solid, 1/6/7 clear
+    {
+        const core::impoint_t v[] = {{4, 3}, {4, 10}};
+        auto g = core::Graphics::make_ptr(9, 14);
+        g->fill(core::colors::Black);
+        g->draw_polyline_aa(v, 2, 3, core::colors::Red);
+
+        for (int y = 2; y <= 10; ++y)
+        {
+            EXPECT(test::pixel_at(*g, 3, y) == core::colors::Red.pixel);
+            EXPECT(test::pixel_at(*g, 4, y) == core::colors::Red.pixel);
+            EXPECT(test::pixel_at(*g, 1, y) == core::colors::Black.pixel);
+            EXPECT(test::pixel_at(*g, 6, y) == core::colors::Black.pixel);
+            EXPECT(test::pixel_at(*g, 7, y) == core::colors::Black.pixel);
+        }
+        EXPECT(test::pixel_at(*g, 4, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 4, 13) == core::colors::Black.pixel);
+    }
+
+    // 45-degree segment: on-line pixels are solid, pixels a full
+    // radius-and-a-half away are untouched
+    {
+        const core::impoint_t d[] = {{2, 2}, {9, 9}};
+        auto g = core::Graphics::make_ptr(12, 12);
+        g->fill(core::colors::Black);
+        g->draw_polyline_aa(d, 2, 3, core::colors::Red);
+
+        EXPECT(test::pixel_at(*g, 4, 4) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 5, 5) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 6, 6) == core::colors::Red.pixel);
+        EXPECT(test::pixel_at(*g, 5, 2) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 2, 5) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 6, 3) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 3, 6) == core::colors::Black.pixel);
+    }
+
+    // joints single-write: the capsule union (min distance over the
+    // segments) plots a fully covered joint pixel exactly once, so a
+    // translucent L's corner equals the single-blend value of a straight
+    // interior pixel (a double blend would stack the alpha)
+    {
+        const core::Color ink = core::Color::from(0xFF, 0xFF, 0xFF, 0x80);
+        const core::impoint_t el[] = {{3, 3}, {10, 3}, {10, 10}};
+        auto g = core::Graphics::make_ptr(14, 14);
+        g->fill(core::colors::Black);
+        g->draw_polyline_aa(el, 3, 4, ink);
+
+        const core::impoint_t ref[] = {{3, 3}, {10, 3}};
+        auto g_ref = core::Graphics::make_ptr(14, 14);
+        g_ref->fill(core::colors::Black);
+        g_ref->draw_polyline_aa(ref, 2, 4, ink);
+
+        const uint32_t single = test::pixel_at(*g_ref, 6, 3);
+        EXPECT(test::pixel_at(*g, 10, 3) == single);
+        EXPECT(test::pixel_at(*g, 9, 3) == single);
+        EXPECT(test::pixel_at(*g, 10, 4) == single);
+        EXPECT(test::pixel_at(*g, 9, 4) == single);
+    }
+
+    // width 1 is the draw_line_aa chain shape, byte for byte: the first
+    // segment whole, every later one skip_first (solid endpoints, joints
+    // not double-blended)
+    {
+        const core::impoint_t path[] = {
+            {2, 8}, {8, 8}, {8, 2}, {12, 6}, {12, 6}, {5, 6}};
+        auto g_chain = core::Graphics::make_ptr(16, 12);
+        g_chain->fill(core::colors::Black);
+        g_chain->draw_line_aa(path[0].x, path[0].y, path[1].x, path[1].y,
+                              core::colors::Red);
+        for (int i = 1; i + 1 < 6; ++i)
+        {
+            g_chain->draw_line_aa(path[i].x, path[i].y, path[i + 1].x,
+                                  path[i + 1].y, core::colors::Red, true);
+        }
+
+        auto g_poly = core::Graphics::make_ptr(16, 12);
+        g_poly->fill(core::colors::Black);
+        g_poly->draw_polyline_aa(path, 6, 1, core::colors::Red);
+
+        for (int y = 0; y < 12; ++y)
+        {
+            for (int x = 0; x < 16; ++x)
+            {
+                EXPECT(test::pixel_at(*g_poly, x, y) ==
+                       test::pixel_at(*g_chain, x, y));
+            }
+        }
+    }
+
+    // the F9 lock for the stroke: a damage-clipped partial repaint
+    // matches the full repaint inside the region and keeps the previous
+    // content outside it, byte for byte over the whole frame
+    {
+        const core::impoint_t path[] = {{1, 1}, {12, 6}};
+        auto g_full = core::Graphics::make_ptr(14, 8);
+        g_full->fill(core::colors::Black);
+        g_full->draw_polyline_aa(path, 2, 2, core::colors::Red);
+
+        auto g_part = core::Graphics::make_ptr(14, 8);
+        g_part->fill(core::colors::Black);
+        g_part->set_damage(6, 0, 14, 8);  // half-open: cols 6..13
+        g_part->draw_polyline_aa(path, 2, 2, core::colors::Red);
+
+        for (int y = 0; y < 8; ++y)
+        {
+            for (int x = 0; x < 14; ++x)
+            {
+                if (x >= 6)
+                {
+                    EXPECT(test::pixel_at(*g_part, x, y) ==
+                           test::pixel_at(*g_full, x, y));
+                }
+                else
+                {
+                    EXPECT(test::pixel_at(*g_part, x, y) ==
+                           core::colors::Black.pixel);
+                }
+            }
+        }
+    }
+
+    // widget-local stroke coordinates resolve through the draw-area offset
+    {
+        auto g = core::Graphics::make_ptr(12, 12);
+        g->fill(core::colors::Black);
+        {
+            auto clip = g->clip_surface_safe(4, 4, 4, 4);
+            EXPECT(static_cast<bool>(clip));
+            const core::impoint_t path[] = {{0, 1}, {3, 1}};
+            g->draw_polyline_aa(path, 2, 1, core::colors::Green);
+        }
+
+        EXPECT(test::pixel_at(*g, 4, 5) == core::colors::Green.pixel);
+        EXPECT(test::pixel_at(*g, 7, 5) == core::colors::Green.pixel);
+        EXPECT(test::pixel_at(*g, 4, 4) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 3, 5) == core::colors::Black.pixel);
+    }
+
+    // degenerate inputs draw nothing
+    {
+        auto g = core::Graphics::make_ptr(8, 8);
+        g->fill(core::colors::Black);
+        const core::impoint_t p[] = {{2, 2}, {5, 5}};
+        g->draw_polyline_aa(nullptr, 2, 3, core::colors::Red);  // null points
+        g->draw_polyline_aa(p, 1, 3, core::colors::Red);        // fewer than two
+        g->draw_polyline_aa(p, 0, 3, core::colors::Red);        // empty
+        g->draw_polyline_aa(p, -2, 3, core::colors::Red);       // negative count
+        g->draw_polyline_aa(p, 2, 0, core::colors::Red);        // zero width
+        g->draw_polyline_aa(p, 2, -3, core::colors::Red);       // negative width
+        EXPECT(test::pixel_at(*g, 2, 2) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 5, 5) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 3, 3) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 0, 0) == core::colors::Black.pixel);
+        EXPECT(test::pixel_at(*g, 7, 7) == core::colors::Black.pixel);
+    }
+
+    // two identical paints produce byte-identical pixels (determinism)
+    {
+        const core::impoint_t path[] = {{2, 2}, {6, 7}, {11, 3}};
+        auto g = core::Graphics::make_ptr(14, 10);
+        g->fill(core::colors::Black);
+        g->draw_polyline_aa(path, 3, 2, core::colors::Green);
+        std::vector<uint32_t> snapshot;
+        for (int y = 0; y < 10; ++y)
+        {
+            for (int x = 0; x < 14; ++x)
+            {
+                snapshot.push_back(test::pixel_at(*g, x, y));
+            }
+        }
+
+        g->fill(core::colors::Black);
+        g->draw_polyline_aa(path, 3, 2, core::colors::Green);
+        for (int y = 0; y < 10; ++y)
+        {
+            for (int x = 0; x < 14; ++x)
+            {
+                EXPECT(test::pixel_at(*g, x, y) ==
+                       snapshot[static_cast<size_t>(y) * 14 +
+                                static_cast<size_t>(x)]);
+            }
+        }
+    }
+
     return test::report("draw_surface");
 }

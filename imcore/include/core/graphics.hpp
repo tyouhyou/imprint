@@ -407,6 +407,27 @@ namespace zb::ui::core
         void draw_circle_aa(int x, int y, int radius, const Color &colr);
 
         /*
+         * Anti-aliased open polyline stroke (TJ-NEW, code-contract §9):
+         * one device-space capsule per segment with round joins —
+         * per-pixel coverage through 2x2 supersampling on a fixed-point
+         * grid (0.25 px = 256), the coverage scaling the color's own
+         * alpha (the SvgCanvas stroke algorithm generalized; SvgCanvas
+         * keeps its internal path until a step adopts the primitive).
+         * Every pixel plots at most once (min distance over the
+         * segments), so translucent strokes never double-blend at a
+         * joint. Width 1 is the draw_line_aa chain shape: solid
+         * endpoints, skip_first joints. Integer and fixed-point only --
+         * no float -- so gcc/clang/MSVC/NDS plot identical pixels.
+         * Fewer than two points or a non-positive width draws nothing.
+         * Every write goes through plot_aa: the clip/damage conventions
+         * (A-12/A-13) and the draw_area_offset seam hold. The walk is
+         * bounded by the point bbox inflated by the width, intersected
+         * with the active clip (X-18).
+         */
+        void draw_polyline_aa(const impoint_t *pts, int count, int width,
+                              const Color &colr);
+
+        /*
          * Anti-aliased disc fill (AA adoption): the same shape
          * fill_circle fills, but the two edge pixels of every chord span
          * blend by the exact fractional coverage (the draw_circle_aa
