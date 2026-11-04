@@ -28,8 +28,8 @@ Dependency-driven: each tier unlocks what follows.
    host resolution — fps IMPRINT-RUNTIME R15/R18), never
    `cpu.pressure`.
 3. **Batch FI — tianji client (active; restructured 2026-11-03)**:
-   framework modules first — FI-09+V-4 landed 2026-11-04; the Part 1
-   order continues FI-10 → annotation canvas → stream trio → text
+   framework modules first — FI-09+V-4 and FI-10 landed 2026-11-04;
+   the Part 1 order continues annotation canvas → stream trio → text
    readiness — then the composition under `tianji/` (Part 2). Display
    path: SIXEL first.
 4. **Explicitly NOT now**: F-1/F-2, I-1, A-4/A-21, D-*, A-27, and
@@ -320,25 +320,28 @@ the tianji repo; go there only to confirm specifics.**
   failures (that block had never compiled under `USE_PNG` before) —
   fixed, not weakened. Unscheduled hardening note: the file-variant
   decoders carry the same callback-throw free-guard gap.
-- **FI-10 — deterministic SIXEL quantizer** (revived 2026-11-03; was
-  de-prioritized under the old ruling). Replace per-band color-drop at
-  `kMaxRegisters=250` with a deterministic quantizer (fixed palette /
-  median cut) so photo-grade scene art plus UI colors survive one
-  frame. Determinism lock: same frame → same DCS bytes. Extend the pty
-  smoke with an image-bearing frame. Also covers the
-  buffer-geometry ↔ terminal-cell mapping a real client frame needs
-  (the current P4 demo target is a fixed buffer). Design (2026-11-04
-  recon): frames whose every band fits 250 registers keep the current
-  exact per-band encoder **byte-for-byte** (existing test_sixel
-  expectations untouched); only a frame with an overflowing band
-  switches to a frame-level deterministic median-cut palette
-  (integer-only math, stable ordering — first-seen scan, ties broken
-  by lowest register), so photo frames get no band seams and no
-  dropped pixels; the drop path and its LW latch disappear
-  (quantization is normal operation, not a warning). Pixels map to
-  registers by squared-distance nearest with a lower-register
-  tie-break; a color→register memo is legal (pure memoization) but
-  must not change the output.
+- **FI-10 — landed 2026-11-04.** Frames whose every band fits 250
+  registers keep the exact per-band encoder byte-for-byte (proven
+  differentially against the pre-FI-10 encoder on 13 frames); any
+  overflowing band switches the whole frame to an integer-only
+  deterministic median-cut frame palette (heaviest splittable bucket →
+  widest extent → earliest order; axis ties R>G>B; weighted-median
+  split; half-up weighted-average representatives; nearest-register
+  mapping with a lower-register tie-break) — no band seams, no dropped
+  pixels, no diagnostic (quantization is normal operation). The
+  literal "stop when the heaviest bucket is unsplittable" reading was
+  rejected in review: it collapses dominant-color photos to 2-color
+  palettes; the implemented rule splits among all ≥2-distinct buckets.
+  test_sixel locks the behavior with a bounds-guarded DCS decoder
+  (palette / per-column coverage / single-write), a cross-band seam
+  test and the 250/251 overflow boundary; the >250-color path is
+  locked at the unit layer (the pty smoke cannot inject frame
+  content; the CI sixel job is compile-only). ARCHITECTURE §5 carries
+  the presenter facts. Verification: review **approve** (0 blocker /
+  0 must; two SHOULD FIX fixed — strict test decoder, byte-sized
+  register map); battery 68/68 on desktop-test and desktop-test-16.
+  Open remainder: the buffer-geometry ↔ terminal-cell mapping for a
+  real client frame (rides with TJ-C3).
 - **TJ-NEW — annotation canvas widget** (new widget, framework-style;
   final name lands at implementation). A widget with a fixed
   logical-canvas coordinate space: background layer over the FI-09

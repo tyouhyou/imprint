@@ -68,3 +68,8 @@
   PNG/JPEG 解码 + HTML `<img>` 白名单与 html_embed 构建期打包。评审
   approve；desktop / codecs / 16bpp 三配置 battery 全绿。舞台画布的
   图片通道就绪，下一项 FI-10（SIXEL 确定性量化器）。
+- 2026-11-04：**FI-10 落地**——SIXEL 确定性中位切分调色板：文字帧逐字节
+  不变；照片级帧（任一带将超 250 寄存器）整帧切换帧级调色板，**零丢像素、
+  无带间接缝、无告警**（同帧同 DCS 字节）。评审 approve；desktop +
+  16bpp battery 全绿。SIXEL 优先路径的两块硬前提（图片缩放 + 保真出图）
+  均已就绪。
