@@ -40,6 +40,20 @@ namespace zb::ui
         void set_scroll_offset(const int v);
         // how many pixels of content hide below the viewport (0 = fits)
         [[nodiscard]] int max_scroll() const;
+
+        /*
+         * FI-05 follow-bottom (code-contract §3.4): while armed, a
+         * layout() re-clamp snaps the offset to the new maximum when it
+         * sat at the old one before the content changed (the at-bottom
+         * state is the one recorded at the offset's last write) —
+         * appended content keeps the stream pinned to the bottom
+         * without the host polling offsets. A wheel notch that actually
+         * scrolls toward the top disarms it; wheeling back down to the
+         * bottom re-arms; set_scroll_offset (a thumb drag included)
+         * never moves the flag. Default off.
+         */
+        void set_follow_bottom(const bool on) { follow_ = on; }
+        [[nodiscard]] bool follow_bottom() const { return follow_; }
         // re-clamps the offset after any content/viewport change: paint()
         // always runs layout() before draw (contract 11), so draw/pick/
         // on_input never see a stale offset (e.g. scrolled to the bottom,
@@ -64,7 +78,14 @@ namespace zb::ui
         // the offset moved
         bool scroll_by(const int delta);
 
-        int top_ = 0;            // scroll offset in pixels
+        int top_ = 0;          // scroll offset in pixels
+        bool follow_ = false;  // FI-05: pin to the bottom on re-clamps
+        // FI-05: the offset sat at max_scroll() when it was last written
+        // (an empty panel starts at its bottom). layout() cannot re-derive
+        // this against the pre-relayout geometry — the content may
+        // already have changed under the offset — so every offset write
+        // records it while the geometry is consistent
+        bool at_bottom_ = true;
         bool dragging_ = false;  // a thumb drag is in flight
         int drag_grab_ = 0;      // press offset from the thumb top
 

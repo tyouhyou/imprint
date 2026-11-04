@@ -226,5 +226,82 @@ int test_scroll_panel()
         EXPECT(clicks == 1);  // hit where it draws
     }
 
+    // FI-05 follow-bottom (code-contract §3.4): appended content keeps
+    // the stream pinned to the bottom while armed and the view sat at
+    // the bottom; a wheel up disarms, wheeling back down to the bottom
+    // re-arms, and a direct set_scroll_offset never moves the flag
+    {
+        Panel root;
+        root.set_size(100, 60);
+        auto sp = std::make_unique<ScrollPanel>();
+        auto *psp = sp.get();
+        sp->set_size(100, 60);
+        auto content = box(80, 30, core::colors::Red);
+        Widget *pc = content.get();
+        sp->add_child(std::move(content));
+        root.add_child(std::move(sp));
+        root.layout();
+
+        EXPECT(!psp->follow_bottom());  // default off
+        EXPECT(psp->max_scroll() == 0);
+
+        // growth without follow: the offset stays put
+        pc->set_size(80, 200);
+        root.layout();
+        EXPECT(psp->scroll_offset() == 0);
+
+        // armed but not at the bottom: a relayout does not snap
+        psp->set_follow_bottom(true);
+        root.layout();
+        EXPECT(psp->scroll_offset() == 0);
+
+        // at the bottom: appended content pins to the new maximum
+        psp->set_scroll_offset(psp->max_scroll());
+        EXPECT(psp->scroll_offset() == 140);
+        pc->set_size(80, 300);
+        root.layout();
+        EXPECT(psp->max_scroll() == 240);
+        EXPECT(psp->scroll_offset() == 240);
+
+        // a wheel up disarms: growth no longer pins
+        InputDispatcher d;
+        zb::input::input_event ev;
+        ev.type = zb::input::input_type::mouse_wheel;
+        ev.x = 10;
+        ev.y = 30;
+        ev.delta = 1;
+        EXPECT(d.dispatch(root, ev));
+        EXPECT(psp->scroll_offset() == 208);
+        pc->set_size(80, 400);
+        root.layout();
+        EXPECT(psp->max_scroll() == 340);
+        EXPECT(psp->scroll_offset() == 208);
+
+        // a direct set_scroll_offset to the bottom does not re-arm
+        psp->set_scroll_offset(psp->max_scroll());
+        EXPECT(psp->scroll_offset() == 340);
+        pc->set_size(80, 500);
+        root.layout();
+        EXPECT(psp->max_scroll() == 440);
+        EXPECT(psp->scroll_offset() == 340);  // disarmed: no snap
+
+        // wheeling back down to the bottom re-arms
+        ev.delta = -1;
+        while (d.dispatch(root, ev))
+        {
+        }
+        EXPECT(psp->scroll_offset() == psp->max_scroll());
+        pc->set_size(80, 600);
+        root.layout();
+        EXPECT(psp->max_scroll() == 540);
+        EXPECT(psp->scroll_offset() == 540);  // re-armed: pinned
+
+        // a shrinking content tree lands on the (new) bottom
+        pc->set_size(80, 40);
+        root.layout();
+        EXPECT(psp->max_scroll() == 0);
+        EXPECT(psp->scroll_offset() == 0);
+    }
+
     return test::report("scroll_panel");
 }

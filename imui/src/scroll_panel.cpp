@@ -22,6 +22,9 @@ namespace zb::ui
     void ScrollPanel::set_scroll_offset(const int v)
     {
         const int clamped = std::max(0, std::min(v, max_scroll()));
+        // FI-05: at-bottom is judged at every offset write, moved or not
+        // — the flag must track the geometry the offset actually sits in
+        at_bottom_ = (clamped == max_scroll());
         if (clamped == top_)
         {
             return;
@@ -33,6 +36,15 @@ namespace zb::ui
     void ScrollPanel::layout()
     {
         FlexPanel::layout();
+        if (follow_ && at_bottom_)
+        {
+            // FI-05: the offset sat at the maximum before the relayout,
+            // so it snaps to the new one — appended content keeps the
+            // stream pinned, and a shrinking tree lands on the new
+            // bottom through the same snap
+            set_scroll_offset(max_scroll());
+            return;
+        }
         // the content extent (or the viewport) may have shrunk under a
         // scrolled offset; set_scroll_offset clamps and marks dirty
         set_scroll_offset(top_);
@@ -46,6 +58,7 @@ namespace zb::ui
             return false;  // already at the end: the wheel falls through
         }
         top_ = next;
+        at_bottom_ = (top_ == max_scroll());
         mark_dirty();
         return true;
     }
@@ -186,8 +199,23 @@ namespace zb::ui
             return false;
         }
         case zb::input::input_type::mouse_wheel:
+        {
             // wheel up (delta > 0) scrolls toward the top
-            return scroll_by(ev.delta > 0 ? -wheel_step : wheel_step);
+            const bool toward_top = ev.delta > 0;
+            const bool moved = scroll_by(toward_top ? -wheel_step : wheel_step);
+            if (toward_top)
+            {
+                if (moved)
+                {
+                    follow_ = false;  // reading history: stop pinning
+                }
+            }
+            else if (top_ == max_scroll())
+            {
+                follow_ = true;  // wheeled back to the bottom: re-arm
+            }
+            return moved;
+        }
         default:
             return false;
         }
