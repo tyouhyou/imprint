@@ -34,7 +34,7 @@ other target uses the desktop defaults.
 | `imevent` | Zero-allocation pub/sub `Event<T...>` + RAII `Subscription`; `PAINT_EVENT`/`CLOSE_EVENT`   | INTERFACE    | —                                   |
 | `iminput` | `input_event` POD + `key_code` enum                                                         | INTERFACE    | —                                   |
 | `imcore`  | Drawing kernel: `Graphics` (rasterizer, clipping, damage culling), compile-time `Color`, text (`GlyphProvider`, 5x7 bitmap + optional runtime TTF, UTF-8), codecs (`png`/`jpeg`, vendored stb; file and memory-source reads, V-4) | SHARED | `imutil`                            |
-| `imui`    | Widget tree: `Panel`, `FlexPanel`, `ScrollPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, `ToggleSwitch`, `GaugeDial`, `Knob`, `TrendLine` (V-5 composition widgets), `SvgCanvas` (HTML `svg`/`vectordial` vector-dial subset), `ImageView` (FI-09 scaled image display), `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`, `html`) | STATIC | `imcore`, `imevent`, `iminput`      |
+| `imui`    | Widget tree: `Panel`, `FlexPanel`, `ScrollPanel`, `Button`, `Checkbox`, `RadioButton`, `Label`, `Slider`, `ProgressBar`, `ListBox`, `TextInput`, `Dialog`, `ToggleSwitch`, `GaugeDial`, `Knob`, `TrendLine` (V-5 composition widgets), `SvgCanvas` (HTML `svg`/`vectordial` vector-dial subset), `ImageView` (FI-09 scaled image display), `AnnotateCanvas` (TJ-NEW logical-space annotation canvas), `InputDispatcher`; design-file layer (`ui_builder`, `ui_file`, `html`) | STATIC | `imcore`, `imevent`, `iminput`      |
 | `imapp`   | App interface (`IApp`/`IWindow`/`IGui`) + `make_app()` entry; no widget dependency — a graphics-only app links only this | INTERFACE | `imcore`, `imevent`, `iminput` |
 | `imapp_canvas` | Optional default `CanvasWindow` (an `IWindow` over the widget tree); the `imapp.hpp` umbrella lives here | INTERFACE | `imapp`, `imui` |
 | `imapp_snapshot` | Optional snapshot helper (`zb::snap`, header-only): frame hash + baseline record/check + GIF/PNG dumps — the deterministic-test story (code-contract §12) | INTERFACE | `imapp` |
@@ -463,6 +463,12 @@ satisfies. Changing any of these is an architecture change.
   no float — deterministic on every target. `ImageView` letterboxes
   through it; the pixel model and the damage gates are untouched.
   API-level contract: code-contract §3.5/§9.
+- **Polyline stroke (TJ-NEW).** `draw_polyline_aa` strokes an open
+  integer polyline as device-space capsules with round joins (2x2
+  supersampled fixed-point coverage — the SvgCanvas algorithm
+  generalized); integer/fixed-point only, deterministic on every
+  target. `AnnotateCanvas` inks through it. API-level contract:
+  code-contract §9.
 - **Optional host depth plane (U-6).** Depth/occlusion semantics are a
   host-owned `float` plane attached to `Graphics` (GL-style LESS test,
   per-pixel z interpolation in `draw_line_depth` / `fill_triangle_depth`,

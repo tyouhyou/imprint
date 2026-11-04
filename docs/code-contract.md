@@ -1176,6 +1176,49 @@ NDS too).
   may allocate); `draw_at` allocates nothing — the scaled blit walks
   the destination in place.
 
+### 3.6 AnnotateCanvas (TJ-NEW, the annotation canvas)
+
+`zb::ui::AnnotateCanvas` is an `ImageView` subclass that accepts
+freehand strokes in a **fixed logical-canvas coordinate space** (the
+tianji stage: annotate in logical coordinates, present through any
+letterbox). Programmatic-only by design — no `.ui`/HTML tag; the
+first consumer (the tianji client, Batch FI Part 2) builds it in C++.
+
+- **Coordinate space.** `set_canvas_size(logical_w, logical_h)` names
+  the logical space (positive; defaults to the image size). Drawing
+  maps logical → device through the inherited ImageView letterbox
+  (the same scale/offset the background uses — the ink sits exactly
+  on the image), and input maps device → logical through the exact
+  inverse; samples outside the mapped image rect clamp into the
+  logical rect (a stroke cannot escape the canvas). The letterbox
+  math is shared with ImageView, not restated (one helper, two
+  callers).
+- **The stroke model is data.** `Stroke { id, color, width, points }`
+  (points = integer logical coordinates; consecutive duplicates
+  dropped at capture). The host injects remote annotations with
+  `add_stroke` (explicit id; a duplicate id is rejected — one LW and
+  `false`), removes with `remove_stroke(id)` / `clear_strokes()`,
+  queries with `strokes()`. Captured strokes take monotonically
+  increasing ids from the same space; `stroke_ended` (an
+  `Event<Stroke>`, by value — the `changed` precedent) fires once per
+  completed capture — the I/F relay point. Undo is host-side over the
+  removal ops (no widget undo stack).
+- **Input.** With `set_annotate_enabled(true)` the canvas claims the
+  pointer (`captures_pointer`, the Slider pattern): a press starts an
+  in-progress stroke, moves extend it (same-point samples dropped),
+  release commits it and fires `stroke_ended`; `on_cancel` (focus
+  loss, eviction, dispatcher reset) discards the in-progress stroke.
+  Disabled (the default) the widget never captures and the strokes
+  still draw — a read-only stage.
+- **Rendering.** The background is the inherited ImageView draw;
+  strokes render in insertion order through
+  `Graphics::draw_polyline_aa` (§9), the in-progress stroke last.
+  Same stroke set + same canvas box + same image → same pixels (16bpp
+  follows the plot_aa binary rule). `draw_at` allocates nothing
+  (strokes draw in place from the stored points).
+- **Defaults.** Captured strokes use `set_stroke_color` /
+  `set_stroke_width` (theme text color, width 2, until set).
+
 ## 4. Declarative UI builder (batch G contract)
 
 - `ui_node` is the sole entry for static descriptions:
@@ -1843,6 +1886,20 @@ obligations:
   malformed view or a degenerate rectangle draws nothing. Determinism:
   same view + same rectangle → same pixels on every target and depth,
   locked by a pixel-exact mapping test in the battery.
+- **Polyline stroke (TJ-NEW)**: `Graphics::draw_polyline_aa(pts, count,
+  width, color)` strokes an open polyline of integer points as one
+  device-space capsule per segment with round joins — per-pixel
+  coverage through 2x2 supersampling on a fixed-point grid (0.25 px =
+  256), the coverage scaling the color's own alpha (the SvgCanvas
+  stroke algorithm generalized; SvgCanvas keeps its internal path
+  until a step adopts the primitive). Width 1 is the `draw_line_aa`
+  chain shape (solid endpoints, so joints do not double-blend).
+  Integer and fixed-point only — no float — so gcc/clang/MSVC/NDS
+  plot identical pixels. Fewer than two points or a non-positive
+  width draws nothing. Coordinates pass through `draw_area_offset`
+  like every primitive; clipping follows the per-pixel damage /
+  draw-area gate. Deterministic; locked by a pixel-exact battery
+  test.
 - **Zero-copy backing (wrapper mode)**: `Graphics::make_ptr(width, height,
   your_buffer)` wraps the caller's memory instead of allocating. Every
   primitive writes into the provided block, `data()` hands it back, and
