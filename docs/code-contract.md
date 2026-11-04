@@ -1126,6 +1126,14 @@ instead of clipping**. What the offset does and does not touch:
   `overflow: scroll` CSS property on a `div`/`body` (whitelist:
   html-path.md), which swaps the container type — the scroll container
   is always a column even with `flex-direction: row` markup.
+- **Follow-bottom (FI-05)**: `set_follow_bottom(bool)` (default off).
+  On every `layout()` re-clamp: when enabled and the offset sat at
+  `max_scroll()` before the relayout, it snaps to the new maximum —
+  appended content keeps the stream pinned to the bottom without the
+  host polling offsets. A wheel-up disables follow (scrolling back to
+  the bottom re-arms it); direct `set_scroll_offset` calls never
+  change the flag. The at-bottom test runs against the pre-clamp
+  offset, so a shrinking content tree lands on the (new) bottom too.
 
 ### 3.5 ImageView and the scaled blit (FI-09)
 
@@ -1218,6 +1226,66 @@ first consumer (the tianji client, Batch FI Part 2) builds it in C++.
   (strokes draw in place from the stored points).
 - **Defaults.** Captured strokes use `set_stroke_color` /
   `set_stroke_width` (theme text color, width 2, until set).
+
+### 3.7 Variable-height ListBox rows (FI-06)
+
+`ListBox` rows may carry per-item heights. The visible-window +
+row-bitmap-cache virtualization is unchanged; the work is the offset
+math.
+
+- **Model.** `set_item_height(const ItemHeight fn, const void *arg)`
+  mirrors `set_item_text` (same ownership and invalidation rules: any
+  setter that can change rendered rows resets the row cache). The
+  provider returns a positive height per item index; a returned value
+  ≤ 0 is tolerated as 1 (a zero-height row can neither be hit nor
+  seen). Unset = the fixed `row_height` for every row (the existing
+  shape, byte-identical behavior when no provider is set).
+- **Offsets.** Row offsets are prefix sums maintained on model
+  changes (`set_item_count`, provider change); `max_scroll()` and the
+  scrollbar thumb derive from the total. The visible window is
+  located by binary search over the sums; a row renders when any part
+  intersects the viewport (unchanged rule).
+- **Sizing.** With a provider set, `set_visible_rows(n)` sizes the
+  widget to the sum of the provider's heights for items [0, n) —
+  deterministic against the current model; without one, the existing
+  rows × `row_height` rule stands.
+- **Wheel.** One notch scrolls 3 × the height of the topmost visible
+  row (the fixed-height 3-rows rule generalized; deterministic for a
+  given model and offset).
+- **Determinism.** Same model + same provider + same geometry → same
+  pixels (prefix sums are integer; no float anywhere).
+
+### 3.8 Text selection and the clipboard seam (FI-02)
+
+Selection is TextArea's already-declared additive shape (the "caret
+only" batch note); the clipboard is a new seam, designed host-sinks.
+
+- **Selection (TextArea).** Pointer drag sets an anchor and moves the
+  caret (the selection is [min, max) of the two u16 indexes);
+  shift+click and shift+arrow extend from the anchor; Ctrl+A selects
+  all. Any edit, any non-shift caret move, and focus loss collapse
+  the selection to the caret. The selected range draws with an
+  inverted face over the wrapped spans. `selected_text()` reports the
+  current selection as UTF-8 (empty when collapsed).
+- **Selection (TextInput).** Single-line: drag and shift+arrow
+  select, Ctrl+A selects all; typing replaces the selection.
+  `selected_text()` mirrors TextArea.
+- **Clipboard seam.** `zb::ui::ClipboardSink { virtual void
+  set_text(const char *utf8, size_t n) = 0; virtual std::string
+  get_text() const = 0; }` installed once per process via
+  `set_clipboard_sink(ClipboardSink *)` — module-level like the
+  logging sink; the pointer is borrowed for the process lifetime and
+  the host owns it. A null sink (the default) makes copy silently
+  drop and paste a no-op; a sink may be set-only (`get_text` returns
+  empty — the SIXEL OSC 52 case), which disables paste but not copy.
+- **Key bindings.** Ctrl+C / Ctrl+Insert copy the selection of the
+  focused text widget; Ctrl+V / Shift+Insert paste at the caret
+  replacing any selection (clipped to the field's own input rules);
+  Ctrl+A select-all. No menu, no mouse-middle paste.
+- **Not contracted here.** Selection across message-stream rows (the
+  quote-from-the-stream use case) is a stream-level feature of the
+  tianji client, not a TextArea/TextInput behavior — the client owns
+  it over its row model.
 
 ## 4. Declarative UI builder (batch G contract)
 
