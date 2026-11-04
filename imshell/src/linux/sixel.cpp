@@ -498,11 +498,12 @@ namespace zb::shell::sixel
             // nearest register per distinct color: registers are scanned
             // in order and replaced only by a strictly closer one, so the
             // tie keeps the lower register; a pure per-color memo cannot
-            // change the mapping
-            std::vector<std::size_t> reg_of(colors.size(), 0);
+            // change the mapping. Registers are capped at kMaxRegisters
+            // (250), so a register index fits a byte.
+            std::vector<std::uint8_t> reg_of(colors.size(), 0);
             for (std::size_t i = 0; i < colors.size(); ++i)
             {
-                std::size_t best = 0;
+                std::uint8_t best = 0;
                 int best_d = 0;
                 for (std::size_t r = 0; r < regs.size(); ++r)
                 {
@@ -513,18 +514,16 @@ namespace zb::shell::sixel
                     if (r == 0 || d < best_d)
                     {
                         best_d = d;
-                        best = r;
+                        best = static_cast<std::uint8_t>(r);
                     }
                 }
                 reg_of[i] = best;
             }
 
-            // registers are capped at kMaxRegisters (250), so the
-            // per-pixel index fits a byte
             std::vector<std::uint8_t> pixel_reg(src_index.size());
             for (std::size_t i = 0; i < src_index.size(); ++i)
             {
-                pixel_reg[i] = static_cast<std::uint8_t>(reg_of[src_index[i]]);
+                pixel_reg[i] = reg_of[src_index[i]];
             }
 
             std::string s;

@@ -81,18 +81,23 @@ namespace
         std::vector<std::vector<int>> masks;  // [register][column]
     };
 
-    // digits at [i, to), or -1 when there is no number there
+    // digits at [i, to), or -1 when there is no number there; a run
+    // longer than 9 digits cannot fit an int, so it reports -1 too —
+    // the presenter never emits a number that long
     std::size_t parse_num(const std::string &s, std::size_t i, const std::size_t to,
                           int &out)
     {
         int v = 0;
-        const std::size_t start = i;
+        int digits = 0;
         while (i < to && s[i] >= '0' && s[i] <= '9')
         {
-            v = v * 10 + (s[i] - '0');
+            if (++digits <= 9)
+            {
+                v = v * 10 + (s[i] - '0');
+            }
             ++i;
         }
-        out = i > start ? v : -1;
+        out = (digits > 0 && digits <= 9) ? v : -1;
         return i;
     }
 
@@ -161,6 +166,9 @@ namespace
                 }
                 const int bits = s[i++] - '?';
                 EXPECT(bits >= 0 && bits < 64);
+                // a run overrunning the band is a stream the terminal
+                // would reject: fail it, never truncate it silently
+                EXPECT(col + len <= width);
                 for (int k = 0; k < len && col < width; ++k)
                 {
                     band.masks[reg][static_cast<std::size_t>(col++)] = bits;
