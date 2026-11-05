@@ -497,6 +497,9 @@ satisfies. Changing any of these is an architecture change.
   (custom, the build-time TTF subset, or the runtime TTF provider via
   `USE_TTF_RUNTIME`) with the built-in 5x7 `BitmapProvider`
   as fallback for uncovered code units; uncovered-by-both units are skipped.
+  Non-BMP code points ride surrogate pairs stored atomically (A-25):
+  the runtime TTF provider renders a pair as its combined code point,
+  BMP-only providers keep the skip semantics (code-contract §2.4).
 - The 5x7 table covers ASCII (plus lowercase → uppercase) and, when Python
   is available at configure time, a build-generated subset of code units
   actually used in app/test sources (`FONT_SUBSET`).

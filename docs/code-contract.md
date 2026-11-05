@@ -149,6 +149,19 @@ Standing contract obligations:
 
 - Fallback chain: main provider reports "glyph not covered" → fallback
   provider → still missing → skip.
+- **Non-BMP pairing (A-25)**: a surrogate pair in stored text is one
+  atomic segment on every text walk — a provider-run boundary never
+  falls between the two units (a style-run edge inside a pair extends
+  to the lead's run), letter-spacing adds once per pair, and a
+  provider is selected for the pair through
+  `virtual bool covers_pair(const char16_t *str) const` — default
+  `false` (`str` holds ≥ 2 units, `str[0]` a lead surrogate), so every
+  BMP-only provider answers "not covered" without overriding. A
+  provider that covers the pair receives the whole 2-unit segment in
+  `measure`/`write` and renders it as ONE glyph with one advance. No
+  covering provider → the pair takes the per-unit chain, where each
+  half is uncovered (fonts index by code point, not surrogate halves)
+  → skipped at zero width: the pre-A-25 drop semantics, unchanged.
 - Provider conditional compilation (`IMCORE_HAS_TTF_RUNTIME`; formerly
   the FreeType `USE_FONT`, removed 2026-09-06) is only allowed at the
   provider-selection point; the widget draw path is unconditional.
@@ -268,7 +281,8 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   outlive that family; every real use keeps the family app-scoped (a
   static font / a value held for the app's lifetime) while widgets hold
   providers for their subtree.
-- **Bounded glyph cache (§8)**: entries keyed `(pixel size, code unit)`
+- **Bounded glyph cache (§8)**: entries keyed `(pixel size, code
+  unit)` — a surrogate pair keys by its combined code point (A-25) —
   rasterize lazily on first draw; the cache counts bytes and drops
   everything when over budget (the ListBox row-cache rule) — rendered
   pixels never depend on cache state. First-frame rasterization may
@@ -496,12 +510,22 @@ the characters come from.
   its own, re-parsed from the ground state — no byte is ever
   swallowed.
 - Editor acceptance (`TextInput`, `TextArea`): U+0020–U+007E (as
-  today) plus code points ≥ U+00A0, inserted as a BMP code unit.
-  Non-BMP code points (> U+FFFF) are dropped in this batch — the
-  caret is a u16 index, and the cluster/advance extension is A-25
-  territory. No other gate: an uncovered code unit renders through
-  the normal fallback chain (primary → 5×7 → skip), which is a
-  font-coverage concern, not an input concern.
+  today) plus code points ≥ U+00A0, inserted as a BMP code unit. A
+  code point > U+FFFF (A-25: typed on the terminal path, whose
+  translator already assembles 4-byte UTF-8 into one full `ch`) is
+  accepted and stored as its UTF-16 surrogate pair. No other gate: an
+  uncovered code unit renders through the normal fallback chain
+  (primary → 5×7 → skip), which is a font-coverage concern, not an
+  input concern.
+- **Pair atomicity (A-25)**: stored text may contain surrogate pairs
+  (typed `ch > U+FFFF`, IME or paste through `utf8_to_utf16`). Every
+  editing step treats a pair as one atom: caret motion, deletion
+  (backspace and delete) and selection boundaries never split a pair,
+  and a caret landed inside one (click hit-testing) snaps to the
+  pair's end. Paste filters keep whole pairs (a lone surrogate unit
+  still drops — the pre-A-25 T-2 rule, preserved for degenerate
+  input). `selected_text()` therefore re-encodes whole pairs and the
+  result is always valid UTF-8.
 - **IME composition stays a declared non-goal**: the framework never
   composes; composition is the platform IME's (or the host's) job, and
   the editor only ever sees finished code points. Desktop shells relay
@@ -1305,11 +1329,13 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
   the C-ABI `zb_input` event carries no mods today, so these bindings
   are unreachable from C hosts until the shells translate terminal
   modifier bytes — that translation is a TJ-C3/C4 prerequisite.
-- **Surrogate boundaries.** The u16 selection indexes may land inside
-  a surrogate pair (caret motion is per code unit until A-25); a
-  split pair re-encodes as U+FFFD, so `selected_text()` is always
-  valid UTF-8 — never a truncated sequence. A-25 will snap
-  selection/copy boundaries to code-point (and cluster) edges.
+- **Surrogate boundaries.** Selection indexes never land inside a
+  surrogate pair: caret motion, deletion and selection extents are
+  pair-atomic (§2 T-2 pair atomicity), so `selected_text()` always
+  re-encodes whole pairs — never a U+FFFD from a split, never invalid
+  UTF-8. A lone surrogate (degenerate input only; the acceptance and
+  paste filters drop those units) still maps to U+FFFD in the UTF-8
+  conversion.
 - **Not contracted here.** Selection across message-stream rows (the
   quote-from-the-stream use case) is a stream-level feature of the
   tianji client, not a TextArea/TextInput behavior — the client owns
