@@ -1430,6 +1430,13 @@ namespace zb::ui
         const int n = static_cast<int>(text.size());
         const auto w_of = [&](const int i) -> int
         {
+            // A-25: a lone half never renders — zero width, the wrap
+            // accumulator stays monotonic for any provider
+            const char16_t unit = text[static_cast<std::size_t>(i)];
+            if (is_high_surrogate(unit) || is_low_surrogate(unit))
+            {
+                return 0;
+            }
             const GlyphProvider *p = nullptr;
             if (runs != nullptr)
             {
@@ -1442,10 +1449,39 @@ namespace zb::ui
             }
             if (p == nullptr)
             {
-                p = pick(text[static_cast<std::size_t>(i)]);
+                p = pick(unit);
             }
             return p != nullptr
                      ? p->measure(text.data() + i, 1).width + letter
+                     : 0;
+        };
+        const auto w_of_pair = [&](const int i) -> int
+        {
+            // A-25: the pair fills the wrap as one atomic unit through
+            // covers_pair — its whole advance once, letter-spacing once
+            // (mirrors the draw pen); no covering provider fills zero
+            const GlyphProvider *p = nullptr;
+            if (runs != nullptr)
+            {
+                if (const text_style_run *const r =
+                        covering_run(*runs, i);
+                    r != nullptr && r->provider != nullptr &&
+                    r->provider->covers_pair(text.data() + i))
+                {
+                    p = r->provider;
+                }
+            }
+            if (p == nullptr && primary != nullptr &&
+                primary->covers_pair(text.data() + i))
+            {
+                p = primary;
+            }
+            if (p == nullptr && fallback->covers_pair(text.data() + i))
+            {
+                p = fallback;
+            }
+            return p != nullptr
+                     ? p->measure(text.data() + i, 2).width + letter
                      : 0;
         };
         const auto emit_line = [&](const int start, int end)
@@ -1490,8 +1526,18 @@ namespace zb::ui
             {
                 break_before = p;
             }
-            acc += w_of(p);
-            ++p;
+            // A-25: a pair fills as one atomic unit
+            if (p + 1 < n && is_high_surrogate(ch) &&
+                is_low_surrogate(text[static_cast<std::size_t>(p) + 1]))
+            {
+                acc += w_of_pair(p);
+                p += 2;
+            }
+            else
+            {
+                acc += w_of(p);
+                ++p;
+            }
             if (acc > width)
             {
                 // greedy: the later candidate fills the line further; a

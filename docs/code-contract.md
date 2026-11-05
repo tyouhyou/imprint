@@ -159,9 +159,10 @@ Standing contract obligations:
   BMP-only provider answers "not covered" without overriding. A
   provider that covers the pair receives the whole 2-unit segment in
   `measure`/`write` and renders it as ONE glyph with one advance. No
-  covering provider → the pair takes the per-unit chain, where each
-  half is uncovered (fonts index by code point, not surrogate halves)
-  → skipped at zero width: the pre-A-25 drop semantics, unchanged.
+  covering provider → the pair is skipped outright at zero width
+  (halves are never rendered as units — the pre-A-25 drop semantics,
+  unchanged; this holds for every first-party provider and is the
+  walk-level rule, not a per-unit chain).
 - Provider conditional compilation (`IMCORE_HAS_TTF_RUNTIME`; formerly
   the FreeType `USE_FONT`, removed 2026-09-06) is only allowed at the
   provider-selection point; the widget draw path is unconditional.

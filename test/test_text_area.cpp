@@ -500,18 +500,19 @@ int test_text_area()
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace))));
         EXPECT(t.area->get_text().empty());
 
-        // the pair rides whole through wrap spans: every span boundary
-        // sits on a pair edge
-        t.area->set_text(std::u16string(u"ab\xD83D"
+        // the pair rides whole through wrap spans: with a break
+        // candidate beside it, the forced break lands on the space, not
+        // inside the pair (indexes: a0 b1 sp2 lead3 trail4 sp5 c6 d7)
+        t.area->set_text(std::u16string(u"ab \xD83D"
                                         u"\xDE00"
-                                        u"cd"));
-        const auto &sp = t.area->wrap_spans(t.area->get_size().width);
+                                        u" cd"));
+        t.area->set_size(24, 30);  // forces the break after the pair
+        const auto &sp = t.area->wrap_spans(24);
+        EXPECT(sp.size() == 2);  // "ab <pair>" | "cd"
         for (const auto &span : sp)
         {
-            const auto off = static_cast<size_t>(span.first);
-            const auto end = off + static_cast<size_t>(span.second);
-            // a span never ends between the pair's two units (at 3)
-            EXPECT(!(end == 3));
+            // no span ends between the pair's two units (at index 4)
+            EXPECT(!(span.first <= 3 && span.first + span.second == 4));
         }
     }
 

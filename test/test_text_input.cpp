@@ -104,6 +104,26 @@ namespace
         }
     };
 
+    // A-25: BMP units 5px; a covered surrogate pair is ONE 9px glyph
+    struct PairProvider : GlyphProvider
+    {
+        bool covers(const char16_t ch) const override
+        {
+            return !is_surrogate_lead(ch) && !is_surrogate_trail(ch);
+        }
+        bool covers_pair(const char16_t *) const override { return true; }
+        text_metrics measure(const char16_t *s, const int len) const override
+        {
+            return {(len == 2 && is_surrogate_pair(s[0], s[1])) ? 9 : 5 * len,
+                    7, 7};
+        }
+        text_metrics line_metrics() const override { return {0, 7, 7}; }
+        void write(core::Graphics &, const char16_t *, const int, const int,
+                   const int, const core::Color &) const override
+        {
+        }
+    };
+
     // a single-line editor with uniform advances and a changed recorder
     struct SelInput
     {
@@ -447,26 +467,6 @@ int test_text_input()
     // one advance for the pair, letter-spacing once per pair (observed
     // through Label::measure, the public single-line advance)
     {
-        struct PairProvider : GlyphProvider
-        {
-            bool covers(const char16_t ch) const override
-            {
-                return !is_surrogate_lead(ch) && !is_surrogate_trail(ch);
-            }
-            bool covers_pair(const char16_t *) const override { return true; }
-            text_metrics measure(const char16_t *s, const int len) const override
-            {
-                // a pair renders as one 9px glyph; any single unit 5px
-                return {(len == 2 && is_surrogate_pair(s[0], s[1])) ? 9
-                                                                    : 5 * len,
-                        7, 7};
-            }
-            text_metrics line_metrics() const override { return {0, 7, 7}; }
-            void write(core::Graphics &, const char16_t *, const int, const int,
-                       const int, const core::Color &) const override
-            {
-            }
-        };
         Label l;
         l.set_glyph_provider(zb::make_shared<PairProvider>());
         l.set_text(std::u16string(u"A\xD83D"
@@ -474,6 +474,30 @@ int test_text_input()
         EXPECT(l.measure().width == 14);  // 5 + 9: the pair as one glyph
         l.set_letter_spacing(2);
         EXPECT(l.measure().width == 18);  // spacing once per pair
+    }
+
+    // A-25: a click landing on a covered pair's glyph snaps the caret
+    // to the pair's end — the load-bearing snap (the pair has real
+    // width; prefixes 5/14/19)
+    {
+        Panel root;
+        root.set_size(200, 100);
+        auto in = std::make_unique<TextInput>();
+        in->set_size(120, 20);
+        in->set_position(10, 10);
+        in->set_glyph_provider(zb::make_shared<PairProvider>());
+        TextInput *inp = in.get();
+        root.add_child(std::move(in));
+        InputDispatcher d;
+        inp->set_text(std::u16string(u"A\xD83D"
+                                     u"\xDE00"
+                                     u"B"));
+        d.dispatch(root, press_at(22, 20));  // local 12: inside the pair
+        d.dispatch(root, release_at(22, 20));
+        d.dispatch(root,
+                   key_mod(static_cast<int>(zb::input::key_code::right),
+                           zb::input::mod_shift));
+        EXPECT(inp->selected_text() == "B");  // [3, 4), not a lone unit
     }
 
     return test::report("text_input");

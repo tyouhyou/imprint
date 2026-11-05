@@ -8,21 +8,6 @@
 
 namespace zb::ui
 {
-    namespace
-    {
-        // A-25: a caret index between a lead and its trail is not a legal
-        // stop — snap to the pair's end (after the trail)
-        size_t snap_pair_end(const std::u16string &t, const size_t pos)
-        {
-            if (pos > 0 && pos < t.size() &&
-                is_surrogate_lead(t[pos - 1]) && is_surrogate_trail(t[pos]))
-            {
-                return pos + 1;
-            }
-            return pos;
-        }
-    }  // namespace
-
     TextArea::TextArea()
     {
         // T-4: wrap is always on — the editor is a wrapping paragraph
@@ -44,6 +29,10 @@ namespace zb::ui
         {
             sel_anchor = get_text().size();
         }
+        // A-25: a programmatic set_text can leave an index mid-pair —
+        // snap before any edit or selection math reads it
+        caret = snap_pair_end(get_text(), caret);
+        sel_anchor = snap_pair_end(get_text(), sel_anchor);
     }
 
     void TextArea::fire_changed()

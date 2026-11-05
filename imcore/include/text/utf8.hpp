@@ -80,4 +80,17 @@ namespace zb::ui
         return 0x10000 + ((static_cast<char32_t>(lead) - 0xD800) << 10) +
                (static_cast<char32_t>(trail) - 0xDC00);
     }
+
+    /* the nearest legal stop at or after `pos`: an index between a lead
+     * and its trail snaps to the pair's end (A-25 pair atomicity — no
+     * caret, anchor or span boundary sits inside a pair) */
+    inline size_t snap_pair_end(const std::u16string &t, const size_t pos)
+    {
+        if (pos > 0 && pos < t.size() &&
+            is_surrogate_lead(t[pos - 1]) && is_surrogate_trail(t[pos]))
+        {
+            return pos + 1;
+        }
+        return pos;
+    }
 }  // namespace zb::ui
