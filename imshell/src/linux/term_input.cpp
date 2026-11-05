@@ -28,6 +28,19 @@ namespace zb::shell::term_input
             ev.ch = 0xFFFD;
             out.push_back(ev);
         }
+
+        // a modifier chord: the control-byte translation (TJ-C3) — the
+        // §3.8 clipboard bindings ride key + mods with ch = 0, exactly
+        // like the desktop shells' chords
+        void push_chord(std::vector<zb::input::input_event> &out,
+                        const zb::input::key_code key, const int mods)
+        {
+            zb::input::input_event ev{};
+            ev.type = zb::input::input_type::key_down;
+            ev.key = static_cast<int>(key);
+            ev.mods = mods;
+            out.push_back(ev);
+        }
     }
 
     void parser::reset()
@@ -193,8 +206,8 @@ namespace zb::shell::term_input
         case 0x08:
             push_key(out, zb::input::key_code::backspace);
             return;
-        case 0x03:  // Ctrl-C: the terminal's "get me out" maps to escape
-        case 0x04:
+        case 0x04:  // Ctrl-D: the terminal's "get me out" (the EOF
+                    // convention) — the escape hatch keeps this one key
             push_key(out, zb::input::key_code::escape);
             return;
         case ' ':
@@ -205,6 +218,25 @@ namespace zb::shell::term_input
             return;
         default:
             break;
+        }
+        // the Ctrl chords (TJ-C3, code-contract §3.8): the clipboard
+        // bindings are unreachable from terminal hosts without this.
+        // 0x00 = Ctrl+Space; 0x01-0x1A ride their letter with mod_ctrl.
+        // Unreachable by terminal protocol design: Ctrl+H (0x08 =
+        // backspace), Ctrl+I/M (0x09/0x0D = tab/enter), Ctrl+[ (0x1b =
+        // the escape-parser lead); Ctrl+C (0x03) is the copy chord —
+        // the "get me out" affordance moved to Ctrl-D above.
+        if (b == 0x00)
+        {
+            push_chord(out, zb::input::key_code::space,
+                       zb::input::mod_ctrl);
+            return;
+        }
+        if (b <= 0x1A && b != 0x08 && b != 0x09 && b != 0x0D)
+        {
+            push_chord(out, static_cast<zb::input::key_code>('a' + (b - 1)),
+                       zb::input::mod_ctrl);
+            return;
         }
         if (b >= 0x20 && b <= 0x7e)
         {
@@ -307,6 +339,19 @@ namespace zb::shell::term_input
                 else if (ch == 'O')
                 {
                     state_ = state::ss3;
+                }
+                else if (ch >= 0x20 && ch <= 0x7e)
+                {
+                    // the meta convention (xterm's ESC-prefix): ESC +
+                    // a printable byte is the alt chord (TJ-C3); '['
+                    // and 'O' keep their parser roles above
+                    zb::input::input_event ev{};
+                    ev.type = zb::input::input_type::key_down;
+                    ev.mods = zb::input::mod_alt;
+                    ev.ch = ch;
+                    zb::input::decorate_printable_key(ev, ch);
+                    out.push_back(ev);
+                    state_ = state::ground;
                 }
                 else
                 {

@@ -34,12 +34,12 @@ int test_term_input()
         // ch (the terminal protocol itself has no key-up)
         EXPECT(ev[0].ch == 'a' && ev[0].key == 'a');
 
-        ev = feed(p, "\r\t\x7f\x03");
+        ev = feed(p, "\r\t\x7f\x04");
         EXPECT(ev.size() == 4);
         EXPECT(ev[0].key == static_cast<int>(key_code::enter));
         EXPECT(ev[1].key == static_cast<int>(key_code::tab));
         EXPECT(ev[2].key == static_cast<int>(key_code::backspace));
-        EXPECT(ev[3].key == static_cast<int>(key_code::escape));  // Ctrl-C
+        EXPECT(ev[3].key == static_cast<int>(key_code::escape));  // Ctrl-D
 
         // space is a navigation key (§4.2), never a character -- the same
         // routing as the desktop shells, so it activates the focused widget
@@ -54,6 +54,51 @@ int test_term_input()
         EXPECT(ev[0].key == 'z' && ev[0].ch == 'Z');
         EXPECT(ev[1].key == '5' && ev[1].ch == '5');
         EXPECT(ev[2].key == 0 && ev[2].ch == '!');
+    }
+
+    // the Ctrl chords (TJ-C3, code-contract §3.8): 0x01-0x1A ride their
+    // letter with mod_ctrl, ch = 0 — the §3.8 clipboard bindings are
+    // reachable from a terminal host through this table
+    {
+        zb::shell::term_input::parser p(320, 240);
+        auto ev = feed(p, "\x03\x16\x01\x0a");
+        EXPECT(ev.size() == 4);
+        EXPECT(ev[0].key == 'c' && ev[0].ch == 0 &&
+               ev[0].mods == zb::input::mod_ctrl);  // Ctrl+C: copy
+        EXPECT(ev[1].key == 'v' && ev[1].ch == 0 &&
+               ev[1].mods == zb::input::mod_ctrl);  // Ctrl+V: paste
+        EXPECT(ev[2].key == 'a' && ev[2].ch == 0 &&
+               ev[2].mods == zb::input::mod_ctrl);  // Ctrl+A: select all
+        EXPECT(ev[3].key == 'j' && ev[3].ch == 0 &&
+               ev[3].mods == zb::input::mod_ctrl);  // Ctrl+J (LF)
+
+        // the functional set keeps its keys: 0x08 backspace, 0x09 tab,
+        // 0x0d enter; 0x00 is Ctrl+Space (explicit length: a std::string
+        // from a char literal would stop at the embedded NUL)
+        ev = feed(p, std::string("\x00\x08\x09\x0d", 4));
+        EXPECT(ev.size() == 4);
+        EXPECT(ev[0].key == static_cast<int>(key_code::space) &&
+               ev[0].mods == zb::input::mod_ctrl);
+        EXPECT(ev[1].key == static_cast<int>(key_code::backspace) &&
+               ev[1].mods == 0);
+        EXPECT(ev[2].key == static_cast<int>(key_code::tab) && ev[2].mods == 0);
+        EXPECT(ev[3].key == static_cast<int>(key_code::enter) &&
+               ev[3].mods == 0);
+    }
+
+    // the meta convention: ESC + a printable byte is the alt chord
+    // (the CSI/SS3 introducers keep their parser roles)
+    {
+        zb::shell::term_input::parser p(320, 240);
+        auto ev = feed(p, "\x1bs");
+        EXPECT(ev.size() == 1);
+        EXPECT(ev[0].ch == 's' && ev[0].key == 's' &&
+               ev[0].mods == zb::input::mod_alt);
+
+        // the introducers still parse as sequences, not alt chords
+        ev = feed(p, "\x1b[B");
+        EXPECT(ev.size() == 1 &&
+               ev[0].key == static_cast<int>(key_code::down));
     }
 
     // arrows in CSI and SS3 forms; a sequence split across chunks
