@@ -1,6 +1,7 @@
 #include "test.hpp"
 
 #include "imui.hpp"
+#include "text/utf8.hpp"
 
 using namespace zb::ui;
 
@@ -264,11 +265,14 @@ int test_text_input()
         d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::backspace)));
         EXPECT(input->get_text() == std::u16string(u"\u4F60"));
 
-        // DEL (0x7F), the C1 block, and a non-BMP code point drop
+        // DEL (0x7F) and the C1 block drop; a non-BMP code point
+        // stores as its surrogate pair (A-25)
         d.dispatch(root, char_ev(0x7F));
         d.dispatch(root, char_ev(0x9F));
         d.dispatch(root, char_ev(0x1F600));
-        EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+        EXPECT(input->get_text() ==
+               std::u16string(u"\u4F60\xD83D"
+                              u"\xDE00"));
     }
 
     // FI-02 single-line selection (code-contract §3.8): drag selects,
@@ -361,6 +365,115 @@ int test_text_input()
         EXPECT(t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl)));
         EXPECT(t.input->get_text() == std::u16string(u"abcdef"));
         EXPECT(t.input->selected_text() == "bc");
+    }
+
+    // A-25 pair atomicity: a typed non-BMP code point stores as its
+    // surrogate pair (ch > U+FFFF: the terminal translator assembles
+    // 4-byte UTF-8 into one full ch) and edits as one atom
+    {
+        SelInput t;
+        // a click first: char events ride focus
+        t.d.dispatch(t.root, press_at(20, 20));
+        t.d.dispatch(t.root, release_at(20, 20));
+        EXPECT(t.d.dispatch(t.root, char_ev(0x1F600)));
+        EXPECT(t.input->get_text().size() == 2);  // the pair, whole
+        EXPECT(t.input->get_text()[0] == 0xD83D);
+        EXPECT(t.input->get_text()[1] == 0xDE00);
+
+        // arrow steps never stop between the two units: from after the
+        // pair, two lefts reach the pair start, and the typed 'x' lands
+        // BEFORE the pair — a broken snap would split it
+        t.d.dispatch(t.root, char_ev('B'));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
+        t.d.dispatch(t.root, char_ev('x'));
+        EXPECT(t.input->get_text() ==
+               std::u16string(u"x\xD83D"
+                              u"\xDE00"
+                              u"B"));
+
+        // Ctrl+A selects the whole text, the pair included — whole
+        // units out, valid UTF-8 back
+        t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
+        EXPECT(t.input->selected_text() == "x\xF0\x9F\x98\x80"
+                                           "B");
+    }
+
+    // A-25: backspace and delete remove both units of a pair
+    {
+        SelInput t;
+        t.d.dispatch(t.root, press_at(20, 20));
+        t.d.dispatch(t.root, release_at(20, 20));
+        t.d.dispatch(t.root, char_ev(0x1F600));
+        t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        EXPECT(t.input->get_text().empty());  // not a lone lead
+
+        t.d.dispatch(t.root, char_ev(0x1F600));
+        t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left)));
+        t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::del)));
+        EXPECT(t.input->get_text().empty());  // not a lone trail
+    }
+
+    // A-25: paste keeps whole pairs; a click inside the pair's span
+    // snaps the caret to the pair's end (shift+right from there selects
+    // "b", never a lone unit)
+    {
+        TestSink sink;
+        SinkGuard guard(&sink);
+        SelInput t;
+        t.d.dispatch(t.root, press_at(20, 20));
+        t.d.dispatch(t.root, release_at(20, 20));
+        sink.canned = "a\xF0\x9F\x98\x80"
+                      "b";
+        t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
+        EXPECT(t.input->get_text() ==
+               std::u16string(u"a\xD83D"
+                              u"\xDE00"
+                              u"b"));
+        EXPECT(t.input->get_text().size() == 4);
+
+        // uniform 6px advances; the zero-width pair sits before "b"'s
+        // 6px span — a click just left of the span's midpoint (xx 8)
+        // places the caret after the pair, and shift+right selects "b"
+        // (never a lone unit)
+        t.d.dispatch(t.root, press_at(20, 20));
+        t.d.dispatch(t.root,
+                     key_mod(static_cast<int>(zb::input::key_code::right),
+                             zb::input::mod_shift));
+        EXPECT(t.input->selected_text() == "b");
+    }
+
+    // A-25: a covers_pair provider receives the whole 2-unit segment —
+    // one advance for the pair, letter-spacing once per pair (observed
+    // through Label::measure, the public single-line advance)
+    {
+        struct PairProvider : GlyphProvider
+        {
+            bool covers(const char16_t ch) const override
+            {
+                return !is_surrogate_lead(ch) && !is_surrogate_trail(ch);
+            }
+            bool covers_pair(const char16_t *) const override { return true; }
+            text_metrics measure(const char16_t *s, const int len) const override
+            {
+                // a pair renders as one 9px glyph; any single unit 5px
+                return {(len == 2 && is_surrogate_pair(s[0], s[1])) ? 9
+                                                                    : 5 * len,
+                        7, 7};
+            }
+            text_metrics line_metrics() const override { return {0, 7, 7}; }
+            void write(core::Graphics &, const char16_t *, const int, const int,
+                       const int, const core::Color &) const override
+            {
+            }
+        };
+        Label l;
+        l.set_glyph_provider(zb::make_shared<PairProvider>());
+        l.set_text(std::u16string(u"A\xD83D"
+                                  u"\xDE00"));
+        EXPECT(l.measure().width == 14);  // 5 + 9: the pair as one glyph
+        l.set_letter_spacing(2);
+        EXPECT(l.measure().width == 18);  // spacing once per pair
     }
 
     return test::report("text_input");

@@ -1645,6 +1645,10 @@ namespace zb::ui
         // drops, one crossing it truncates)
         [[nodiscard]] const GlyphProvider *
         pick_provider(const char16_t *data, const int i) const;
+        // A-25: the pair counterpart — same candidate order, answered by
+        // covers_pair on the surrogate pair at data[i..i+1]
+        [[nodiscard]] const GlyphProvider *
+        pick_provider_pair(const char16_t *data, const int i) const;
         void clamp_text_runs();
         std::u16string text_;
         // unset = follow the active theme's `text` token (contract 10.3)

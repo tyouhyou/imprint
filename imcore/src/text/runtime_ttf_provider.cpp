@@ -10,6 +10,7 @@
 #include <vector>
 
 #include "core/error.hpp"
+#include "text/utf8.hpp"
 #include "stb_truetype.h"
 
 namespace zb::ui
@@ -37,14 +38,15 @@ namespace zb::ui
         stbtt_fontinfo info = {};
         size_t budget = TtfFamily::kDefaultCacheBudget;
 
-        // one rasterized glyph; the key is (pixel size, code unit) --
-        // everything that changes the rendered pixels. Every field is
-        // default-initialized: an empty bitmap (e.g. the space glyph)
-        // leaves w/h at 0, never indeterminate
+        // one rasterized glyph; the key is (pixel size, code point) --
+        // everything that changes the rendered pixels. A BMP unit keys
+        // as itself; a surrogate pair keys by its combined code point
+        // (A-25). Every field is default-initialized: an empty bitmap
+        // (e.g. the space glyph) leaves w/h at 0, never indeterminate
         struct GlyphEntry
         {
             int px = 0;
-            char16_t ch = 0;
+            char32_t cp = 0;
             int advance = 0;
             int xoff = 0;
             int yoff = 0;
@@ -120,20 +122,23 @@ namespace zb::ui
             return true;
         }
 
-        int glyph_index(const TtfFamilyState &s, const char16_t ch)
+        int glyph_index(const TtfFamilyState &s, const char32_t cp)
         {
-            return stbtt_FindGlyphIndex(&s.info, ch);
+            // cp is a BMP unit or a combined pair (<= 0x10FFFF): the
+            // int cast is value-preserving
+            return stbtt_FindGlyphIndex(&s.info, static_cast<int>(cp));
         }
 
-        // the pre-rounded advance of one code unit; never rasterizes
+        // the pre-rounded advance of one code point (a BMP unit, or a
+        // surrogate pair's combined code point -- A-25); never rasterizes
         // (measure only needs metrics). A font may declare a negative
         // advance (italic kerning, some CJK fonts): clamp at the provider
         // boundary so the widget advance cache never receives a negative
         // total -- that would collide with its -1 "not computed" sentinel
         // (permanent cache miss) and push the pen backwards (W-6).
-        int advance_px(const TtfFamilyState &s, const float scale, const char16_t ch)
+        int advance_px(const TtfFamilyState &s, const float scale, const char32_t cp)
         {
-            const int g = glyph_index(s, ch);
+            const int g = glyph_index(s, cp);
             if (g == 0)
             {
                 return 0;
@@ -146,11 +151,11 @@ namespace zb::ui
         }
 
         const TtfFamilyState::GlyphEntry *find_entry(const TtfFamilyState &s,
-                                                     const int px, const char16_t ch)
+                                                     const int px, const char32_t cp)
         {
             for (const auto &e : s.cache)
             {
-                if (e.px == px && e.ch == ch)
+                if (e.px == px && e.cp == cp)
                 {
                     return &e;
                 }
@@ -166,18 +171,18 @@ namespace zb::ui
         // measure / write call, any of which can push_back or clear the
         // vector and invalidate it (write() observes this today)
         const TtfFamilyState::GlyphEntry &entry_for(TtfFamilyState &s, const int px,
-                                                    const float scale, const char16_t ch)
+                                                    const float scale, const char32_t cp)
         {
-            if (const auto *hit = find_entry(s, px, ch))
+            if (const auto *hit = find_entry(s, px, cp))
             {
                 return *hit;
             }
             ++s.rasterizations;
             TtfFamilyState::GlyphEntry e;
             e.px = px;
-            e.ch = ch;
-            e.advance = advance_px(s, scale, ch);
-            const int g = glyph_index(s, ch);
+            e.cp = cp;
+            e.advance = advance_px(s, scale, cp);
+            const int g = glyph_index(s, cp);
             if (g != 0)
             {
                 int w = 0;
@@ -345,6 +350,13 @@ namespace zb::ui
         return glyph_index(*state_, ch) != 0;
     }
 
+    bool TtfRuntimeProvider::covers_pair(const char16_t *str) const
+    {
+        return str != nullptr && is_surrogate_pair(str[0], str[1]) &&
+               glyph_index(*state_,
+                           combine_surrogate_pair(str[0], str[1])) != 0;
+    }
+
     text_metrics TtfRuntimeProvider::measure(const char16_t *str, const int len) const
     {
         text_metrics m = line_;
@@ -352,9 +364,19 @@ namespace zb::ui
         {
             return m;
         }
-        for (int i = 0; i < len; ++i)
+        for (int i = 0; i < len;)
         {
+            // A-25: a lead+trail pair measures as its combined code
+            // point; each lone half stays uncovered (glyph 0 -> 0)
+            if (i + 1 < len && is_surrogate_pair(str[i], str[i + 1]))
+            {
+                m.width += advance_px(
+                    *state_, scale_, combine_surrogate_pair(str[i], str[i + 1]));
+                i += 2;
+                continue;
+            }
             m.width += advance_px(*state_, scale_, str[i]);
+            ++i;
         }
         return m;
     }
@@ -377,9 +399,20 @@ namespace zb::ui
         const auto bak = g.is_alpha_enabled();
         g.enable_alpha(true);
         int pen = x;
-        for (int i = 0; i < len; ++i)
+        for (int i = 0; i < len;)
         {
-            const auto &e = entry_for(*state_, px_, scale_, str[i]);
+            // A-25: a pair draws its combined code point's one glyph
+            char32_t cp = str[i];
+            if (i + 1 < len && is_surrogate_pair(str[i], str[i + 1]))
+            {
+                cp = combine_surrogate_pair(str[i], str[i + 1]);
+                i += 2;
+            }
+            else
+            {
+                ++i;
+            }
+            const auto &e = entry_for(*state_, px_, scale_, cp);
             if (e.w > 0 && e.h > 0)
             {
                 const int left = pen + e.xoff;

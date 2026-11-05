@@ -34,6 +34,20 @@ namespace zb::ui
         /* whether this provider has a glyph for the given code unit */
         virtual bool covers(const char16_t ch) const = 0;
 
+        /*
+         * Whether this provider has a glyph for the non-BMP code point
+         * the surrogate pair at str[0..1] encodes (A-25; str holds >= 2
+         * units and str[0] is a lead surrogate). The default answers
+         * "no", so BMP-only providers never override it; a provider
+         * that answers yes receives the whole 2-unit segment in
+         * measure/write and renders it as one glyph with one advance.
+         */
+        virtual bool covers_pair(const char16_t *str) const
+        {
+            (void)str;
+            return false;
+        }
+
         /* advance width / line height / ascent of the whole run */
         virtual text_metrics measure(const char16_t *str, const int len) const = 0;
 

@@ -8,6 +8,21 @@
 
 namespace zb::ui
 {
+    namespace
+    {
+        // A-25: a caret index between a lead and its trail is not a legal
+        // stop — snap to the pair's end (after the trail)
+        size_t snap_pair_end(const std::u16string &t, const size_t pos)
+        {
+            if (pos > 0 && pos < t.size() &&
+                is_surrogate_lead(t[pos - 1]) && is_surrogate_trail(t[pos]))
+            {
+                return pos + 1;
+            }
+            return pos;
+        }
+    }  // namespace
+
     core::imsize_t TextInput::measure() const
     {
         return {100, text_height() + 2};
@@ -93,16 +108,25 @@ namespace zb::ui
     std::u16string TextInput::paste_filter(const std::u16string &in) const
     {
         std::u16string out;
-        for (const char16_t c : in)
+        for (size_t i = 0; i < in.size();)
         {
-            const int u = static_cast<int>(c);
-            // the T-2 acceptance; no line break (single line). Surrogate
-            // units (a non-BMP code point's pair) drop like the ch path
+            // the T-2 acceptance; no line break (single line). A whole
+            // surrogate pair rides (A-25); a lone surrogate unit drops
+            if (i + 1 < in.size() &&
+                is_surrogate_pair(in[i], in[i + 1]))
+            {
+                out.push_back(in[i]);
+                out.push_back(in[i + 1]);
+                i += 2;
+                continue;
+            }
+            const int u = static_cast<int>(in[i]);
             if (((u >= 0x20 && u <= 0x7E) || u >= 0xA0) &&
                 (u < 0xD800 || u > 0xDFFF))
             {
-                out.push_back(c);
+                out.push_back(in[i]);
             }
+            ++i;
         }
         return out;
     }
@@ -157,8 +181,13 @@ namespace zb::ui
             return false;
         }
         std::u16string t = get_text();
-        t.erase(caret - 1, 1);
-        --caret;
+        // A-25: backspacing into a pair removes both units
+        const size_t back = (caret >= 2 && is_surrogate_pair(t[caret - 2],
+                                                             t[caret - 1]))
+                              ? 2
+                              : 1;
+        t.erase(caret - back, back);
+        caret -= back;
         sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
@@ -178,7 +207,12 @@ namespace zb::ui
             return false;
         }
         std::u16string t = get_text();
-        t.erase(caret, 1);
+        // A-25: deleting across a pair removes both units
+        const size_t fwd = (caret + 1 < t.size() &&
+                            is_surrogate_pair(t[caret], t[caret + 1]))
+                             ? 2
+                             : 1;
+        t.erase(caret, fwd);
         sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
@@ -193,11 +227,17 @@ namespace zb::ui
         size_t next = caret;
         if (dir > 0 && caret < n)
         {
-            ++next;
+            next = snap_pair_end(get_text(), caret + 1);
         }
         else if (dir < 0 && caret > 0)
         {
-            --next;
+            next = caret - 1;
+            // A-25: never stop between a lead and its trail
+            if (next > 0 && is_surrogate_lead(get_text()[next - 1]) &&
+                is_surrogate_trail(get_text()[next]))
+            {
+                --next;
+            }
         }
         else
         {
@@ -254,6 +294,7 @@ namespace zb::ui
                 break;
             }
         }
+        caret = snap_pair_end(get_text(), caret);
         if (caret != before)
         {
             mark_dirty();
@@ -354,9 +395,9 @@ namespace zb::ui
             // character input (space arrives as a key, see the key
             // mapping in the shells). T-2 acceptance (code-contract §2
             // "Text input scope"): printable ASCII plus any code point
-            // >= U+00A0 inserts as a BMP code unit; C1 controls and
-            // non-BMP code points drop — the caret is a u16 index and
-            // the cluster/advance extension is A-25 territory
+            // >= U+00A0 inserts as a BMP code unit; a code point >
+            // U+FFFF stores as its surrogate pair (A-25); C1 controls
+            // drop
             if (ev.ch != 0)
             {
                 // a chord never inserts text: alt/meta combos and any
@@ -375,6 +416,18 @@ namespace zb::ui
                 if (ev.ch >= 0xA0 && ev.ch <= 0xFFFF)
                 {
                     insert(static_cast<char16_t>(ev.ch));
+                    return true;
+                }
+                if (ev.ch >= 0x10000 && ev.ch <= 0x10FFFF)
+                {
+                    // A-25: a non-BMP code point stores as its surrogate
+                    // pair (the terminal translator assembles 4-byte
+                    // UTF-8 into one full ch)
+                    std::u16string pair;
+                    const char32_t v = static_cast<char32_t>(ev.ch) - 0x10000;
+                    pair.push_back(static_cast<char16_t>(0xD800 + (v >> 10)));
+                    pair.push_back(static_cast<char16_t>(0xDC00 + (v & 0x3FF)));
+                    insert_text(pair);
                     return true;
                 }
                 return false;

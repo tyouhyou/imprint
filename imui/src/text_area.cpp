@@ -8,6 +8,21 @@
 
 namespace zb::ui
 {
+    namespace
+    {
+        // A-25: a caret index between a lead and its trail is not a legal
+        // stop — snap to the pair's end (after the trail)
+        size_t snap_pair_end(const std::u16string &t, const size_t pos)
+        {
+            if (pos > 0 && pos < t.size() &&
+                is_surrogate_lead(t[pos - 1]) && is_surrogate_trail(t[pos]))
+            {
+                return pos + 1;
+            }
+            return pos;
+        }
+    }  // namespace
+
     TextArea::TextArea()
     {
         // T-4: wrap is always on — the editor is a wrapping paragraph
@@ -217,16 +232,26 @@ namespace zb::ui
     std::u16string TextArea::paste_filter(const std::u16string &in) const
     {
         std::u16string out;
-        for (const char16_t c : in)
+        for (size_t i = 0; i < in.size();)
         {
-            const int u = static_cast<int>(c);
-            // the T-2 acceptance plus '\n' (enter is content here);
-            // surrogate units (a non-BMP code point's pair) drop
+            // the T-2 acceptance plus '\n' (enter is content here). A
+            // whole surrogate pair rides (A-25); a lone surrogate unit
+            // drops
+            if (i + 1 < in.size() &&
+                is_surrogate_pair(in[i], in[i + 1]))
+            {
+                out.push_back(in[i]);
+                out.push_back(in[i + 1]);
+                i += 2;
+                continue;
+            }
+            const int u = static_cast<int>(in[i]);
             if (((u >= 0x20 && u <= 0x7E) || u >= 0xA0 || u == u'\n') &&
                 (u < 0xD800 || u > 0xDFFF))
             {
-                out.push_back(c);
+                out.push_back(in[i]);
             }
+            ++i;
         }
         return out;
     }
@@ -283,8 +308,13 @@ namespace zb::ui
             return false;
         }
         std::u16string t = get_text();
-        t.erase(caret - 1, 1);
-        --caret;
+        // A-25: backspacing into a pair removes both units
+        const size_t back = (caret >= 2 && is_surrogate_pair(t[caret - 2],
+                                                             t[caret - 1]))
+                              ? 2
+                              : 1;
+        t.erase(caret - back, back);
+        caret -= back;
         sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
@@ -306,7 +336,12 @@ namespace zb::ui
             return false;
         }
         std::u16string t = get_text();
-        t.erase(caret, 1);
+        // A-25: deleting across a pair removes both units
+        const size_t fwd = (caret + 1 < t.size() &&
+                            is_surrogate_pair(t[caret], t[caret + 1]))
+                             ? 2
+                             : 1;
+        t.erase(caret, fwd);
         sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
@@ -323,11 +358,17 @@ namespace zb::ui
         size_t next = caret;
         if (dir > 0 && caret < n)
         {
-            ++next;
+            next = snap_pair_end(get_text(), caret + 1);
         }
         else if (dir < 0 && caret > 0)
         {
-            --next;
+            next = caret - 1;
+            // A-25: never stop between a lead and its trail
+            if (next > 0 && is_surrogate_lead(get_text()[next - 1]) &&
+                is_surrogate_trail(get_text()[next]))
+            {
+                --next;
+            }
         }
         else
         {
@@ -364,9 +405,10 @@ namespace zb::ui
         const int len = spans[static_cast<std::size_t>(target)].second;
         // the pixel column goal survives the move (a shorter target line
         // clamps to its end without re-anchoring the goal)
-        const size_t next = static_cast<size_t>(off) +
-                            column_to_caret(get_text().data() + off, len,
-                                            column_goal);
+        const size_t next = snap_pair_end(
+            get_text(),
+            static_cast<size_t>(off) +
+                column_to_caret(get_text().data() + off, len, column_goal));
         if (!extend_selection)
         {
             sel_anchor = next;
@@ -398,9 +440,10 @@ namespace zb::ui
         }
         const int off = spans[static_cast<std::size_t>(line)].first;
         const int len = spans[static_cast<std::size_t>(line)].second;
-        caret = static_cast<size_t>(off) +
-                column_to_caret(get_text().data() + off, len,
-                                x - text_gap);
+        caret = snap_pair_end(
+            get_text(),
+            static_cast<size_t>(off) +
+                column_to_caret(get_text().data() + off, len, x - text_gap));
         column_goal = x - text_gap > 0 ? x - text_gap : 0;
         mark_dirty();
         scroll_caret_into_view();
@@ -499,7 +542,8 @@ namespace zb::ui
             const bool extend = (ev.mods & zb::input::mod_shift) != 0;
             // the T-2 acceptance (code-contract §2 "Text input scope"):
             // printable ASCII plus code points >= U+00A0 as BMP code
-            // units; C1 and non-BMP drop
+            // units; a code point > U+FFFF stores as its surrogate pair
+            // (A-25); C1 controls drop
             if (ev.ch != 0)
             {
                 // a chord never inserts text: alt/meta combos and any
@@ -514,6 +558,18 @@ namespace zb::ui
                     (ev.ch >= 0xA0 && ev.ch <= 0xFFFF))
                 {
                     insert(static_cast<char16_t>(ev.ch));
+                    return true;
+                }
+                if (ev.ch >= 0x10000 && ev.ch <= 0x10FFFF)
+                {
+                    // A-25: a non-BMP code point stores as its surrogate
+                    // pair (the terminal translator assembles 4-byte
+                    // UTF-8 into one full ch)
+                    std::u16string pair;
+                    const char32_t v = static_cast<char32_t>(ev.ch) - 0x10000;
+                    pair.push_back(static_cast<char16_t>(0xD800 + (v >> 10)));
+                    pair.push_back(static_cast<char16_t>(0xDC00 + (v & 0x3FF)));
+                    insert_text(pair);
                     return true;
                 }
                 return false;

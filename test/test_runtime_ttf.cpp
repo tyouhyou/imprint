@@ -338,5 +338,34 @@ int test_runtime_ttf()
         clear_font_family();
     }
 
+    // A-25 pairing: a surrogate pair resolves through covers_pair to the
+    // combined code point. Inter carries no non-BMP glyph, so the
+    // answers are negative — the pair measures 0 (each lone half is
+    // uncovered) and the pre-A-25 drop semantics stand; a covering
+    // provider receives the whole 2-unit segment (locked by the stub
+    // checks in test_text_input/test_text_area)
+    {
+        const auto p = family.provider_for(16);
+        const char16_t emoji[2] = {0xD83D, 0xDE00};  // U+1F600
+        EXPECT(!p->covers_pair(emoji));
+        EXPECT(!p->covers(emoji[0]) && !p->covers(emoji[1]));
+
+        const char16_t with_pair[4] = {u'H', 0xD83D, 0xDE00, u'i'};
+        // the pair contributes nothing: measure == "H" + "i" alone
+        const char16_t plain[2] = {u'H', u'i'};
+        EXPECT(p->measure(with_pair, 4).width == p->measure(plain, 2).width);
+
+        // drawing the lone pair routes once through the cache keyed by
+        // the combined code point and lands on glyph 0: one probe, an
+        // empty coverage entry, zero cache bytes — the pre-A-25 drop,
+        // now pair-shaped
+        core::Graphics g(64, 32, nullptr);
+        const long long before = family.rasterization_count();
+        const size_t bytes_before = family.cache_bytes();
+        p->write(g, emoji, 2, 1, 20, core::colors::Black);
+        EXPECT(family.rasterization_count() - before == 1);
+        EXPECT(family.cache_bytes() == bytes_before);
+    }
+
     return test::report("runtime_ttf");
 }

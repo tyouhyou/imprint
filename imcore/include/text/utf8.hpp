@@ -51,4 +51,33 @@ namespace zb::ui
      * UTF-8.
      */
     std::string utf16_to_utf8(const std::u16string &u16);
+
+    /*
+     * Surrogate-pair helpers (A-25 pair atomicity, code-contract §2):
+     * a non-BMP code point stores as a lead+trail pair, and every
+     * editing/walk step treats the pair as one atom.
+     */
+    constexpr bool is_surrogate_lead(const char16_t u)
+    {
+        return u >= 0xD800 && u <= 0xDBFF;
+    }
+
+    constexpr bool is_surrogate_trail(const char16_t u)
+    {
+        return u >= 0xDC00 && u <= 0xDFFF;
+    }
+
+    constexpr bool is_surrogate_pair(const char16_t lead, const char16_t trail)
+    {
+        return is_surrogate_lead(lead) && is_surrogate_trail(trail);
+    }
+
+    /* the code point a valid lead+trail pair encodes (undefined for
+     * units that do not form a pair) */
+    constexpr char32_t combine_surrogate_pair(const char16_t lead,
+                                              const char16_t trail)
+    {
+        return 0x10000 + ((static_cast<char32_t>(lead) - 0xD800) << 10) +
+               (static_cast<char32_t>(trail) - 0xDC00);
+    }
 }  // namespace zb::ui

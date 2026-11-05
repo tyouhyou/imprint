@@ -1701,6 +1701,39 @@ namespace zb::ui
         return nullptr;
     }
 
+    const GlyphProvider *Widget::pick_provider_pair(const char16_t *data,
+                                                    const int i) const
+    {
+        // the A-25 pair counterpart of pick_provider: the same candidate
+        // order (covering run's provider -> primary -> bitmap), answered
+        // by covers_pair on the pair at data[i..i+1]
+        if (ext_ != nullptr && !ext_->runs.empty() && !text_.empty())
+        {
+            const char16_t *const begin = text_.data();
+            if (data >= begin && data <= begin + text_.size())
+            {
+                const int idx = static_cast<int>(data - begin) + i;
+                if (const text_style_run *const r =
+                        covering_run(ext_->runs, idx);
+                    r != nullptr && r->provider != nullptr &&
+                    r->provider->covers_pair(data + i))
+                {
+                    return r->provider;
+                }
+            }
+        }
+        const GlyphProvider *const primary = primary_provider();
+        if (primary != nullptr && primary->covers_pair(data + i))
+        {
+            return primary;
+        }
+        if (bitmap_fallback_->covers_pair(data + i))
+        {
+            return bitmap_fallback_.get();
+        }
+        return nullptr;
+    }
+
     int Widget::advance_of(const char16_t *data, const int len) const
     {
         if (len <= 0)
@@ -1723,22 +1756,64 @@ namespace zb::ui
         if (letter > 0)
         {
             int spaced = 0;
-            for (int i = 0; i < len; ++i)
+            for (int i = 0; i < len;)
             {
-                const GlyphProvider *const p = pick(i);
-                if (p != nullptr)
+                // A-25: a pair is one character — spacing once per pair
+                if (i + 1 < len && is_high_surrogate(data[i]) &&
+                    is_low_surrogate(data[i + 1]))
                 {
-                    spaced += p->measure(data + i, 1).width + letter;
+                    const GlyphProvider *const p = pick_provider_pair(data, i);
+                    if (p != nullptr)
+                    {
+                        spaced += p->measure(data + i, 2).width + letter;
+                    }
+                    i += 2;
+                    continue;
                 }
+                // a lone half never renders (no font indexes a surrogate
+                // unit): zero advance, provider never consulted
+                if (!is_high_surrogate(data[i]) && !is_low_surrogate(data[i]))
+                {
+                    const GlyphProvider *const p = pick(i);
+                    if (p != nullptr)
+                    {
+                        spaced += p->measure(data + i, 1).width + letter;
+                    }
+                }
+                ++i;
             }
             return spaced;
         }
         int total = 0;
         for (int i = 0; i < len;)
         {
+            // A-25: a surrogate pair is one atomic segment — its provider
+            // resolves via covers_pair and it never splits across runs
+            if (i + 1 < len && is_high_surrogate(data[i]) &&
+                is_low_surrogate(data[i + 1]))
+            {
+                const GlyphProvider *const p = pick_provider_pair(data, i);
+                if (p != nullptr)
+                {
+                    total += p->measure(data + i, 2).width;
+                }
+                i += 2;
+                continue;
+            }
+            // a lone half never renders: zero advance (the prefix walk
+            // stays monotonic for any provider)
+            if (is_high_surrogate(data[i]) || is_low_surrogate(data[i]))
+            {
+                ++i;
+                continue;
+            }
             const GlyphProvider *cur = pick(i);
-            int j = i;
-            while (j < len && pick(j) == cur)
+            int j = i + 1;
+            // a group segment never contains a surrogate unit — a pair
+            // is the atomic branch above, and a half measured as a run
+            // member would report a phantom advance
+            while (j < len && pick(j) == cur &&
+                   !is_high_surrogate(data[j]) && !is_low_surrogate(data[j]))
             {
                 ++j;
             }
@@ -1785,9 +1860,34 @@ namespace zb::ui
                 int pen = 0;
                 for (int i = i0; i < i1;)
                 {
+                    // A-25: a pair draws whole through covers_pair
+                    if (i + 1 < len && is_high_surrogate(data[i]) &&
+                        is_low_surrogate(data[i + 1]))
+                    {
+                        const GlyphProvider *const p =
+                            pick_provider_pair(data, i);
+                        if (p != nullptr)
+                        {
+                            p->write(area, data + i, 2, x0 + pen, y0, c);
+                            pen += p->measure(data + i, 2).width;
+                        }
+                        i += 2;
+                        continue;
+                    }
+                    // a lone half never renders (no font indexes a surrogate
+                    // unit): the pen keeps its position
+                    if (is_high_surrogate(data[i]) || is_low_surrogate(data[i]))
+                    {
+                        ++i;
+                        continue;
+                    }
                     const GlyphProvider *cur = pick(i);
-                    int j = i;
-                    while (j < i1 && pick(j) == cur)
+                    int j = i + 1;
+                    // a group segment never contains a surrogate unit (same
+                    // rule as advance_of — halves report no phantom advance)
+                    while (j < i1 && pick(j) == cur &&
+                           !is_high_surrogate(data[j]) &&
+                           !is_low_surrogate(data[j]))
                     {
                         ++j;
                     }
@@ -1801,14 +1901,34 @@ namespace zb::ui
                 return;
             }
             int pen = 0;
-            for (int i = i0; i < i1; ++i)
+            for (int i = i0; i < i1;)
             {
+                // A-25: a pair is one character — spacing once per pair
+                if (i + 1 < len && is_high_surrogate(data[i]) &&
+                    is_low_surrogate(data[i + 1]))
+                {
+                    const GlyphProvider *const p = pick_provider_pair(data, i);
+                    if (p != nullptr)
+                    {
+                        p->write(area, data + i, 2, x0 + pen, y0, c);
+                        pen += p->measure(data + i, 2).width + letter;
+                    }
+                    i += 2;
+                    continue;
+                }
+                // a lone half never renders: the pen keeps its position
+                if (is_high_surrogate(data[i]) || is_low_surrogate(data[i]))
+                {
+                    ++i;
+                    continue;
+                }
                 const GlyphProvider *const p = pick(i);
                 if (p != nullptr)
                 {
                     p->write(area, data + i, 1, x0 + pen, y0, c);
                     pen += p->measure(data + i, 1).width + letter;
                 }
+                ++i;
             }
         };
 
@@ -1838,6 +1958,14 @@ namespace zb::ui
                 const text_style_run *const r = run_at(i);
                 int j = i + 1;
                 while (j < len && run_at(j) == r)
+                {
+                    ++j;
+                }
+                // A-25: a part never ends between a lead and its trail —
+                // extend into the next run so the pair renders whole with
+                // the lead's run's style
+                if (j < len && is_high_surrogate(data[j - 1]) &&
+                    is_low_surrogate(data[j]))
                 {
                     ++j;
                 }

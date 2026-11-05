@@ -88,6 +88,7 @@ namespace zb::ui
     {
     public:
         bool covers(const char16_t ch) const override;
+        bool covers_pair(const char16_t *str) const override;
         text_metrics measure(const char16_t *str, const int len) const override;
         text_metrics line_metrics() const override;
         void write(core::Graphics &g, const char16_t *str, const int len,

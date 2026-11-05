@@ -5,6 +5,7 @@
 #include "test.hpp"
 
 #include "imui.hpp"
+#include "text/utf8.hpp"
 
 using namespace zb::ui;
 
@@ -463,6 +464,70 @@ int test_text_area()
         // copy through the set-only sink still works
         t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl));
         EXPECT(set_only.sent == "bcd");
+    }
+
+    // A-25 pair atomicity in the multi-line editor: a typed non-BMP
+    // code point stores as its surrogate pair, edits as one atom, and
+    // the wrap spans never split it
+    {
+        SelTree t;
+        // a click first: char events ride focus
+        t.d.dispatch(t.root, press_at(2, 3));
+        t.d.dispatch(t.root, release_at(2, 3));
+        EXPECT(t.d.dispatch(t.root, char_ev(0x1F600)));
+        EXPECT(t.area->get_text().size() == 2);
+        EXPECT(t.area->get_text()[0] == 0xD83D);
+        EXPECT(t.area->get_text()[1] == 0xDE00);
+
+        // arrow steps never stop between the two units; the typed 'x'
+        // lands before the pair instead of splitting it
+        t.d.dispatch(t.root, char_ev('B'));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
+        t.d.dispatch(t.root, char_ev('x'));
+        EXPECT(t.area->get_text() ==
+               std::u16string(u"x\xD83D"
+                              u"\xDE00"
+                              u"B"));
+
+        // walk the caret to the end (the first right hops over the
+        // pair), then three backspaces remove 'B', the pair (as one —
+        // no lone unit survives) and 'x'
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::right))));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::right))));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace))));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace))));
+        EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace))));
+        EXPECT(t.area->get_text().empty());
+
+        // the pair rides whole through wrap spans: every span boundary
+        // sits on a pair edge
+        t.area->set_text(std::u16string(u"ab\xD83D"
+                                        u"\xDE00"
+                                        u"cd"));
+        const auto &sp = t.area->wrap_spans(t.area->get_size().width);
+        for (const auto &span : sp)
+        {
+            const auto off = static_cast<size_t>(span.first);
+            const auto end = off + static_cast<size_t>(span.second);
+            // a span never ends between the pair's two units (at 3)
+            EXPECT(!(end == 3));
+        }
+    }
+
+    // A-25: paste keeps whole pairs next to '\n' content
+    {
+        TestSink sink;
+        SinkGuard guard(&sink);
+        SelTree t;
+        t.d.dispatch(t.root, press_at(2, 3));
+        t.d.dispatch(t.root, release_at(2, 3));
+        sink.canned = "x\xF0\x9F\x98\x80\ny";
+        t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() ==
+               std::u16string(u"x\xD83D"
+                              u"\xDE00"
+                              u"\ny"));
     }
 
     return test::report("text_area");
