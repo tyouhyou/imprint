@@ -11,13 +11,18 @@ namespace zb::ui
 {
     /*
      * Model-view ListBox: the widget stores only scroll/selection state,
-     * the caller owns the items. Rows are fixed-height; the widget height
-     * is set from the number of visible rows (set_visible_rows). The row
-     * text is pulled lazily per visible row from an ItemText callback.
+     * the caller owns the items. Rows are fixed-height by default (the
+     * widget height is set from the number of visible rows,
+     * set_visible_rows); a height provider (set_item_height, FI-06,
+     * code-contract §3.7) switches the offset math to per-row heights —
+     * prefix-sum offsets, a binary-search visible window, and a widget
+     * height derived from the provider's own model. The row text is
+     * pulled lazily per visible row from an ItemText callback.
      *
      * Interaction: press a row to select (changed fires with the row
      * index, or `invalid` semantics for a cleared model); the mouse wheel
-     * scrolls the window (3 rows per notch) and only has an effect when
+     * scrolls the window (3 rows per notch; with a height provider, 3 x
+     * the topmost visible row's height) and only has an effect when
      * the content overflows; up/down on the focused list move the
      * selection and scroll to keep it visible. The scrollbar thumb can be
      * dragged (captures the pointer while dragging; the press is never
@@ -44,15 +49,22 @@ namespace zb::ui
         // set_item_text (may be null)
         using ItemText = std::string (*)(const void *arg, size_t index);
 
+        // returns the pixel height of the given row; arg comes from
+        // set_item_height (may be null). A returned value <= 0 is
+        // tolerated as 1 (a zero-height row can neither be hit nor seen)
+        using ItemHeight = int (*)(const void *arg, size_t index);
+
         ListBox() = default;
 
         // clamps to >= 1 (a zero height divided by zero on the next
         // click) and re-derives the widget height from the visible rows
         void set_row_height(const int h);
-        // re-sizes the widget: width stays, height = rows * row_height.
-        // A width that was never explicit stays measured (L-3): a
-        // declarative list without a width keeps its natural 100px
-        // instead of freezing the pre-layout 0 as explicit.
+        // re-sizes the widget: width stays, height = rows * row_height
+        // (with a height provider: the sum of the provider's heights for
+        // items [0, rows), the current model). A width that was never
+        // explicit stays measured (L-3): a declarative list without a
+        // width keeps its natural 100px instead of freezing the
+        // pre-layout 0 as explicit.
         void set_visible_rows(const size_t rows);
         void set_item_count(const size_t n);
 
@@ -65,11 +77,21 @@ namespace zb::ui
             mark_dirty();
         }
 
+        // per-row height source (code-contract §3.7). Unset = the fixed
+        // row_height for every row (byte-identical behavior). Same
+        // invalidation rules as set_item_text: any setter that can
+        // change rendered rows resets the row cache; installing or
+        // replacing the provider also rebuilds the prefix sums and
+        // re-derives the widget height from the current model
+        void set_item_height(const ItemHeight fn, const void *arg = nullptr);
+
         // programmatic selection (silent); `invalid` clears it
         void set_value(const size_t v);
         [[nodiscard]] size_t get_value() const { return value; }
-        // index of the first visible row
-        [[nodiscard]] size_t get_top() const { return top; }
+        // index of the first visible row (with a height provider: the
+        // row whose span crosses the window top, found by the prefix-sum
+        // binary search)
+        [[nodiscard]] size_t get_top() const;
 
         /*
          * Observability seam (code-contract §8): the number of row
@@ -91,11 +113,10 @@ namespace zb::ui
         // fired when the selection changed through user input
         zb::event::Event<size_t> changed;
 
-        // natural size: 100 wide, visible rows tall
-        [[nodiscard]] core::imsize_t measure() const override
-        {
-            return {100, static_cast<int>(visible) * row_height};
-        }
+        // natural size: 100 wide, visible rows tall (with a height
+        // provider: the sum of the provider's heights for items
+        // [0, visible) of the current model)
+        [[nodiscard]] core::imsize_t measure() const override;
 
     protected:
         void draw_at(core::Graphics &area) const override;
@@ -111,14 +132,44 @@ namespace zb::ui
         // largest legal value of `top` (0 when the content fits)
         [[nodiscard]] size_t max_top() const;
 
+        // FI-06 variable-height offset math (height provider set):
+        // everything below runs in pixel offsets over the prefix sums;
+        // without a provider the fixed row math above stands untouched
+        // (byte-identical shape)
+        // the height of row i: the provider's value floored at 1, or
+        // the fixed row_height when no provider is set
+        [[nodiscard]] int height_at(const size_t i) const;
+        // rebuilds the prefix sums (sums_[i] = the top of row i,
+        // sums_[count] = the content total) from the model + provider
+        void rebuild_sums();
+        // the content height the model yields for `rows` visible rows
+        [[nodiscard]] int64_t visible_height(const size_t rows) const;
+        // largest legal pixel offset (0 when the content fits)
+        [[nodiscard]] int64_t max_top_px() const;
+        // smallest row whose span crosses the window top: the binary
+        // search over the prefix sums
+        [[nodiscard]] size_t row_at_offset() const;
+        // whether the scrollbar shows for the current geometry (the
+        // overflow test: row-count rule fixed, content-vs-viewport rule
+        // with a provider)
+        [[nodiscard]] bool overflows() const;
+
         // keeps `sel` inside the visible window, moving `top` as needed
         void reveal(const size_t sel);
         // moves the selection one row in `dir` (+1/-1); false at the
         // ends or on an empty model (fall back to focus navigation)
         bool step_selection(const int dir);
-        // scrolls the window `dir * 3` rows; false when nothing moved
+        // scrolls the window `dir * 3` rows (with a height provider:
+        // `dir * 3 x` the topmost visible row's height); false when
+        // nothing moved
         bool scroll_rows(const int dir);
         void clamp_top();
+
+        // one row's face + text at (0, y0) with height rh -- shared by
+        // the fixed-height and the variable-height draw loops (the
+        // wireframe bypass and the row-image cache are identical)
+        void draw_row(core::Graphics &area, const size_t r, const int y0,
+                      const int rh, const int text_w, const Theme &th) const;
 
         // scrollbar layout for the current geometry; empty rect when the
         // bar is not shown
@@ -174,6 +225,16 @@ namespace zb::ui
         ItemText text_fn = nullptr;
         const void *text_arg = nullptr;
         std::shared_ptr<std::vector<std::string>> items_;  // static model
+
+        // FI-06 state (all of it only read when height_fn != nullptr):
+        // the prefix sums over the row heights (sums_[i] = the top of
+        // row i, sums_[count] = the content total; count + 1 entries),
+        // rebuilt by set_item_count / set_item_height, and the pixel
+        // scroll offset they address
+        ItemHeight height_fn = nullptr;
+        const void *height_arg = nullptr;
+        std::vector<int64_t> sums_;
+        int64_t top_px = 0;
 
         bool dragging = false;  // a thumb drag is in flight
         int drag_grab = 0;      // press offset from the thumb top

@@ -1,6 +1,9 @@
 #include "list_box.hpp"
 
+#include <algorithm>
+
 #include "logging.hpp"
+#include "scale.hpp"
 #include "text/bitmap_provider.hpp"
 #include "text/text_image.hpp"
 #include "text/utf8.hpp"
@@ -36,7 +39,11 @@ namespace zb::ui
         // 0 that set_size would otherwise mark explicit.
         const bool w_auto = !is_width_explicit();
         auto s = get_size();
-        s.height = static_cast<int>(visible) * row_height;
+        // a height provider owns the geometry (§3.7): the fixed
+        // row_height no longer derives the widget height
+        s.height = height_fn != nullptr
+                     ? detail::clamp_int(visible_height(visible))
+                     : static_cast<int>(visible) * row_height;
         set_size(s.width, s.height);
         if (w_auto)
         {
@@ -70,7 +77,11 @@ namespace zb::ui
         // stays measured instead of freezing the pre-layout 0.
         const bool w_auto = !is_width_explicit();
         auto s = get_size();
-        s.height = static_cast<int>(visible) * row_height;
+        // with a height provider the widget is sized to the sum of the
+        // provider's heights for items [0, visible) of the current model
+        s.height = height_fn != nullptr
+                     ? detail::clamp_int(visible_height(visible))
+                     : static_cast<int>(visible) * row_height;
         set_size(s.width, s.height);
         if (w_auto)
         {
@@ -89,11 +100,48 @@ namespace zb::ui
         invalidate_row_cache();
         mark_dirty();
         count = n;
+        rebuild_sums();
         clamp_top();
         if (value >= count && value != invalid)
         {
             value = invalid;
         }
+    }
+
+    void ListBox::set_item_height(const ItemHeight fn, const void *arg)
+    {
+        height_fn = fn;
+        height_arg = arg;
+        invalidate_row_cache();
+        rebuild_sums();
+        // the model owns the widget height now (the set_visible_rows
+        // rule): re-derive so a provider installed after the rows
+        // setter still sizes the widget from its own heights; unsetting
+        // falls back to the fixed row math. The width axis keeps its
+        // explicitness (L-3, see set_row_height).
+        const bool w_auto = !is_width_explicit();
+        auto s = get_size();
+        s.height = fn != nullptr
+                     ? detail::clamp_int(visible_height(visible))
+                     : static_cast<int>(visible) * row_height;
+        set_size(s.width, s.height);
+        if (w_auto)
+        {
+            set_width_auto(s.width);
+        }
+        if (fn != nullptr)
+        {
+            // the pixel offset takes over from the row index: carry the
+            // window over so a same-shape provider swap stays in place
+            top_px = static_cast<int64_t>(top) * row_height;
+        }
+        else
+        {
+            top = static_cast<size_t>(std::min<int64_t>(
+                top_px / row_height, static_cast<int64_t>(max_top())));
+        }
+        mark_dirty();
+        clamp_top();
     }
 
     void ListBox::set_items(std::vector<std::string> items)
@@ -122,6 +170,86 @@ namespace zb::ui
         }
     }
 
+    core::imsize_t ListBox::measure() const
+    {
+        if (height_fn != nullptr)
+        {
+            return {100, detail::clamp_int(visible_height(visible))};
+        }
+        return {100, static_cast<int>(visible) * row_height};
+    }
+
+    size_t ListBox::get_top() const
+    {
+        return height_fn != nullptr ? row_at_offset() : top;
+    }
+
+    int ListBox::height_at(const size_t i) const
+    {
+        if (height_fn == nullptr)
+        {
+            return row_height;
+        }
+        const int h = height_fn(height_arg, i);
+        return h > 0 ? h : 1;  // §3.7: a zero-height row is neither
+                               // hittable nor visible
+    }
+
+    void ListBox::rebuild_sums()
+    {
+        sums_.assign(count + 1, 0);
+        for (size_t i = 0; i < count; ++i)
+        {
+            sums_[i + 1] = sums_[i] + height_at(i);
+        }
+    }
+
+    int64_t ListBox::visible_height(const size_t rows) const
+    {
+        if (sums_.empty())
+        {
+            return 0;
+        }
+        return sums_[rows < count ? rows : count];
+    }
+
+    int64_t ListBox::max_top_px() const
+    {
+        const int64_t total = visible_height(count);
+        const int64_t view = get_size().height;
+        return total > view ? total - view : 0;
+    }
+
+    size_t ListBox::row_at_offset() const
+    {
+        // the smallest row whose span crosses the window top:
+        // sums_[r] <= top_px < sums_[r+1] (== count past the content)
+        size_t lo = 0;
+        size_t hi = count;
+        while (lo < hi)
+        {
+            const size_t mid = lo + (hi - lo) / 2;
+            if (sums_[mid + 1] > top_px)
+            {
+                hi = mid;
+            }
+            else
+            {
+                lo = mid + 1;
+            }
+        }
+        return lo;
+    }
+
+    bool ListBox::overflows() const
+    {
+        // the bar shows when the content hides below the viewport: the
+        // row-count rule in fixed mode, the content-vs-viewport rule
+        // with a height provider (the geometry is the provider's)
+        return height_fn != nullptr ? visible_height(count) > get_size().height
+                                    : count > visible;
+    }
+
     size_t ListBox::max_top() const
     {
         return count > visible ? count - visible : 0;
@@ -129,6 +257,12 @@ namespace zb::ui
 
     void ListBox::clamp_top()
     {
+        if (height_fn != nullptr)
+        {
+            const int64_t mx = max_top_px();
+            top_px = std::min<int64_t>(std::max<int64_t>(top_px, 0), mx);
+            return;
+        }
         if (top > max_top())
         {
             top = max_top();
@@ -137,6 +271,22 @@ namespace zb::ui
 
     void ListBox::reveal(const size_t sel)
     {
+        if (height_fn != nullptr)
+        {
+            // keep the selected row's whole span inside the window
+            const int64_t r_top = sums_[sel];
+            const int64_t r_bottom = sums_[sel + 1];
+            if (r_top < top_px)
+            {
+                top_px = r_top;
+            }
+            else if (r_bottom > top_px + get_size().height)
+            {
+                top_px = r_bottom - get_size().height;
+            }
+            clamp_top();
+            return;
+        }
         if (sel < top)
         {
             top = sel;
@@ -158,7 +308,7 @@ namespace zb::ui
         if (value == invalid)
         {
             // nothing selected: pick the row at the window top
-            next = top;
+            next = height_fn != nullptr ? row_at_offset() : top;
         }
         else
         {
@@ -182,6 +332,33 @@ namespace zb::ui
 
     bool ListBox::scroll_rows(const int dir)
     {
+        if (height_fn != nullptr)
+        {
+            // §3.7 wheel rule: one notch = 3 x the topmost visible
+            // row's height (the fixed 3-rows rule generalized)
+            const size_t r = row_at_offset();
+            if (r >= count)
+            {
+                return false;
+            }
+            const int64_t step =
+                static_cast<int64_t>(scroll_step) * height_at(r);
+            const int64_t t = top_px - static_cast<int64_t>(dir) * step;
+            int64_t next = t < 0 ? 0 : t;
+            const int64_t mx = max_top_px();
+            if (next > mx)
+            {
+                next = mx;
+            }
+            if (next == top_px)
+            {
+                return false;
+            }
+            invalidate_row_cache();
+            mark_dirty();
+            top_px = next;
+            return true;
+        }
         if (count <= visible)
         {
             return false;
@@ -252,6 +429,26 @@ namespace zb::ui
             {
                 return false;
             }
+            if (height_fn != nullptr)
+            {
+                const int64_t scaled =
+                    static_cast<int64_t>(y - drag_grab) * max_top_px() /
+                    travel;
+                int64_t next = scaled < 0 ? 0 : scaled;
+                const int64_t mx = max_top_px();
+                if (next > mx)
+                {
+                    next = mx;
+                }
+                if (next == top_px)
+                {
+                    return false;
+                }
+                invalidate_row_cache();
+                mark_dirty();
+                top_px = next;
+                return true;
+            }
             const int64_t scaled =
                 static_cast<int64_t>(y - drag_grab) *
                 static_cast<int64_t>(max_top()) / travel;
@@ -311,11 +508,27 @@ namespace zb::ui
         *height = 0;
         *thumb_y = 0;
         *thumb_h = 0;
-        if (count <= visible || s.width <= gutter)
+        if (!overflows() || s.width <= gutter)
         {
             return;
         }
         const int track_h = s.height - 2;
+        if (height_fn != nullptr)
+        {
+            // §3.7: thumb share and offset derive from the pixel totals
+            // (the fixed rows math generalized; X-9 64-bit helper)
+            const int64_t total = visible_height(count);
+            const int th = detail::ratio(track_h, s.height, total);
+            const int thumb = th < 8 ? 8 : th;
+            *x0 = s.width - gutter;
+            *y0 = 1;
+            *height = track_h;
+            *thumb_y =
+                1 + detail::ratio(detail::clamp_int(top_px), track_h - thumb,
+                                  total - s.height);
+            *thumb_h = thumb;
+            return;
+        }
         const int travel = static_cast<int>(count - visible);
         const int th = track_h * static_cast<int>(visible) / static_cast<int>(count);
         const int thumb = th < 8 ? 8 : th;
@@ -338,9 +551,31 @@ namespace zb::ui
         // the scrollbar gutter is not the row area: a click on the
         // track (above or below the thumb) must not select the row that
         // happens to be rendered under the bar
-        if (count > visible && s.width > gutter && x >= s.width - gutter)
+        if (overflows() && s.width > gutter && x >= s.width - gutter)
         {
             return invalid;
+        }
+        if (height_fn != nullptr)
+        {
+            // the row containing the absolute pixel (binary search over
+            // the prefix sums; == count past the content, which the
+            // caller filters like the fixed path's unclamped row)
+            const int64_t p = top_px + y;
+            size_t lo = 0;
+            size_t hi = count;
+            while (lo < hi)
+            {
+                const size_t mid = lo + (hi - lo) / 2;
+                if (sums_[mid + 1] <= p)
+                {
+                    lo = mid + 1;
+                }
+                else
+                {
+                    hi = mid;
+                }
+            }
+            return lo;
         }
         const size_t r = top + static_cast<size_t>(y / row_height);
         return r;
@@ -384,64 +619,86 @@ namespace zb::ui
         row_cache_.push_back(std::move(e));
     }
 
+    void ListBox::draw_row(core::Graphics &area, const size_t r, const int y0,
+                           const int rh, const int text_w,
+                           const Theme &th) const
+    {
+        const bool sel = r == value;
+        const core::Color bg = sel ? th.selection : th.field_bg;
+        const core::Color fg = sel ? th.text_inverted : th.text;
+        if (sel)
+        {
+            area.fill_rect(0, y0, text_w - 1, y0 + rh - 1, bg);
+        }
+        if (text_fn == nullptr)
+        {
+            return;
+        }
+        // S-1: wireframe rows bypass the image cache -- a cached
+        // face would blit opaque over the bones. Glyphs go
+        // straight onto the screen (text skeleton, no face, no
+        // cache activity), so mode flips need no invalidation.
+        if (area.get_render_mode() == core::Graphics::render_mode::wireframe)
+        {
+            const std::string text = text_fn(text_arg, r);
+            const auto u16 = utf8_to_utf16(text.c_str());
+            const BitmapProvider provider;
+            const auto m =
+                provider.measure(u16.data(), static_cast<int>(u16.size()));
+            const int tx = (text_w - m.width) / 2;
+            const int ty = y0 + (rh - m.height) / 2 + m.ascent;
+            provider.write(area, u16.data(), static_cast<int>(u16.size()),
+                           tx, ty, fg);
+            return;
+        }
+        core::image_t row;
+        if (const auto *hit = find_row_cache(r, sel, text_w, rh, fg, bg))
+        {
+            row = {hit->img->data(), hit->w, hit->h, 0};
+        }
+        else
+        {
+            ++rasterizations_;
+            std::string text = text_fn(text_arg, r);
+            auto img = make_text_image(text.c_str(), text_w, rh, fg, bg);
+            const auto sz = img->size();
+            row = {img->data(), sz.width, sz.height, 0};
+            insert_row_cache(
+                row_cache_entry{r, sel, text_w, rh, fg, bg, std::move(img)});
+        }
+        area.draw_image(row, 0, y0);
+    }
+
     void ListBox::draw_at(core::Graphics &area) const
     {
         const auto &th = theme();
         const auto s = get_size();
         area.fill_rect(0, 0, s.width - 1, s.height - 1, th.field_bg);
 
-        const bool bar = count > visible && s.width > gutter;
+        const bool bar = overflows() && s.width > gutter;
         const int text_w = bar ? s.width - gutter : s.width;
 
-        // rows: the visible window of the model
-        const size_t r0 = std::min(top, count);
-        const size_t r1 = std::min(count, top + visible);
-        for (size_t r = r0; r < r1; ++r)
+        if (height_fn != nullptr)
         {
-            const int y0 = static_cast<int>(r - top) * row_height;
-            const bool sel = r == value;
-            const core::Color bg = sel ? th.selection : th.field_bg;
-            const core::Color fg = sel ? th.text_inverted : th.text;
-            if (sel)
+            // FI-06: the visible window is the rows whose spans
+            // intersect the viewport (a row straddling the window top
+            // renders partly clipped — the unchanged render rule)
+            const int64_t view_bottom = top_px + s.height;
+            for (size_t r = row_at_offset(); r < count && sums_[r] < view_bottom; ++r)
             {
-                area.fill_rect(0, y0, text_w - 1, y0 + row_height - 1, bg);
+                draw_row(area, r, detail::clamp_int(sums_[r] - top_px),
+                         height_at(r), text_w, th);
             }
-            if (text_fn != nullptr)
+        }
+        else
+        {
+            // rows: the visible window of the model
+            const size_t r0 = std::min(top, count);
+            const size_t r1 = std::min(count, top + visible);
+            for (size_t r = r0; r < r1; ++r)
             {
-                // S-1: wireframe rows bypass the image cache -- a cached
-                // face would blit opaque over the bones. Glyphs go
-                // straight onto the screen (text skeleton, no face, no
-                // cache activity), so mode flips need no invalidation.
-                if (area.get_render_mode() ==
-                    core::Graphics::render_mode::wireframe)
-                {
-                    const std::string text = text_fn(text_arg, r);
-                    const auto u16 = utf8_to_utf16(text.c_str());
-                    const BitmapProvider provider;
-                    const auto m = provider.measure(
-                        u16.data(), static_cast<int>(u16.size()));
-                    const int tx = (text_w - m.width) / 2;
-                    const int ty = y0 + (row_height - m.height) / 2 + m.ascent;
-                    provider.write(area, u16.data(),
-                                   static_cast<int>(u16.size()), tx, ty, fg);
-                    continue;
-                }
-                core::image_t row;
-                if (const auto *hit = find_row_cache(r, sel, text_w, row_height, fg, bg))
-                {
-                    row = {hit->img->data(), hit->w, hit->h, 0};
-                }
-                else
-                {
-                    ++rasterizations_;
-                    std::string text = text_fn(text_arg, r);
-                    auto img = make_text_image(text.c_str(), text_w, row_height, fg, bg);
-                    const auto sz = img->size();
-                    row = {img->data(), sz.width, sz.height, 0};
-                    insert_row_cache(row_cache_entry{r, sel, text_w, row_height, fg, bg,
-                                                     std::move(img)});
-                }
-                area.draw_image(row, 0, y0);
+                draw_row(area, r, static_cast<int>(r - top) * row_height,
+                         row_height, text_w, th);
             }
         }
 
