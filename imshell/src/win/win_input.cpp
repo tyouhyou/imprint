@@ -4,6 +4,31 @@
 
 namespace zb::shell::win_input
 {
+    // TJ-C4: the modifier chords ride the key_down (code-contract
+    // §3.8) — GetKeyState is the source of truth at event time (the
+    // async tab is wrong during the same-message processing)
+    void mods_from_win(zb::input::input_event &out)
+    {
+        if ((GetKeyState(VK_CONTROL) & 0x8000) != 0)
+        {
+            out.mods |= zb::input::mod_ctrl;
+        }
+        if ((GetKeyState(VK_SHIFT) & 0x8000) != 0)
+        {
+            out.mods |= zb::input::mod_shift;
+        }
+        if ((GetKeyState(VK_MENU) & 0x8000) != 0)
+        {
+            out.mods |= zb::input::mod_alt;
+        }
+        const bool meta = (GetKeyState(VK_LWIN) & 0x8000) != 0 ||
+                          (GetKeyState(VK_RWIN) & 0x8000) != 0;
+        if (meta)
+        {
+            out.mods |= zb::input::mod_meta;
+        }
+    }
+
     // the centralized VK_* -> key_code mapping; 0 = unmapped
     int key_from_virtual_key(const WPARAM vk)
     {
@@ -100,6 +125,7 @@ namespace zb::shell::win_input
                 return result::swallowed;
             }
             out.type = zb::input::input_type::key_down;
+            mods_from_win(out);
             out.key = key;
             return result::handled;
         }
@@ -123,6 +149,21 @@ namespace zb::shell::win_input
             // navigation activation (dispatcher B1), other printable
             // ASCII becomes a character event
             const int c = static_cast<int>(wparam);
+            // TJ-C4: the Ctrl chords ride WM_CHAR's control byte —
+            // letters/digits emit through WM_CHAR, so WM_KEYDOWN never
+            // sees them: 0x01-0x1A minus the functional set (tab,
+            // enter, backspace; 0x1B never posts) maps to its letter
+            // with mod_ctrl, the same table as the terminal
+            // translator. GetKeyState is the same-message truth for
+            // shift/alt/meta.
+            if (c >= 0x01 && c <= 0x1A && c != '\t' && c != '\r' &&
+                c != 0x08)
+            {
+                out.type = zb::input::input_type::key_down;
+                out.key = 'a' + (c - 1);
+                mods_from_win(out);
+                return result::handled;
+            }
             if (c >= 0x20 && c <= 0x7e && c != ' ')
             {
                 out.type = zb::input::input_type::key_down;

@@ -18,6 +18,7 @@
  * the X11 backend builds.
  */
 
+using zb::shell::x11_input::mods_from_x11;
 using zb::shell::x11_input::result;
 using zb::shell::x11_input::translate;
 
@@ -230,6 +231,24 @@ int test_x11_input()
         EXPECT(commit_events(NoSymbol, "abc", 3, nullptr, 0) == 3);
         EXPECT(commit_events(NoSymbol, "abc", 3, ev, 4) == 3);
         EXPECT(ev[2].ch == 'c');
+    }
+
+    // TJ-C4: the modifier chords — the state mask ORs into mods
+    // (the pure helper; the full KeyPress path needs a real mapping)
+    {
+        zb::input::input_event ev{};
+        mods_from_x11(ControlMask, ev);
+        EXPECT(ev.mods == zb::input::mod_ctrl);
+        ev = {};
+        mods_from_x11(ShiftMask | Mod1Mask, ev);
+        EXPECT(ev.mods == (zb::input::mod_shift | zb::input::mod_alt));
+        ev = {};
+        mods_from_x11(Mod4Mask, ev);
+        EXPECT(ev.mods == zb::input::mod_meta);
+        ev = {};
+        mods_from_x11(ControlMask | ShiftMask | Mod1Mask | Mod4Mask, ev);
+        EXPECT(ev.mods == (zb::input::mod_ctrl | zb::input::mod_shift |
+                           zb::input::mod_alt | zb::input::mod_meta));
     }
 
     return test::report("x11_input");

@@ -164,7 +164,15 @@ namespace
                 std::fputs("\x1b[H", stdout);  // cursor home, overwrite
                 zb::shell::sixel::write_frame(window->data(), buffer_w, buffer_h);
             }
+            // R6 / §11.4: one step per tick, then a paint request when
+            // the step made something dirty -- without this, step-driven
+            // damage (the feed replay, a poll update) presents only when
+            // an input event happens to repaint
             app->step(30000, step_index++);
+            if (app->is_dirty())
+            {
+                app->paint();
+            }
         }
 
         session.restore();

@@ -121,6 +121,7 @@ namespace zb::app::tianji
         void append_row(const zb::tianji::StreamRow &row);
         void submit_command();
         void poll_feed();
+        void wire_down(const std::string &why);  // socket dropped: log once + fall back
 
         zb::SharedPtr<CanvasWindow> window_;
         zb::ui::ListBox *stream_ = nullptr;
@@ -133,8 +134,8 @@ namespace zb::app::tianji
         zb::tianji::TianjiView view_{};
         std::vector<zb::tianji::Json> replay_;  // offline: the message queue
         std::size_t replay_at_ = 0;
-        std::string command_text_;              // the submitted-event mirror
-        std::string socket_path_;               // empty = offline replay
+        std::string command_text_;  // the submitted-event mirror
+        std::string socket_path_;   // empty = offline replay
         std::unique_ptr<zb::tianji::FeedClient> feed_;
         bool socket_ready_ = false;
     };

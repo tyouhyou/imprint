@@ -22,6 +22,28 @@ namespace zb::shell::x11_input
 
     // the centralized KeySym -> key_code mapping; 0 = unmapped (then a
     // printable character may still be produced)
+    // TJ-C4: the modifier chords ride the key_down (code-contract
+    // §3.8) — X11's state mask is the source of truth at event time
+    void mods_from_x11(const unsigned int state, zb::input::input_event &out)
+    {
+        if ((state & ControlMask) != 0)
+        {
+            out.mods |= zb::input::mod_ctrl;
+        }
+        if ((state & ShiftMask) != 0)
+        {
+            out.mods |= zb::input::mod_shift;
+        }
+        if ((state & Mod1Mask) != 0)
+        {
+            out.mods |= zb::input::mod_alt;
+        }
+        if ((state & Mod4Mask) != 0)
+        {
+            out.mods |= zb::input::mod_meta;
+        }
+    }
+
     int key_from_keysym(const KeySym ks)
     {
         switch (ks)
@@ -75,6 +97,7 @@ namespace zb::shell::x11_input
         case KeyPress:
         {
             out.type = zb::input::input_type::key_down;
+            mods_from_x11(event.xkey.state, out);
             out.key = key_from_keysym(XLookupKeysym(const_cast<XKeyPressedEvent *>(&event.xkey), 0));
             // printable character (latin-1 from XLookupString;
             // only single-byte, handles shift via the modifier

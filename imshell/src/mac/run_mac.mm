@@ -80,6 +80,27 @@ namespace
         out.type = (nse.type == NSEventTypeKeyUp)
                        ? zb::input::input_type::key_up
                        : zb::input::input_type::key_down;
+        // TJ-C4: the modifier chords (code-contract §3.8) — the
+        // event's modifierFlags is the same-event truth; the Command
+        // flag maps to mod_meta (the mac convention) while the
+        // §3.8 clipboard bindings stay on Control, the platform-
+        // faithful reading
+        if ((nse.modifierFlags & NSEventModifierFlagControl) != 0)
+        {
+            out.mods |= zb::input::mod_ctrl;
+        }
+        if ((nse.modifierFlags & NSEventModifierFlagShift) != 0)
+        {
+            out.mods |= zb::input::mod_shift;
+        }
+        if ((nse.modifierFlags & NSEventModifierFlagOption) != 0)
+        {
+            out.mods |= zb::input::mod_alt;
+        }
+        if ((nse.modifierFlags & NSEventModifierFlagCommand) != 0)
+        {
+            out.mods |= zb::input::mod_meta;
+        }
         switch (nse.keyCode)
         {
             case 36: out.key = static_cast<int>(zb::input::key_code::enter); break;  // return

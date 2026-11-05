@@ -32,6 +32,14 @@ namespace zb::shell::x11_input
     int key_from_keysym(KeySym ks);
 
     /*
+     * TJ-C4: the modifier chords (code-contract §3.8) — ORs X11's
+     * state mask (Control/Shift/Mod1/Mod4) into `out.mods` as the
+     * framework's ctrl/shift/alt/meta bits. Exported pure for the
+     * display-less test, like key_from_keysym.
+     */
+    void mods_from_x11(unsigned int state, zb::input::input_event &out);
+
+    /*
      * FI-01 committed-text relay: turns one IME commit -- the keysym and
      * the UTF-8 string an input context reports for a KeyPress -- into
      * the key_down events the framework contract promises, and returns

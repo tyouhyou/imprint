@@ -4,6 +4,7 @@
 
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 
 #include "imui.hpp"
 
@@ -97,17 +98,29 @@ namespace zb::app::tianji
             const char *path = std::getenv("TIANJI_REPLAY");
             if (path != nullptr)
             {
-                std::FILE *f = std::fopen(path, "rb");
-                if (f != nullptr)
+                // the FILE* guard: bytes.append can throw (OOM) between
+                // fopen and fclose (the acquire/release RAII rule)
+                struct file_guard
                 {
+                    std::FILE *f;
+                    explicit file_guard(std::FILE *file)
+                        : f(file) {}
+                    ~file_guard()
+                    {
+                        if (f != nullptr)
+                            std::fclose(f);
+                    }
+                };
+                if (std::FILE *f = std::fopen(path, "rb"))
+                {
+                    file_guard guard{f};
                     std::string bytes;
                     char chunk[4096];
                     size_t n;
-                    while ((n = std::fread(chunk, 1, sizeof(chunk), f)) > 0)
+                    while ((n = std::fread(chunk, 1, sizeof(chunk), guard.f)) > 0)
                     {
                         bytes.append(chunk, n);
                     }
-                    std::fclose(f);
                     const char *p = bytes.data();
                     std::string err;
                     const zb::tianji::Json record = zb::tianji::Json::parse(p, p + bytes.size(), &err);
@@ -154,10 +167,7 @@ namespace zb::app::tianji
     std::string TianjiApp::stream_text(const void *arg, const size_t index)
     {
         const auto *ctx = static_cast<const StreamContext *>(arg);
-        static thread_local std::string line;  // the provider contract: a
-        // stable pointer until the next call (the zb::ui::ListBox copies at set)
-        line = row_text(ctx->rows->at(index));
-        return line.c_str();
+        return row_text(ctx->rows->at(index));
     }
 
     int TianjiApp::stream_height(const void *arg, const size_t index)
@@ -199,19 +209,19 @@ namespace zb::app::tianji
 
         auto stage = std::make_unique<zb::ui::AnnotateCanvas>();
         stage->set_canvas_size(800, 600);  // the fixed logical stage
-        // the placeholder scene (FI-09/V-4): the packed PNG decodes
-        // once into the content-id cache -- without an image the
-        // canvas has no mapped rect and cannot capture strokes; the
-        // real scene art is the FI-04 ask to tianji
-        // (tianji/for_tianji.md 4). USE_PNG build: the scene art is
-        // compressed shipping data, the codecs are its path.
+                                           // the placeholder scene (FI-09/V-4): the packed PNG decodes
+                                           // once into the content-id cache -- without an image the
+                                           // canvas has no mapped rect and cannot capture strokes; the
+                                           // real scene art is the FI-04 ask to tianji
+                                           // (tianji/for_tianji.md 4). USE_PNG build: the scene art is
+                                           // compressed shipping data, the codecs are its path.
 #if defined(USE_PNG)
         // a decode failure keeps the empty canvas (strokes cannot
         // capture) — the LW already said why
         (void)stage->set_image_png("stage.placeholder", tianji_stage,
                                    tianji_stage_len);
 #endif
-        stage->set_annotate_enabled(true); // case analysis: draw on it
+        stage->set_annotate_enabled(true);  // case analysis: draw on it
         stage_ = stage.get();
         main_row->add_child(std::move(stage), 1);
 
@@ -268,21 +278,40 @@ namespace zb::app::tianji
         {
             socket_path_ = sock;
             feed_ = std::make_unique<zb::tianji::FeedClient>();
+            std::string wire_err;
             if (feed_->connect(socket_path_.c_str()))
             {
                 zb::tianji::Json hello = zb::tianji::Json::object();
                 hello.set("client_id", zb::tianji::Json::str("imprint-tianji"));
                 hello.set("user_id", zb::tianji::Json::str("player"));
-                auto msgs = feed_->request("hello", std::move(hello));
-                zb::tianji::Json join = zb::tianji::Json::object();
-                join.set("room_id", zb::tianji::Json::str("room_default"));
-                join.set("role", zb::tianji::Json::str("actor"));
-                msgs = feed_->request("join_room", std::move(join));
-                for (const zb::tianji::Json &m : msgs)
+                auto msgs = feed_->request("hello", std::move(hello), &wire_err);
+                if (msgs.empty() && !wire_err.empty())
                 {
-                    zb::tianji::apply_message(view_, m);
+                    LW << "tianji: TIANJI_SOCKET hello failed (" << wire_err
+                       << "); falling back to the offline replay";
+                    feed_.reset();
                 }
-                socket_ready_ = true;
+                else
+                {
+                    zb::tianji::Json join = zb::tianji::Json::object();
+                    join.set("room_id", zb::tianji::Json::str("room_default"));
+                    join.set("role", zb::tianji::Json::str("actor"));
+                    msgs = feed_->request("join_room", std::move(join), &wire_err);
+                    if (msgs.empty() && !wire_err.empty())
+                    {
+                        LW << "tianji: TIANJI_SOCKET join failed (" << wire_err
+                           << "); falling back to the offline replay";
+                        feed_.reset();
+                    }
+                    else
+                    {
+                        for (const zb::tianji::Json &m : msgs)
+                        {
+                            zb::tianji::apply_message(view_, m);
+                        }
+                        socket_ready_ = true;
+                    }
+                }
             }
             else
             {
@@ -377,7 +406,13 @@ namespace zb::app::tianji
             zb::tianji::Json proposal = zb::tianji::Json::object();
             proposal.set("action", zb::tianji::Json::str(match->action));
             fields.set("proposal", std::move(proposal));
-            auto msgs = feed_->request("submit_proposal", std::move(fields));
+            std::string err;
+            auto msgs = feed_->request("submit_proposal", std::move(fields), &err);
+            if (msgs.empty() && !err.empty())
+            {
+                wire_down(err);
+                return;
+            }
             for (const zb::tianji::Json &m : msgs)
             {
                 zb::tianji::apply_message(view_, m);
@@ -393,6 +428,30 @@ namespace zb::app::tianji
         append_row(r);
     }
 
+    void TianjiApp::wire_down(const std::string &why)
+    {
+        if (!socket_ready_)
+        {
+            return;  // already down
+        }
+        socket_ready_ = false;
+        LW << "tianji: feed dropped (" << why << "); falling back to "
+                                                 "the offline replay";
+        zb::tianji::StreamRow r;
+        r.kind = zb::tianji::RowKind::system;
+        r.text = "feed dropped: " + why;
+        append_row(r);
+        if (replay_.empty())
+        {
+            // the socket mode never built the replay queue: build it so
+            // the app keeps a live stream (the documented reconnect =
+            // connect + subscribe(after_seq) is the host's restart path)
+            replay_ = zb::tianji::MockTianjiServer::synthesize(
+                load_replay_record(), "room_offline");
+            replay_at_ = 0;
+        }
+    }
+
     void TianjiApp::poll_feed()
     {
         if (!socket_ready_ || feed_ == nullptr)
@@ -401,7 +460,13 @@ namespace zb::app::tianji
         }
         zb::tianji::Json sub = zb::tianji::Json::object();
         sub.set("after_seq", zb::tianji::Json::number(static_cast<double>(view_.last_seq)));
-        auto msgs = feed_->request("subscribe", std::move(sub));
+        std::string err;
+        auto msgs = feed_->request("subscribe", std::move(sub), &err);
+        if (msgs.empty() && !err.empty())
+        {
+            wire_down(err);  // the socket closed under us
+            return;
+        }
         bool changed = false;
         for (const zb::tianji::Json &m : msgs)
         {

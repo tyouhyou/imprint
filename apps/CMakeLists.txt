@@ -2,6 +2,9 @@ set(STORY tictactoe CACHE STRING "Demo application to build")
 set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly windloom rotafarm comet crystal moonpull fogkeeper hoursmith tianji)
 # STORY=tianji links tianji_app, built from tianji/ (the client
 # composition layer -- Batch FI Part 2), not from apps/<story>
+if (STORY STREQUAL "tianji" AND NOT USE_PNG)
+    message(STATUS "STORY=tianji without -DUSE_PNG=ON: the stage placeholder decodes nothing (a stageless client); the kit tianji-app target pins USE_PNG")
+endif()
 
 # app libraries are always built on desktop (tests link them); STORY only
 # selects which one the shell executable links. The previewer is a

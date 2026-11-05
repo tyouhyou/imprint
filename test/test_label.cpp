@@ -21,6 +21,10 @@ namespace
     struct WideStubProvider : GlyphProvider
     {
         bool covers(const char16_t) const override { return true; }
+        // A-25: the stub models a font WITH a non-BMP glyph — the pair
+        // is one atomic 8px unit (measure(len 2) = 8), never two 4px
+        // halves (the draw side skips uncovered pairs outright)
+        bool covers_pair(const char16_t *) const override { return true; }
         text_metrics measure(const char16_t *, const int len) const override
         {
             return {4 * len, 7, 7};

@@ -65,4 +65,25 @@ fi
 
 echo "SMOKE PASS: $FRAMES SIXEL frames, session survived, input driven"
 rm -f "$FIFO" "$LOG"
+
+# the replay-only variant (L5): no driver input beyond the session
+# open -- every frame past the boot frame comes from the step clock's
+# replay presentations (M1's fix), not from input repaints. A silent
+# pty must still advance the stream.
+LOG2=$(mktemp)
+timeout 6 script -qec "IM_TERM_SIZE=1024x768 '$EXE'" "$LOG2" < /dev/null
+STATUS2=$?
+if [ "$STATUS2" -ne 124 ]; then
+    echo "SMOKE FAIL: the replay-only session exited early ($STATUS2)"
+    rm -f "$LOG2"
+    exit 1
+fi
+FRAMES2=$(grep -o $'\x1bP' "$LOG2" 2>/dev/null | wc -l)
+if [ "$FRAMES2" -lt 3 ]; then
+    echo "SMOKE FAIL: the replay never presented (only $FRAMES2 frames)"
+    rm -f "$LOG2"
+    exit 1
+fi
+echo "SMOKE PASS: replay-only variant advanced ($FRAMES2 frames)"
+rm -f "$LOG2"
 exit 0

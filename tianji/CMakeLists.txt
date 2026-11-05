@@ -28,15 +28,22 @@ target_link_libraries(tianji_app PUBLIC tianji_feed imui imapp_canvas)
 # art) stays open; this asset is what makes the stage input-mappable
 # today
 set(TIANJI_STAGE_HEADER ${CMAKE_CURRENT_BINARY_DIR}/tianji_stage.gen.hpp)
-add_custom_command(
-    OUTPUT ${TIANJI_STAGE_HEADER}
-    COMMAND bytes_embed ${TIANJI_STAGE_HEADER} tianji_stage
-            ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
-    DEPENDS bytes_embed ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
-    VERBATIM)
-add_custom_target(tianji_stage_gen DEPENDS ${TIANJI_STAGE_HEADER})
-add_dependencies(tianji_app tianji_stage_gen)
-target_include_directories(tianji_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+# the gen step needs the bytes_embed host tool (IMPRINT_USE_TOOLS): a
+# framework-only subproject configure (A-28, tools off) builds the feed
+# library and tests without the app's packed asset. The variable, not
+# TARGET bytes_embed: this subdirectory is processed before the tools
+# block, so the target does not exist yet at configure time.
+if (IMPRINT_USE_TOOLS)
+    add_custom_command(
+        OUTPUT ${TIANJI_STAGE_HEADER}
+        COMMAND bytes_embed ${TIANJI_STAGE_HEADER} tianji_stage
+                ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
+        DEPENDS bytes_embed ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
+        VERBATIM)
+    add_custom_target(tianji_stage_gen DEPENDS ${TIANJI_STAGE_HEADER})
+    add_dependencies(tianji_app tianji_stage_gen)
+    target_include_directories(tianji_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+endif()
 
 # Linux-only for now: the wire is an AF_UNIX socket and the mock binds
 # the Linux abstract namespace (Darwin has none — the macOS maintainer

@@ -31,4 +31,13 @@ namespace zb::shell::win_input
 
     /* the centralized VK_* -> key_code mapping (0 = unmapped) */
     int key_from_virtual_key(WPARAM vk);
+
+    /*
+     * TJ-C4: the modifier chords (code-contract §3.8) — ORs the
+     * GetKeyState modifier set (VK_CONTROL/VK_SHIFT/VK_MENU/the Windows
+     * keys) into `out.mods` as the framework's ctrl/shift/alt/meta
+     * bits. Exported pure for the test battery, like
+     * key_from_virtual_key.
+     */
+    void mods_from_win(zb::input::input_event &out);
 }
