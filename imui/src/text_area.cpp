@@ -502,6 +502,14 @@ namespace zb::ui
             // units; C1 and non-BMP drop
             if (ev.ch != 0)
             {
+                // a chord never inserts text: alt/meta combos and any
+                // ctrl chord that fell through the clipboard switch
+                // above (shift stays legal — shift+ch is plain input)
+                if ((ev.mods & (zb::input::mod_ctrl | zb::input::mod_alt |
+                                zb::input::mod_meta)) != 0)
+                {
+                    return false;
+                }
                 if ((ev.ch >= 0x20 && ev.ch <= 0x7E) ||
                     (ev.ch >= 0xA0 && ev.ch <= 0xFFFF))
                 {

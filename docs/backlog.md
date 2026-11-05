@@ -387,12 +387,18 @@ the tianji repo; go there only to confirm specifics.**
   right stage canvas), command input → legal-action proposals,
   assembled like `${STORY}` (`shell_backend` + `tianji_app`) but
   sourced from `tianji/`; first target `IM_SHELL_BACKEND=SIXEL`;
-  verify via pty smoke + a real terminal. FI-01's standing
-  re-verification (real IME) and SIXEL terminal Chinese input close
-  here. CMake wiring touches the top-level composition — ARCHITECTURE
-  §2/§3 updates land with the step (contract-before-API).
-- **TJ-C4 — desktop shells.** Same tree under X11/win/mac; no new
-  framework work expected beyond FI-01 re-verification.
+  verify via pty smoke + a real terminal. Prerequisite in-tree: the
+  shells translate modifier chords into `input_event::mods`
+  (terminal control bytes first — code-contract §3.8), without which
+  the §3.8 clipboard bindings are unreachable from terminal hosts.
+  FI-01's standing re-verification (real IME) and SIXEL terminal
+  Chinese input close here. CMake wiring touches the top-level
+  composition — ARCHITECTURE §2/§3 updates land with the step
+  (contract-before-API).
+- **TJ-C4 — desktop shells.** Same tree under X11/win/mac; carries the
+  desktop half of the mods translation (X11 `ControlMask` state,
+  win32 `GetKeyState`, mac command-key flags) beyond FI-01
+  re-verification.
 - **TJ-C5 — scene-replay animation.** Beat-driven repositioning from
   the feed/event state, step-driven via the A-29 deterministic step
   contract; **no framework animation system** (transition animations

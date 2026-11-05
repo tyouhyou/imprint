@@ -1333,10 +1333,10 @@ namespace zb::ui
         {
             if (focused != f)
             {
+                focused = f;
                 mark_dirty();
                 on_focus_change(f);
             }
-            focused = f;
         }
 
         // called after the focus actually flipped (set_focused); the

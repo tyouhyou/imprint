@@ -69,7 +69,12 @@ extern "C"
         ZB_INPUT_POINTER_DELTA
     };
 
-    /* ---- keyboard codes (must match zb::input::key_code) ---- */
+    /* ---- keyboard codes ----
+     * Values correspond to zb::input::key_code (subset). zb_input_event
+     * carries no modifier flags across the C ABI, so a C host cannot
+     * deliver modifier combinations (Ctrl/Shift+...) today — mapped
+     * bindings that require mods (code-contract §3.8) are unreachable
+     * from C hosts until the shells translate modifiers. */
     enum
     {
         ZB_KEY_BACKSPACE = 8,
@@ -81,7 +86,8 @@ extern "C"
         ZB_KEY_UP = 256,
         ZB_KEY_DOWN,
         ZB_KEY_LEFT,
-        ZB_KEY_RIGHT
+        ZB_KEY_RIGHT,
+        ZB_KEY_INSERT = 260
     };
 
     /* key-state semantics (U-1): mapped printable keys carry their

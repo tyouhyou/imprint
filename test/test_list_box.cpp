@@ -683,5 +683,26 @@ int test_list_box()
         EXPECT(last == 2);
     }
 
+    // the natural order provider -> visible_rows -> model: a count
+    // change under a provider re-derives the widget height from the
+    // fresh sums (mirrors set_item_height). visible_height clamps to
+    // the count, so shrinking the model under the window pulls the
+    // height in and growing it restores the full window sum.
+    {
+        Panel root;
+        root.set_size(140, 80);
+        auto l = std::make_unique<ListBox>();
+        l->set_size(100, 1);
+        l->set_item_count(6);
+        l->set_item_text(item_text, nullptr);
+        l->set_item_height(array_height, var_heights);
+        l->set_visible_rows(3);
+        EXPECT(l->get_size().height == 60);  // 10 + 30 + 20
+        l->set_item_count(2);
+        EXPECT(l->get_size().height == 40);  // [0, 3) clamps to 2 rows
+        l->set_item_count(6);
+        EXPECT(l->get_size().height == 60);
+    }
+
     return test::report("list_box");
 }

@@ -1289,7 +1289,16 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
 - **Key bindings.** Ctrl+C / Ctrl+Insert copy the selection of the
   focused text widget; Ctrl+V / Shift+Insert paste at the caret
   replacing any selection (clipped to the field's own input rules);
-  Ctrl+A select-all. No menu, no mouse-middle paste.
+  Ctrl+A select-all. No menu, no mouse-middle paste. The chords ride
+  `input_event::mods` (key = `'c'`/`'v'`/`'a'`/`insert`, ch = 0);
+  the C-ABI `zb_input` event carries no mods today, so these bindings
+  are unreachable from C hosts until the shells translate terminal
+  modifier bytes — that translation is a TJ-C3/C4 prerequisite.
+- **Surrogate boundaries.** The u16 selection indexes may land inside
+  a surrogate pair (caret motion is per code unit until A-25); a
+  split pair re-encodes as U+FFFD, so `selected_text()` is always
+  valid UTF-8 — never a truncated sequence. A-25 will snap
+  selection/copy boundaries to code-point (and cluster) edges.
 - **Not contracted here.** Selection across message-stream rows (the
   quote-from-the-stream use case) is a stream-level feature of the
   tianji client, not a TextArea/TextInput behavior — the client owns

@@ -101,6 +101,16 @@ namespace zb::ui
         mark_dirty();
         count = n;
         rebuild_sums();
+        if (height_fn != nullptr)
+        {
+            // the model changed under a provider: re-derive the widget
+            // height (the set_visible_rows rule) from the fresh sums,
+            // mirroring set_item_height; the fixed-row height does not
+            // depend on the count
+            auto s = get_size();
+            s.height = detail::clamp_int(visible_height(visible));
+            set_size(s.width, s.height);
+        }
         clamp_top();
         if (value >= count && value != invalid)
         {
