@@ -27,11 +27,14 @@ Dependency-driven: each tier unlocks what follows.
    discipline (interleaved, rotating arm order, min-of-N, null A/B for
    host resolution — fps IMPRINT-RUNTIME R15/R18), never
    `cpu.pressure`.
-3. **Batch FI — tianji client (active; restructured 2026-11-03)**:
-   framework modules first — FI-09+V-4, FI-10 and the annotation
-   canvas landed 2026-11-04; the Part 1 order continues stream trio
-   (FI-05/06/02) → text readiness — then the composition under
-   `tianji/` (Part 2). Display path: SIXEL first.
+ 3. **Batch FI — tianji client (code-complete 2026-11-05)**: Part 1
+    framework modules (FI-09+V-4, FI-10, the annotation canvas, the
+    stream trio FI-05/06/02, the FI-04 font recipe, A-25 pairing) and
+    Part 2 composition (TJ-C1..C5) all landed — see the two batch
+    sections for the per-item records. **Standing**: TJ-C3's
+    real-terminal pass + FI-01 real-IME re-verification (machines and
+    the terminal list live with tianji, for_tianji §4.3) and TJ-C6
+    (wasm, unscheduled). Display path: SIXEL first.
 4. **Explicitly NOT now**: F-1/F-2, I-1, A-4/A-21, D-*, A-27, and
    Batch W (audit follow-ups, decision-gated). Condition-triggered
    items stay trigger-gated. (V-4 moved out 2026-11-03: it fires with
@@ -382,33 +385,52 @@ the tianji repo; go there only to confirm specifics.**
 
 - **TJ-C1 — folder + `for_tianji.md`.** Done 2026-11-03 (doc only; no
   code yet, per ruling).
-- **TJ-C2 — message-level I/F + mock feeder.** Feed client (connect,
-  hello/join_room/subscribe, `after_seq` resume, reconnect) + view
-  builder (v1 messages → widget tree) + a feeder that replays
-  transcripts shaped like tianji's `samples/run_子夜客栈.json`. The
-  exact message subset is written into `tianji/for_tianji.md` for
-  tianji to confirm.
-- **TJ-C3 — SIXEL-first client app.** FlexPanel layout (left stream +
-  right stage canvas), command input → legal-action proposals,
-  assembled like `${STORY}` (`shell_backend` + `tianji_app`) but
-  sourced from `tianji/`; first target `IM_SHELL_BACKEND=SIXEL`;
-  verify via pty smoke + a real terminal. Prerequisite in-tree: the
-  shells translate modifier chords into `input_event::mods`
-  (terminal control bytes first — code-contract §3.8), without which
-  the §3.8 clipboard bindings are unreachable from terminal hosts.
-  FI-01's standing re-verification (real IME) and SIXEL terminal
-  Chinese input close here. CMake wiring touches the top-level
-  composition — ARCHITECTURE §2/§3 updates land with the step
-  (contract-before-API).
-- **TJ-C4 — desktop shells.** Same tree under X11/win/mac; carries the
-  desktop half of the mods translation (X11 `ControlMask` state,
-  win32 `GetKeyState`, mac command-key flags) beyond FI-01
-  re-verification.
-- **TJ-C5 — scene-replay animation.** Beat-driven repositioning from
-  the feed/event state, step-driven via the A-29 deterministic step
-  contract; **no framework animation system** (transition animations
-  remain a ratified non-goal — this is application content); optional
-  GIF snapshot export for replay 存证 (GIF89a writer exists).
+- **TJ-C2 — message-level I/F + mock feeder — landed 2026-11-05**
+  (19426b4 + review fixes 3955813). `tianji/feed/`: the v1 JSON subset
+  parser (bounded recursion, raw-control rejection, surrogate-decoding
+  escapes), the wire client (hello/join_room/subscribe(after_seq)/ping,
+  the event cursor, abstract-namespace sockets), the mock feeder
+  (replays run_*.json-shaped records as the full v1 stream with exact
+  after_seq resume) and the stream view model (six row categories,
+  server-enumerated proposals, the snapshot cursor — the recent seed
+  and the subscribe cursor never overlap). Two review passes (4M+9L:
+  wakeable stop, int64 clamps, line caps, snapshot cursor, CI/asan
+  battery inclusion); socket end-to-end suites green.
+- **TJ-C3 — SIXEL-first client app — landed 2026-11-05** (terminal
+  mods 5ff081e, the app ae5bc1f, review fixes d14652a). `STORY=tianji`
+  composes `shell_backend + tianji_app` from `tianji/` (ARCHITECTURE
+  §2); left stream = follow-bottom ScrollPanel + variable-height
+  ListBox over the view model; right stage = AnnotateCanvas with a
+  build-time placeholder scene (bytes_embed PNG via set_image_png,
+  USE_PNG); the command line resolves against the server's proposals;
+  TIANJI_SOCKET / TIANJI_REPLAY / TIANJI_FONT wiring with logged
+  degradations. Prerequisite in-tree **landed**: the terminal shell
+  translates the control-byte chords (0x01-0x1A minus the functional
+  set, Ctrl+C = the copy chord, Ctrl+D = the escape hatch) and ESC+
+  printable as the alt chord; the terminal main runs the R6 step clock
+  (one step per 30ms tick, then paint-when-dirty). Verified: pty smoke
+  (driven + replay-only variants) + the tianji-asan kit target.
+  **Still open on this item**: a real-terminal pass and FI-01's
+  standing real-IME re-verification (needs the maintainer's machines /
+  tianji's terminal list — for_tianji §4.3).
+- **TJ-C4 — desktop shells — landed 2026-11-05** (d14652a). The
+  desktop half of the mods translation: X11 ORs the state mask
+  (Control/Shift/Mod1/Mod4) into key_down (pure helper + display-less
+  battery coverage); win32 reads GetKeyState at WM_KEYDOWN and maps
+  the WM_CHAR control byte to its ctrl chord (letters emit through
+  WM_CHAR, so WM_KEYDOWN never sees them); mac maps modifierFlags
+  with Command → mod_meta (platform-faithful; the §3.8 clipboard
+  bindings stay on Control). win-probe green; mac compiles in CI.
+- **TJ-C5 — scene-replay animation — landed 2026-11-05** (64c894e).
+  Application content per the A-29 step contract, no framework
+  animation system: `scene_replay` parses the v1 stage message's
+  StageView slice (props as rects, overlays as circles, #rrggbb with
+  a fallback), compose() renders one state into the 800×600 buffer
+  through the ordinary primitives (same state, same bytes), and the
+  step clock walks one beat per interval tick; TIANJI_GIF names the
+  replay 存证 GIF through the snapshot helper's GIF89a writer. The
+  mock synthesizes three beats so the replay is visible without scene
+  art. The tianji_scene suite covers parse/clamp/determinism.
 - **TJ-C6 — wasm path.** Later batch: transport seam + tianji-side
   WebSocket gateway; unscheduled.
 

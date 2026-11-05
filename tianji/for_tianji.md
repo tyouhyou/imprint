@@ -132,3 +132,23 @@
   终端壳接入 R6 固定步进；终端 Ctrl/Alt 和弦翻译（Ctrl+A/C/V 在
   SIXEL 终端可用）。pty 冒烟通过（帧推进、输入驱动、会话存活）。
   待真终端人工复验 + FI-01 真 IME 复验（需要贵方终端清单，见 §4.3）。
+- 2026-11-05：**TJ-C4（桌面壳 mods 翻译）落地**——X11 把 state 掩码
+  （Control/Shift/Mod1/Mod4）带进每个 key_down；win32 在 WM_KEYDOWN
+  读 GetKeyState，并把 WM_CHAR 的控制字节 0x01-0x1A 映射为对应
+  Ctrl 和弦（字母事件走 WM_CHAR，WM_KEYDOWN 看不到它们——与终端
+  同一张表）；mac 把 modifierFlags 映射为 mods，Command → meta（平台
+  本义；剪贴板绑定仍在 Control 上）。Ctrl+A/C/V 三个桌面壳全部
+  可用。
+- 2026-11-05：**TJ-C5（现场还原动画）落地**——按 A-29 确定性 step
+  契约的应用侧内容（无框架动画系统，过渡动画维持否决项）：
+  v1 stage 消息的 StageView 切片解析为舞台状态（道具=实心矩形、
+  overlays=圆，"#rrggbb"），compose() 用普通绘图原语把一拍渲进
+  800×600 缓冲（同状态同字节），步进时钟每间隔走一拍；
+  TIANJI_GIF 指定回放存证 GIF（快照助手的 GIF89a writer）。mock
+  合成三拍让回放无素材也可见——真实节拍是贵方的 stage 消息，
+  素材诉求不变（§4.1）。
+- 2026-11-05：**收尾电池**——desktop-test（68 套件 + tianji 三+一套
+  件）、desktop-test-16、desktop-test-ttf、zbapi-test、asan 电池
+  （含 test_tianji）、win-probe、pty 双变体冒烟，全部通过。批次
+  内所有代码任务闭环；余下：真终端 + 真 IME 人工复验（§4.3）、
+  TJ-C6 wasm（未排期）。
