@@ -46,6 +46,21 @@ namespace zb::tianji
             r.seq = seq;
             view.rows.push_back(std::move(r));
         }
+
+        // the unchecked-narrowing guard (the TJ-NEW review precedent):
+        // wire integers land in int fields saturated, never truncated
+        int clamp_int(const long long v)
+        {
+            if (v > 2147483647LL)
+            {
+                return 2147483647;
+            }
+            if (v < -2147483648LL)
+            {
+                return -2147483648;
+            }
+            return static_cast<int>(v);
+        }
     }  // namespace
 
     bool apply_message(TianjiView &view, const Json &msg)
@@ -77,7 +92,7 @@ namespace zb::tianji
                 for (const Json &r : recent->items())
                 {
                     push_row(view, RowKind::speech,
-                             static_cast<int>(r.get_int("tick")),
+                             clamp_int(r.get_int("tick")),
                              r.get_str("name"), r.get_str("text"), 0);
                 }
             }
@@ -116,7 +131,7 @@ namespace zb::tianji
             }
             const std::string et = ev->get_str("type");
             const long long seq = ev->get_int("seq");
-            const int tick = static_cast<int>(ev->get_int("tick"));
+            const int tick = clamp_int(ev->get_int("tick"));
             if (seq > view.last_seq)
             {
                 view.last_seq = seq;
@@ -152,8 +167,20 @@ namespace zb::tianji
                      msg.get_str("code") + ": " + msg.get_str("message"), 0);
             return true;
         }
-        // welcome / room_snapshot / stage / window / presence / pong:
-        // no stream-visible change in the v1 subset
+        if (type == "room_snapshot")
+        {
+            // docs/07 §5.2 first-connect flow: the snapshot's last_seq
+            // IS the resume cursor — the recent seed and the subscribe
+            // cursor must not overlap, or the history lands twice
+            const long long snap_seq = msg.get_int("last_seq");
+            if (snap_seq > view.last_seq)
+            {
+                view.last_seq = snap_seq;
+            }
+            return true;
+        }
+        // welcome / stage / window / presence / pong: no
+        // stream-visible change in the v1 subset
         return false;
     }
 }  // namespace zb::tianji

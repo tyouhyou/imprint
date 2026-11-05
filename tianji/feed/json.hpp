@@ -94,7 +94,6 @@ namespace zb::tianji
                                 std::string *error, int depth);
 
     public:
-
         // serializes back to one compact line (the mock server and the
         // request path use it; strings re-escape minimally)
         std::string dump() const;

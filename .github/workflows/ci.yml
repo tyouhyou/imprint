@@ -46,6 +46,7 @@ jobs:
       - name: Run test suites and C-ABI smoke
         run: |
           ./build_ci/bin/test_imui
+          ./build_ci/bin/test_tianji
           ./build_ci/bin/test_zbapi
       - name: External-consumption smoke (library mode, Batch G P1)
         run: |

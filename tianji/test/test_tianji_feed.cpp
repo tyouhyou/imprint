@@ -89,7 +89,8 @@ int test_tianji_json()
         EXPECT(v.type() == Json::Type::Object);
         EXPECT(p - trailing == 7);  // the parser stops at the value's end
 
-        const char *rawctl = "\"a\x01" "b\"";
+        const char *rawctl = "\"a\x01"
+                             "b\"";
         p = rawctl;
         Json::parse(p, p + 6, &err);
         EXPECT(!err.empty());
@@ -175,26 +176,50 @@ int test_tianji_feed()
 
 int test_tianji_view()
 {
-    // the full replay through the view builder: the seeded stream, the
-    // proposals, the cursor
+    // the docs/07 §5.2 first-connect flow through the view builder:
+    // snapshot + view seed the stream AND the cursor; the subscribe
+    // rides that cursor, so the history never lands twice
     TianjiView view;
     auto msgs = MockTianjiServer::synthesize(sample_record(), "room_mock");
+    // the first-connect shape: welcome, snapshot, view (the subscribe
+    // tail with after_seq = snapshot.last_seq is empty — verified over
+    // the wire in test_tianji_feed)
     int applied = 0;
-    for (const Json &m : msgs)
+    for (int i = 0; i < 3; ++i)
     {
-        if (apply_message(view, m))
+        if (apply_message(view, msgs[static_cast<size_t>(i)]))
         {
             ++applied;
         }
     }
-    // view (recent seeds 3 rows) + 3 events = 6 applied
-    EXPECT(applied == 4);
-    EXPECT(view.rows.size() == 6);  // 3 seeded + 3 events
+    EXPECT(applied == 2);           // snapshot (cursor) + view (seed); welcome no
+    EXPECT(view.rows.size() == 3);  // the recent seed, in order
     EXPECT(view.rows[0].kind == RowKind::speech);
     EXPECT(view.rows[0].name == "沈三娘");
-    EXPECT(view.rows[5].kind == RowKind::speech);
-    EXPECT(view.rows[5].seq == 3);
-    EXPECT(view.last_seq == 3);
+    EXPECT(view.last_seq == 3);  // from the snapshot, not from events
+
+    // the wire-level resume check: subscribe(after_seq=3) replays
+    // nothing (the mock's event seqs are 1..3, all <= the cursor)
+    EXPECT(msgs.size() == 6);  // welcome, snapshot, view, ev1..ev3
+    for (size_t i = 3; i < msgs.size(); ++i)
+    {
+        const long long seq = msgs[i].find("event")->get_int("seq");
+        EXPECT(seq <= view.last_seq);  // the subscribe would skip it
+    }
+
+    // a NEW event (seq 4) appends one row and advances the cursor
+    const char *kNew = "{\"type\":\"event\",\"room_id\":\"room_mock\","
+                       "\"seq\":4,\"event\":{\"seq\":4,\"tick\":2,"
+                       "\"type\":\"speech.uttered\","
+                       "\"actor\":\"seat:seat.luo\",\"payload\":"
+                       "{\"seat_id\":\"seat.luo\",\"name\":\"阿萝\","
+                       "\"text\":\"那你说说，是谁？\"}}}";
+    const char *p = kNew;
+    EXPECT(apply_message(view, Json::parse(p, p + std::strlen(kNew))));
+    EXPECT(view.rows.size() == 4);
+    EXPECT(view.rows[3].seq == 4);
+    EXPECT(view.rows[3].name == "阿萝");
+    EXPECT(view.last_seq == 4);
 
     // the proposals come from the server's legal_actions (never
     // invented client-side): speak (open) + search (loc.equip)
@@ -204,15 +229,53 @@ int test_tianji_view()
     EXPECT(view.proposals[1].action == "search");
     EXPECT(view.proposals[1].target == "loc.equip");
 
+    // the event-kind table (the stream's categories): action, clue,
+    // ending, narration (world.broadcast / narrative.*), and the
+    // unknown-type degradation to system
+    {
+        const char *kinds[] = {
+            "{\"type\":\"event\",\"seq\":5,\"event\":{\"seq\":5,"
+            "\"type\":\"action.search\",\"payload\":{\"seat_id\":\"s\","
+            "\"name\":\"阿萝\",\"text\":\"搜了设备舱，一无所获\"}}}",
+            "{\"type\":\"event\",\"seq\":6,\"event\":{\"seq\":6,"
+            "\"type\":\"clue.found\",\"payload\":{\"text\":\"定时器\"}}}",
+            "{\"type\":\"event\",\"seq\":7,\"event\":{\"seq\":7,"
+            "\"type\":\"session.ended\",\"payload\":{\"text\":\"失败\"}}}",
+            "{\"type\":\"event\",\"seq\":8,\"event\":{\"seq\":8,"
+            "\"type\":\"world.broadcast\",\"payload\":{\"text\":\"灯光闪烁\"}}}",
+            "{\"type\":\"event\",\"seq\":9,\"event\":{\"seq\":9,"
+            "\"type\":\"narrative.cue\",\"payload\":{\"text\":\"钟声\"}}}",
+            "{\"type\":\"event\",\"seq\":10,\"event\":{\"seq\":10,"
+            "\"type\":\"future.unknown\",\"payload\":{\"text\":\"?\"}}}",
+        };
+        const RowKind want[] = {
+            RowKind::action,
+            RowKind::clue,
+            RowKind::ending,
+            RowKind::narration,
+            RowKind::narration,
+            RowKind::system,
+        };
+        for (int i = 0; i < 6; ++i)
+        {
+            p = kinds[i];
+            EXPECT(apply_message(view, Json::parse(p, p + std::strlen(kinds[i]))));
+            EXPECT(view.rows.back().kind == want[i]);
+        }
+    }
+
     // error messages land as system rows; pong/stage are ignored
     const char *kErr = "{\"type\":\"error\",\"code\":\"SEAT_LEASE_LOST\","
                        "\"message\":\"窗口已过\"}";
-    const char *p = kErr;
+    p = kErr;
     EXPECT(apply_message(view, Json::parse(p, p + std::strlen(kErr))));
     EXPECT(view.rows.back().kind == RowKind::system);
     const char *kPong = "{\"type\":\"pong\"}";
     p = kPong;
     EXPECT(!apply_message(view, Json::parse(p, p + std::strlen(kPong))));
+    const char *kStage = "{\"type\":\"stage\",\"room_id\":\"r\"}";
+    p = kStage;
+    EXPECT(!apply_message(view, Json::parse(p, p + std::strlen(kStage))));
     return test::report("tianji_view");
 }
 

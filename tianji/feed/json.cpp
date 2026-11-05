@@ -9,11 +9,6 @@ namespace zb::tianji
 {
     namespace
     {
-        // untrusted-input hardening: the sibling parsers cap recursion
-        // (warn-once + drop); 32 nesting levels is far past any v1
-        // message shape (the deepest documented field is 3 levels)
-        constexpr int kMaxDepth = 32;
-
         void skip_ws(const char *&p, const char *end)
         {
             while (p < end && (*p == ' ' || *p == '\t' || *p == '\n' ||
@@ -303,22 +298,29 @@ namespace zb::tianji
         return type_ == Type::Bool ? bool_ : fallback;
     }
 
+    namespace
+    {
+        // the shared float->int64 guard (the unchecked-narrowing rule):
+        // out-of-range or non-finite values take the fallback instead
+        // of the UB conversion [conv.fpint]
+        long long round_ll(const double v, const long long fallback)
+        {
+            if (!std::isfinite(v) || v >= 9.2233720368547758e18 ||
+                v <= -9.2233720368547758e18)
+            {
+                return fallback;
+            }
+            return static_cast<long long>(v + (v >= 0 ? 0.5 : -0.5));
+        }
+    }  // namespace
+
     long long Json::as_int(const long long fallback) const
     {
         if (type_ != Type::Number || !std::isfinite(num_))
         {
             return fallback;
         }
-        // clamp into long long (the unchecked-narrowing rule)
-        if (num_ >= 9.2233720368547758e18)
-        {
-            return fallback;
-        }
-        if (num_ <= -9.2233720368547758e18)
-        {
-            return fallback;
-        }
-        return static_cast<long long>(num_ + (num_ >= 0 ? 0.5 : -0.5));
+        return round_ll(num_, fallback);
     }
 
     double Json::as_number(const double fallback) const
@@ -394,111 +396,122 @@ namespace zb::tianji
     Json Json::parse_value(const char *&p, const char *end,
                            std::string *error, const int depth)
     {
-            const auto fail = [&](const char *msg)
+        const auto fail = [&](const char *msg)
+        {
+            if (error != nullptr)
             {
-                if (error != nullptr)
-                {
-                    *error = msg;
-                }
-                return Json();
-            };
-            if (depth > Json::kMaxDepth)
-            {
-                return fail("nesting too deep");
+                *error = msg;
             }
+            return Json();
+        };
+        if (depth > Json::kMaxDepth)
+        {
+            // the parser-family rule (warn-once + drop): a message
+            // past the cap is a hostile or corrupt input — one log
+            // line, then the caller skips it
+            static bool depth_warned = false;
+            if (!depth_warned)
+            {
+                depth_warned = true;
+                LW << "tianji/json: nesting deeper than "
+                   << Json::kMaxDepth << "; the value was dropped "
+                                         "(further occurrences are silent)";
+            }
+            return fail("nesting too deep");
+        }
+        skip_ws(p, end);
+        if (p >= end)
+        {
+            return fail("empty input");
+        }
+        switch (*p)
+        {
+        case '{':
+        {
+            ++p;
+            Json j = object();
             skip_ws(p, end);
-            if (p >= end)
-            {
-                return fail("empty input");
-            }
-            switch (*p)
-            {
-            case '{':
+            if (p < end && *p == '}')
             {
                 ++p;
-                Json j = object();
+                return j;
+            }
+            for (;;)
+            {
                 skip_ws(p, end);
+                std::string key;
+                if (p >= end || !parse_string_body(p, end, key))
+                {
+                    return fail("bad object key");
+                }
+                skip_ws(p, end);
+                if (p >= end || *p != ':')
+                {
+                    return fail("expected ':'");
+                }
+                ++p;
+                std::string sub;
+                Json v = parse_value(p, end, &sub, depth + 1);
+                if (!sub.empty())
+                {
+                    if (error != nullptr)
+                    {
+                        *error = sub;
+                    }
+                    return Json();
+                }
+                j.obj_.emplace_back(std::move(key), std::move(v));
+                skip_ws(p, end);
+                if (p < end && *p == ',')
+                {
+                    ++p;
+                    continue;
+                }
                 if (p < end && *p == '}')
                 {
                     ++p;
                     return j;
                 }
-                for (;;)
-                {
-                    skip_ws(p, end);
-                    std::string key;
-                    if (p >= end || !parse_string_body(p, end, key))
-                    {
-                        return fail("bad object key");
-                    }
-                    skip_ws(p, end);
-                    if (p >= end || *p != ':')
-                    {
-                        return fail("expected ':'");
-                    }
-                    ++p;
-                    std::string sub;
-                    Json v = parse_value(p, end, &sub, depth + 1);
-                    if (!sub.empty())
-                    {
-                        if (error != nullptr)
-                        {
-                            *error = sub;
-                        }
-                        return Json();
-                    }
-                    j.obj_.emplace_back(std::move(key), std::move(v));
-                    skip_ws(p, end);
-                    if (p < end && *p == ',')
-                    {
-                        ++p;
-                        continue;
-                    }
-                    if (p < end && *p == '}')
-                    {
-                        ++p;
-                        return j;
-                    }
-                    return fail("expected ',' or '}'");
-                }
+                return fail("expected ',' or '}'");
             }
-            case '[':
+        }
+        case '[':
+        {
+            ++p;
+            Json j = array();
+            skip_ws(p, end);
+            if (p < end && *p == ']')
             {
                 ++p;
-                Json j = array();
+                return j;
+            }
+            for (;;)
+            {
+                std::string sub;
+                Json v = parse_value(p, end, &sub, depth + 1);
+                if (!sub.empty())
+                {
+                    if (error != nullptr)
+                    {
+                        *error = sub;
+                    }
+                    return Json();
+                }
+                j.arr_.push_back(std::move(v));
                 skip_ws(p, end);
+                if (p < end && *p == ',')
+                {
+                    ++p;
+                    continue;
+                }
                 if (p < end && *p == ']')
                 {
                     ++p;
                     return j;
                 }
-                for (;;)
-                {
-                    std::string sub;
-                    Json v = parse_value(p, end, &sub, depth + 1);
-                    if (!sub.empty())
-                    {
-                        if (error != nullptr)
-                        {
-                            *error = sub;
-                        }
-                        return Json();
-                    }
-                    j.arr_.push_back(std::move(v));
-                    skip_ws(p, end);
-                    if (p < end && *p == ',')
-                    {
-                        ++p;
-                        continue;
-                    }
-                    if (p < end && *p == ']')
-                    {
-                        ++p;
-                        return j;
-                    }
-                    return fail("expected ',' or ']'");
-                }
+                return fail("expected ',' or ']'");
             }
+        }
         case '"':
         {
             Json j;
@@ -561,11 +574,14 @@ namespace zb::tianji
             break;
         case Type::Number:
         {
-            // v1 numbers are small integers; integral values dump
-            // without the decimal noise
-            if (std::isfinite(num_) && num_ == static_cast<double>(static_cast<long long>(num_)))
+            // v1 numbers are small integers; integral in-range values
+            // dump without the decimal noise (the round_ll guard keeps
+            // the float->int64 conversion defined)
+            const long long whole = round_ll(num_, 0);
+            if (std::isfinite(num_) &&
+                num_ == static_cast<double>(whole))
             {
-                out += std::to_string(static_cast<long long>(num_));
+                out += std::to_string(whole);
             }
             else
             {
@@ -595,7 +611,20 @@ namespace zb::tianji
                     out += "\\t";
                     break;
                 default:
-                    out += c;
+                    if (static_cast<unsigned char>(c) < 0x20)
+                    {
+                        // the parse side rejects raw control bytes (a
+                        // framing error); \\u-decoded ones re-escape so
+                        // the line stays valid JSON
+                        static const char *kHex = "0123456789abcdef";
+                        out += "\\u00";
+                        out += kHex[(static_cast<unsigned char>(c) >> 4) & 0xF];
+                        out += kHex[static_cast<unsigned char>(c) & 0xF];
+                    }
+                    else
+                    {
+                        out += c;
+                    }
                     break;
                 }
             }

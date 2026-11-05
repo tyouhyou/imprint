@@ -16,6 +16,9 @@ namespace zb::tianji
 {
     namespace
     {
+        // mirrors the feed client's response-line cap
+        constexpr size_t kMaxLineBytes = 1 << 20;  // 1 MiB
+
         Json envelope(const char *type, const std::string &room_id)
         {
             Json m = Json::object();
@@ -159,7 +162,12 @@ namespace zb::tianji
 
     MockTianjiServer::~MockTianjiServer()
     {
-        stop();
+        stop();  // wake a blocked accept, if any
+        if (listen_fd_ >= 0)
+        {
+            ::close(listen_fd_);
+            listen_fd_ = -1;
+        }
     }
 
     std::vector<Json> MockTianjiServer::synthesize(const Json &record,
@@ -249,22 +257,29 @@ namespace zb::tianji
     {
         if (listen_fd_ >= 0)
         {
-            ::close(listen_fd_);
-            listen_fd_ = -1;
+            // shutdown (not close): close() does not wake a blocked
+            // accept on Linux, shutdown() does — serve() returns with
+            // a failed accept instead of hanging; the fd itself is
+            // closed by the destructor
+            ::shutdown(listen_fd_, SHUT_RDWR);
         }
     }
 
     void MockTianjiServer::serve()
     {
-        if (listen_fd_ < 0)
+        // one read of the fd: after stop() shuts it down the accept
+        // fails and serve returns; the serve thread never re-reads the
+        // member afterwards (the fd outlives until the destructor)
+        const int listen_fd = listen_fd_;
+        if (listen_fd < 0)
         {
             return;
         }
         const std::vector<Json> stream = synthesize(record_, room_id_);
-        const int conn = ::accept(listen_fd_, nullptr, nullptr);
+        const int conn = ::accept(listen_fd, nullptr, nullptr);
         if (conn < 0)
         {
-            return;  // stop() closed the listener
+            return;  // stop() shut the listener down
         }
         // one line in, one line out — the same shape the Python server
         // speaks; the connection closes when the peer does
@@ -275,6 +290,14 @@ namespace zb::tianji
             const size_t nl = buf.find('\n');
             if (nl == std::string::npos)
             {
+                // the client side's own cap, mirrored: a peer that
+                // floods without a newline is cut, not grown
+                if (buf.size() > kMaxLineBytes)
+                {
+                    LW << "tianji/mock: request line exceeds the size "
+                          "cap; disconnecting";
+                    break;
+                }
                 const ssize_t n = ::read(conn, chunk, sizeof(chunk));
                 if (n <= 0)
                 {

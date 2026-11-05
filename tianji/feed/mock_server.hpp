@@ -39,16 +39,19 @@ namespace zb::tianji
                                             const std::string &room_id);
 
         /*
-         * Binds a fresh abstract-namespace or filesystem socket and
-         * serves ONE connection (the feed client's): reads request
-         * lines, answers with the synthesized responses, until the
-         * peer disconnects. Runs on a caller-provided thread — serve()
-         * blocks; stop() from another thread breaks it out. Returns
-         * false and fills `error` when the socket cannot be created.
+         * Binds a fresh abstract-namespace socket (Linux; the macOS
+         * maintainer box has no abstract namespace — the CMake gate
+         * keeps this off Apple) and serves ONE connection (the feed
+         * client's): reads request lines, answers with the
+         * synthesized responses, until the peer disconnects. serve()
+         * blocks and runs on a caller-provided thread; stop() from
+         * another thread shuts the listener down, which wakes the
+         * blocked accept and ends serve(). Returns false and fills
+         * `error` when the socket cannot be created.
          */
         bool listen(std::string *socket_path_out, std::string *error);
-        void serve();          // blocks: one client, then returns
-        void stop();           // thread-safe: closes the listener
+        void serve();  // blocks: one client, then returns
+        void stop();   // thread-safe: shutdown, then close
         const std::string &socket_path() const { return socket_path_; }
 
         // installs the record BEFORE listen()

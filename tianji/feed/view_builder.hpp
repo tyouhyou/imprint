@@ -23,12 +23,12 @@ namespace zb::tianji
 {
     enum class RowKind
     {
-        narration,   // 旁白 / world broadcast
-        speech,      // 发言 (speech.uttered)
-        action,      // 动作成败 (action.*)
-        clue,        // 线索发现 (clue.*)
-        system,      // 系统提示 (presence / window / errors)
-        ending       // 终局卡 (session.ended)
+        narration,  // 旁白 / world broadcast
+        speech,     // 发言 (speech.uttered)
+        action,     // 动作成败 (action.*)
+        clue,       // 线索发现 (clue.*)
+        system,     // 系统提示 (presence / window / errors)
+        ending      // 终局卡 (session.ended)
     };
 
     struct StreamRow
@@ -51,7 +51,7 @@ namespace zb::tianji
     {
         std::vector<StreamRow> rows;
         std::vector<Proposal> proposals;
-        std::string seat_name;   // "me" display name from the SeatView
+        std::string seat_name;  // "me" display name from the SeatView
         std::string seat_id;
         std::string window_id;
         bool window_submitted = false;
@@ -60,16 +60,18 @@ namespace zb::tianji
 
     /*
      * Applies one v1 message to the view. Returns false for messages
-     * that carry no stream-visible change (pong, stage-only, unknown
-     * types — logged once per type by the caller if it wants noise).
+     * that carry no stream-visible change (welcome, pong, stage).
      * Known messages:
-     *   room_snapshot — seats/phase set the roster baseline
+     *   room_snapshot — captures `last_seq` as the resume cursor: the
+     *                   recent seed and the subscribe cursor must not
+     *                   overlap (docs/07 §5.2 first-connect flow: the
+     *                   app subscribes with view.last_seq after the
+     *                   first connect, or the history lands twice)
      *   view          — seat_view.recent seeds the stream, the "me"
      *                   name, legal_actions -> proposals
      *   event         — one row per known event type; unknown types
-     *                   land as narration with the raw text (the
-     *                   server filter is trusted; nothing is dropped
-     *                   silently)
+     *                   degrade to a system row (never dropped
+     *                   silently, never a crash)
      *   error         — a system row with code + message
      */
     bool apply_message(TianjiView &view, const Json &msg);

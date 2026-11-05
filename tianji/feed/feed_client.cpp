@@ -213,6 +213,20 @@ namespace zb::tianji
             }
             return {};
         }
+        // the caller's line-exhausted obligation (json.hpp): trailing
+        // bytes after the value are a framing error, not silence
+        while (p < end && (*p == ' ' || *p == '\t' || *p == '\r'))
+        {
+            ++p;
+        }
+        if (p != end)
+        {
+            if (error != nullptr)
+            {
+                *error = "bad response line: trailing bytes";
+            }
+            return {};
+        }
         if (response.type() != Json::Type::Array)
         {
             // a bare object response is tolerated as a one-element list
