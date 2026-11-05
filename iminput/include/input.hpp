@@ -62,6 +62,22 @@ namespace zb::input
         down,
         left,
         right,
+        insert = 260,  // the Insert key (FI-02 bindings: Ctrl/Shift+Insert)
+    };
+
+    /*
+     * Modifier flags for input_event.mods (FI-02, code-contract §3.3):
+     * the host reports the modifiers held at event time — the framework
+     * never derives them (the same "the shell translates, the framework
+     * routes" line as key/ch). Plain ints (not enum class) so hosts can
+     * pass a mask across the C-ABI boundary.
+     */
+    enum : int
+    {
+        mod_shift = 1,
+        mod_ctrl = 2,
+        mod_alt = 4,
+        mod_meta = 8,  // the platform key: Win / Command
     };
 
     /*
@@ -80,6 +96,12 @@ namespace zb::input
      *                              key produces one; always 0 on key_up)
      *   - pointer_delta          : dx, dy (host-provided relative
      *                              displacement, U-3; x/y untouched)
+     *
+     * `mods` carries the modifier mask (mod_* above) held at event time
+     * on every event type; hosts that track no modifiers leave it 0.
+     * The text-widget bindings read it (shift+click/arrow extends a
+     * selection, Ctrl+C/V/A are the FI-02 clipboard bindings); it never
+     * changes the dispatcher's own routing.
      *
      * `ch` holds a Unicode code point produced by a printable key (ASCII
      * 0x20..0x7E for now). Both fields are independent: a key may set only
@@ -104,6 +126,7 @@ namespace zb::input
         int ch = 0;  // Unicode code point (0 = no character)
         int dx = 0;  // relative motion (pointer_delta, U-3)
         int dy = 0;
+        int mods = 0;  // modifier mask (mod_*; 0 = no modifiers held)
     };
 
     /*

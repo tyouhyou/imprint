@@ -1,5 +1,9 @@
 #include "text_area.hpp"
 
+#include <algorithm>
+
+#include "clipboard.hpp"
+#include "theme.hpp"
 #include "text/utf8.hpp"
 
 namespace zb::ui
@@ -21,11 +25,36 @@ namespace zb::ui
         {
             caret = get_text().size();
         }
+        if (sel_anchor > get_text().size())
+        {
+            sel_anchor = get_text().size();
+        }
     }
 
     void TextArea::fire_changed()
     {
         changed(utf16_to_utf8(get_text()));
+    }
+
+    std::string TextArea::selected_text() const
+    {
+        size_t a = sel_anchor;
+        size_t c = caret;
+        const size_t n = get_text().size();
+        if (a > n)
+        {
+            a = n;
+        }
+        if (c > n)
+        {
+            c = n;
+        }
+        if (a == c)
+        {
+            return {};
+        }
+        return utf16_to_utf8(
+            get_text().substr(std::min(a, c), std::max(a, c) - std::min(a, c)));
     }
 
     int TextArea::line_pitch() const
@@ -142,12 +171,99 @@ namespace zb::ui
         mark_dirty();
     }
 
+    bool TextArea::erase_selection(const bool fire)
+    {
+        clamp_caret();
+        const size_t lo = std::min(sel_anchor, caret);
+        const size_t hi = std::max(sel_anchor, caret);
+        if (lo == hi)
+        {
+            return false;
+        }
+        std::u16string t = get_text();
+        t.erase(lo, hi - lo);
+        caret = lo;
+        sel_anchor = lo;
+        mark_dirty();
+        set_text(t);
+        column_goal = caret_pixel_column();
+        scroll_caret_into_view();
+        if (fire)
+        {
+            fire_changed();
+        }
+        return true;
+    }
+
+    void TextArea::insert_text(const std::u16string &units)
+    {
+        erase_selection(false);
+        clamp_caret();
+        if (units.empty())
+        {
+            return;
+        }
+        std::u16string t = get_text();
+        t.insert(caret, units);
+        caret += units.size();
+        sel_anchor = caret;  // the edit collapses the selection
+        mark_dirty();
+        set_text(t);
+        column_goal = caret_pixel_column();
+        scroll_caret_into_view();
+        fire_changed();
+    }
+
+    std::u16string TextArea::paste_filter(const std::u16string &in) const
+    {
+        std::u16string out;
+        for (const char16_t c : in)
+        {
+            const int u = static_cast<int>(c);
+            // the T-2 acceptance plus '\n' (enter is content here);
+            // surrogate units (a non-BMP code point's pair) drop
+            if (((u >= 0x20 && u <= 0x7E) || u >= 0xA0 || u == u'\n') &&
+                (u < 0xD800 || u > 0xDFFF))
+            {
+                out.push_back(c);
+            }
+        }
+        return out;
+    }
+
+    void TextArea::copy_selection()
+    {
+        if (ClipboardSink *sink = clipboard_sink())
+        {
+            const std::string s = selected_text();
+            sink->set_text(s.data(), s.size());
+        }
+        // a null sink silently drops (code-contract §3.8)
+    }
+
+    void TextArea::paste_at_caret()
+    {
+        const ClipboardSink *sink = clipboard_sink();
+        if (sink == nullptr)
+        {
+            return;  // no sink: paste is a no-op (code-contract §3.8)
+        }
+        const std::string text = sink->get_text();
+        if (text.empty())
+        {
+            return;  // nothing to paste (a set-only sink lands here too)
+        }
+        insert_text(paste_filter(utf8_to_utf16(text.c_str())));
+    }
+
     void TextArea::insert(const char16_t ch)
     {
+        erase_selection(false);  // typing replaces the selection
         clamp_caret();
         std::u16string t = get_text();
         t.insert(caret, 1, ch);
         ++caret;
+        sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
         column_goal = caret_pixel_column();
@@ -157,6 +273,10 @@ namespace zb::ui
 
     bool TextArea::erase_before_caret()
     {
+        if (erase_selection())
+        {
+            return true;
+        }
         clamp_caret();
         if (caret == 0 || get_text().empty())
         {
@@ -165,6 +285,7 @@ namespace zb::ui
         std::u16string t = get_text();
         t.erase(caret - 1, 1);
         --caret;
+        sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
         column_goal = caret_pixel_column();
@@ -175,6 +296,10 @@ namespace zb::ui
 
     bool TextArea::erase_at_caret()
     {
+        if (erase_selection())
+        {
+            return true;
+        }
         clamp_caret();
         if (caret >= get_text().size())
         {
@@ -182,6 +307,7 @@ namespace zb::ui
         }
         std::u16string t = get_text();
         t.erase(caret, 1);
+        sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
         column_goal = caret_pixel_column();
@@ -190,29 +316,37 @@ namespace zb::ui
         return true;
     }
 
-    bool TextArea::move_caret(const int dir)
+    bool TextArea::move_caret(const int dir, const bool extend_selection)
     {
         clamp_caret();
         const size_t n = get_text().size();
+        size_t next = caret;
         if (dir > 0 && caret < n)
         {
-            ++caret;
+            ++next;
         }
         else if (dir < 0 && caret > 0)
         {
-            --caret;
+            --next;
         }
         else
         {
             return false;
         }
+        if (!extend_selection)
+        {
+            // a non-shift caret move collapses the selection (FI-02)
+            sel_anchor = next;
+        }
+        caret = next;
         mark_dirty();
         column_goal = caret_pixel_column();
         scroll_caret_into_view();
         return true;
     }
 
-    bool TextArea::move_caret_vertical(const int dir)
+    bool TextArea::move_caret_vertical(const int dir,
+                                       const bool extend_selection)
     {
         clamp_caret();
         const auto &spans = wrap_spans(inner_width());
@@ -230,8 +364,14 @@ namespace zb::ui
         const int len = spans[static_cast<std::size_t>(target)].second;
         // the pixel column goal survives the move (a shorter target line
         // clamps to its end without re-anchoring the goal)
-        caret = static_cast<size_t>(off) +
-                column_to_caret(get_text().data() + off, len, column_goal);
+        const size_t next = static_cast<size_t>(off) +
+                            column_to_caret(get_text().data() + off, len,
+                                            column_goal);
+        if (!extend_selection)
+        {
+            sel_anchor = next;
+        }
+        caret = next;
         mark_dirty();
         scroll_caret_into_view();
         return true;
@@ -274,8 +414,37 @@ namespace zb::ui
         case zb::input::input_type::touch_down:
         {
             const auto pos = get_absolute_position();
+            selecting_ = true;
+            place_caret_at(ev.x - pos.x, ev.y - pos.y);
+            if ((ev.mods & zb::input::mod_shift) == 0)
+            {
+                // a plain press starts a collapsed selection at the
+                // caret; shift+click extends from the standing anchor
+                sel_anchor = caret;
+            }
+            return true;
+        }
+        case zb::input::input_type::mouse_move:
+        case zb::input::input_type::touch_move:
+        {
+            if (!selecting_)
+            {
+                return false;
+            }
+            // the drag moves the caret only: the anchor stays (FI-02)
+            const auto pos = get_absolute_position();
             place_caret_at(ev.x - pos.x, ev.y - pos.y);
             return true;
+        }
+        case zb::input::input_type::mouse_left_up:
+        case zb::input::input_type::touch_up:
+        {
+            if (selecting_)
+            {
+                selecting_ = false;
+                return true;
+            }
+            return false;
         }
         case zb::input::input_type::mouse_wheel:
         {
@@ -288,6 +457,46 @@ namespace zb::ui
         }
         case zb::input::input_type::key_down:
         {
+            // FI-02 clipboard bindings (code-contract §3.3: control
+            // keys ride `key` with mods, ch = 0)
+            if ((ev.mods & zb::input::mod_ctrl) != 0)
+            {
+                switch (ev.key)
+                {
+                case 'a':  // Ctrl+A: select all
+                    clamp_caret();
+                    sel_anchor = 0;
+                    caret = get_text().size();
+                    mark_dirty();
+                    column_goal = caret_pixel_column();
+                    scroll_caret_into_view();
+                    return true;
+                case 'c':  // Ctrl+C: copy
+                    copy_selection();
+                    return true;
+                case 'v':  // Ctrl+V: paste
+                    paste_at_caret();
+                    return true;
+                default:
+                    break;  // e.g. ctrl+arrow keeps the plain move
+                }
+            }
+            if (ev.ch == 0 &&
+                ev.key == static_cast<int>(input::key_code::insert))
+            {
+                if ((ev.mods & zb::input::mod_ctrl) != 0)
+                {
+                    copy_selection();  // Ctrl+Insert: copy
+                    return true;
+                }
+                if ((ev.mods & zb::input::mod_shift) != 0)
+                {
+                    paste_at_caret();  // Shift+Insert: paste
+                    return true;
+                }
+                return false;
+            }
+            const bool extend = (ev.mods & zb::input::mod_shift) != 0;
             // the T-2 acceptance (code-contract §2 "Text input scope"):
             // printable ASCII plus code points >= U+00A0 as BMP code
             // units; C1 and non-BMP drop
@@ -311,13 +520,13 @@ namespace zb::ui
             case input::key_code::del:
                 return erase_at_caret();
             case input::key_code::left:
-                return move_caret(-1);
+                return move_caret(-1, extend);
             case input::key_code::right:
-                return move_caret(1);
+                return move_caret(1, extend);
             case input::key_code::up:
-                return move_caret_vertical(-1);
+                return move_caret_vertical(-1, extend);
             case input::key_code::down:
-                return move_caret_vertical(1);
+                return move_caret_vertical(1, extend);
             case input::key_code::enter:
                 // T-4: enter is content, not submit — there is no
                 // submitted event on this editor
@@ -332,6 +541,17 @@ namespace zb::ui
         }
     }
 
+    void TextArea::on_focus_change(const bool now_focused)
+    {
+        if (!now_focused)
+        {
+            // focus loss collapses the selection to the caret (FI-02)
+            clamp_caret();
+            sel_anchor = caret;
+            selecting_ = false;
+        }
+    }
+
     void TextArea::draw_at(core::Graphics &area) const
     {
         const auto s = get_size();
@@ -342,6 +562,11 @@ namespace zb::ui
         {
             c = get_text().size();
         }
+        size_t a = sel_anchor;
+        if (a > get_text().size())
+        {
+            a = get_text().size();
+        }
 
         // frame; the focus ring marks the active editor (as TextInput)
         const core::Color caret_col = caret_color.value_or(theme().accent);
@@ -350,16 +575,44 @@ namespace zb::ui
         area.draw_rect(0, 0, s.width - 1, s.height - 1, edge);
 
         // the wrapped block hangs from the top; the scroll offset slides
-        // it under the (clipped) viewport
+        // it under the (clipped) viewport. The selected unit range draws
+        // with the inverted face (theme selection + text_inverted);
+        // collapsed, every span takes the plain single-draw path
         const auto &spans = wrap_spans(inner_width());
         const char16_t *const data = get_text().data();
+        const int sel_lo = static_cast<int>(std::min(a, c));
+        const int sel_hi = static_cast<int>(std::max(a, c));
         int y = ascent - scroll_y;
         for (const auto &span : spans)
         {
             if (span.second > 0)
             {
-                draw_text_at(area, data + span.first, span.second,
-                             text_gap, y);
+                const int s0 = span.first;
+                const int s1 = span.first + span.second;
+                const int lo = std::max(sel_lo, s0);
+                const int hi = std::min(sel_hi, s1);
+                if (lo < hi)
+                {
+                    const int x_a = text_gap + advance_of(data + s0, lo - s0);
+                    const int x_b = text_gap + advance_of(data + s0, hi - s0);
+                    const int top = y - ascent;
+                    area.fill_rect(x_a, top, x_b - 1, top + pitch - 1,
+                                   theme().selection);
+                    if (lo > s0)
+                    {
+                        draw_text_at(area, data + s0, lo - s0, text_gap, y);
+                    }
+                    draw_text_at(area, data + lo, hi - lo, x_a, y,
+                                 theme().text_inverted);
+                    if (hi < s1)
+                    {
+                        draw_text_at(area, data + hi, s1 - hi, x_b, y);
+                    }
+                }
+                else
+                {
+                    draw_text_at(area, data + s0, span.second, text_gap, y);
+                }
             }
             y += pitch;
         }

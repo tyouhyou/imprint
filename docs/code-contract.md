@@ -740,6 +740,14 @@ whitelist is the boundary):
   shell convention routes space through `key` to preserve activation
   semantics, TextInput inserts on key==space; other printable characters
   go through `ch`).
+- Modifiers ride the `mods` mask (FI-02: `mod_shift`/`mod_ctrl`/
+  `mod_alt`/`mod_meta`, 0 = none) on every event type — the host
+  reports what was held; the framework never derives or strips them,
+  and the dispatcher's routing ignores them. Control-key bindings are
+  plain `key` events with `mods` set (ch=0): Ctrl+A/C/V arrive as
+  key='a'/'c'/'v' + mod_ctrl, Ctrl+Insert / Shift+Insert as
+  key_code::insert + mod_ctrl / mod_shift, shift+arrow as the arrow
+  key + mod_shift, shift+click as mouse_left_down + mod_shift.
 - Routing priority: the dispatcher **never** feeds ch!=0 keys into focus
   navigation; they go to the focused widget's `on_input` first and are
   dropped if unconsumed.

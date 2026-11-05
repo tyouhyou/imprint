@@ -1334,8 +1334,17 @@ namespace zb::ui
             if (focused != f)
             {
                 mark_dirty();
+                on_focus_change(f);
             }
             focused = f;
+        }
+
+        // called after the focus actually flipped (set_focused); the
+        // default does nothing — text editors collapse their selection
+        // here on focus loss (FI-02)
+        virtual void on_focus_change(const bool now_focused)
+        {
+            (void)now_focused;
         }
 
         // called when the focused widget is activated (Enter/Space)

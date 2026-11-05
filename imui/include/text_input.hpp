@@ -22,6 +22,12 @@ namespace zb::ui
      * `changed` fires with the UTF-8 text after every edit; `submitted`
      * fires with the UTF-8 text on enter.
      *
+     * Selection (FI-02, code-contract §3.8), the single-line mirror of
+     * TextArea: drag and shift+arrow select, Ctrl+A selects all, typing
+     * replaces the selection, and the range draws with the inverted
+     * face. Ctrl+C / Ctrl+Insert copy, Ctrl+V / Shift+Insert paste at
+     * the caret — through the process-wide ClipboardSink (clipboard.hpp).
+     *
      * The frame highlights while focused; the text is drawn via the
      * shared text helpers (advance_of / draw_text_at), so custom glyph
      * providers apply.
@@ -52,6 +58,9 @@ namespace zb::ui
             mark_dirty();
         }
 
+        // the current selection as UTF-8 (empty when collapsed)
+        [[nodiscard]] std::string selected_text() const;
+
         // natural size: 100 wide, one line plus the border
         [[nodiscard]] core::imsize_t measure() const override;
 
@@ -59,17 +68,41 @@ namespace zb::ui
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;
         bool is_focusable() const override { return true; }
+        // a selection drag owns the pointer until release (the slider
+        // pattern) so moves keep extending the selection off-widget
+        [[nodiscard]] bool captures_pointer() const override
+        {
+            return selecting_;
+        }
+        void on_cancel() override { selecting_ = false; }
+        void on_focus_change(const bool focused) override;
 
     private:
         void clamp_caret();
         void insert(const char16_t ch);
         bool erase_before_caret();
         bool erase_at_caret();
-        bool move_caret(const int dir);
+        bool move_caret(const int dir, const bool extend_selection = false);
         void place_caret_at(const int x);
         void fire_changed();
 
+        // FI-02 selection mechanics (see TextArea): erase_selection
+        // replaces the range (`fire` controls the changed event —
+        // insert paths erase silently so one user edit fires once);
+        // insert_text inserts a whole string (paste)
+        bool erase_selection(bool fire = true);
+        void insert_text(const std::u16string &units);
+        // the field's own input rules applied to pasted text: the T-2
+        // acceptance, no line break (single line)
+        [[nodiscard]] std::u16string paste_filter(const std::u16string &in) const;
+        void copy_selection();
+        void paste_at_caret();
+
         size_t caret = 0;
+        // the selection anchor: [min(sel_anchor, caret), max(...));
+        // collapsed when it equals the caret
+        size_t sel_anchor = 0;
+        bool selecting_ = false;  // a selection drag is in flight
         int text_gap = 2;
         // unset = follow the active theme (contract 10.3)
         std::optional<core::Color> border_color;  // override of theme border

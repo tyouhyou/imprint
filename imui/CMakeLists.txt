@@ -32,6 +32,7 @@ add_library(
     ${IMUI_FRONTEND_SRC}
     src/text_input.cpp
     src/text_area.cpp
+    src/clipboard.cpp
     src/dialog.cpp
     src/dispatcher.cpp
     src/toggle_switch.cpp

@@ -257,11 +257,13 @@ satisfies. Changing any of these is an architecture change.
 ### 4.2 Input pipeline
 
 - `input_event` is **memcpy-safe**: trivially copyable + standard layout
-  (`{type, x, y, button, delta, key, touch_id, ch, dx, dy}`, all scalars with
-  default member initializers — so not a strict-C++ *POD*; the
+  (`{type, x, y, button, delta, key, touch_id, ch, dx, dy, mods}`, all scalars
+  with default member initializers — so not a strict-C++ *POD*; the
   `static_assert` in `iminput/include/input.hpp` locks the loadable
   properties). This is the C-ABI pass-through shape and must never grow
-  STL containers, virtuals, or `std::any`.
+  STL containers, virtuals, or `std::any`. `mods` (FI-02) is the
+  modifier mask the host held at event time; hosts that track none
+  leave it 0, and the `zb_input` signature is unchanged.
 - `ev.x/y` are **buffer pixels** (the dispatcher picks targets by
   coordinates). Desktop shells map window-client points through
   `presentation::to_buffer` (I-2a); a point on the letterbox is not app

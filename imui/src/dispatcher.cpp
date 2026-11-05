@@ -56,6 +56,13 @@ namespace zb::ui
 
     void InputDispatcher::set_focus(Widget *w)
     {
+        if (focus_target == w)
+        {
+            // already there: a re-grant must not flip the focus state
+            // (the false edge tells a text editor its selection died,
+            // FI-02 -- it must not fire on a re-grant of the same target)
+            return;
+        }
         if (focus_target != nullptr)
         {
             focus_target->set_focused(false);

@@ -31,6 +31,100 @@ namespace
         ev.y = y;
         return ev;
     }
+    zb::input::input_event release_at(const int x, const int y)
+    {
+        zb::input::input_event ev;
+        ev.type = zb::input::input_type::mouse_left_up;
+        ev.x = x;
+        ev.y = y;
+        return ev;
+    }
+
+    zb::input::input_event move_to(const int x, const int y)
+    {
+        zb::input::input_event ev;
+        ev.type = zb::input::input_type::mouse_move;
+        ev.x = x;
+        ev.y = y;
+        return ev;
+    }
+
+    // a plain key with a modifier mask (FI-02 bindings ride `key` +
+    // mods, ch = 0, code-contract §3.3)
+    zb::input::input_event key_mod(const int key, const int mods)
+    {
+        zb::input::input_event ev;
+        ev.type = zb::input::input_type::key_down;
+        ev.key = key;
+        ev.mods = mods;
+        return ev;
+    }
+
+    // FI-02 ClipboardSink test double (see test_text_area.cpp)
+    struct TestSink : ClipboardSink
+    {
+        std::string sent;
+        std::string canned;
+        void set_text(const char *utf8, const size_t n) override
+        {
+            sent.assign(utf8, n);
+        }
+        std::string get_text() const override
+        {
+            return canned;
+        }
+    };
+
+    struct SinkGuard
+    {
+        explicit SinkGuard(ClipboardSink *s)
+        {
+            set_clipboard_sink(s);
+        }
+        ~SinkGuard()
+        {
+            set_clipboard_sink(nullptr);
+        }
+    };
+
+    // a uniform 6px-advance provider: the selection click math needs
+    // real advances (the 5x7 fallback's vary per glyph)
+    struct UnitProvider : GlyphProvider
+    {
+        bool covers(const char16_t) const override { return true; }
+        text_metrics measure(const char16_t *, const int len) const override
+        {
+            return {6 * len, 7, 7};
+        }
+        text_metrics line_metrics() const override { return {0, 7, 7}; }
+        void write(core::Graphics &, const char16_t *, const int, const int,
+                   const int, const core::Color &) const override
+        {
+        }
+    };
+
+    // a single-line editor with uniform advances and a changed recorder
+    struct SelInput
+    {
+        Panel root;
+        TextInput *input = nullptr;
+        InputDispatcher d;
+        std::string last;
+
+        SelInput()
+        {
+            root.set_size(200, 100);
+            auto in = std::make_unique<TextInput>();
+            in->set_size(120, 20);
+            in->set_position(10, 10);
+            in->set_glyph_provider(zb::make_shared<UnitProvider>());
+            input = in.get();
+            root.add_child(std::move(in));
+            input->changed += [this](const std::string &t)
+            { last = t; };
+        }
+    };
+
 }  // namespace
 
 int test_text_input()
@@ -175,6 +269,98 @@ int test_text_input()
         d.dispatch(root, char_ev(0x9F));
         d.dispatch(root, char_ev(0x1F600));
         EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+    }
+
+    // FI-02 single-line selection (code-contract §3.8): drag selects,
+    // shift+click / shift+arrow extend, a non-shift caret move collapses
+    {
+        SelInput t;
+        t.input->set_text("abcdef");
+        t.d.dispatch(t.root, press_at(18, 20));  // local (8,10): col 6 -> caret 1
+        EXPECT(t.input->selected_text().empty());
+        t.d.dispatch(t.root, move_to(30, 20));  // col 18 -> caret 3
+        EXPECT(t.input->selected_text() == "bc");
+        t.d.dispatch(t.root, release_at(30, 20));
+        EXPECT(t.input->selected_text() == "bc");
+
+        auto shift_click = press_at(36, 20);  // col 24 -> caret 4
+        shift_click.mods = zb::input::mod_shift;
+        t.d.dispatch(t.root, shift_click);
+        EXPECT(t.input->selected_text() == "bcd");
+        t.d.dispatch(t.root, release_at(36, 20));
+
+        t.d.dispatch(t.root, key_mod(static_cast<int>(zb::input::key_code::left),
+                                     zb::input::mod_shift));
+        EXPECT(t.input->selected_text() == "bc");
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::left)));
+        EXPECT(t.input->selected_text().empty());  // collapsed at caret 2
+    }
+
+    // Ctrl+A selects all; typing replaces the selection
+    {
+        SelInput t;
+        t.input->set_text("abcdef");
+        t.d.dispatch(t.root, press_at(18, 20));  // focus + caret 1
+        t.d.dispatch(t.root, release_at(18, 20));
+        t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
+        EXPECT(t.input->selected_text() == "abcdef");
+        t.d.dispatch(t.root, char_ev('X'));
+        EXPECT(t.input->get_text() == u"X");
+        EXPECT(t.input->selected_text().empty());
+        EXPECT(t.last == "X");
+    }
+
+    // key round-trips through an injected sink; the paste is clipped to
+    // the field's own rules (no line break, CJK kept)
+    {
+        TestSink sink;
+        SinkGuard guard(&sink);
+        SelInput t;
+        t.input->set_text("abcdef");
+        t.d.dispatch(t.root, press_at(18, 20));  // caret 1
+        t.d.dispatch(t.root, move_to(30, 20));   // [1, 3)
+        t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl));
+        EXPECT(sink.sent == "bc");
+
+        sink.canned = "p\nq\xE4\xBD\xA0";
+        t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
+        // the '\n' drops (single line), 你 (U+4F60) stays
+        EXPECT(t.input->get_text() == std::u16string(u"apq\x4F60"
+                                                     "def"));
+        EXPECT(t.input->selected_text().empty());
+        EXPECT(t.last == "apq\xE4\xBD\xA0"
+                         "def");
+
+        // Ctrl+Insert copies; Shift+Insert pastes replacing [0, 2)
+        t.d.dispatch(t.root, press_at(18, 20));  // caret 1
+        t.d.dispatch(t.root, move_to(30, 20));   // [1, 3)
+        t.d.dispatch(t.root,
+                     key_mod(static_cast<int>(zb::input::key_code::insert),
+                             zb::input::mod_ctrl));
+        EXPECT(sink.sent == "pq");  // [1, 3) = p..q
+        sink.canned = "z";
+        t.d.dispatch(t.root, release_at(30, 20));
+        t.d.dispatch(t.root, press_at(18, 20));  // caret 1
+        t.d.dispatch(t.root, move_to(30, 20));   // [1, 3)
+        t.d.dispatch(t.root,
+                     key_mod(static_cast<int>(zb::input::key_code::insert),
+                             zb::input::mod_shift));
+        EXPECT(t.input->get_text() == std::u16string(u"az\x4F60"
+                                                     "def"));
+    }
+
+    // the default null sink: copy drops silently, paste is a no-op
+    {
+        SinkGuard guard(nullptr);
+        SelInput t;
+        t.input->set_text("abcdef");
+        t.d.dispatch(t.root, press_at(18, 20));
+        t.d.dispatch(t.root, move_to(30, 20));
+        EXPECT(t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl)));
+        EXPECT(t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl)));
+        EXPECT(t.input->get_text() == std::u16string(u"abcdef"));
+        EXPECT(t.input->selected_text() == "bc");
     }
 
     return test::report("text_input");

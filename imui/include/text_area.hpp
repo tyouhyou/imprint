@@ -21,9 +21,17 @@ namespace zb::ui
      * The view holds an internal vertical scroll offset: any caret move
      * scrolls minimally so the caret's line stays visible; mouse wheel
      * deltas scroll without moving the caret (delta > 0 scrolls toward
-     * the top, the ScrollPanel convention). Focus ring as TextInput. No
-     * undo/redo and no selection in this batch (caret only); both are
-     * additive later without a contract change.
+     * the top, the ScrollPanel convention). Focus ring as TextInput.
+     *
+     * Selection (FI-02, code-contract §3.8): a pointer drag sets an
+     * anchor and moves the caret ([min, max) of the two u16 indexes);
+     * shift+click and shift+arrow extend from the anchor; Ctrl+A selects
+     * all. Any edit, any non-shift caret move and focus loss collapse
+     * the selection to the caret; the selected range draws with the
+     * inverted face over the wrapped spans. Ctrl+C / Ctrl+Insert copy
+     * the selection, Ctrl+V / Shift+Insert paste at the caret — through
+     * the process-wide ClipboardSink (clipboard.hpp; a null sink drops
+     * copy silently and makes paste a no-op). No undo/redo.
      */
     class TextArea : public Widget
     {
@@ -49,6 +57,9 @@ namespace zb::ui
             mark_dirty();
         }
 
+        // the current selection as UTF-8 (empty when collapsed)
+        [[nodiscard]] std::string selected_text() const;
+
         // natural size: 100 wide, three lines plus the border
         [[nodiscard]] core::imsize_t measure() const override;
 
@@ -56,6 +67,14 @@ namespace zb::ui
         void draw_at(core::Graphics &area) const override;
         bool on_input(const zb::input::input_event &ev) override;
         bool is_focusable() const override { return true; }
+        // a selection drag owns the pointer until release (the slider
+        // pattern) so moves keep extending the selection off-widget
+        [[nodiscard]] bool captures_pointer() const override
+        {
+            return selecting_;
+        }
+        void on_cancel() override { selecting_ = false; }
+        void on_focus_change(const bool focused) override;
 
     private:
         // the editing core mirrors TextInput's (a u16 caret clamped on
@@ -64,10 +83,24 @@ namespace zb::ui
         void insert(const char16_t ch);
         bool erase_before_caret();
         bool erase_at_caret();
-        bool move_caret(const int dir);
-        bool move_caret_vertical(const int dir);
+        bool move_caret(const int dir, const bool extend_selection = false);
+        bool move_caret_vertical(const int dir,
+                                 const bool extend_selection = false);
         void place_caret_at(const int x, const int y);
         void fire_changed();
+
+        // FI-02 selection mechanics: erase_selection replaces the range
+        // (collapse to its start; `fire` controls the changed event —
+        // insert paths erase silently so one user edit fires once);
+        // insert_text inserts a whole string (paste) through the same
+        // rules; copy/paste route through the process ClipboardSink
+        bool erase_selection(bool fire = true);
+        void insert_text(const std::u16string &units);
+        // the field's own input rules applied to pasted text: the T-2
+        // acceptance plus '\n' (enter is content here)
+        [[nodiscard]] std::u16string paste_filter(const std::u16string &in) const;
+        void copy_selection();
+        void paste_at_caret();
 
         // the pitch, inner wrap width, and caret geometry shared by the
         // input and draw paths — one definition so a click, a caret
@@ -91,6 +124,10 @@ namespace zb::ui
         void clamp_scroll();
 
         size_t caret = 0;
+        // the selection anchor: [min(sel_anchor, caret), max(...));
+        // collapsed when it equals the caret
+        size_t sel_anchor = 0;
+        bool selecting_ = false;  // a selection drag is in flight
         // pixel column kept across vertical moves; every non-vertical
         // caret change re-anchors it to the caret's own column
         int column_goal = 0;

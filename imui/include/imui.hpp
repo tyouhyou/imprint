@@ -3,6 +3,7 @@
 #include "annotate_canvas.hpp"
 #include "button.hpp"
 #include "checkbox.hpp"
+#include "clipboard.hpp"
 #include "dialog.hpp"
 #include "dispatcher.hpp"
 #include "flex_panel.hpp"
