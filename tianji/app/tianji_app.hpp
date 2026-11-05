@@ -36,6 +36,7 @@
 
 #include "feed/feed_client.hpp"
 #include "feed/view_builder.hpp"
+#include "scene_replay.hpp"
 
 namespace zb::ui
 {
@@ -122,6 +123,8 @@ namespace zb::app::tianji
         void submit_command();
         void poll_feed();
         void wire_down(const std::string &why);  // socket dropped: log once + fall back
+        void present_stage_beat();               // compose + set_image
+        void export_replay_gif();                // TIANJI_GIF: replay 存证
 
         zb::SharedPtr<CanvasWindow> window_;
         zb::ui::ListBox *stream_ = nullptr;
@@ -132,6 +135,12 @@ namespace zb::app::tianji
 
         StreamContext stream_ctx_{};
         zb::tianji::TianjiView view_{};
+        // the scene replay (TJ-C5): the stage states the feed carried,
+        // walked by the deterministic step clock; the composed frame
+        // rides the canvas's ImageView
+        std::vector<StageState> stages_;
+        std::size_t stage_presented_ = 0;  // the deterministic cursor
+        std::vector<core::Color> stage_buf_{};
         std::vector<zb::tianji::Json> replay_;  // offline: the message queue
         std::size_t replay_at_ = 0;
         std::string command_text_;  // the submitted-event mirror

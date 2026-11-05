@@ -12,6 +12,8 @@
 #include "feed/mock_server.hpp"
 #include "feed/view_builder.hpp"
 
+#include "scene_replay.hpp"
+
 using namespace zb::tianji;
 
 namespace
@@ -199,12 +201,18 @@ int test_tianji_view()
     EXPECT(view.last_seq == 3);  // from the snapshot, not from events
 
     // the wire-level resume check: subscribe(after_seq=3) replays
-    // nothing (the mock's event seqs are 1..3, all <= the cursor)
-    EXPECT(msgs.size() == 6);  // welcome, snapshot, view, ev1..ev3
-    for (size_t i = 3; i < msgs.size(); ++i)
+    // nothing (the mock's event seqs are 1..3, all <= the cursor).
+    // The stream is welcome, snapshot, view, 3 events, then the 3
+    // TJ-C5 stage beats -- only the event slice carries the cursor
+    EXPECT(msgs.size() == 9);
+    for (size_t i = 3; i < 6; ++i)
     {
-        const long long seq = msgs[i].find("event")->get_int("seq");
-        EXPECT(seq <= view.last_seq);  // the subscribe would skip it
+        const zb::tianji::Json *ev = msgs[i].find("event");
+        EXPECT(ev != nullptr);
+        if (ev != nullptr)
+        {
+            EXPECT(ev->get_int("seq") <= view.last_seq);
+        }
     }
 
     // a NEW event (seq 4) appends one row and advances the cursor
@@ -279,6 +287,84 @@ int test_tianji_view()
     return test::report("tianji_view");
 }
 
+using zb::app::tianji::compose_stage;
+using zb::app::tianji::kStageWidth;
+using zb::app::tianji::parse_stage;
+using zb::app::tianji::StageState;
+
+// TJ-C5: the stage-message parse + the deterministic compose
+int test_tianji_scene()
+{
+    // the mock's synthesized beats parse into states
+    auto msgs = zb::tianji::MockTianjiServer::synthesize(sample_record(),
+                                                         "room_mock");
+    // 3 welcome/snapshot/view + 3 events + 3 stage beats
+    EXPECT(msgs.size() == 9);
+    std::vector<StageState> beats;
+    for (const auto &m : msgs)
+    {
+        StageState s;
+        if (parse_stage(m, s))
+        {
+            beats.push_back(std::move(s));
+        }
+    }
+    EXPECT(beats.size() == 3);
+    EXPECT(beats[0].scene_id == "scene.equip");
+    EXPECT(beats[0].revision == 1 && beats[2].revision == 3);
+    EXPECT(beats[0].props.size() == 1);
+    EXPECT(beats[0].props[0].id == "p.marker");
+    EXPECT(beats[0].props[0].w == 60 && beats[0].props[0].h == 40);
+    EXPECT(beats[1].props[0].x == 120 + 200);
+    EXPECT(beats[0].overlays.size() == 1 && beats[0].overlays[0].r == 30);
+    // the schema color form parses; the walk is deterministic
+    EXPECT(beats[0].props[0].color.r() == 0xFF);
+    EXPECT(beats[0].props[0].color.g() == 0xCC);
+    EXPECT(beats[0].props[0].color.b() == 0x00);
+
+    // the compose is a pure function of the state: same state, same
+    // bytes; a moved prop changes exactly the covered region
+    std::vector<core::Color> buf_a;
+    std::vector<core::Color> buf_b;
+    compose_stage(beats[0], buf_a);
+    compose_stage(beats[0], buf_b);
+    EXPECT(buf_a == buf_b);
+    compose_stage(beats[1], buf_b);
+    EXPECT(buf_a != buf_b);
+    // the prop rect is where the beat put it (inside the canvas)
+    const int w = kStageWidth;
+    const int px = beats[0].props[0].x;
+    const int py = beats[0].props[0].y;
+    const core::Color &c =
+        buf_a[static_cast<size_t>(py) * static_cast<size_t>(w) +
+              static_cast<size_t>(px)];
+    EXPECT(c.r() == 0xFF && c.g() == 0xCC && c.b() == 0x00);
+
+    // untrusted wire numbers clamp into the canvas; a bad color falls
+    // back to the theme blue; a message without a stage_view is not a
+    // beat
+    {
+        const char *kWild = "{\"type\":\"stage\",\"stage_view\":{"
+                            "\"scene_id\":\"s\",\"revision\":9,\"props\":["
+                            "{\"id\":\"p\",\"x\":999999,\"y\":-5,\"w\":80,"
+                            "\"h\":80,\"color\":\"not-a-color\"}]}}";
+        const char *p = kWild;
+        StageState s;
+        EXPECT(parse_stage(zb::tianji::Json::parse(
+                               p, p + std::strlen(kWild)),
+                           s));
+        EXPECT(s.props[0].x == kStageWidth);
+        EXPECT(s.props[0].y == 0);
+        EXPECT(s.props[0].color.b() == 200);  // the theme-blue fallback
+        const char *kNoStage = "{\"type\":\"event\",\"seq\":1}";
+        p = kNoStage;
+        EXPECT(!parse_stage(zb::tianji::Json::parse(
+                                p, p + std::strlen(kNoStage)),
+                            s));
+    }
+    return test::report("tianji_scene");
+}
+
 // the tianji binary's own dispatch (test_imui's main is framework
 // suites; this one stays app-side): the same filter convention —
 // substring match, no filter = all
@@ -293,6 +379,7 @@ int main(const int argc, char **argv)
         {"tianji_json", test_tianji_json},
         {"tianji_feed", test_tianji_feed},
         {"tianji_view", test_tianji_view},
+        {"tianji_scene", test_tianji_scene},
     };
     const char *filters[16] = {};
     int filter_count = 0;

@@ -1,5 +1,6 @@
 #include "tianji_app.hpp"
 
+#include "snapshot.hpp"
 #include "tianji_stage.gen.hpp"  // bytes_embed blob: the 800x600 stage placeholder
 
 #include <cstdio>
@@ -470,6 +471,13 @@ namespace zb::app::tianji
         bool changed = false;
         for (const zb::tianji::Json &m : msgs)
         {
+            StageState s;
+            if (zb::app::tianji::parse_stage(m, s))
+            {
+                stages_.push_back(std::move(s));  // a replay beat
+                changed = true;
+                continue;
+            }
             if (zb::tianji::apply_message(view_, m))
             {
                 changed = true;
@@ -495,18 +503,67 @@ namespace zb::app::tianji
             else if (replay_at_ < replay_.size() &&
                      index % kReplayStepInterval == 0)
             {
-                if (zb::tianji::apply_message(view_, replay_[replay_at_]))
+                const zb::tianji::Json &m = replay_[replay_at_];
+                StageState s;
+                if (zb::app::tianji::parse_stage(m, s))
+                {
+                    stages_.push_back(std::move(s));
+                }
+                else if (zb::tianji::apply_message(view_, m))
                 {
                     refresh_stream();
                     refresh_proposals();
                 }
                 ++replay_at_;
             }
+            // the stage beats present half an interval after the
+            // message that carried them: each tick does one thing
+            if (index % kReplayStepInterval == kReplayStepInterval / 2)
+            {
+                present_stage_beat();
+            }
         }
         catch (const std::exception &e)
         {
             // the step never throws into the shell loop (R6)
             LE << "tianji: step failed: " << e.what();
+        }
+    }
+
+    void TianjiApp::present_stage_beat()
+    {
+        if (stage_presented_ >= stages_.size())
+        {
+            return;
+        }
+        compose_stage(stages_[stage_presented_], stage_buf_);
+        const core::image_t view{stage_buf_.data(), kStageWidth,
+                                 kStageHeight, 0};
+        stage_->set_image(view);
+        ++stage_presented_;
+        if (stage_presented_ == stages_.size())
+        {
+            // the replay finished: the optional GIF 存证 (the
+            // GIF89a writer from the snapshot helper)
+            export_replay_gif();
+        }
+    }
+
+    void TianjiApp::export_replay_gif()
+    {
+        const char *gif = std::getenv("TIANJI_GIF");
+        if (gif == nullptr || gif[0] == '\0')
+        {
+            return;
+        }
+        // the snapshot helper's init path throws; the step never does
+        try
+        {
+            zb::snap::save_gif(*window_, gif);
+        }
+        catch (const std::exception &e)
+        {
+            LW << "tianji: replay GIF export failed: " << e.what();
         }
     }
 

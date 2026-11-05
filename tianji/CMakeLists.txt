@@ -18,9 +18,10 @@ target_link_libraries(tianji_feed PUBLIC imutil imcore)
 add_library(tianji_app STATIC
     app/tianji_app.cpp
     app/app_maker.cpp
+    app/scene_replay.cpp
 )
 target_include_directories(tianji_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/app)
-target_link_libraries(tianji_app PUBLIC tianji_feed imui imapp_canvas)
+target_link_libraries(tianji_app PUBLIC tianji_feed imui imapp_canvas imapp_snapshot)
 
 # the stage placeholder (the g2048 font-blob precedent): a deterministic
 # 800x600 PNG packed at build time, the ImageView content behind the
@@ -53,8 +54,8 @@ endif()
 # API).
 if (UNIX AND NOT APPLE)
     add_executable(test_tianji test/test_tianji_feed.cpp)
-    target_include_directories(test_tianji PRIVATE ${PROJECT_SOURCE_DIR}/test)
-    target_link_libraries(test_tianji PRIVATE tianji_feed)
+    target_include_directories(test_tianji PRIVATE ${PROJECT_SOURCE_DIR}/test ${CMAKE_CURRENT_SOURCE_DIR}/app)
+    target_link_libraries(test_tianji PRIVATE tianji_app)
     add_test(NAME test_tianji COMMAND test_tianji)
     set_tests_properties(test_tianji PROPERTIES
         ENVIRONMENT "ASAN_OPTIONS=detect_leaks=1")

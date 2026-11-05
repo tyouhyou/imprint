@@ -188,6 +188,47 @@ namespace zb::tianji
                 out.push_back(make_event(room_id, line, ++seq));
             }
         }
+        // the replay beats (TJ-C5): a prop walking a fixed triangle --
+        // beat b places it on (120 + (200*b) % 560, 200 + 80*(b % 3)),
+        // revision = b + 1. The real beats arrive as the server's stage
+        // messages; this synthetic walk makes the replay visible
+        // without scene art.
+        for (int b = 0; b < 3; ++b)
+        {
+            Json m = envelope("stage", room_id);
+            Json sv = Json::object();
+            sv.set("scene_id", Json::str("scene.equip"));
+            sv.set("revision", Json::number(static_cast<double>(b + 1)));
+            Json canvas = Json::object();
+            canvas.set("w", Json::number(800));
+            canvas.set("h", Json::number(600));
+            sv.set("canvas", std::move(canvas));
+            Json props = Json::array();
+            Json prop = Json::object();
+            prop.set("id", Json::str("p.marker"));
+            prop.set("x",
+                     Json::number(static_cast<double>(120 + (200 * b) % 560)));
+            prop.set("y",
+                     Json::number(static_cast<double>(200 + 80 * (b % 3))));
+            prop.set("w", Json::number(60));
+            prop.set("h", Json::number(40));
+            prop.set("color", Json::str("#ffcc00"));
+            props.push_back(std::move(prop));
+            sv.set("props", std::move(props));
+            Json overlays = Json::array();
+            Json ring = Json::object();
+            ring.set("id", Json::str("o.1"));
+            ring.set("x",
+                     Json::number(static_cast<double>(150 + (200 * b) % 560)));
+            ring.set("y",
+                     Json::number(static_cast<double>(220 + 80 * (b % 3))));
+            ring.set("r", Json::number(30));
+            ring.set("color", Json::str("#ffcc00"));
+            overlays.push_back(std::move(ring));
+            sv.set("overlays", std::move(overlays));
+            m.set("stage_view", std::move(sv));
+            out.push_back(std::move(m));
+        }
         return out;
     }
 
