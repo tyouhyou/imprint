@@ -196,6 +196,14 @@ if (IMPRINT_WITH_SHELL)
     add_subdirectory(imshell)
 endif()
 
+# the tianji client composition layer (Batch FI Part 2): app-side feed
+# library + tests; desktop hosts only (the wire is an AF_UNIX socket —
+# neither the NDS toolchain nor the wasm build speaks it; TJ-C6 adds
+# the wasm transport seam)
+if (NOT NDS_PLATFORM AND NOT EMSCRIPTEN)
+    add_subdirectory(tianji)
+endif()
+
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree.
 foreach(_imprint_target imutil imcore imraster imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend zbapi)
