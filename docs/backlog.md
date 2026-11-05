@@ -368,6 +368,11 @@ the tianji repo; go there only to confirm specifics.**
 - **FI-04 — CJK runtime-font recipe** (document-only). Runtime full
   font + `cache_budget` guidance (the 64KB default ≈ a few dozen
   hanzi; recommend 2–8MB) vs build-time subsets.
+  **Landed 2026-11-05**: the sizing fact (entry = w×h coverage bytes,
+  64KB ≈ 240 units at 16px / 110 at 24px, 2–8MB for dynamic CJK,
+  scale as `units × px²`) lives in code-contract §2.4 "Cache sizing";
+  the tianji-facing recipe (runtime-full vs build-time-subset choice,
+  build flag, TtfFamily wiring) is §5 of `tianji/for_tianji.md`.
 - **FI-03 → A-25 — non-BMP pairing rendering** (trigger fired). Late
   in this batch: engine-side text is all-BMP today; AI-generated
   dialogue emoji is the residual risk. Contract-first at A-25, no

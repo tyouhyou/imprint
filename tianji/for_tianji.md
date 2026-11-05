@@ -58,7 +58,30 @@
 4. **输入方式确认**：SIXEL 壳的键盘输入由终端直送 UTF-8（term_input 已
    解析），中文输入依赖终端自身的 IME 行为——请确认可接受，或给出目标终端。
 
-## 5. 进展账（每步更新）
+## 5. 中文渲染配方（FI-04 回执）
+
+天机 FI-04 问"中文怎么配"。两条路径，按文本来源选：
+
+- **动态文本（对话流、AI 生成的台词——你们的主体）→ 运行时全字体**：
+  1. 构建加 `-DUSE_TTF_RUNTIME=ON`（vendored stb_truetype，无外部依赖）；
+  2. 进程内加载一个覆盖 CJK 的 TTF：`TtfFamily::from_file(path)`
+     （宿主机）或 `from_memory(bytes, n)`（借用，须活得比 family 长）；
+  3. 装到控件上：`set_font_family(family)`（进程级）+ 需要处
+     `set_font_size(px)`，或逐子树 `set_glyph_provider(family.provider_for(px))`；
+  4. **缓存定档（唯一要动脑的参数）**：`cache_budget` 默认 64KB 只够
+     16px 下 ~240 个字（每条目 w×h 覆盖字节，汉字 16px ≈ 256B），
+     对话流必然反复清空。传 **2MB（≈8k 条目，对话工作集）** 到
+     **8MB（≈32k 条目，16px 下全 GB2312）**；按 `字数 × px²` 缩放。
+     细节在 imprint 仓 `docs/code-contract.md` §2.4 "Cache sizing"。
+- **静态 UI 文本（构建期就定死的标签）→ 构建期子集**
+  （`TTF_FONT` + `TtfSubsetProvider`，零运行时开销）。对话流不要用
+  这条——AI 生成的字构建期枚举不全。
+
+兜底链：运行时字体未覆盖的字 → 5x7 位图（仅 ASCII）→ 跳过。
+字体缺 emoji 时 emoji 会被跳过——非 BMP 码点的**成对渲染与光标/
+选择边界**属 A-25/FI-03（本批稍后落地，届时补充）。
+
+## 6. 进展账（每步更新）
 
 - 2026-11-03：分工拍板（SIXEL 优先；组合层入树 `tianji/`；FI-07 维持
   关闭）；`docs/backlog.md` Batch FI 重构为「框架模块 → 组合层」两段；

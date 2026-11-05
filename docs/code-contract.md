@@ -276,6 +276,17 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   family: `rasterization_count()` (monotonic cache misses) and
   `cache_bytes()` — the counter is the portable proof across the imcore
   DLL boundary (§8, the ListBox precedent).
+- **Cache sizing (CJK consumers, FI-04)**: an entry costs `w×h`
+  coverage bytes — a hanzi is ≈256 B at 16px, ≈576 B at 24px — so the
+  64 KB default holds ~240 units at 16px / ~110 at 24px, and a dynamic
+  CJK stream (unbounded distinct hanzi) thrashes it into
+  drop-everything cycles. A consumer rendering dynamic CJK text passes
+  `cache_budget` explicitly: **2 MB** (≈8k entries at 16px) covers a
+  dialogue working set; **8 MB** (≈32k entries) holds the full GB2312
+  range at 16px — scale as `distinct_units × px²`. Static UI text
+  keeps the build-time subset (zero runtime cost, units known at build
+  time); the runtime full font is for text the build cannot enumerate
+  (AI-generated dialogue).
 - **Fallback chain unchanged (standing rules above)**: code units the
   font lacks (glyph index 0) are "not covered" and fall through to the
   5x7 bitmap provider, then skip. `covers` never allocates; `measure`
