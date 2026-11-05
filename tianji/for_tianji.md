@@ -48,7 +48,8 @@
 1. **场景图素材（最关键）**：worldpack 目前零图片资产，StageView 的
    background/props 恒为空。请定义：格式（PNG？）、基准尺寸（800×600？）、
    来源（AI 生成？手绘？）、分发方式；"还原现场"动画是否需要角色/道具
-   精灵图（sprite）。
+   精灵图（sprite）。客户端当前用构建期打包的占位图垫底（否则标注画布
+   无映射矩形、不能收笔画）。
 2. **stage.annotation 激活**：schema 已预留（贵方
    `docs/07-interface-contracts.md` 的 circle/overlays），权限 / audience /
    ttl 语义归贵方；我们提供笔画数据（逻辑画布坐标、颜色、宽度、所有者）。
@@ -57,6 +58,12 @@
    几何（每帧整幅 sixel 位图，非文字单元混排）。
 4. **输入方式确认**：SIXEL 壳的键盘输入由终端直送 UTF-8（term_input 已
    解析），中文输入依赖终端自身的 IME 行为——请确认可接受，或给出目标终端。
+5. **unsolicited push 与轮询节奏（新，随 TJ-C2 提出）**：v1 wire 是
+   "一请求一行响应"；贵方原型会不会在无请求时主动下发（view/stage/
+   window 增量）？若会，同步轮询会把 push 误读为当前请求的响应——需要
+   贵方确认（原型确认即可，远期 WebSocket 再议）。当前客户端按
+   "subscribe(after_seq) 拉取" 建模，与 docs/07 §5.2 的首连/断线流程
+   一致。
 
 ## 5. 中文渲染配方（FI-04 回执）
 
@@ -103,3 +110,25 @@
   原语（SvgCanvas 胶囊算法提炼，定点确定性）。评审意见两条已修（注入点
   int64→int 窄化钳制 + 格式漂移）；desktop + 16bpp battery 全绿。舞台
   的"画线标注"框架能力就绪。
+- 2026-11-05：**框架模块段全部收尾**——消息流三件套（FI-05 跟底 /
+  FI-06 变高行前缀和虚拟化 / FI-02 选择+剪贴板接缝）评审修复后落地；
+  FI-04 中文渲染配方写入 §5；A-25/FI-03 非 BMP 成对渲染落地（输入
+  `ch > U+FFFF` 存 UTF-16 对、光标/删除/选择按对原子、`covers_pair`
+  缝隙 + 运行时字体按合并码点渲染、包裹不劈对——AI 台词里的 emoji
+  不再是残的风险）。评审闭环、过滤套件全绿。
+- 2026-11-05：**TJ-C2 落地**——`tianji/feed/`：v1 JSON 子集解析器
+  （深度帽/控制字节拒绝/代理对解码）、feed 客户端（hello/join_room/
+  subscribe(after_seq)/ping，抽象套接字 @ 路径）、mock 喂入器（回放
+  run_*.json 形状的会话记录为完整 v1 流，after_seq 精确续传）、视图
+  构建器（消息 → 流行模型：六类行 + 服务端合法动作提案 + 游标）。
+  评审 4M+9L 全部修复（stop/shutdown 唤醒、int64 钳制、快照游标防
+  双份历史等）；socket 端到端测试全绿；test_tianji 进 CI 与 asan 电池。
+- 2026-11-05：**TJ-C3（SIXEL 优先客户端）落地**——`STORY=tianji`
+  组装（`shell_backend + tianji_app`，来自 `tianji/`）：左流
+  ScrollPanel+变高 ListBox（跟底）、右 800×600 逻辑舞台
+  AnnotateCanvas（占位场景图垫底，标注可画）、底部命令行按服务端
+  提案解析（不在客户端发明动作）；离线回放（默认）与 TIANJI_SOCKET
+  在线模式；TIANJI_FONT 运行时 CJK 字体（§5 配方的应用侧落点）；
+  终端壳接入 R6 固定步进；终端 Ctrl/Alt 和弦翻译（Ctrl+A/C/V 在
+  SIXEL 终端可用）。pty 冒烟通过（帧推进、输入驱动、会话存活）。
+  待真终端人工复验 + FI-01 真 IME 复验（需要贵方终端清单，见 §4.3）。

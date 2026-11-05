@@ -12,6 +12,32 @@ add_library(tianji_feed STATIC
 target_include_directories(tianji_feed PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(tianji_feed PUBLIC imutil imcore)
 
+# the STORY=tianji app library: the root composes the ${STORY} exe
+# from shell_backend + ${STORY}_app (A-22, one composition point) --
+# same convention as apps/<story>, sourced from tianji/
+add_library(tianji_app STATIC
+    app/tianji_app.cpp
+    app/app_maker.cpp
+)
+target_include_directories(tianji_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/app)
+target_link_libraries(tianji_app PUBLIC tianji_feed imui imapp_canvas)
+
+# the stage placeholder (the g2048 font-blob precedent): a deterministic
+# 800x600 PNG packed at build time, the ImageView content behind the
+# AnnotateCanvas's letterbox -- the FI-04 ask (tianji has zero scene
+# art) stays open; this asset is what makes the stage input-mappable
+# today
+set(TIANJI_STAGE_HEADER ${CMAKE_CURRENT_BINARY_DIR}/tianji_stage.gen.hpp)
+add_custom_command(
+    OUTPUT ${TIANJI_STAGE_HEADER}
+    COMMAND bytes_embed ${TIANJI_STAGE_HEADER} tianji_stage
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
+    DEPENDS bytes_embed ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
+    VERBATIM)
+add_custom_target(tianji_stage_gen DEPENDS ${TIANJI_STAGE_HEADER})
+add_dependencies(tianji_app tianji_stage_gen)
+target_include_directories(tianji_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
+
 # Linux-only for now: the wire is an AF_UNIX socket and the mock binds
 # the Linux abstract namespace (Darwin has none — the macOS maintainer
 # box and the macos CI job stay out until a filesystem-socket fallback

@@ -126,6 +126,12 @@ namespace
         std::fputs("\x1b[H", stdout);
         zb::shell::sixel::write_frame(window->data(), buffer_w, buffer_h);
 
+        // R6: the shell owns the frame clock — one fixed step per loop
+        // tick (the 30ms poll cadence is the clock), so an app with a
+        // simulation (the tianji client's feed replay) advances
+        // deterministically instead of never
+        std::uint64_t step_index = 0;
+
         while (!app_closed)
         {
             // 30ms poll: input arrives when it arrives, the frame presents
@@ -158,6 +164,7 @@ namespace
                 std::fputs("\x1b[H", stdout);  // cursor home, overwrite
                 zb::shell::sixel::write_frame(window->data(), buffer_w, buffer_h);
             }
+            app->step(30000, step_index++);
         }
 
         session.restore();
