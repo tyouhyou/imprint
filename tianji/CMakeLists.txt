@@ -2,6 +2,18 @@
 # library is pure app-side code over imutil/imcore — no framework API
 # changes; the ${STORY}-style exe assembly lands with TJ-C3.
 
+# Platform gate: the wire is an AF_UNIX socket and the mock binds the
+# Linux abstract namespace (Darwin has none — the macOS maintainer box
+# and the macos CI job stay out until a filesystem-socket fallback is
+# wanted), and neither the NDS toolchain nor the wasm build speaks the
+# socket wire (the wasm transport seam is TJ-C6). Everything below —
+# feed library, app library, tests — rides this gate; the feed TUs
+# include <sys/socket.h>/<sys/un.h> and must not reach a non-POSIX
+# compiler (the win32 CI has no POSIX socket API).
+if (NOT UNIX OR APPLE OR NDS_PLATFORM OR EMSCRIPTEN)
+    return()
+endif()
+
 add_library(tianji_feed STATIC
     feed/json.cpp
     feed/feed_client.cpp
@@ -11,6 +23,15 @@ add_library(tianji_feed STATIC
 
 target_include_directories(tianji_feed PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(tianji_feed PUBLIC imutil imcore)
+
+# the app library and everything downstream of it need the build-time
+# packed stage asset (the bytes_embed host tool = IMPRINT_USE_TOOLS):
+# a framework-only subproject configure (A-28, tools off) builds the
+# feed library alone — no tool, no asset header, no tianji_app for the
+# ${STORY} composition
+if (NOT IMPRINT_USE_TOOLS)
+    return()
+endif()
 
 # the STORY=tianji app library: the root composes the ${STORY} exe
 # from shell_backend + ${STORY}_app (A-22, one composition point) --
@@ -29,30 +50,24 @@ target_link_libraries(tianji_app PUBLIC tianji_feed imui imapp_canvas imapp_snap
 # art) stays open; this asset is what makes the stage input-mappable
 # today
 set(TIANJI_STAGE_HEADER ${CMAKE_CURRENT_BINARY_DIR}/tianji_stage.gen.hpp)
-# the gen step needs the bytes_embed host tool (IMPRINT_USE_TOOLS): a
-# framework-only subproject configure (A-28, tools off) builds the feed
-# library and tests without the app's packed asset. The variable, not
-# TARGET bytes_embed: this subdirectory is processed before the tools
-# block, so the target does not exist yet at configure time.
-if (IMPRINT_USE_TOOLS)
-    add_custom_command(
-        OUTPUT ${TIANJI_STAGE_HEADER}
-        COMMAND bytes_embed ${TIANJI_STAGE_HEADER} tianji_stage
-                ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
-        DEPENDS bytes_embed ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
-        VERBATIM)
-    add_custom_target(tianji_stage_gen DEPENDS ${TIANJI_STAGE_HEADER})
-    add_dependencies(tianji_app tianji_stage_gen)
-    target_include_directories(tianji_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
-endif()
+# The variable, not TARGET bytes_embed: this subdirectory is processed
+# before the tools block, so the target does not exist yet at configure
+# time. (The IMPRINT_USE_TOOLS gate above is the same condition the
+# bytes_embed target is declared under.)
+add_custom_command(
+    OUTPUT ${TIANJI_STAGE_HEADER}
+    COMMAND bytes_embed ${TIANJI_STAGE_HEADER} tianji_stage
+            ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
+    DEPENDS bytes_embed ${CMAKE_CURRENT_SOURCE_DIR}/assets/stage_placeholder.png
+    VERBATIM)
+add_custom_target(tianji_stage_gen DEPENDS ${TIANJI_STAGE_HEADER})
+add_dependencies(tianji_app tianji_stage_gen)
+target_include_directories(tianji_app PRIVATE ${CMAKE_CURRENT_BINARY_DIR})
 
-# Linux-only for now: the wire is an AF_UNIX socket and the mock binds
-# the Linux abstract namespace (Darwin has none — the macOS maintainer
-# box and the macos CI job stay out until a filesystem-socket fallback
-# is wanted); the wasm transport seam is TJ-C6. The tests ride the same
-# gate (the sockets are not embeddable and win32 CI has no POSIX socket
-# API).
-if (UNIX AND NOT APPLE)
+# the feed suites ride the same battery gate as the in-tree test/ dir
+# (root CMakeLists): they link tianji_app, so they also need the tools
+# on (WITH_TESTS implies IMPRINT_USE_TOOLS in the root)
+if (IMPRINT_WITH_TESTS)
     add_executable(test_tianji test/test_tianji_feed.cpp)
     target_include_directories(test_tianji PRIVATE ${PROJECT_SOURCE_DIR}/test ${CMAKE_CURRENT_SOURCE_DIR}/app)
     target_link_libraries(test_tianji PRIVATE tianji_app)

@@ -197,12 +197,10 @@ if (IMPRINT_WITH_SHELL)
 endif()
 
 # the tianji client composition layer (Batch FI Part 2): app-side feed
-# library + tests; desktop hosts only (the wire is an AF_UNIX socket —
-# neither the NDS toolchain nor the wasm build speaks it; TJ-C6 adds
-# the wasm transport seam)
-if (NOT NDS_PLATFORM AND NOT EMSCRIPTEN)
-    add_subdirectory(tianji)
-endif()
+# library + tests. The list file owns its platform gate (AF_UNIX wire —
+# Linux-only for now) and its tools/tests gates; the only consumer here
+# is the generic ${STORY} composition below, which links ${STORY}_app.
+add_subdirectory(tianji)
 
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree.
