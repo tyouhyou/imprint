@@ -154,9 +154,10 @@ namespace zb::ui
         // w*h*kQ10*kQ10 of the viewBox stroke scale (2^60 at this cap)
         // and |dx|*w*kQ10 of the coordinate map (2^51). kMaxPx is
         // deliberately generous (real surfaces are ~three orders of
-        // magnitude smaller). Non-geometry numeric props (gradient stops,
-        // control ranges, enum selectors) keep their own setter clamps or
-        // are compare-only; they are not this class.
+        // magnitude smaller). Non-geometry numeric props are not this
+        // class: control ranges/steps/values, the radio group and the
+        // svg_text anchor gate at their own casts below (ctrl_of and the
+        // inline clamps); gradient stops are parsed colors.
         constexpr long long kMaxPx = 1LL << 20;  // 1 048 576 px
 
         int px_of(const ui_node &n, const char *name,
@@ -175,6 +176,20 @@ namespace zb::ui
                 return static_cast<int>(-kMaxPx);
             }
             return static_cast<int>(v > kMaxPx ? kMaxPx : v);
+        }
+
+        // control-quantity gate (X-5's non-geometry class): a
+        // range/step/value/group arrives as an unbounded long long and
+        // feeds an int field — the gate stops the silent wrap of values
+        // beyond int while keeping the whole int domain reachable
+        // (negative ranges and negative group ids are valid)
+        int ctrl_of(const ui_node &n, const char *name,
+                    const long long fallback = 0)
+        {
+            const long long v = prop_of(n, name, fallback);
+            return static_cast<int>(
+                v < -2147483648LL ? -2147483648LL
+                                  : (v > 2147483647LL ? 2147483647LL : v));
         }
 
         // the string keys here are the ones a future designer-file
@@ -600,8 +615,10 @@ namespace zb::ui
                             rp > 65535 ? 65535 : rp);
                     }
                 }
-                const int ang = static_cast<int>(
-                    prop_of(n, (pre + "rot_ang").c_str(), 0LL));
+                // clamp on the long long before the cast (the rot_ox/oy
+                // rule): narrowing first would clamp an already-wrapped
+                // value
+                const long long ang = prop_of(n, (pre + "rot_ang").c_str(), 0LL);
                 if (ang != 0)
                 {
                     if (ps.grad_kind != 0)
@@ -1353,7 +1370,9 @@ namespace zb::ui
             if (t == "radio")
             {
                 RadioButton &r = *as_radio(w);
-                r.set_group(static_cast<int>(prop_of(n, "group", 0LL)));
+                // the group id is equality-only and negative ids are
+                // valid; the gate only stops the beyond-int wrap
+                r.set_group(ctrl_of(n, "group", 0LL));
                 if (prop_of(n, "checked", false))
                 {
                     r.set_checked(true);
@@ -1363,18 +1382,16 @@ namespace zb::ui
             if (t == "slider")
             {
                 Slider &s = *as_slider(w);
-                s.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
-                            static_cast<int>(prop_of(n, "max", 100LL)));
-                s.set_step(static_cast<int>(prop_of(n, "step", 1LL)));
-                s.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                s.set_range(ctrl_of(n, "min", 0LL), ctrl_of(n, "max", 100LL));
+                s.set_step(ctrl_of(n, "step", 1LL));
+                s.set_value(ctrl_of(n, "value", 0LL));
                 return;
             }
             if (t == "progress_bar")
             {
                 ProgressBar &p = *as_progress_bar(w);
-                p.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
-                            static_cast<int>(prop_of(n, "max", 100LL)));
-                p.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                p.set_range(ctrl_of(n, "min", 0LL), ctrl_of(n, "max", 100LL));
+                p.set_value(ctrl_of(n, "value", 0LL));
                 return;
             }
             if (t == "toggle")
@@ -1388,18 +1405,16 @@ namespace zb::ui
             if (t == "gauge")
             {
                 GaugeDial &g = *as_gauge(w);
-                g.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
-                            static_cast<int>(prop_of(n, "max", 100LL)));
-                g.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                g.set_range(ctrl_of(n, "min", 0LL), ctrl_of(n, "max", 100LL));
+                g.set_value(ctrl_of(n, "value", 0LL));
                 return;
             }
             if (t == "knob")
             {
                 Knob &k = *as_knob(w);
-                k.set_range(static_cast<int>(prop_of(n, "min", 0LL)),
-                            static_cast<int>(prop_of(n, "max", 100LL)));
-                k.set_step(static_cast<int>(prop_of(n, "step", 1LL)));
-                k.set_value(static_cast<int>(prop_of(n, "value", 0LL)));
+                k.set_range(ctrl_of(n, "min", 0LL), ctrl_of(n, "max", 100LL));
+                k.set_step(ctrl_of(n, "step", 1LL));
+                k.set_value(ctrl_of(n, "value", 0LL));
                 return;
             }
             if (t == "image_view")
@@ -1468,7 +1483,12 @@ namespace zb::ui
                             txt.color = fill;
                             txt.has_color = true;
                         }
-                        txt.anchor = static_cast<int>(prop_of(c, "anchor", 0LL));
+                        // the anchor domain is 0/1/2 (start/middle/end);
+                        // an out-of-domain .ui value clamps instead of
+                        // narrowing unchecked
+                        const long long av = prop_of(c, "anchor", 0LL);
+                        txt.anchor =
+                            static_cast<int>(av < 0 ? 0 : (av > 2 ? 2 : av));
                         txt.font_size = prop_of(c, "text_fs", 0.0);
                         v.add_text(txt);
                     }

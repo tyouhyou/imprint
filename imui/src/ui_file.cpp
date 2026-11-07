@@ -479,7 +479,8 @@ namespace zb::ui
                         }
                         else
                         {
-                            LW << "ui_file: line " << first_line << ": " << key << "needs a quoted string (e.g., \"center\")";
+                            LW << "ui_file: line " << first_line << ": " << key
+                               << " needs a quoted string (e.g., \"center\")";
                         }
                     }
                     else

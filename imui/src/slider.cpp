@@ -75,7 +75,9 @@ namespace zb::ui
 
     bool Slider::apply_step(const int dir)
     {
-        int v = value + step * dir;
+        // value/step are unbounded int fields; the product and the sum
+        // stay in int64 and clamp into [min, max] before narrowing back
+        long long v = static_cast<long long>(value) + static_cast<long long>(step) * dir;
         if (v < min)
         {
             v = min;
@@ -84,13 +86,14 @@ namespace zb::ui
         {
             v = max;
         }
-        if (v == value)
+        const int nv = static_cast<int>(v);
+        if (nv == value)
         {
             return false;
         }
         mark_dirty();
-        value = v;
-        changed(v);
+        value = nv;
+        changed(nv);
         return true;
     }
 

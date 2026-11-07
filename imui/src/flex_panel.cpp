@@ -645,7 +645,10 @@ namespace zb::ui
                 // the leftover pixels and the shares sum to exactly the
                 // surplus. Non-growers with an explicit basis land their
                 // claim here (percent/demand sizes resolve elsewhere).
-                int total_weight = 0;
+                // X-9: the weight sum and the share product ride 64-bit
+                // (the deficit path's long long rule) — grow weights are
+                // only narrowing-guarded upstream, not overflow-guarded
+                long long total_weight = 0;
                 int flex_count = 0;
                 for (const size_t i : line)
                 {
@@ -662,9 +665,11 @@ namespace zb::ui
                     if (grows(i) && total_weight > 0)
                     {
                         ++flex_seen;
-                        const int share = (flex_seen == flex_count)
-                                            ? balance - distributed_size
-                                            : balance * items[i].flex_grow / total_weight;
+                        const int share =
+                            (flex_seen == flex_count)
+                                ? balance - distributed_size
+                                : detail::ratio(balance, items[i].flex_grow,
+                                                total_weight);
                         const int final = std::max(0, claim_of(i) + share);
                         changed |= (main_now(*items[i].child, direction) != final);
                         set_main_size(*items[i].child, direction, final);

@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "clipboard.hpp"
+#include "scale.hpp"
 #include "theme.hpp"
 #include "text/utf8.hpp"
 
@@ -481,11 +482,17 @@ namespace zb::ui
         case zb::input::input_type::mouse_wheel:
         {
             // wheel up (delta > 0) scrolls toward the top, the caret
-            // stays put (the ScrollPanel convention)
+            // stays put (the ScrollPanel convention). H-4: a wheel event
+            // that moves nothing bubbles to the outer scroller (the
+            // ListBox/ScrollPanel rule). delta is C-ABI input, so the
+            // step product computes in 64-bit and clamps — scroll_y
+            // never wraps
             const int step = line_pitch() > 0 ? line_pitch() : 1;
-            scroll_y -= ev.delta * step;
+            const int before = scroll_y;
+            scroll_y = detail::clamp_int(static_cast<int64_t>(scroll_y) -
+                                         static_cast<int64_t>(ev.delta) * step);
             clamp_scroll();
-            return true;
+            return scroll_y != before;
         }
         case zb::input::input_type::key_down:
         {
@@ -532,7 +539,7 @@ namespace zb::ui
             // the T-2 acceptance (code-contract §2 "Text input scope"):
             // printable ASCII plus code points >= U+00A0 as BMP code
             // units; a code point > U+FFFF stores as its surrogate pair
-            // (A-25); C1 controls drop
+            // (A-25); lone surrogate units and C1 controls drop
             if (ev.ch != 0)
             {
                 // a chord never inserts text: alt/meta combos and any
@@ -543,8 +550,12 @@ namespace zb::ui
                 {
                     return false;
                 }
+                // a lone surrogate unit drops (A-25: no unpaired half
+                // enters the buffer — the same rule paste_filter applies
+                // to pasted text)
                 if ((ev.ch >= 0x20 && ev.ch <= 0x7E) ||
-                    (ev.ch >= 0xA0 && ev.ch <= 0xFFFF))
+                    (ev.ch >= 0xA0 && ev.ch <= 0xFFFF &&
+                     (ev.ch < 0xD800 || ev.ch > 0xDFFF)))
                 {
                     insert(static_cast<char16_t>(ev.ch));
                     return true;

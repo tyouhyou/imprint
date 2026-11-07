@@ -100,9 +100,13 @@ namespace zb::ui
         invalidate_row_cache();
         mark_dirty();
         count = n;
-        rebuild_sums();
+        // sums exist only for a height provider: the fixed-row height
+        // needs no prefix sums, and materializing them for a huge virtual
+        // model would allocate per-count memory the fixed mode never
+        // reads (every fixed-mode path derives from count and row_height)
         if (height_fn != nullptr)
         {
+            rebuild_sums();
             // the model changed under a provider: re-derive the widget
             // height (the set_visible_rows rule) from the fresh sums,
             // mirroring set_item_height; the fixed-row height does not
@@ -539,14 +543,22 @@ namespace zb::ui
             *thumb_h = thumb;
             return;
         }
-        const int travel = static_cast<int>(count - visible);
-        const int th = track_h * static_cast<int>(visible) / static_cast<int>(count);
+        // fixed rows: count has no sums allocation capping it anymore, so
+        // the travel and thumb shares compute in 64-bit and clamp into
+        // int (the provider branch's detail::ratio discipline); the share
+        // stays under track_h, so clamping only bites a count no real
+        // model carries
+        const int64_t travel =
+            static_cast<int64_t>(count) - static_cast<int64_t>(visible);
+        const int th = detail::ratio(track_h, static_cast<int>(visible),
+                                     static_cast<int64_t>(count));
         const int thumb = th < 8 ? 8 : th;
         *x0 = s.width - gutter;
         *y0 = 1;
         *height = track_h;
         *thumb_y = 1 + (travel > 0
-                            ? static_cast<int>(top) * (track_h - thumb) / travel
+                            ? detail::clamp_int(static_cast<int64_t>(top) *
+                                                (track_h - thumb) / travel)
                             : 0);
         *thumb_h = thumb;
     }

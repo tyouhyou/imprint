@@ -385,8 +385,8 @@ namespace zb::ui
             // mapping in the shells). T-2 acceptance (code-contract §2
             // "Text input scope"): printable ASCII plus any code point
             // >= U+00A0 inserts as a BMP code unit; a code point >
-            // U+FFFF stores as its surrogate pair (A-25); C1 controls
-            // drop
+            // U+FFFF stores as its surrogate pair (A-25); lone surrogate
+            // units and C1 controls drop
             if (ev.ch != 0)
             {
                 // a chord never inserts text: alt/meta combos and any
@@ -402,7 +402,11 @@ namespace zb::ui
                     insert(static_cast<char16_t>(ev.ch));
                     return true;
                 }
-                if (ev.ch >= 0xA0 && ev.ch <= 0xFFFF)
+                // a lone surrogate unit drops (A-25: no unpaired half
+                // enters the buffer — the same rule paste_filter applies
+                // to pasted text)
+                if (ev.ch >= 0xA0 && ev.ch <= 0xFFFF &&
+                    (ev.ch < 0xD800 || ev.ch > 0xDFFF))
                 {
                     insert(static_cast<char16_t>(ev.ch));
                     return true;

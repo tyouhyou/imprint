@@ -128,7 +128,10 @@ namespace zb::ui
         }
         const int dx = x - s.width / 2;
         const int dy = y - s.height / 2;
-        return dx * dx + dy * dy <= r * r;
+        // int64 squares: x/y come straight from the C-ABI event
+        // (untrusted int coordinates), dx*dx overflows int
+        return static_cast<int64_t>(dx) * dx + static_cast<int64_t>(dy) * dy <=
+               static_cast<int64_t>(r) * r;
     }
 
     bool Knob::on_input(const zb::input::input_event &ev)

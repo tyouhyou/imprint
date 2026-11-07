@@ -87,6 +87,27 @@ namespace zb::ui
             return static_cast<int64_t>(v * kQ10 + (v >= 0 ? 0.5 : -0.5));
         }
 
+        // device px (double) -> int, same validation-before-conversion
+        // policy as the q10 helpers: the mapped baseline point is
+        // .ui-reachable and can exceed int range, so the coordinate clamp
+        // is applied in double space and only an in-range value is cast
+        int device_px_of(const double v)
+        {
+            if (!(v == v))
+            {
+                return 0;  // NaN
+            }
+            if (v <= -static_cast<double>(kCoordMax))
+            {
+                return static_cast<int>(-kCoordMax);
+            }
+            if (v >= static_cast<double>(kCoordMax))
+            {
+                return static_cast<int>(kCoordMax);
+            }
+            return static_cast<int>(v);
+        }
+
         /*
          * X-6: (a * b) / kQ10 for non-negative Q10 lengths, without
          * letting the product leave int64. The stroke-width chain
@@ -1345,15 +1366,19 @@ namespace zb::ui
         const double len =                             // circle, ~9% shy
             static_cast<double>(tf_len_q10()) / kQ10;  // at the extreme
         perim *= len;
-        int segs = static_cast<int>(perim / 2.0);
-        if (segs < 16)
+        // X-6: validate before converting — perim is .ui-reachable and
+        // can exceed int range, so the [16, 256] clamp is applied in
+        // double space and only an in-range value is cast
+        double raw_segs = perim / 2.0;
+        if (!(raw_segs == raw_segs) || raw_segs < 16.0)
         {
-            segs = 16;
+            raw_segs = 16.0;
         }
-        else if (segs > 256)
+        else if (raw_segs > 256.0)
         {
-            segs = 256;
+            raw_segs = 256.0;
         }
+        const int segs = static_cast<int>(raw_segs);
         const double dt = 2.0 * kPi / static_cast<double>(segs);
         // rotation step, libm-free: a small-angle series (dt <= 2*pi/16,
         // truncation ~1e-7) keeps USE_INTEGER_GEOMETRY targets off the
@@ -1462,10 +1487,17 @@ namespace zb::ui
             // sqrt(|det|) (code-contract §3.2: no rotated glyphs)
             const double tlen = static_cast<double>(tf_len_q10()) / kQ10;
             sy *= tlen;
-            const int px =
-                t.font_size > 0.0
-                    ? static_cast<int>(t.font_size * sy + 0.5)
-                    : 0;
+            // X-6: the 1..128 acceptance runs in double space, before the
+            // conversion — a declared font-size rides the viewBox scale
+            // and can exceed int range. fs + 0.5 in [1, 129) is exactly
+            // the domain the old round-then-check accepted, so every
+            // accepted size casts to the same value
+            const double fs = t.font_size * sy + 0.5;
+            int px = 0;
+            if (t.font_size > 0.0 && fs >= 1.0 && fs < 129.0)
+            {
+                px = static_cast<int>(fs);
+            }
             zb::SharedPtr<GlyphProvider> held;
             if (px >= 1 && px <= 128 && has_font_family())
             {
@@ -1481,8 +1513,8 @@ namespace zb::ui
             {
                 apply_tf(tx, ty);
             }
-            int pen = static_cast<int>(tx);
-            int baseline = static_cast<int>(ty);
+            int pen = device_px_of(tx);
+            int baseline = device_px_of(ty);
             if (provider != nullptr)
             {
                 // §2.4 applies at the svg seam too: the item-level
