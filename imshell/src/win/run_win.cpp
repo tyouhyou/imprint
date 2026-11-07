@@ -369,6 +369,29 @@ namespace zb::shell
             throw zb::ui::error("Win32 shell: CreateWindowExW failed");
         }
 
+        // the window dies through this guard on every path out of run()
+        // (code-contract §11.2): a throw after the window exists -- the
+        // app's first paint, the pacer validation, anything the app code
+        // in the loop throws -- must not leave a live window whose
+        // WndProc would route a second run()'s input to the new app. The
+        // WM_DESTROY route may have destroyed the window already;
+        // IsWindow keeps the destructor from touching a dead handle.
+        struct window_owner
+        {
+            HWND hwnd;
+            explicit window_owner(HWND h)
+                : hwnd(h) {}
+            ~window_owner()
+            {
+                if (hwnd != nullptr && IsWindow(hwnd))
+                {
+                    DestroyWindow(hwnd);
+                }
+            }
+            window_owner(const window_owner &) = delete;
+            window_owner &operator=(const window_owner &) = delete;
+        } window_guard{hwnd};
+
         g_hwnd = hwnd;
         g_presentation = current_presentation(hwnd);
         // fill the framebuffer before the first show: the initial WM_PAINT
@@ -422,15 +445,12 @@ namespace zb::shell
             DispatchMessage(&msg);
         }
 
-        // teardown (mirrors the X11 shell): the WM_DESTROY route has
-        // already destroyed the window; a quit that arrived through the
-        // closed signal did not. Either way the globals must not name a
-        // dead window, and a second run() in this process must not
-        // inherit the previous run's app/presentation state
-        if (g_hwnd != nullptr && IsWindow(g_hwnd))
-        {
-            DestroyWindow(g_hwnd);
-        }
+        // teardown (mirrors the X11 shell): the window dies in
+        // window_guard's destructor -- the WM_DESTROY route may have got
+        // there first, and the guard's IsWindow check covers that. Either
+        // way the globals must not name a dead window, and a second run()
+        // in this process must not inherit the previous run's
+        // app/presentation state
         g_hwnd = nullptr;
         g_app.reset();
         g_framebuffer = nullptr;

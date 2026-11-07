@@ -4,9 +4,10 @@
 
 namespace zb::shell::win_input
 {
-    // TJ-C4: the modifier chords ride the key_down (code-contract
-    // §3.8) — GetKeyState is the source of truth at event time (the
-    // async tab is wrong during the same-message processing)
+    // TJ-C4: the modifier mask rides every key event (code-contract
+    // §3.8; U-1: mods on every event type) — GetKeyState is the source
+    // of truth at event time (the async tab is wrong during the
+    // same-message processing)
     void mods_from_win(zb::input::input_event &out)
     {
         if ((GetKeyState(VK_CONTROL) & 0x8000) != 0)
@@ -132,13 +133,15 @@ namespace zb::shell::win_input
         case WM_KEYUP:
         {
             // U-1: keys ride both edges so hosts can pair down/up for
-            // key-state (hold-to-walk); ch is always 0 on keyup
+            // key-state (hold-to-walk); mods ride every event type
+            // (U-1), ch is always 0 on keyup
             const int key = key_from_virtual_key(wparam);
             if (key == 0)
             {
                 return result::swallowed;
             }
             out.type = zb::input::input_type::key_up;
+            mods_from_win(out);
             out.key = key;
             return result::handled;
         }

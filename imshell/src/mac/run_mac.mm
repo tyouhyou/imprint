@@ -71,7 +71,8 @@ namespace
     /*
      * A-2 InputSource, keyboard half: navigation keys map from the
      * hardware key codes (stable across layouts); printable text comes
-     * from the characters string (already layout aware). Returns false
+     * from the characters string (already layout aware), and the Ctrl
+     * chords ride its control bytes (code-contract §3.8). Returns false
      * when the event produces nothing the framework understands.
      */
     bool nsevent_to_key(NSEvent *nse, zb::input::input_event &out)
@@ -124,10 +125,36 @@ namespace
             NSString *chars = nse.characters;
             if (chars.length > 0)
             {
-                const unichar c = [chars characterAtIndex:0];
-                if (c <= 0x7e)
+                const int c = static_cast<int>([chars characterAtIndex:0]);
+                // §3.8 chords (TJ-C4): with Control held the characters
+                // string carries the ASCII control byte (Ctrl+C -> "\x03")
+                // and the plain letter is unrecoverable from it, so the
+                // chord is rebuilt from the byte -- the same table as
+                // win_input's WM_CHAR and the terminal translator. A chord
+                // rides key + mods only, ch = 0 (§3.8: Ctrl+C/V/A arrive
+                // as key 'c'/'v'/'a' with mod_ctrl).
+                // 0x08/0x09/0x0D stay excluded: the sibling tables rule
+                // those chords unreachable, and the real backspace/tab/
+                // enter keys route through the nav switch above.
+                if (out.key == 0 && c >= 0x01 && c <= 0x1A &&
+                    c != 0x08 && c != '\t' && c != '\r')
                 {
-                    zb::input::decorate_printable_key(out, static_cast<int>(c));
+                    out.key = 'a' + (c - 1);
+                }
+                else if (c >= 0x20 && c <= 0x7e)
+                {
+                    // Ctrl/Meta must not inject text: under Command the
+                    // characters string carries the unmodified letter
+                    // (Cmd+C -> "c"), and a §3.8 chord rides key + mods
+                    // with ch = 0 -- a letter/digit keeps its key half
+                    // but drops ch while ctrl or meta is held (decorate
+                    // reports the letter/digit half through its return;
+                    // punctuation stays a character event, as on win).
+                    if (zb::input::decorate_printable_key(out, c) &&
+                        (out.mods & (zb::input::mod_ctrl | zb::input::mod_meta)) != 0)
+                    {
+                        out.ch = 0;
+                    }
                 }
             }
         }
@@ -393,6 +420,26 @@ namespace zb::shell
 
         @autoreleasepool
         {
+            // reuse-safe (mirrors the win shell's entry reset): a second
+            // run() in one process must not inherit the previous run's
+            // frame-scope globals. The teardown after [nsapp run] only
+            // covers a normal return -- an aborted run throws past it,
+            // so the entry clears the full set (X-4).
+            g_painted_sub.reset();
+            g_closed_sub.reset();
+            g_view = nil;
+            g_app.reset();
+            g_buffer_width = 0;
+            g_buffer_height = 0;
+
+            // R6 (code-contract §11.4): the fixed-step clock. A zero
+            // step_micros leaves [nsapp run] exactly as it was; a nonzero
+            // one paces the loop through the timer installed below. The
+            // constructor's validation runs here, before any install
+            // (§11.2): a rejected run_options must not leave a
+            // half-installed frame behind.
+            zb::shell::frame_pacer pacer(options);
+
             zb::shell::install_platform_font();
             g_app = app;
             if (g_app->window() == nullptr)
@@ -492,17 +539,13 @@ namespace zb::shell
             [win makeKeyAndOrderFront:nil];
             [nsapp activateIgnoringOtherApps:YES];
 
-            // R6 (code-contract §11.4): the fixed-step clock. A zero
-            // step_micros leaves [nsapp run] exactly as it was. A nonzero
-            // one installs a timer that delivers one step per fire; a
-            // bounded run (max_steps) runs flat out and stops the run loop
-            // when the last step has been delivered. A block captures C++
-            // variables **const**, so the pacer is reached through a
-            // pointer the block holds by value -- a non-const call on an
-            // object captured by reference does not compile (desk-checked
-            // with the stubbed-Cocoa clang probe). The timer must be
-            // invalidated before this scope ends (the teardown below).
-            zb::shell::frame_pacer pacer(options);
+            // A block captures C++ variables **const**, so the pacer is
+            // reached through a pointer the block holds by value -- a
+            // non-const call on an object captured by reference does not
+            // compile (desk-checked with the stubbed-Cocoa clang probe).
+            // The timer must be invalidated before this scope ends (the
+            // teardown below); a bounded run stops the loop once the last
+            // step has been delivered.
             zb::shell::frame_pacer *pacer_ptr = &pacer;
             NSTimer *step_timer = nil;
             if (pacer.fixed())

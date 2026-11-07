@@ -138,6 +138,32 @@ namespace zb::shell
             throw zb::ui::error("X11 shell: XCreateImage failed");
         }
 
+        // the client-side XImage is not a server resource: XCloseDisplay
+        // does not release it, so every path out of run() -- the normal
+        // teardown and any throw between here and there (the pacer
+        // validation, a subscription allocation) -- goes through this
+        // guard (code-contract §11.2). The bytes belong to the app's
+        // Graphics (delete[]), never to the image: XDestroyImage would
+        // XFree them out from under the app buffer, so data is nulled
+        // before the destroy (the same handoff the scratch image performs
+        // below).
+        struct ximage_owner
+        {
+            XImage *image;
+            explicit ximage_owner(XImage *img)
+                : image(img) {}
+            ~ximage_owner()
+            {
+                if (image != nullptr)
+                {
+                    image->data = nullptr;
+                    XDestroyImage(image);
+                }
+            }
+            ximage_owner(const ximage_owner &) = delete;
+            ximage_owner &operator=(const ximage_owner &) = delete;
+        } ximage_guard{xi};
+
         // FI-01: the platform IME owns composition (root-window preedit --
         // the IM server paints its own window); the shell only relays
         // committed text. The owner guard releases the IC/IM in its
@@ -202,14 +228,23 @@ namespace zb::shell
             XFlush(display);
         };
 
+        // the window size the current mapping was built for: the dedup
+        // must compare against the *window* size, not the presented rect
+        // -- the two differ whenever the window is letterboxed, and a
+        // resize back to an old presented size is still a real change
+        int last_win_w = width;
+        int last_win_h = height;
         // a new client size: rebuild the mapping and the scratch, clear the
         // (grown or shrunk) letterbox, re-present everything
         auto on_resize = [&](const int win_w, const int win_h)
         {
-            if (win_w <= 0 || win_h <= 0 || (win_w == pres.w && win_h == pres.h))
+            if (win_w <= 0 || win_h <= 0 ||
+                (win_w == last_win_w && win_h == last_win_h))
             {
                 return;  // moves also send ConfigureNotify -- only a size change rebuilds
             }
+            last_win_w = win_w;
+            last_win_h = win_h;
             pres = zb::shell::presentation_fit(win_w, win_h, buf_w, buf_h);
             if (is_one_to_one())
             {
@@ -418,11 +453,10 @@ namespace zb::shell
             keep_running = handle_event(event);
         }
 
-        // XDestroyImage frees ximage->data with Xfree; the buffer belongs to
-        // the app's Graphics (delete[]) and is freed again by its destructor.
-        // The scratch image's bytes belong to `scratch` the same way.
-        xi->data = nullptr;
-        XDestroyImage(xi);
+        // XDestroyImage frees the image's data with Xfree; the scratch
+        // image's bytes belong to `scratch`, so they are detached before
+        // the destroy. The app-buffer image dies in ximage_guard's
+        // destructor with the same handoff.
         if (sx != nullptr)
         {
             sx->data = nullptr;

@@ -22,8 +22,9 @@ namespace zb::shell::x11_input
 
     // the centralized KeySym -> key_code mapping; 0 = unmapped (then a
     // printable character may still be produced)
-    // TJ-C4: the modifier chords ride the key_down (code-contract
-    // §3.8) — X11's state mask is the source of truth at event time
+    // TJ-C4: the modifier mask rides every key event (code-contract
+    // §3.8; U-1: mods on every event type) — X11's state mask is the
+    // source of truth at event time
     void mods_from_x11(const unsigned int state, zb::input::input_event &out)
     {
         if ((state & ControlMask) != 0)
@@ -123,11 +124,13 @@ namespace zb::shell::x11_input
         case KeyRelease:
         {
             // U-1: keys ride both edges so hosts can pair down/up for
-            // key-state; ch is always 0 on key_up. X11 autorepeat
+            // key-state; mods ride every event type (U-1), ch is always
+            // 0 on key_up. X11 autorepeat
             // interleaves release/press pairs while a key is held --
             // a key-state host dedupes them (ARCHITECTURE §4.2);
             // the pure translator cannot peek the queue.
             out.type = zb::input::input_type::key_up;
+            mods_from_x11(event.xkey.state, out);
             out.key = key_from_keysym(XLookupKeysym(const_cast<XKeyPressedEvent *>(&event.xkey), 0));
             return (out.key != 0) ? result::handled : result::swallowed;
         }
