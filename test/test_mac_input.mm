@@ -122,7 +122,7 @@ int test_mac_input()
     // navigation keys come from the key codes and coexist with mods
     {
         const auto ev = translate(down, NSEventModifierFlagShift,
-                                  @"\UF700", @"\UF700", 126);
+                                  @"\uF700", @"\uF700", 126);
         EXPECT(ev.key == static_cast<int>(key_code::up));
         EXPECT(ev.mods == mod_shift);
         EXPECT(ev.ch == 0);
@@ -168,10 +168,11 @@ int test_mac_input()
     }
 
     // a committed astral character's lead surrogate is dropped (A-25
-    // note: no cluster/advance extension yet)
+    // note: no cluster/advance extension yet); the astral literal
+    // reaches the shell as its UTF-16 lead surrogate at index 0
     {
         bool ok = true;
-        const auto ev = translate(down, 0, @"\ud83d", @"\ud83d", 0, &ok);
+        const auto ev = translate(down, 0, @"\U0001F600", @"\U0001F600", 0, &ok);
         EXPECT(!ok);
         EXPECT(ev.ch == 0);
     }
