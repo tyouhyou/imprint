@@ -109,13 +109,29 @@ target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imui/src)
 
 # A-2 dummy-driven platform input mapping tests: the win32 translation
 # compiles only on Windows, the x11 translation only where the X11 shell
-# builds (the FB backend has no X11 dependency to link)
+# builds (the FB backend has no X11 dependency to link), the mac
+# translation only on Apple
 if (WIN32)
     target_sources(test_imui PRIVATE
         test_win_input.cpp
         ${PROJECT_SOURCE_DIR}/imshell/src/win/win_input.cpp
     )
     target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/src/win)
+elseif (APPLE)
+    # the mac keyboard seam: the same dummy-driven shape -- synthetic
+    # NSEvents, no window, no run loop. ARC like the shell_hostloop TU
+    # it mirrors
+    target_sources(test_imui PRIVATE
+        test_mac_input.mm
+        ${PROJECT_SOURCE_DIR}/imshell/src/mac/mac_input.mm
+    )
+    target_compile_definitions(test_imui PRIVATE IM_TEST_MAC_INPUT=1)
+    target_include_directories(test_imui PRIVATE ${PROJECT_SOURCE_DIR}/imshell/src/mac)
+    target_link_libraries(test_imui PRIVATE "-framework Cocoa")
+    set_source_files_properties(
+        test_mac_input.mm
+        ${PROJECT_SOURCE_DIR}/imshell/src/mac/mac_input.mm
+        PROPERTIES COMPILE_OPTIONS "-fobjc-arc")
 elseif (UNIX AND IM_SHELL_BACKEND STREQUAL "X11")
     target_sources(test_imui PRIVATE
         test_x11_input.cpp

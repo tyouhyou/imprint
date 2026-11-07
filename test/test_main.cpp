@@ -82,6 +82,9 @@ int test_main_guard();
 #if defined(_WIN32)
 int test_win_input();
 #endif
+#if defined(IM_TEST_MAC_INPUT)
+int test_mac_input();
+#endif
 #if defined(IM_TEST_X11_INPUT)
 int test_x11_input();
 #endif
@@ -183,6 +186,9 @@ static const suite g_suites[] = {
     {"main_guard", test_main_guard},
 #if defined(_WIN32)
     {"win_input", test_win_input},
+#endif
+#if defined(IM_TEST_MAC_INPUT)
+    {"mac_input", test_mac_input},
 #endif
 #if defined(IM_TEST_X11_INPUT)
     {"x11_input", test_x11_input},
