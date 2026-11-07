@@ -199,7 +199,11 @@ namespace zb::raster
                                    (static_cast<float>(bot) - y_lo) / span;
             }
             const float w_near = w_top > w_bot ? w_top : w_bot;
-            if (cam.depth != nullptr &&
+            // depth[x] == 0 is the mesh-side convention for "no wall in
+            // this column, nothing occludes" (the iwall fill in
+            // draw_mesh) -- a 0 must not read as a wall at the eye and
+            // drop the whole column
+            if (cam.depth != nullptr && cam.depth[x] > 0.f &&
                 (w_near <= 0.f || 1.f / w_near >= cam.depth[x]))
             {
                 continue;  // a wall stands in front of this column

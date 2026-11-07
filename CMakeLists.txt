@@ -244,8 +244,10 @@ endforeach()
 if (TARGET zbapi AND NOT NDS_PLATFORM)
     list(APPEND IMPRINT_INSTALL_TARGETS zbapi)
 endif()
-# the glibc shim travels with the shared imcore as a LINK_ONLY
-# dependency; the export set must contain it (binding/CMakeLists)
+# the glibc shim is referenced by BARE NAME in the exported targets'
+# INTERFACE_LINK_LIBRARIES (a static dep of a shared lib -- not wrapped
+# in $<LINK_ONLY:>), so the export set must contain it: an export
+# without it is an undefined name (binding/CMakeLists)
 if (TARGET zbcompat)
     list(APPEND IMPRINT_INSTALL_TARGETS zbcompat)
 endif()
@@ -318,6 +320,17 @@ endif()
 # sources via IMPRINT_SHELL_*; apps provide <story>_app. The executable
 # is assembled here so framework modules never name story code.
 if (IMPRINT_WITH_DEMOS)
+# ${STORY}_app is linked unconditionally below, but tianji_app only
+# exists when the operator-local tianji/ layer is present AND its own
+# platform/tools gates let it configure -- fail here with that fact,
+# not at link time after every target has compiled (the 3D-story
+# precedent in apps/CMakeLists.txt)
+if (STORY STREQUAL "tianji" AND NOT TARGET tianji_app)
+    message(FATAL_ERROR
+        "STORY=tianji needs the operator-local tianji/ layer (AF_UNIX "
+        "wire, Linux-only) -- absent from this checkout or gated out on "
+        "this platform")
+endif()
 add_executable(${STORY})
 target_sources(${STORY} PRIVATE ${IMPRINT_SHELL_SRC})
 target_include_directories(${STORY} PRIVATE ${IMPRINT_SHELL_SRCDIR})

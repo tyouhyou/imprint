@@ -404,13 +404,27 @@ namespace zb::app::showcase
             log_[i].m = root.find_by_id(id);
         }
 
-        // the power sliders drive every derived readout
+        // the power sliders drive every derived readout. The ids come
+        // from the design source; a missing widget skips its binding
+        // instead of dereferencing null (the bind_button discipline)
         auto on_slider = [this](const int)
         { sync_power(); };
-        react_->changed += on_slider;
-        shield_->changed += on_slider;
-        weapons_->changed += on_slider;
-        engine_->changed += on_slider;
+        if (react_ != nullptr)
+        {
+            react_->changed += on_slider;
+        }
+        if (shield_ != nullptr)
+        {
+            shield_->changed += on_slider;
+        }
+        if (weapons_ != nullptr)
+        {
+            weapons_->changed += on_slider;
+        }
+        if (engine_ != nullptr)
+        {
+            engine_->changed += on_slider;
+        }
 
         // the system switches: command feedback only (the design keeps
         // them out of the load math)
@@ -419,9 +433,18 @@ namespace zb::app::showcase
             toast(on ? "SYSTEM ONLINE" : "SYSTEM OFFLINE");
             log_line(on ? "ok" : "warn", "PWR", "system power state changed");
         };
-        ion_sw_->changed += on_switch;
-        grav_sw_->changed += on_switch;
-        vent_sw_->changed += on_switch;
+        if (ion_sw_ != nullptr)
+        {
+            ion_sw_->changed += on_switch;
+        }
+        if (grav_sw_ != nullptr)
+        {
+            grav_sw_->changed += on_switch;
+        }
+        if (vent_sw_ != nullptr)
+        {
+            vent_sw_->changed += on_switch;
+        }
 
         // header actions
         bind_button("auto", &Showcase::on_auto);

@@ -56,7 +56,16 @@ namespace zb::raster
                           const int part, const float ao, const float ref_x,
                           const float ref_y, const float ref_z)
     {
-        MeshTri tr{a, b, c, static_cast<unsigned char>(part), ao};
+        // the 8-bit part field saturates instead of wrapping: a wrapped
+        // id (256 -> 0) could land back INSIDE the caller's table and
+        // silently paint the wrong material, while 255 is past every
+        // table an 8-bit id can index (part_count <= 256) -- or the last
+        // entry of a full one -- so the documented paint-side rule ("a
+        // part id >= part_count paints as the LAST entry", mesh.hpp)
+        // governs the miss. A negative id is outside that rule's domain;
+        // 0 keeps it deterministic rather than modulo-defined.
+        const int part_sat = part < 0 ? 0 : (part > 255 ? 255 : part);
+        MeshTri tr{a, b, c, static_cast<unsigned char>(part_sat), ao};
         const MeshVert &A = verts[static_cast<size_t>(a)];
         const MeshVert &B = verts[static_cast<size_t>(b)];
         const MeshVert &C = verts[static_cast<size_t>(c)];
@@ -774,13 +783,18 @@ namespace zb::raster
                     const float g2 = gxi > gyi ? gxi : gyi;
                     const float grad = g1 > g2 ? g1 : g2;
                     int lv = 0;
-                    // clamped to the mips[]/mip_sizes[] slot count
-                    // (kMipSlots, review round 1): a caller with an
-                    // oversized mip_levels degrades to the finest stored
-                    // level instead of indexing past the member arrays.
-                    // For mip_levels <= kMipSlots this is the same walk.
+                    // the walk may only land on a level that is actually
+                    // STORED: clamped to the mips[]/mip_sizes[] slot
+                    // count (kMipSlots, review round 1) and to the levels
+                    // the caller filled -- a declared-but-unfilled level
+                    // ends the walk, because mesh.hpp promises the finest
+                    // stored level and an unfilled slot would dereference
+                    // null or mask with -1. A consistent chain walks the
+                    // same levels as before.
                     while (lv + 1 < paint.mip_levels &&
                            lv + 1 < kMipSlots &&
+                           paint.mips[lv + 1] != nullptr &&
+                           paint.mip_sizes[lv + 1] > 0 &&
                            grad >= static_cast<float>(1 << (lv + 1)))
                     {
                         ++lv;
