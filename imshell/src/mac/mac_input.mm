@@ -3,7 +3,7 @@
 // verbatim out of run_mac.mm when the mac_input suite demanded a
 // linkable TU.
 
-#import <Cocoa.h>
+#import <Cocoa/Cocoa.h>
 
 #include "input.hpp"
 #include "mac_input.hpp"

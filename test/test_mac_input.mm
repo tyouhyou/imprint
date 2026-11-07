@@ -1,6 +1,6 @@
 #include "test.hpp"
 
-#import <Cocoa.h>
+#import <Cocoa/Cocoa.h>
 
 #include "input.hpp"
 #include "mac_input.hpp"

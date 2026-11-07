@@ -5,7 +5,7 @@
 //
 // 32bpp-only shell, like run_mac.mm.
 
-#import <Cocoa.h>
+#import <Cocoa/Cocoa.h>
 
 #include "input.hpp"
 
