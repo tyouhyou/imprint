@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <cmath>
 #include <cstdint>
+#include <climits>
 #include <algorithm>
 #include <memory>
 #include <stdexcept>
@@ -1194,11 +1195,14 @@ void Graphics::draw_line_full(int x1, int y1, int x2, int y2, const Color &colr)
         }
     }
 
-    int nDx = x2 - x1;
-    int nDy = y2 - y1;
+    // the endpoint difference is taken in int64 first (X-9: untrusted
+    // endpoints can sit at opposite int extremes); the magnitude narrows
+    // back saturating -- the int walk cannot step past INT_MAX anyway
+    const int64_t nDx = static_cast<int64_t>(x2) - x1;
+    const int64_t nDy = static_cast<int64_t>(y2) - y1;
 
-    int nIx = abs(nDx);
-    int nIy = abs(nDy);
+    int nIx = static_cast<int>(std::min(std::abs(nDx), static_cast<int64_t>(INT_MAX)));
+    int nIy = static_cast<int>(std::min(std::abs(nDy), static_cast<int64_t>(INT_MAX)));
 
     int nInc = (nIx > nIy ? nIx : nIy);
 
@@ -1223,8 +1227,8 @@ void Graphics::draw_line_full(int x1, int y1, int x2, int y2, const Color &colr)
     int y = y1;
 
     nInc--;
-    int64_t nTwoIx = 2 * nIx;
-    int64_t nTwoIy = 2 * nIy;
+    int64_t nTwoIx = 2LL * nIx;
+    int64_t nTwoIy = 2LL * nIy;
 
     for (int i = 0; i < nInc; i++)
     {
@@ -1386,11 +1390,14 @@ void Graphics::draw_line_depth(int x1, int y1, float z1,
         y2 += sketch_jitter(y2, x2 + 101);
     }
 
-    // the draw_line walk, with z interpolated by step index
-    int nDx = x2 - x1;
-    int nDy = y2 - y1;
-    int nIx = abs(nDx);
-    int nIy = abs(nDy);
+    // the draw_line walk, with z interpolated by step index. The endpoint
+    // difference is taken in int64 first (X-9: untrusted endpoints can
+    // sit at opposite int extremes); the magnitude narrows back
+    // saturating -- the int walk cannot step past INT_MAX anyway
+    const int64_t nDx = static_cast<int64_t>(x2) - x1;
+    const int64_t nDy = static_cast<int64_t>(y2) - y1;
+    int nIx = static_cast<int>(std::min(std::abs(nDx), static_cast<int64_t>(INT_MAX)));
+    int nIy = static_cast<int>(std::min(std::abs(nDy), static_cast<int64_t>(INT_MAX)));
     int nInc = (nIx > nIy ? nIx : nIy);
     if (nInc < 2)
     {
@@ -1407,8 +1414,8 @@ void Graphics::draw_line_depth(int x1, int y1, float z1,
     float z = z1;
 
     nInc--;
-    int64_t nTwoIx = 2 * nIx;
-    int64_t nTwoIy = 2 * nIy;
+    int64_t nTwoIx = 2LL * nIx;
+    int64_t nTwoIy = 2LL * nIy;
 
     for (int i = 0; i < nInc; i++)
     {
@@ -1489,7 +1496,9 @@ void Graphics::fill_triangle_depth(int x1, int y1, float z1,
         {
             return ex1;
         }
-        return ex1 + (ex2 - ex1) * (y - ey1) / dy;
+        // the interpolation product stays in int64 (X-9): the vertices
+        // are untrusted and the int product overflows first
+        return static_cast<int>(ex1 + 1LL * (ex2 - ex1) * (y - ey1) / dy);
     };
     const auto edge_z = [](const int y, const int ez_y1, const float ez1, const int ez_y2, const float ez2) -> float
     {
@@ -3168,7 +3177,9 @@ void Graphics::fill_triangle(
         {
             return ex1;
         }
-        return ex1 + (ex2 - ex1) * (y - ey1) / dy;
+        // the interpolation product stays in int64 (X-9): the vertices
+        // are untrusted and the int product overflows first
+        return static_cast<int>(ex1 + 1LL * (ex2 - ex1) * (y - ey1) / dy);
     };
 
     // scanline fill: one draw_line per row between the long edge and the
@@ -3198,11 +3209,13 @@ void Graphics::draw_incir_pixels(int x, int y, int px, int py, const Color &colr
 
 void Graphics::draw_ellipse(int cx, int cy, int rx, int ry, const Color &colr)
 {
-    // int64 accumulators: rx*rx overflows int from rx > 46340 and
-    // 2*rx*rx already from rx > 32767 -- the midpoint scan corrupted
-    // silently on huge radii
-    const int64_t i64rx = rx, i64ry = ry;
-    int x = rx, y = 0;
+    // clamp to the same domain as fill_ellipse: the worst accumulator
+    // product rx^2*ry^2 must stay below 2^63 (46340^2 < 2^31) -- an
+    // ellipse larger than any surface is clipped to the same pixels
+    const int crx = rx > 46340 ? 46340 : rx;
+    const int cry = ry > 46340 ? 46340 : ry;
+    const int64_t i64rx = crx, i64ry = cry;
+    int x = crx, y = 0;
     const int64_t sx = i64rx * i64rx,
                   sy = i64ry * i64ry,
                   sx2 = 2 * sx,

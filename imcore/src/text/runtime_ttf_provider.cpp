@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdlib>
 #include <memory>
+#include <new>
 #include <string>
 #include <utility>
 #include <vector>
@@ -192,7 +193,9 @@ namespace zb::ui
                 // stb_truetype allocated with the default STBTT_malloc
                 // (malloc); the wrapper TU overrides nothing. A guard, not
                 // a catch-and-free: the cov.assign below can throw
-                // bad_alloc (the acquire/release RAII rule).
+                // bad_alloc (the acquire/release RAII rule) -- write()
+                // catches it and skips the glyph (the provider never-throw
+                // contract); this guard releases the stb buffer either way.
                 struct free_deleter
                 {
                     void operator()(unsigned char *p) const { std::free(p); }
@@ -334,6 +337,13 @@ namespace zb::ui
         : state_(state), px_(px)
     {
         scale_ = stbtt_ScaleForPixelHeight(&state_->info, static_cast<float>(px_));
+        // a degenerate font (ascent == descent) yields a non-finite scale
+        // and llround on it is unspecified -- reject at init like the
+        // 1..128 pixel-size gate in provider_for
+        if (!std::isfinite(scale_) || scale_ <= 0.0f)
+        {
+            throw error("TtfFamily: degenerate font metrics (pixel scale is not finite/positive)");
+        }
         int ascent = 0;
         int descent = 0;
         int linegap = 0;
@@ -397,6 +407,15 @@ namespace zb::ui
         // rasterizer hard-clips per pixel (damage/clip safe) -- the
         // identical pixel semantics as TtfSubsetProvider::write
         const auto bak = g.is_alpha_enabled();
+        // a scope guard, not a trailing restore: the caller's alpha mode
+        // goes back on every exit path -- a leaked foreground mode would
+        // poison everything drawn after this call
+        struct alpha_restore
+        {
+            core::Graphics &g;
+            bool bak;
+            ~alpha_restore() { g.enable_alpha(bak); }
+        } restore{g, bak};
         g.enable_alpha(true);
         int pen = x;
         for (int i = 0; i < len;)
@@ -412,16 +431,28 @@ namespace zb::ui
             {
                 ++i;
             }
-            const auto &e = entry_for(*state_, px_, scale_, cp);
-            if (e.w > 0 && e.h > 0)
+            const TtfFamilyState::GlyphEntry *e = nullptr;
+            try
             {
-                const int left = pen + e.xoff;
-                const int top = y + e.yoff;  // y is the baseline
-                for (int r = 0; r < e.h; ++r)
+                e = &entry_for(*state_, px_, scale_, cp);
+            }
+            catch (const std::bad_alloc &)
+            {
+                // the glyph could not be rasterized or cached for lack of
+                // memory: skip its pixels, keep the pen motion and the
+                // GlyphProvider never-throw contract intact
+                pen += advance_px(*state_, scale_, cp);
+                continue;
+            }
+            if (e->w > 0 && e->h > 0)
+            {
+                const int left = pen + e->xoff;
+                const int top = y + e->yoff;  // y is the baseline
+                for (int r = 0; r < e->h; ++r)
                 {
-                    for (int c = 0; c < e.w; ++c)
+                    for (int c = 0; c < e->w; ++c)
                     {
-                        const uint8_t cov = e.cov[static_cast<size_t>(r) * static_cast<size_t>(e.w) + static_cast<size_t>(c)];
+                        const uint8_t cov = e->cov[static_cast<size_t>(r) * static_cast<size_t>(e->w) + static_cast<size_t>(c)];
                         if (cov != 0)
                         {
                             g.draw_pixel(left + c, top + r,
@@ -430,8 +461,7 @@ namespace zb::ui
                     }
                 }
             }
-            pen += e.advance;
+            pen += e->advance;
         }
-        g.enable_alpha(bak);
     }
 }  // namespace zb::ui

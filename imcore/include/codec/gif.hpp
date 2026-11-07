@@ -48,7 +48,10 @@ namespace zb::ui
     class GifPaletteBuilder
     {
     public:
-        /* collect one frame's colors (weight 1 each pixel) */
+        /* collect one frame's colors (weight 1 each pixel). The
+         * distinct-color set is capped: past the cap new colors are
+         * dropped (warned once) and the palette degrades -- the
+         * collection stays bounded by design. */
         void add_frame(const core::Color *pixels, std::size_t n);
         /* median-cut palette over everything collected, <= max_colors */
         GifPalette palette(std::size_t max_colors = 256) const;
@@ -56,6 +59,7 @@ namespace zb::ui
     private:
         std::vector<std::uint32_t> colors_;  // packed 0x00RRGGBB, sorted
         std::vector<std::uint32_t> counts_;  // parallel weight table
+        bool color_cap_warned_ = false;
     };
 
     class GifWriter
@@ -73,7 +77,10 @@ namespace zb::ui
         GifWriter(const GifWriter &) = delete;
         GifWriter &operator=(const GifWriter &) = delete;
 
-        /* pixels: width*height core::Color values, pitch = width */
+        /* pixels: width*height core::Color values, pitch = width. Throws
+         * zb::ui::error when the stream failed mid-write (disk full,
+         * device error) -- close() runs from the destructor and cannot
+         * report it, so the failure surfaces here, per frame. */
         void add_frame(const core::Color *pixels);
 
         void close();
@@ -81,9 +88,10 @@ namespace zb::ui
         [[nodiscard]] std::size_t frames() const { return frames_; }
 
     private:
-        /* init-path rejection: unopenable path or dimensions past the
-         * GIF 16-bit field throw zb::ui::error (code-contract §1.1) */
-        void check_open(std::size_t width, std::size_t height) const;
+        /* init-path rejection: unopenable path or a value past the GIF
+         * 16-bit fields (dimensions, delay) throws zb::ui::error
+         * (code-contract §1.1) */
+        void check_open(std::size_t width, std::size_t height, std::size_t delay_cs) const;
 
         void write_header(const GifPalette *pal);
 

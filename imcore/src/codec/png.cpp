@@ -25,6 +25,29 @@ using namespace zb;
 using namespace zb::ui;
 using namespace zb::ui::core;
 
+namespace
+{
+    // the row callbacks are arbitrary host code: a throw on the way out
+    // (bad_alloc from a caller's push_back, say) must still free the stbi
+    // decode buffer — the buffer is released on every exit path of these
+    // readers, exceptions included
+    struct stbi_decode_buffer
+    {
+        explicit stbi_decode_buffer(unsigned char *p)
+            : data(p) {}
+        ~stbi_decode_buffer()
+        {
+            if (data != nullptr)
+            {
+                stbi_image_free(data);
+            }
+        }
+        stbi_decode_buffer(const stbi_decode_buffer &) = delete;
+        stbi_decode_buffer &operator=(const stbi_decode_buffer &) = delete;
+        unsigned char *data;
+    };
+}  // namespace
+
 int Image::read_png_file(
     const std::string file_name,
     on_loading_image image_loaded,
@@ -49,6 +72,7 @@ int Image::read_png_file(
 
     int img_width = 0, img_height = 0, comp = 0;
     unsigned char *data = stbi_load(file_name.c_str(), &img_width, &img_height, &comp, 4);
+    stbi_decode_buffer buffer{data};
     if (!data)
     {
         LE << "Decoding png file failed. (" << file_name << ") reason: " << stbi_failure_reason();
@@ -57,7 +81,6 @@ int Image::read_png_file(
     if (img_width <= 0 || img_height <= 0)
     {
         LE << "PNG file reports zero width/height, refusing to process. (" << file_name << ")";
-        stbi_image_free(data);
         return 4;
     }
 
@@ -72,7 +95,6 @@ int Image::read_png_file(
     if (!image_loaded(iminf))
     {
         LE << "Error occurred when set image info in image_loaded callback.";
-        stbi_image_free(data);
         return 5;
     }
 
@@ -82,38 +104,13 @@ int Image::read_png_file(
         if (!read_row(row_pointer))
         {
             LE << "Error occurred when processing image row data.";
-            stbi_image_free(data);
             return 6;
         }
         row_pointer += row_stride;
     }
 
-    stbi_image_free(data);
     return 0;
 }
-
-namespace
-{
-    // the row callbacks are arbitrary host code: a throw on the way out
-    // (bad_alloc from a caller's push_back, say) must still free the stbi
-    // decode buffer — the buffer is released on every exit path of the
-    // memory-variant readers, exceptions included
-    struct stbi_decode_buffer
-    {
-        explicit stbi_decode_buffer(unsigned char *p)
-            : data(p) {}
-        ~stbi_decode_buffer()
-        {
-            if (data != nullptr)
-            {
-                stbi_image_free(data);
-            }
-        }
-        stbi_decode_buffer(const stbi_decode_buffer &) = delete;
-        stbi_decode_buffer &operator=(const stbi_decode_buffer &) = delete;
-        unsigned char *data;
-    };
-}  // namespace
 
 int Image::read_png_memory(
     const uint8_t *bytes,

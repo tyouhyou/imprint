@@ -127,6 +127,14 @@ int main(const int argc, const char **argv)
     }
 
     const float scale = stbtt_ScaleForPixelHeight(&font, static_cast<float>(pixel_size));
+    // a degenerate font (ascent == descent) yields a non-finite scale and
+    // llround on it is unspecified -- fail the build like the other
+    // unusable-font cases (the runtime provider checks the same thing)
+    if (!std::isfinite(scale) || scale <= 0.0f)
+    {
+        std::fprintf(stderr, "ttf_subset: degenerate font metrics (non-finite scale): %s\n", font_path);
+        return 1;
+    }
     int ascent = 0, descent = 0, linegap = 0;
     stbtt_GetFontVMetrics(&font, &ascent, &descent, &linegap);
     const int ascent_px = static_cast<int>(std::llround(ascent * scale));

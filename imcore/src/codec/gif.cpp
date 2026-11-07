@@ -11,6 +11,7 @@
 #include "codec/gif.hpp"
 
 #include "core/error.hpp"
+#include "logging.hpp"
 
 #include <algorithm>
 #include <array>
@@ -22,6 +23,13 @@ namespace zb::ui
 {
     namespace
     {
+        // hard cap on the distinct-color collection: photo/gradient
+        // content can carry tens of thousands of colors and the sorted
+        // insert is O(n^2) in the distinct count. Past the cap new
+        // colors are dropped (known colors keep counting) -- collection
+        // stays bounded and palette() still consumes at most 256 buckets
+        constexpr std::size_t kPaletteColorCap = 65536;
+
         void u16(std::ostream &out, const std::size_t v)
         {
             out.put(static_cast<char>(v & 0xFF));
@@ -190,13 +198,21 @@ namespace zb::ui
             {
                 ++counts_[static_cast<std::size_t>(it - colors_.begin())];
             }
-            else
+            else if (colors_.size() < kPaletteColorCap)
             {
                 // save the insertion offset first: colors_.insert may
                 // reallocate and invalidate the iterator
                 const std::size_t pos = static_cast<std::size_t>(it - colors_.begin());
                 colors_.insert(colors_.begin() + static_cast<std::ptrdiff_t>(pos), key);
                 counts_.insert(counts_.begin() + static_cast<std::ptrdiff_t>(pos), 1);
+            }
+            else if (!color_cap_warned_)
+            {
+                // warn-once + drop: the palette degrades past the cap,
+                // and a silently degraded recording is never debugged
+                color_cap_warned_ = true;
+                LW << "GifPaletteBuilder: distinct-color cap (" << kPaletteColorCap
+                   << ") reached, further colors are dropped";
             }
         }
     }
@@ -349,7 +365,7 @@ namespace zb::ui
                          const std::size_t height, const std::size_t delay_cs)
         : palette_(nullptr), out_(path, std::ios::binary), width_(width), height_(height), delay_cs_(delay_cs)
     {
-        check_open(width, height);
+        check_open(width, height, delay_cs);
         write_header(nullptr);
     }
 
@@ -358,22 +374,23 @@ namespace zb::ui
                          const GifPalette &palette)
         : palette_(&palette), out_(path, std::ios::binary), width_(width), height_(height), delay_cs_(delay_cs)
     {
-        check_open(width, height);
+        check_open(width, height, delay_cs);
         write_header(&palette);
     }
 
     // init-path rejection (code-contract §1.1): construction creates the
-    // file, so an unopenable path or a dimension past GIF's 16-bit field
-    // must fail loudly instead of writing every byte into a failed stream
-    void GifWriter::check_open(std::size_t width, std::size_t height) const
+    // file, so an unopenable path or a value past GIF's 16-bit fields
+    // (dimensions, delay) must fail loudly instead of writing every byte
+    // into a failed stream
+    void GifWriter::check_open(std::size_t width, std::size_t height, std::size_t delay_cs) const
     {
         if (out_.fail())
         {
             throw error("GifWriter: cannot open output file");
         }
-        if (width > 0xFFFF || height > 0xFFFF)
+        if (width > 0xFFFF || height > 0xFFFF || delay_cs > 0xFFFF)
         {
-            throw error("GifWriter: dimensions exceed the GIF 16-bit field");
+            throw error("GifWriter: dimensions/delay exceed the GIF 16-bit field");
         }
     }
 
@@ -460,6 +477,14 @@ namespace zb::ui
 
         out_.put(static_cast<char>(8));  // LZW minimum code size
         write_sub_blocks(out_, lzw_encode(indexed.data(), indexed.size()));
+        // the stream failure surfaces here, per frame: the init path
+        // throws (check_open), so a disk that fills mid-recording must
+        // not turn into frames() reporting a clean write -- close() runs
+        // from the destructor and cannot report it
+        if (out_.fail())
+        {
+            throw error("GifWriter: frame write failed");
+        }
         ++frames_;
     }
 
@@ -469,6 +494,8 @@ namespace zb::ui
         {
             return;
         }
+        // destructor path: no throwing here -- a failed trailer write
+        // stays in the stream state, add_frame is the throwing checkpoint
         out_.put(';');  // trailer
         closed_ = true;
     }
