@@ -81,6 +81,15 @@ namespace zb::ui
         {
             return t == "span" || t == "label" || t == "small";
         }
+        // the widget tags: each maps to its own widget, never a label, so
+        // held inside a text leaf they can only degrade to plain text
+        // (html-path.md element table)
+        bool is_widget_html(const std::string &t)
+        {
+            return t == "button" || t == "checkbox" || t == "radio" ||
+                   t == "toggle" || t == "gauge" || t == "knob" ||
+                   t == "slider" || t == "trend" || t == "meter";
+        }
         // presentation attributes a transparent svg <g> folds onto its
         // descendant line/text (nearest ancestor wins; the element's own
         // attribute wins over all)
@@ -1827,6 +1836,27 @@ namespace zb::ui
             return v;
         }
 
+        // the flex weight channels are int fields (ui_node): a source
+        // value past the int range has no representation there, and the
+        // raw cast would flip its sign -- it is capped at the channel
+        // maximum (warned once) instead; in-range values pass through
+        // untouched
+        int flex_channel_value(long long v)
+        {
+            static bool capped_warned = false;
+            if (v > 2147483647LL)
+            {
+                if (!capped_warned)
+                {
+                    capped_warned = true;
+                    LW << "html: flex value " << v
+                       << " is past the int range; capped to 2147483647";
+                }
+                return 2147483647;
+            }
+            return static_cast<int>(v);
+        }
+
         // H-7c: parse flex-basis value (auto, Npx, N%)
         // Returns true on success, sets flex_basis_px >= 0 for px, flex_basis_pct 1..100 for %
         bool parse_flex_basis(ui_node &n, const std::string &s)
@@ -1843,7 +1873,7 @@ namespace zb::ui
                 long long px = 0;
                 if (parse_int_value(v.substr(0, v.size() - 2), px) && px >= 0)
                 {
-                    n.flex_basis_px = static_cast<int>(px);
+                    n.flex_basis_px = flex_channel_value(px);
                     n.flex_basis_pct = 0;
                     return true;
                 }
@@ -1907,7 +1937,7 @@ namespace zb::ui
             long long g = 0;
             if (parse_int_value(tokens[0], g) && g >= 0)
             {
-                n.flex_grow = static_cast<int>(g);
+                n.flex_grow = flex_channel_value(g);
             }
             else
             {
@@ -1919,7 +1949,7 @@ namespace zb::ui
                 long long sh = 0;
                 if (parse_int_value(tokens[1], sh) && sh >= 0)
                 {
-                    n.flex_shrink = static_cast<int>(sh);
+                    n.flex_shrink = flex_channel_value(sh);
                 }
                 else
                 {
@@ -4637,7 +4667,7 @@ namespace zb::ui
                     const long long s = parse_int(*fs, -1);
                     if (s >= 0)
                     {
-                        n.flex_shrink = static_cast<int>(s);
+                        n.flex_shrink = flex_channel_value(s);
                     }
                     else
                     {
@@ -4651,7 +4681,7 @@ namespace zb::ui
                 const long long g = parse_int(*fg, -1);
                 if (g >= 0)
                 {
-                    n.flex_grow = static_cast<int>(g);
+                    n.flex_grow = flex_channel_value(g);
                 }
                 else
                 {
@@ -5547,9 +5577,12 @@ namespace zb::ui
         {
             std::string tag;
             int mode = k_build;
-            bool pushed = false;          // the elem already sits in the tree
-            Elem *elem = nullptr;         // the elem being filled (k_build only)
-            std::unique_ptr<Elem> owned;  // a held inline elem (merged at close)
+            bool pushed = false;   // the elem already sits in the tree
+            Elem *elem = nullptr;  // the elem being filled (k_build only)
+            // a held frame's own elem: it lives nowhere else, and close
+            // merges it into the leaf parent; a pushed frame's elem is
+            // owned by its parent's children, so owned stays empty there
+            std::unique_ptr<Elem> owned;
         };
 
         struct Parser
@@ -5562,6 +5595,10 @@ namespace zb::ui
             std::vector<Frame> frames;
             bool depth_warned = false;  // the depth-cap warning: once per parse
             bool body_seen = false;     // only the first <body> re-roots
+            // the elem a held open just produced, waiting for handle_open
+            // to frame it; empty outside that window -- the frame takes it
+            // when held (its own `owned`), a pushed open never fills it
+            std::unique_ptr<Elem> pending_held;
             // transparent <g> presentation maps inside svg, innermost last;
             // each level already merges its ancestors (nearest wins by
             // overwrite), so resolution reads the back only
@@ -5605,9 +5642,12 @@ namespace zb::ui
             }
 
             // opens a new element into the current context. Returns the elem
-            // and whether it was pushed into the tree (a false `pushed` means
-            // the caller adopts `owned` -- text is merged into the leaf parent
-            // at close).
+            // and whether it was pushed into the tree (a false `pushed`
+            // parks the elem in `pending_held` for handle_open to frame --
+            // the new frame then owns it, and close merges it into the
+            // leaf parent). The host frame is never written: its `owned`
+            // slot already holds the host's own elem when the host is
+            // itself a held frame.
             void open_elem(const std::string &tag, Elem *&out_elem,
                            bool &out_pushed, const int line)
             {
@@ -5669,7 +5709,7 @@ namespace zb::ui
                     }
                     out_elem = e.get();
                     out_pushed = false;
-                    host->owned = std::move(e);
+                    pending_held = std::move(e);
                     return;
                 }
                 p->children.push_back(std::move(e));
@@ -5782,6 +5822,22 @@ namespace zb::ui
                                 LW << "html: line " << f.elem->line
                                    << ": <img> inside a text leaf is "
                                       "dropped (no inline images)";
+                            }
+                            else if (is_widget_html(f.elem->tag))
+                            {
+                                // html-path: a widget inside a text leaf
+                                // can only degrade to plain text — an
+                                // authoring error, like the img drop above
+                                static bool widget_leaf_warned = false;
+                                if (!widget_leaf_warned)
+                                {
+                                    widget_leaf_warned = true;
+                                    LW << "html: line " << f.elem->line
+                                       << ": <" << f.elem->tag
+                                       << "> inside a text leaf degrades "
+                                          "to plain text (no inline "
+                                          "widgets)";
+                                }
                             }
                             par.elem->text += f.elem->text;
                         }
@@ -6077,16 +6133,16 @@ namespace zb::ui
                             LW << "html: line " << t.line << ": <img> inside "
                                << "a text leaf is dropped (no inline images)";
                         }
-                        frames.back().owned.reset();  // held temp: discard
+                        pending_held.reset();  // held elem: discard
                     }
                     return;
                 }
-                // the held inline temp lives on the host frame (transparent
-                // svg markers never host), so drain it from there
-                Frame *host = host_frame();
+                // a held frame carries its own elem (the pending_held the
+                // open above produced); a pushed frame's elem is owned by
+                // its parent's children, so it never takes the slot
                 frames.push_back({name, mode, pushed, elem,
-                                  host != nullptr ? std::move(host->owned)
-                                                  : std::unique_ptr<Elem>()});
+                                  !pushed ? std::move(pending_held)
+                                          : std::unique_ptr<Elem>()});
             }
 
             void feed(const Token &t)

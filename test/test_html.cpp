@@ -2608,6 +2608,53 @@ int test_html()
         EXPECT(r.children[0].flex_shrink == 0);
     }
 
+    // the flex weight channels are int fields: a value past the int range
+    // is capped (warned once) instead of narrowing into a negative weight;
+    // in-range values pass through untouched
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        ui_node r = parse_html(
+            "<div style=\"display:flex\">"
+            "<label style=\"flex-grow: 2147483648\">x</label></div>\n",
+            nullptr);
+        EXPECT(r.children[0].flex_grow == 2147483647);
+        r = parse_html(
+            "<div style=\"display:flex\">"
+            "<label style=\"flex-shrink: 2147483648\">x</label></div>\n",
+            nullptr);
+        EXPECT(r.children[0].flex_shrink == 2147483647);
+        r = parse_html(
+            "<div style=\"display:flex\">"
+            "<label style=\"flex: 2147483648 2147483649\">x</label></div>\n",
+            nullptr);
+        EXPECT(r.children[0].flex_grow == 2147483647);
+        EXPECT(r.children[0].flex_shrink == 2147483647);
+        r = parse_html(
+            "<div style=\"display:flex\">"
+            "<label style=\"flex-basis: 2147483648px\">x</label></div>\n",
+            nullptr);
+        EXPECT(r.children[0].flex_basis_px == 2147483647);
+        EXPECT(r.children[0].flex_basis_pct == 0);
+        zb::Logging::set_log_handle();
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("past the int range") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 1);  // once per process (the letter-spacing convention)
+        ui_node r2 = parse_html(
+            "<div style=\"display:flex\">"
+            "<label style=\"flex-grow: 2147483647\">x</label></div>\n",
+            nullptr);
+        EXPECT(r2.children[0].flex_grow == 2147483647);
+    }
+
     // the whitelisted flex longhands apply without the unknown-property
     // whitelist warning (the false-warning class commit 8203879 fixed
     // for margin/padding sides); a genuinely unknown property still warns
@@ -3220,6 +3267,121 @@ int test_html()
         EXPECT(test::vget<std::string>(node_prop_v(r2.children[0], "text")) ==
                "abc");
         EXPECT(find_prop(r2.children[0], "text_run") < 0);
+    }
+
+    // held-host nesting regression (audit B1): a held span hosting another
+    // open elem used to clobber its own frame's owned slot and read freed
+    // memory at the close. The held elem now rides a parser-level pending
+    // slot, so the nested shapes parse to the same tree as their flat twins.
+    {
+        // nested held spans fold into the paragraph text (T-5), the outer
+        // span's style landing as the one run
+        ui_node r = parse_html(
+            "<p><span style=\"color: red\">a<span>b</span>c</span></p>\n",
+            nullptr);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "abc");
+        int i = find_prop(r.children[0], "text_run");
+        EXPECT(i >= 0);
+        if (i >= 0)
+        {
+            EXPECT(test::vget<std::string>(
+                       r.children[0].props[static_cast<std::size_t>(i)].second) == "0|3|red|-|0");
+        }
+    }
+    {
+        // a pushed svg inside a held span: the span folds into the
+        // paragraph (its svg child rides the inline elem), the parse
+        // completes clean and no svg node leaks into the tree
+        ui_node r = parse_html(
+            "<p><span><svg viewBox=\"0 0 10 10\">"
+            "<line x1=\"0\" y1=\"0\" x2=\"1\" y2=\"1\" stroke=\"red\"/>"
+            "</svg></span></p>\n",
+            nullptr);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        bool svg_found = false;
+        std::vector<const ui_node *> stack{&r};
+        while (!stack.empty())
+        {
+            const ui_node *n = stack.back();
+            stack.pop_back();
+            if (n->type == "svg")
+            {
+                svg_found = true;
+            }
+            for (const auto &c : n->children)
+            {
+                stack.push_back(&c);
+            }
+        }
+        EXPECT(!svg_found);
+    }
+    {
+        // a self-closed img inside a held span: the img-drop LW stays,
+        // no image_view anywhere, and the span's close reads live memory
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        ui_node r = parse_html("<p><span><img src=\"x.png\"/></span></p>\n",
+                               nullptr);
+        zb::Logging::set_log_handle();
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("inside a text leaf is dropped") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 1);
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        bool image_view_found = false;
+        std::vector<const ui_node *> stack{&r};
+        while (!stack.empty())
+        {
+            const ui_node *n = stack.back();
+            stack.pop_back();
+            if (n->type == "image_view")
+            {
+                image_view_found = true;
+            }
+            for (const auto &c : n->children)
+            {
+                stack.push_back(&c);
+            }
+        }
+        EXPECT(!image_view_found);
+    }
+
+    // a widget inside a text leaf degrades to the leaf's plain text with
+    // one warn-once LW (an authoring error, like the img drop above); the
+    // inline text tags stay silent (the legal T-5 runs)
+    {
+        std::vector<std::string> warns;
+        zb::Logging::set_log_handle([&](zb::Logging_Level,
+                                        const std::string &m)
+                                    { warns.push_back(m); });
+        ui_node r = parse_html("<p>a<button>OK</button>b</p>\n", nullptr);
+        parse_html("<p><button>x</button><button>y</button></p>\n", nullptr);
+        zb::Logging::set_log_handle();
+        std::size_t hits = 0;
+        for (const std::string &w : warns)
+        {
+            if (w.find("degrades to plain text") != std::string::npos)
+            {
+                ++hits;
+            }
+        }
+        EXPECT(hits == 1);  // once per process (the letter-spacing convention)
+        EXPECT(r.children.size() == 1);
+        EXPECT(r.children[0].type == "label");
+        EXPECT(test::vget<std::string>(node_prop_v(r.children[0], "text")) ==
+               "aOKb");
     }
 
     // T-5 review fix: a segment whose text also occurs in the bare text
