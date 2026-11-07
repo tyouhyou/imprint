@@ -107,6 +107,10 @@ namespace zb::ui
             return true;
         }
 
+        // the single-root direct-return set (docs/design-file.md
+        // "Root handling"): scroll_panel is deliberately absent — a lone
+        // top-level scroll_panel always materializes as a real control.
+        // The builder-side helper of the same name carries it too.
         bool is_container_tag(const std::string &t)
         {
             return t == "panel" || t == "column" || t == "row";

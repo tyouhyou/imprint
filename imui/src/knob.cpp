@@ -62,19 +62,23 @@ namespace zb::ui
 
     int Knob::value_deg() const
     {
-        const int den = max - min;
+        // min/max/value are unbounded int fields: the differences go
+        // through int64 before the degree fold (X-9)
+        const long long den = static_cast<long long>(max) - min;
         if (den <= 0)
         {
             return -135;
         }
-        const int num = value - min;
+        const long long num = static_cast<long long>(value) - min;
         // int64 intermediate: a wide range times 270 overflows signed int
-        return -135 + static_cast<int>(static_cast<int64_t>(num) * 270 / den);
+        return -135 + static_cast<int>(num * 270 / den);
     }
 
     bool Knob::apply_step(const int dir)
     {
-        int v = value + step * dir;
+        // value/step are unbounded int fields; the product and the sum
+        // stay in int64 and clamp into [min, max] before narrowing back
+        long long v = static_cast<long long>(value) + static_cast<long long>(step) * dir;
         if (v < min)
         {
             v = min;
@@ -83,19 +87,22 @@ namespace zb::ui
         {
             v = max;
         }
-        if (v == value)
+        const int nv = static_cast<int>(v);
+        if (nv == value)
         {
             return false;
         }
         mark_dirty();
-        value = v;
-        changed(v);
+        value = nv;
+        changed(nv);
         return true;
     }
 
     void Knob::apply_delta(const int n)
     {
-        int v = value + n;
+        // same int64 discipline as apply_step: value + n clamps into
+        // [min, max] before narrowing back
+        long long v = static_cast<long long>(value) + n;
         if (v < min)
         {
             v = min;
@@ -108,9 +115,10 @@ namespace zb::ui
         {
             return;
         }
+        const int nv = static_cast<int>(v);
         mark_dirty();
-        value = v;
-        changed(v);
+        value = nv;
+        changed(nv);
     }
 
     bool Knob::hit(const int x, const int y) const

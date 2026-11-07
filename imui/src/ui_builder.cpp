@@ -195,6 +195,10 @@ namespace zb::ui
         // the string keys here are the ones a future designer-file
         // deserializer must emit; keep in sync with the builders in
         // ui_builder.hpp
+        // children-of-non-container set: scroll_panel counts here even
+        // though the parse-side single-root check (ui_file.cpp) excludes
+        // it — a lone top-level scroll_panel materializes as a real
+        // control (docs/design-file.md "Root handling")
         bool is_container_tag(const std::string &t)
         {
             return t == "column" || t == "row" || t == "panel" ||
@@ -206,6 +210,15 @@ namespace zb::ui
         {
             const long long v = prop_of(n, "elem_opacity", 1000LL);
             return v < 0 ? 0 : (v > 1000 ? 1000 : v);
+        }
+
+        // svg paint alpha channel: 0..255 like the default; the clamp
+        // keeps the alpha fold below inside the int domain for
+        // unbounded .ui/HTML text
+        long long paint_alpha(const ui_node &n, const char *name)
+        {
+            const long long v = prop_of(n, name, 255LL);
+            return v < 0 ? 0 : (v > 255 ? 255 : v);
         }
         // fold opacity into a paint color (rounded up: any nonzero
         // stays nonzero — the set_a(v > 0) binary rule, so a dimmed
@@ -1440,7 +1453,7 @@ namespace zb::ui
                                px_of(n, "vb_w"), px_of(n, "vb_h"));
                 // the svg element's own opacity multiplies every child
                 // (the per-level product already folded at parse time)
-                const long long base_alpha = prop_of(n, "opacity", 255LL);
+                const long long base_alpha = paint_alpha(n, "opacity");
                 for (const ui_node &c : n.children)
                 {
                     if (c.type == "svg_line")
@@ -1451,7 +1464,7 @@ namespace zb::ui
                             continue;  // SVG default: no stroke = invisible
                         }
                         const long long alpha =
-                            prop_of(c, "stroke_alpha", 255LL) * base_alpha / 255;
+                            paint_alpha(c, "stroke_alpha") * base_alpha / 255;
                         stroke.set_a(static_cast<uint8_t>(alpha));
                         SvgCanvas::Line l;
                         l.x1 = px_offset_of(c, "x1");
@@ -1478,7 +1491,7 @@ namespace zb::ui
                         if (parse_color(prop_of(c, "fill", std::string{}), fill))
                         {
                             const long long alpha =
-                                prop_of(c, "fill_alpha", 255LL) * base_alpha / 255;
+                                paint_alpha(c, "fill_alpha") * base_alpha / 255;
                             fill.set_a(static_cast<uint8_t>(alpha));
                             txt.color = fill;
                             txt.has_color = true;
@@ -1579,7 +1592,7 @@ namespace zb::ui
                         if (has_stroke)
                         {
                             const long long alpha =
-                                prop_of(c, "stroke_alpha", 255LL) *
+                                paint_alpha(c, "stroke_alpha") *
                                 base_alpha / 255;
                             stroke.set_a(static_cast<uint8_t>(alpha));
                             pth.color = stroke;
@@ -1588,7 +1601,7 @@ namespace zb::ui
                         if (has_fill)
                         {
                             const long long alpha =
-                                prop_of(c, "fill_alpha", 255LL) *
+                                paint_alpha(c, "fill_alpha") *
                                 base_alpha / 255;
                             fill.set_a(static_cast<uint8_t>(alpha));
                             pth.fill = fill;
@@ -1615,7 +1628,7 @@ namespace zb::ui
                                         paint))
                         {
                             const long long alpha =
-                                prop_of(c, "fill_alpha", 255LL) *
+                                paint_alpha(c, "fill_alpha") *
                                 base_alpha / 255;
                             paint.set_a(static_cast<uint8_t>(alpha));
                             sh.fill = paint;
@@ -1627,7 +1640,7 @@ namespace zb::ui
                             sw > 0)
                         {
                             const long long alpha =
-                                prop_of(c, "stroke_alpha", 255LL) *
+                                paint_alpha(c, "stroke_alpha") *
                                 base_alpha / 255;
                             paint.set_a(static_cast<uint8_t>(alpha));
                             sh.stroke = paint;

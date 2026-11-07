@@ -102,8 +102,11 @@ namespace
             // rows (the locked top-edge span test caught exactly that)
             const int lo4 = 4 * left + r4 - chord4;
             const int hi4 = 4 * (right + 1) - r4 + chord4;
-            s.lx = std::max(left, (lo4 + 1) / 4);   // first center >= lo
-            s.rx = std::min(right, (hi4 - 3) / 4);  // last center <= hi
+            // both edges exclude an exact pixel-center boundary so the
+            // two arcs treat the fringe pixel symmetrically (its true
+            // coverage comes from the overlap blend on both sides)
+            s.lx = std::max(left, (lo4 + 2) / 4);   // first center > lo
+            s.rx = std::min(right, (hi4 - 3) / 4);  // last center < hi
             if (s.lx > s.rx)
             {
                 s.lx = 1;
@@ -1491,18 +1494,21 @@ void Graphics::fill_triangle_depth(int x1, int y1, float z1,
     // vertex value
     const auto edge_x = [](const int y, const int ex1, const int ey1, const int ex2, const int ey2) -> int
     {
-        const int dy = ey2 - ey1;
+        // the vertex differences and the interpolation product stay in
+        // int64 (X-9): the vertices are untrusted and int wraps first
+        const long long dy = static_cast<long long>(ey2) - ey1;
         if (dy == 0)
         {
             return ex1;
         }
-        // the interpolation product stays in int64 (X-9): the vertices
-        // are untrusted and the int product overflows first
-        return static_cast<int>(ex1 + 1LL * (ex2 - ex1) * (y - ey1) / dy);
+        return static_cast<int>(
+            ex1 + 1LL * (static_cast<long long>(ex2) - ex1) *
+                      (static_cast<long long>(y) - ey1) / dy);
     };
     const auto edge_z = [](const int y, const int ez_y1, const float ez1, const int ez_y2, const float ez2) -> float
     {
-        const int dy = ez_y2 - ez_y1;
+        // same X-9 widening as edge_x: the y difference is untrusted too
+        const long long dy = static_cast<long long>(ez_y2) - ez_y1;
         if (dy == 0)
         {
             return ez1;
@@ -3172,14 +3178,16 @@ void Graphics::fill_triangle(
     // x on the edge (x1,y1)-(x2,y2) at row y; y1 == y2 keeps the vertex x
     const auto edge_x = [](const int y, const int ex1, const int ey1, const int ex2, const int ey2) -> int
     {
-        const int dy = ey2 - ey1;
+        // the vertex differences and the interpolation product stay in
+        // int64 (X-9): the vertices are untrusted and int wraps first
+        const long long dy = static_cast<long long>(ey2) - ey1;
         if (dy == 0)
         {
             return ex1;
         }
-        // the interpolation product stays in int64 (X-9): the vertices
-        // are untrusted and the int product overflows first
-        return static_cast<int>(ex1 + 1LL * (ex2 - ex1) * (y - ey1) / dy);
+        return static_cast<int>(
+            ex1 + 1LL * (static_cast<long long>(ex2) - ex1) *
+                      (static_cast<long long>(y) - ey1) / dy);
     };
 
     // scanline fill: one draw_line per row between the long edge and the
