@@ -320,6 +320,8 @@ ABORT 将座舱切换到逃生协议。UI 是一份 HTML 设计稿，布局以�
 
 **井字棋**（默认 story）——人机对战，覆盖对话框、按钮、布局与按需重绘；NDS 构建产出 `build/build_nds/bin/tictactoe.nds`。第三个应用 `ui_preview`（`-DSTORY=ui_preview`）渲染 `UI_PREVIEW_FILES`（空格分隔路径，左右键切换文档）指定的设计文件——可传 `.ui` 或 HTML 路径。另有十五个 story 供门户演示，构建方式相同：`g2048`、`mines`、`life`、`seedmap`、`seq303`、`drift`、`sandbox`、`firefly`、`windloom`、`rotafarm`、`comet`、`crystal`、`moonpull`、`fogkeeper`、`hoursmith`（`-DSTORY=<name>`；它们同时是 wasm 演示页）。最后三个是使用可选 imraster 模块的 3D story，仅在以 `-DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32 -DENDIAN=le` 配置时才会生成。
 
+门户集合之外还有一个合法 `STORY`：**tianji**（`-DSTORY=tianji`）——天机剧场客户端的组合层，operator-local、POSIX/AF_UNIX 专属：`tianji/` 不随检出分发，检出不含它时 `-DSTORY=tianji` 在 configure 期即报错。
+
 | Windows | macOS | Linux (X11) | WebAssembly | 任天堂 DS | Python 宿主 |
 |:---:|:---:|:---:|:---:|:---:|:---:|
 | <img src="assets/tictactoe/win.png" width="240"> | <img src="assets/tictactoe/mac.png" width="240"> | <img src="assets/tictactoe/linux_x11.png" width="240"> | <img src="assets/tictactoe/wasm.png" width="160"> | <img src="assets/tictactoe/nds.png" width="200"> | <img src="assets/tictactoe/py256.png" width="240"> |

@@ -256,6 +256,8 @@ NDS とフレームバッファシェルは 1:1 表示、WASM/Python ホスト�
 
 **三目並べ**（デフォルト story）——人間 vs コンピュータ。ダイアログ・ボタン・レイアウト・オンデマンド再描画を一通り使います。NDS ビルドは `build/build_nds/bin/tictactoe.nds` を生成します。3 つ目のアプリ `ui_preview`（`-DSTORY=ui_preview`）は `UI_PREVIEW_FILES`（スペース区切りのパス、左右キーでドキュメント切替）のデザインファイルを描画します——`.ui` か HTML のパスを渡せます。さらに 15 の story がポータルデモ用に同じ手順でビルドできます：`g2048`、`mines`、`life`、`seedmap`、`seq303`、`drift`、`sandbox`、`firefly`、`windloom`、`rotafarm`、`comet`、`crystal`、`moonpull`、`fogkeeper`、`hoursmith`（`-DSTORY=<name>`。wasm デモページも兼ねます）。最後の 3 つはオプションの imraster モジュールを使う 3D story で、`-DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32 -DENDIAN=le` を付けて設定した場合にのみ構成されます。
 
+ポータルセットの外に `STORY` がもう 1 つあります：**tianji**（`-DSTORY=tianji`）——天机剧场クライアントのコンポジション層で、operator-local かつ POSIX/AF_UNIX 専用です：`tianji/` はチェックアウトに同梱されず、それがないチェックアウトでは `-DSTORY=tianji` は configure 時にエラーになります。
+
 | Windows | macOS | Linux (X11) | WebAssembly | ニンテンドーDS | Python ホスト |
 |:---:|:---:|:---:|:---:|:---:|:---:|
 | <img src="assets/tictactoe/win.png" width="240"> | <img src="assets/tictactoe/mac.png" width="240"> | <img src="assets/tictactoe/linux_x11.png" width="240"> | <img src="assets/tictactoe/wasm.png" width="160"> | <img src="assets/tictactoe/nds.png" width="200"> | <img src="assets/tictactoe/py256.png" width="240"> |

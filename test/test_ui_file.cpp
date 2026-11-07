@@ -142,6 +142,40 @@ column id="main" spacing=4 padding=8
         EXPECT(r.children.size() == 0);
     }
 
+    // truncated UTF-8 BOM prefixes: the strip check is length-guarded, so
+    // a 1- or 2-byte host text parses as-is (unknown tag -> dropped with a
+    // warning, document empty) instead of reading past its terminator
+    // (review-3 read-past fix; reachable from the C ABI)
+    {
+        bool ok = true;
+        ui_node r = parse_ui_text("\xEF", &ok);
+        EXPECT(!ok);
+        EXPECT(r.children.empty());
+
+        ok = true;
+        r = parse_ui_text("\xEF\xBB", &ok);
+        EXPECT(!ok);
+        EXPECT(r.children.empty());
+    }
+
+    // a full UTF-8 BOM is stripped before parsing: the tag under it parses
+    // normally (editors that emit a BOM must not turn the root container
+    // into an unknown tag and lose it — unstripped, root.type would be
+    // "root" and the column would be gone)
+    {
+        bool ok = false;
+        ui_node r = parse_ui_text(
+            "\xEF\xBB\xBF"
+            "column id=\"bomroot\" spacing=4\n"
+            "  label id=\"title\" text=\"Welcome\"\n",
+            &ok);
+        EXPECT(ok);
+        EXPECT(r.type == "column");
+        EXPECT(r.id == "bomroot");
+        EXPECT(r.children.size() == 1);
+        EXPECT(test::vget<std::string>(r.children[0].props[0].second) == "Welcome");
+    }
+
     // nesting by indentation; children of non-container tags are legal
     // in the file (the materializer drops them with a warning)
     {

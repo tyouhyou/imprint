@@ -105,10 +105,13 @@ keys (`size`/`pos` emit `width`/`height`/`pos_x`/`pos_y` props;
 that axis as a percentage of the FlexPanel parent's content box,
 resolved at layout time — it never becomes an explicit size, and outside
 a FlexPanel it stays unresolved. `background` and `color` carry color
-values as quoted strings in the forms `#rgb`, `#rrggbb`, the named
-subset (`transparent`, `black`, `white`, `red`, `green`, `blue`,
-`yellow`, `gray`/`grey`, `cyan`, `magenta`); a malformed color is
-silently dropped (nothing is set — the tolerated-value rule).
+values as quoted strings in the forms `#rgb`, `#rrggbb`, `rgb()`,
+`rgba()`, the named subset (`transparent`, `black`, `white`, `red`,
+`green`, `blue`, `yellow`, `gray`/`grey`, `cyan`, `magenta`); a
+malformed color is silently dropped (nothing is set — the
+tolerated-value rule). The `rgb()`/`rgba()` forms share the HTML path's
+`parse_color` resolver; their argument semantics and constraints live
+in code-contract §4 and are not restated here.
 `background` sets the widget's background color, `color` its text color;
 `transparent` for either is a no-op (the default "no background / theme
 text" stays). `font_size` is a bare integer pixel size — the 1..128 range and the
@@ -119,8 +122,12 @@ form parses identically from text.
 ## Root handling
 
 - A document with exactly one top-level container (`panel`/`column`/
-  `row`/`scroll_panel`) returns that node directly; its container
-  properties (`spacing`, `padding`, `wrap`) apply to the build host.
+  `row`) returns that node directly; its container properties
+  (`spacing`, `padding`, `wrap`) apply to the build host.
+- A lone top-level `scroll_panel` always materializes as a `ScrollPanel`
+  control: it owns scroll state, so the build host cannot stand in for
+  it — it takes the pseudo-root route below, and its `spacing`/`padding`
+  stay with the control.
 - Otherwise a pseudo-root `type="root"` wraps the top-level nodes; its
   children are materialized into the host one by one.
 

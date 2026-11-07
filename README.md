@@ -405,6 +405,11 @@ the wasm demo pages). The last three are 3D stories on the optional imraster
 module: they configure only with `-DIMPRINT_WITH_IMRASTER=ON -DRGB_MODEL=rgba32
 -DENDIAN=le`.
 
+One `STORY` lives outside the portal set: **tianji** (`-DSTORY=tianji`) —
+the 天机剧场 (Tianji theater) client composition layer, operator-local and
+POSIX/AF_UNIX only: `tianji/` is not shipped with the checkout, and
+`-DSTORY=tianji` fails the configure step without it.
+
 | Windows | macOS | Linux (X11) | WebAssembly | Nintendo DS | Python host |
 |:---:|:---:|:---:|:---:|:---:|:---:|
 | <img src="assets/tictactoe/win.png" width="240"> | <img src="assets/tictactoe/mac.png" width="240"> | <img src="assets/tictactoe/linux_x11.png" width="240"> | <img src="assets/tictactoe/wasm.png" width="160"> | <img src="assets/tictactoe/nds.png" width="200"> | <img src="assets/tictactoe/py256.png" width="240"> |
