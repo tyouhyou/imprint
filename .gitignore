@@ -70,10 +70,11 @@ Thumbs.db
 
 /reports/
 /design/
-# the dev container's rebuildable definition ships (a clone can reproduce
-# the environment); the staged melonDS AppImage and the generated root
-# override stay local
-/docker/context/
-/docker/*.AppImage
+# operator-local, untracked since 2026-11-07: the dev container, the
+# tianji client composition layer (CMake/CI gate on its absence), the
+# local ROM launcher
+/docker/
+/tianji/
+/run_showcase.bat
 /snapshot_test_out/
 

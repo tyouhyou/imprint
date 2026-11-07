@@ -197,10 +197,14 @@ if (IMPRINT_WITH_SHELL)
 endif()
 
 # the tianji client composition layer (Batch FI Part 2): app-side feed
-# library + tests. The list file owns its platform gate (AF_UNIX wire —
-# Linux-only for now) and its tools/tests gates; the only consumer here
-# is the generic ${STORY} composition below, which links ${STORY}_app.
-add_subdirectory(tianji)
+# library + tests. Operator-local since 2026-11-07 — configure the layer
+# only when the checkout carries it. The list file owns its platform
+# gate (AF_UNIX wire — Linux-only for now) and its tools/tests gates;
+# the only consumer here is the generic ${STORY} composition below,
+# which links ${STORY}_app.
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tianji/CMakeLists.txt)
+    add_subdirectory(tianji)
+endif()
 
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree.
