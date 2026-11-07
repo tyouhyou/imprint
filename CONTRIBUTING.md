@@ -15,9 +15,10 @@ file disagree, they win.
   `docs/ARCHITECTURE.md`. Contract-before-API is the rule: if your change
   alters a public surface, change the contract in the same PR (or
   before it).
-- **Check [`docs/backlog.md`](docs/backlog.md).** It is the single home
-  of the roadmap and the architecture backlog. A missing A-/X- number
-  means that item landed — history is in `git log`.
+- **Propose architecture changes in an issue first.** The roadmap and
+  the architecture backlog are maintained privately by the maintainer;
+  a missing A-/X- number means that item landed — history is in
+  `git log`.
 - **Pick an issue, or open one first.** For anything larger than a
   clearly-scoped fix, agree on the approach before writing code. The
   `good first issue` entries all have an acceptance path.

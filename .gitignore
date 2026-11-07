@@ -55,6 +55,8 @@ demo/wasm/tictactoe.wasm
 # internal dev docs (not published)
 /AGENTS.md
 /CONTEXT.md
+# the architecture backlog: root file, inner-repo managed (2026-11-07)
+/backlog.md
 
 # OS
 Thumbs.db

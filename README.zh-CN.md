@@ -283,11 +283,10 @@ letterbox 上的点击被忽略。NDS 与 framebuffer 壳按 1:1 呈现；WASM/P
 5. [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约
 6. [`docs/design-file.md`](docs/design-file.md)——处理 `.ui` 文件时再读
 
-**按任务找文档**：改公开 API → 先改 `code-contract.md`（契约先于 API）· 新目标 / 新像素格式 / 新构建选项 → `docs/backlog.md` 与 ARCHITECTURE §4 · `.ui` 语法或打包 → `design-file.md` · C-ABI 宿主 → `zbapi.h` + ARCHITECTURE §4.8 · 构建/运行命令 → 上方**构建**。
+**按任务找文档**：改公开 API → 先改 `code-contract.md`（契约先于 API）· 新目标 / 新像素格式 / 新构建选项 → ARCHITECTURE §4 · `.ui` 语法或打包 → `design-file.md` · C-ABI 宿主 → `zbapi.h` + ARCHITECTURE §4.8 · 构建/运行命令 → 上方**构建**。
 
 - [`docs/getting-started.md`](docs/getting-started.md)——从克隆到跑起自己的应用：运行 `hello` 示例、理解 `IApp`/`CanvasWindow` 接缝、注册自己的 story
 - [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md)——按现状实装的架构：模块图与依赖规则、契约（帧生命周期、输入、像素模型、文本、事件、错误处理、C-ABI 宿主、构建选项）、已知限制
-- [`docs/backlog.md`](docs/backlog.md)——活跃 Backlog：架构项、产品特性批次（L/I/F）、条件触发项
 - [`docs/code-contract.md`](docs/code-contract.md)——API 级接口契约：错误路径、UTF-8/文本、glyph provider、树变更、布局失效、分配预算、呈现接缝转换器
 - [`docs/design-file.md`](docs/design-file.md)——`.ui` 设计文件格式：语法、打包管线、物化语义
 - [`docs/html-path.md`](docs/html-path.md)——HTML 设计文件路径：元素/属性/CSS 白名单
