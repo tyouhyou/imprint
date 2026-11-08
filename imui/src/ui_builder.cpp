@@ -17,6 +17,7 @@
 #include "slider.hpp"
 #include "svg_canvas.hpp"
 #include "text/utf8.hpp"
+#include "text_area.hpp"
 #include "text_input.hpp"
 #include "toggle_switch.hpp"
 #include "trend_line.hpp"
@@ -298,6 +299,10 @@ namespace zb::ui
             if (t == "text_input")
             {
                 return std::make_unique<TextInput>();
+            }
+            if (t == "textarea")
+            {
+                return std::make_unique<TextArea>();
             }
             if (t == "column" || t == "row")
             {
@@ -1658,6 +1663,22 @@ namespace zb::ui
                 }
                 return;
             }
+            if (t == "text_input")
+            {
+                if (prop_of(n, "read_only", false))
+                {
+                    static_cast<TextInput &>(w).set_read_only(true);
+                }
+                return;
+            }
+            if (t == "textarea")
+            {
+                if (prop_of(n, "read_only", false))
+                {
+                    static_cast<TextArea &>(w).set_read_only(true);
+                }
+                return;
+            }
             if (t == "list_box")
             {
                 ListBox &l = *as_list(w);
@@ -1743,6 +1764,12 @@ namespace zb::ui
             else if (t == "text_input")
             {
                 static_cast<TextInput &>(w).submitted += [sink, id](const std::string &)
+                { sink(id); };
+                ++bound;
+            }
+            else if (t == "textarea")
+            {
+                static_cast<TextArea &>(w).changed += [sink, id](const std::string &)
                 { sink(id); };
                 ++bound;
             }

@@ -341,6 +341,15 @@ namespace zb::ui
         n.text(std::move(text));
         return n;
     }
+    // read-only rides .prop("read_only", true) (the .ui key of the same
+    // name); the declarative action is `changed`, not `submitted`
+    inline ui_node textarea(std::string text = {})
+    {
+        ui_node n;
+        n.type = "textarea";
+        n.text(std::move(text));
+        return n;
+    }
 
     /*
      * Materializes a descriptive tree into the live widget tree:
@@ -358,7 +367,7 @@ namespace zb::ui
      * own widget's primary action event to `sink(id)` — the concrete
      * event per tag is chosen in ui_builder.cpp beside the tag table
      * (button click, checkbox/toggle/radio/slider/list_box change,
-     * text_input submit). Binding rides materialization so each sink
+     * text_input submit, textarea change). Binding rides materialization so each sink
      * attaches to the very widget that node created (the §4.3 no-RTTI
      * discipline): there is no post-hoc id lookup that a duplicate id
      * could reroute to a wrong-typed widget. A binder, not a registry:
