@@ -32,6 +32,12 @@ namespace zb::ui
      * the selection, Ctrl+V / Shift+Insert paste at the caret — through
      * the process-wide ClipboardSink (clipboard.hpp; a null sink drops
      * copy silently and makes paste a no-op). No undo/redo.
+     *
+     * Read-only (set_read_only, code-contract §2): user edits stop at
+     * the edit primitives — typing/IME ch, enter's '\n', space,
+     * backspace, delete and paste are silent no-ops and `changed`
+     * stays quiet; caret motion, selection, copy and wheel scrolling
+     * behave as before, and a programmatic set_text still applies.
      */
     class TextArea : public Widget
     {
@@ -56,6 +62,16 @@ namespace zb::ui
             text_gap = g;
             mark_dirty();
         }
+        void set_read_only(const bool on)
+        {
+            if (read_only_ == on)
+            {
+                return;
+            }
+            read_only_ = on;
+            mark_dirty();
+        }
+        [[nodiscard]] bool is_read_only() const { return read_only_; }
 
         // the current selection as UTF-8 (empty when collapsed)
         [[nodiscard]] std::string selected_text() const;
@@ -128,6 +144,7 @@ namespace zb::ui
         // collapsed when it equals the caret
         size_t sel_anchor = 0;
         bool selecting_ = false;  // a selection drag is in flight
+        bool read_only_ = false;  // code-contract §2 "Read-only mode"
         // pixel column kept across vertical moves; every non-vertical
         // caret change re-anchors it to the caret's own column
         int column_goal = 0;

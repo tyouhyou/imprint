@@ -202,6 +202,10 @@ namespace zb::ui
 
     void TextArea::insert_text(const std::u16string &units)
     {
+        if (read_only_)
+        {
+            return;  // read-only: user edits drop here (code-contract §2)
+        }
         erase_selection(false);
         clamp_caret();
         if (units.empty())
@@ -273,6 +277,10 @@ namespace zb::ui
 
     void TextArea::insert(const char16_t ch)
     {
+        if (read_only_)
+        {
+            return;  // read-only: user edits drop here (code-contract §2)
+        }
         erase_selection(false);  // typing replaces the selection
         clamp_caret();
         std::u16string t = get_text();
@@ -288,6 +296,10 @@ namespace zb::ui
 
     bool TextArea::erase_before_caret()
     {
+        if (read_only_)
+        {
+            return false;  // read-only: user edits drop here (code-contract §2)
+        }
         if (erase_selection())
         {
             return true;
@@ -316,6 +328,10 @@ namespace zb::ui
 
     bool TextArea::erase_at_caret()
     {
+        if (read_only_)
+        {
+            return false;  // read-only: user edits drop here (code-contract §2)
+        }
         if (erase_selection())
         {
             return true;

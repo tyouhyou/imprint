@@ -28,6 +28,12 @@ namespace zb::ui
      * face. Ctrl+C / Ctrl+Insert copy, Ctrl+V / Shift+Insert paste at
      * the caret — through the process-wide ClipboardSink (clipboard.hpp).
      *
+     * Read-only (set_read_only, code-contract §2): user edits stop at
+     * the edit primitives — typing/IME ch, space, backspace, delete
+     * and paste are silent no-ops and `changed` stays quiet; caret
+     * motion, selection, copy and enter-submitted behave as before,
+     * and a programmatic set_text still applies.
+     *
      * The frame highlights while focused; the text is drawn via the
      * shared text helpers (advance_of / draw_text_at), so custom glyph
      * providers apply.
@@ -57,6 +63,16 @@ namespace zb::ui
             text_gap = g;
             mark_dirty();
         }
+        void set_read_only(const bool on)
+        {
+            if (read_only_ == on)
+            {
+                return;
+            }
+            read_only_ = on;
+            mark_dirty();
+        }
+        [[nodiscard]] bool is_read_only() const { return read_only_; }
 
         // the current selection as UTF-8 (empty when collapsed)
         [[nodiscard]] std::string selected_text() const;
@@ -103,6 +119,7 @@ namespace zb::ui
         // collapsed when it equals the caret
         size_t sel_anchor = 0;
         bool selecting_ = false;  // a selection drag is in flight
+        bool read_only_ = false;  // code-contract §2 "Read-only mode"
         int text_gap = 2;
         // unset = follow the active theme (contract 10.3)
         std::optional<core::Color> border_color;  // override of theme border
