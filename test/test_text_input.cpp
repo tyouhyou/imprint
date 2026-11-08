@@ -531,6 +531,11 @@ int test_text_input()
         sink.canned = "zz";
         SinkGuard guard(&sink);
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
+        t.d.dispatch(t.root,
+                     key_mod(static_cast<int>(zb::input::key_code::insert),
+                             zb::input::mod_shift));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::del)));
         EXPECT(t.input->get_text() == std::u16string(u"seed"));
 
         // enter still submits a read-only field (an affordance, not an edit)

@@ -522,12 +522,15 @@ the characters come from.
   both editors gates user edits only. While set, typing and
   IME-committed `ch`, enter (TextArea inserts `\n`), space,
   backspace, delete, and paste (both chords) are silent no-ops that
-  never fire `changed`. Everything else is untouched: caret motion,
-  click placement, selection and select-all, the copy chords, wheel
-  scrolling (TextArea), and `TextInput::submitted` (Enter still
-  submits a read-only field). Programmatic `set_text` keeps working
-  (app-driven, not a user edit; it still does not fire `changed`).
-  No default visual change.
+  never fire `changed`. The gated edits are consumed (the editor saw
+  them; space/enter must not fall through to activation), while
+  backspace/del report not-consumed as in the editable state — no
+  dispatcher path acts on either. Everything else is untouched:
+  caret motion, click placement, selection and select-all, the copy
+  chords, wheel scrolling (TextArea), and `TextInput::submitted`
+  (Enter still submits a read-only field). Programmatic `set_text`
+  keeps working (app-driven, not a user edit; it still does not fire
+  `changed`). No default visual change.
 - **Pair atomicity (A-25)**: stored text may contain surrogate pairs
   (typed `ch > U+FFFF`, IME or paste through `utf8_to_utf16`). Every
   editing step treats a pair as one atom: caret motion, deletion
@@ -1622,7 +1625,8 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
   materialized node carrying a non-empty id subscribes that node's own
   widget's primary action event to `sink(id)` — the concrete event per
   tag (button `clicked`; checkbox / toggle `changed`; radio `changed`;
-  slider `changed`; text_input `submitted`; list_box `changed`) is
+  slider `changed`; text_input `submitted`; textarea `changed`;
+  list_box `changed`) is
   chosen in ui_builder.cpp beside the tag table. Binding rides
   materialization so each sink attaches to the very widget that node
   created (the §4.3 no-RTTI discipline): there is no post-hoc id
