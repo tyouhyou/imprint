@@ -75,14 +75,16 @@ The tag and property set is defined by the factory/property tables in
 panel container) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
-`text_input`, `svg`, `image_view`), with properties including
+`text_input`, `textarea`, `svg`, `image_view`), with properties including
 `id`, `text`, `title` (`group_box`), `items`, `width`, `height` (px, or
 `N%` — see below),
 `min_width` / `max_width` / `min_height` / `max_height` (D-1 flex
 clamps, px; 0 = unconstrained),
 `pos_x` / `pos_y` (pixel position), `valign` (`top`, `center`, `bottom`),
 `halign` (`left`, `center`, `right`), `checked`, `group`, `step`,
-`min`, `max`, `value`, `rows`, `spacing`, `padding`,
+`min`, `max`, `value`, `rows`, `spacing`, `padding`, `read_only`
+(bool: the read-only editor flag, `text_input`/`textarea` only —
+code-contract §2 "Read-only mode"),
 `padding_t` / `padding_r` / `padding_b` / `padding_l` (per-side wins
 over the uniform share), `wrap`, `flex` (integer grow weight),
 `margin_t`, `margin_r`, `margin_b`, `margin_l`,

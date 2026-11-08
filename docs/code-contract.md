@@ -518,6 +518,16 @@ the characters come from.
   uncovered code unit renders through the normal fallback chain
   (primary → 5×7 → skip), which is a font-coverage concern, not an
   input concern.
+- **Read-only mode**: `set_read_only(bool)` / `is_read_only()` on
+  both editors gates user edits only. While set, typing and
+  IME-committed `ch`, enter (TextArea inserts `\n`), space,
+  backspace, delete, and paste (both chords) are silent no-ops that
+  never fire `changed`. Everything else is untouched: caret motion,
+  click placement, selection and select-all, the copy chords, wheel
+  scrolling (TextArea), and `TextInput::submitted` (Enter still
+  submits a read-only field). Programmatic `set_text` keeps working
+  (app-driven, not a user edit; it still does not fire `changed`).
+  No default visual change.
 - **Pair atomicity (A-25)**: stored text may contain surrogate pairs
   (typed `ch > U+FFFF`, IME or paste through `utf8_to_utf16`). Every
   editing step treats a pair as one atom: caret motion, deletion
@@ -1325,7 +1335,9 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
 - **Key bindings.** Ctrl+C / Ctrl+Insert copy the selection of the
   focused text widget; Ctrl+V / Shift+Insert paste at the caret
   replacing any selection (clipped to the field's own input rules);
-  Ctrl+A select-all. No menu, no mouse-middle paste. The chords ride
+  Ctrl+A select-all. A read-only field (§2 "Read-only mode") keeps
+  the copy chords and Ctrl+A and drops the paste chords silently.
+  No menu, no mouse-middle paste. The chords ride
   `input_event::mods` (key = `'c'`/`'v'`/`'a'`/`insert`, ch = 0);
   the C-ABI `zb_input` event carries no mods today, so these bindings
   are unreachable from C hosts until the shells translate terminal
