@@ -206,6 +206,14 @@ if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/tianji/CMakeLists.txt)
     add_subdirectory(tianji)
 endif()
 
+# the tianji studio client composition layer (P1-10): the five-pane
+# session screen over the studio-bridge child process. Operator-local
+# like tianji/ — configure only when the checkout carries it; the list
+# file owns its platform gate (POSIX pipes) and its test gate.
+if (EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/studio/CMakeLists.txt)
+    add_subdirectory(studio)
+endif()
+
 # imprint:: aliases: the out-of-tree consumption names (ARCHITECTURE
 # §3.2). Aliases resolve inside the consuming tree.
 foreach(_imprint_target imutil imcore imraster imevent iminput imui imapp imapp_canvas imapp_snapshot shell_common shell_hostloop shell_backend zbapi)
@@ -330,6 +338,12 @@ if (STORY STREQUAL "tianji" AND NOT TARGET tianji_app)
         "STORY=tianji needs the operator-local tianji/ layer (AF_UNIX "
         "wire, Linux-only) -- absent from this checkout or gated out on "
         "this platform")
+endif()
+if (STORY STREQUAL "studio" AND NOT TARGET studio_app)
+    message(FATAL_ERROR
+        "STORY=studio needs the operator-local studio/ layer (POSIX "
+        "pipes) -- absent from this checkout or gated out on this "
+        "platform")
 endif()
 add_executable(${STORY})
 target_sources(${STORY} PRIVATE ${IMPRINT_SHELL_SRC})

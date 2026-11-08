@@ -682,7 +682,18 @@ namespace zb::ui
         {
             ++rasterizations_;
             std::string text = text_fn(text_arg, r);
-            auto img = make_text_image(text.c_str(), text_w, rh, fg, bg);
+            // FI-12 (P1-10): a widget that declared a runtime font size
+            // (set_font_size against the process family) renders its rows
+            // through that provider, left-aligned like every chat surface
+            // (CJK bodies). Without the declaration the 5x7 centered
+            // legacy path stays byte-identical.
+            const GlyphProvider *provider = nullptr;
+            if (font_size() > 0)
+            {
+                provider = primary_provider();
+            }
+            auto img = make_text_image(text.c_str(), text_w, rh, fg, bg,
+                                       provider, provider != nullptr);
             const auto sz = img->size();
             row = {img->data(), sz.width, sz.height, 0};
             insert_row_cache(

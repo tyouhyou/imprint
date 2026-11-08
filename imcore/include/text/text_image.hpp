@@ -2,6 +2,7 @@
 
 #include "../core/graphics.hpp"
 #include "../core/ptr.hpp"
+#include "../text/glyph_provider.hpp"
 
 namespace zb::ui
 {
@@ -26,4 +27,20 @@ namespace zb::ui
         const int width, const int height,
         const core::Color &foreground,
         const core::Color &background);
+
+    /*
+     * The provider/alignment form (P1-10, the studio client's CJK rows):
+     * `provider` (null = the built-in 5x7 bitmap, byte-identical to the
+     * 5-arg form) renders the text; `left_align` pins x to 0 instead of
+     * the horizontal center. Vertical baseline centering is kept for
+     * both. ListBox rows use this with the widget's installed glyph
+     * provider (FI-12) -- CJK row bodies render through the runtime TTF
+     * and stream rows read left-aligned like every chat surface.
+     */
+    zb::SharedPtr<core::Graphics> make_text_image(
+        const char *text,
+        const int width, const int height,
+        const core::Color &foreground,
+        const core::Color &background,
+        const GlyphProvider *provider, bool left_align);
 }  // namespace zb::ui

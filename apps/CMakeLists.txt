@@ -1,7 +1,9 @@
 set(STORY tictactoe CACHE STRING "Demo application to build")
-set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly windloom rotafarm comet crystal moonpull fogkeeper hoursmith tianji)
+set_property(CACHE STORY PROPERTY STRINGS tictactoe ui_preview showcase hello showcase_html g2048 mines life seedmap seq303 drift sandbox firefly windloom rotafarm comet crystal moonpull fogkeeper hoursmith tianji studio)
 # STORY=tianji links tianji_app, built from tianji/ (the client
 # composition layer -- Batch FI Part 2), not from apps/<story>
+# STORY=studio likewise links studio_app, built from studio/ (P1-10,
+# the five-pane session screen over the studio-bridge child process)
 if (STORY STREQUAL "tianji" AND NOT USE_PNG)
     message(STATUS "STORY=tianji without -DUSE_PNG=ON: the stage placeholder decodes nothing (a stageless client); the kit tianji-app target pins USE_PNG")
 endif()
@@ -78,6 +80,6 @@ if (NOT STORY STREQUAL "tictactoe" AND NOT STORY STREQUAL "ui_preview"
     AND NOT STORY STREQUAL "showcase_html" AND NOT STORY STREQUAL "g2048"
     AND NOT STORY STREQUAL "mines" AND NOT STORY STREQUAL "life"
     AND NOT STORY STREQUAL "seedmap" AND NOT STORY STREQUAL "seq303"
-    AND NOT STORY STREQUAL "drift" AND NOT STORY STREQUAL "sandbox" AND NOT STORY STREQUAL "firefly" AND NOT STORY STREQUAL "windloom" AND NOT STORY STREQUAL "rotafarm" AND NOT STORY STREQUAL "comet" AND NOT STORY STREQUAL "crystal" AND NOT STORY STREQUAL "moonpull" AND NOT STORY STREQUAL "fogkeeper" AND NOT STORY STREQUAL "hoursmith" AND NOT STORY STREQUAL "tianji")
+    AND NOT STORY STREQUAL "drift" AND NOT STORY STREQUAL "sandbox" AND NOT STORY STREQUAL "firefly" AND NOT STORY STREQUAL "windloom" AND NOT STORY STREQUAL "rotafarm" AND NOT STORY STREQUAL "comet" AND NOT STORY STREQUAL "crystal" AND NOT STORY STREQUAL "moonpull" AND NOT STORY STREQUAL "fogkeeper" AND NOT STORY STREQUAL "hoursmith" AND NOT STORY STREQUAL "tianji" AND NOT STORY STREQUAL "studio")
     message(FATAL_ERROR "Unknown STORY: ${STORY}")
 endif()
