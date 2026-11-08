@@ -500,5 +500,58 @@ int test_text_input()
         EXPECT(inp->selected_text() == "B");  // [3, 4), not a lone unit
     }
 
+    // read-only (code-contract §2): typing/paste/backspace drop
+    // silently and changed stays quiet; copy and selection still work;
+    // submitted still fires on enter; clearing the flag restores editing
+    {
+        SelInput t;
+        t.d.dispatch(t.root, press_at(20, 20));
+        t.d.dispatch(t.root, release_at(20, 20));
+        t.input->set_text(std::u16string(u"seed"));
+        t.input->set_read_only(true);
+        EXPECT(t.input->is_read_only());
+
+        int submits = 0;
+        std::string submitted_text;
+        t.input->submitted += [&](const std::string &s)
+        {
+            ++submits;
+            submitted_text = s;
+        };
+
+        t.d.dispatch(t.root, char_ev('x'));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::space)));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        EXPECT(t.input->get_text() == std::u16string(u"seed"));
+        EXPECT(t.last.empty());  // changed never fired
+
+        TestSink sink;
+        sink.canned = "zz";
+        SinkGuard guard(&sink);
+        t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
+        EXPECT(t.input->get_text() == std::u16string(u"seed"));
+
+        // enter still submits a read-only field (an affordance, not an edit)
+        EXPECT(t.d.dispatch(t.root,
+                            key_ev(static_cast<int>(zb::input::key_code::enter))));
+        EXPECT(submits == 1);
+        EXPECT(submitted_text == "seed");
+
+        // copy works
+        t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
+        t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl));
+        EXPECT(sink.sent == "seed");
+
+        // collapse the standing selection with a click past the text end
+        // (typing replaces a selection, FI-02), then re-enable editing
+        t.d.dispatch(t.root, press_at(110, 20));  // local 100: past "seed"
+        t.d.dispatch(t.root, release_at(110, 20));
+        t.input->set_read_only(false);
+        EXPECT(t.d.dispatch(t.root, char_ev('!')));
+        EXPECT(t.input->get_text() == std::u16string(u"seed!"));
+    }
+
     return test::report("text_input");
 }

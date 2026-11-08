@@ -257,6 +257,46 @@ int test_builder()
         EXPECT(ti->get_text() == u"hello!");
     }
 
+    // textarea: DOM + materialize + changed action binding; read_only
+    // materializes a read-only editor (code-contract §2)
+    {
+        auto doc = column({
+            label("Note").named("lbl"),
+            textarea("seed").named("ta"),
+        });
+        FlexPanel host;
+        host.set_size(200, 120);
+        std::string action;
+        build(host, doc, [&action](const std::string &id)
+              { action = id; });
+        host.layout();
+
+        auto *ta = static_cast<TextArea *>(host.find_by_id("ta"));
+        EXPECT(ta != nullptr && ta->get_text() == u"seed");
+
+        // an edit fires the bound changed action with the node id
+        InputDispatcher d;
+        d.dispatch(host, press_at(60, 20));  // click past the text end
+        d.dispatch(host, char_down('x'));
+        EXPECT(ta->get_text() == u"seedx");
+        EXPECT(action == "ta");
+
+        // read_only=true materializes read-only: typing drops
+        auto ro = column({
+            textarea("seed").named("ro").prop("read_only", true),
+        });
+        FlexPanel host2;
+        host2.set_size(200, 120);
+        build(host2, ro);
+        host2.layout();
+        auto *r = static_cast<TextArea *>(host2.find_by_id("ro"));
+        EXPECT(r != nullptr && r->is_read_only());
+        InputDispatcher d2;
+        d2.dispatch(host2, press_at(20, 20));
+        d2.dispatch(host2, char_down('x'));
+        EXPECT(r->get_text() == u"seed");
+    }
+
     // alignment attributes materialization
     {
         const std::pair<const char *, Widget::h_align> h_cases[] = {

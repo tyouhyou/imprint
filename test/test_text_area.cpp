@@ -531,5 +531,72 @@ int test_text_area()
                               u"\ny"));
     }
 
+    // read-only (code-contract §2): user edits are silent no-ops and
+    // changed stays quiet
+    {
+        Editor e;
+        e.area->set_read_only(true);
+        e.d.dispatch(e.root, char_ev('a'));
+        e.d.dispatch(e.root,
+                     key_ev(static_cast<int>(zb::input::key_code::enter)));
+        e.d.dispatch(e.root,
+                     key_ev(static_cast<int>(zb::input::key_code::space)));
+        e.d.dispatch(e.root,
+                     key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        e.d.dispatch(e.root,
+                     key_ev(static_cast<int>(zb::input::key_code::del)));
+        EXPECT(e.area->get_text().empty());
+        EXPECT(e.last.empty());
+
+        // paste drops too (a canned sink is present); both chords
+        TestSink sink;
+        sink.canned = "zz";
+        SinkGuard guard(&sink);
+        e.d.dispatch(e.root, key_mod('v', zb::input::mod_ctrl));
+        e.d.dispatch(e.root,
+                     key_mod(static_cast<int>(zb::input::key_code::insert),
+                             zb::input::mod_shift));
+        EXPECT(e.area->get_text().empty());
+        EXPECT(e.last.empty());
+    }
+
+    // read-only keeps the non-edit affordances: selection + copy work,
+    // the wheel still scrolls, caret keys still move; programmatic
+    // set_text applies throughout and clearing the flag restores editing
+    {
+        SelTree t;
+        t.area->set_text(std::u16string(u"l0\nl1\nl2\nl3\nl4"));
+        t.d.dispatch(t.root, press_at(2, 3));  // focus + caret 0
+        t.d.dispatch(t.root, release_at(2, 3));
+        t.area->set_read_only(true);
+
+        TestSink sink;
+        SinkGuard guard(&sink);
+        t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
+        t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl));
+        EXPECT(sink.sent == "l0\nl1\nl2\nl3\nl4");
+
+        // the wheel still scrolls: select-all's caret-follow sits at the
+        // bottom, so a notch down moves nothing (the H-4 bubble rule) and
+        // a notch up scrolls toward the top
+        EXPECT(!t.d.dispatch(t.root, wheel_ev(-1)));
+        EXPECT(t.d.dispatch(t.root, wheel_ev(1)));
+        // caret keys still move (left from the select-all end)
+        EXPECT(t.d.dispatch(
+            t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
+
+        // programmatic set_text still applies (app-driven, not a user edit)
+        t.area->set_text(std::u16string(u"seed"));
+        EXPECT(t.area->get_text() == std::u16string(u"seed"));
+
+        // collapse the standing selection with a click past the line end
+        // (typing replaces a selection, FI-02), then re-enable editing
+        t.d.dispatch(t.root, press_at(38, 3));
+        t.d.dispatch(t.root, release_at(38, 3));
+        t.area->set_read_only(false);
+        EXPECT(t.d.dispatch(t.root, char_ev('!')));
+        EXPECT(t.area->get_text() == std::u16string(u"seed!"));
+    }
+
     return test::report("text_area");
 }

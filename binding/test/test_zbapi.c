@@ -137,6 +137,7 @@ int main(void)
     static const char *UI_TEXT =
         "column id=\"root\" spacing=6 padding=10\n"
         "  label id=\"count\" text=\"Clicks: 0\"\n"
+        "  textarea id=\"notes\" text=\"seed\" read_only=true\n"
         "  button id=\"ok\" text=\"OK\"\n";
 
     zb_app_t *ui = zb_app_create_from_ui(UI_TEXT, 0, 320, 240);
@@ -163,22 +164,40 @@ int main(void)
     /* missing widget: -1, no crash */
     assert(zb_widget_text(ui, "nope", text, sizeof(text)) == -1);
 
-    /* Tab focuses the button, Enter activates it: the action callback
-     * fires with the id, and the host writes through zb_widget_set_text.
-     * The second registration REPLACED the first handler, so the
-     * replacement counts, the original does not. */
+    /* the read-only textarea reads back its declared text
+     * (declarative read_only, code-contract §2) */
+    assert(zb_widget_text(ui, "notes", text, sizeof(text)) > 0);
+    assert(strcmp(text, "seed") == 0);
+
+    /* Tab focuses the read-only textarea first; a typed character drops
+     * silently (read-only), the next Tab reaches the button and Enter
+     * activates it: the action callback fires with the id, and the host
+     * writes through zb_widget_set_text. The second registration
+     * REPLACED the first handler, so the replacement counts, the
+     * original does not. */
     assert(clicks == 0);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, 0, 'X', 0);
+    assert(zb_widget_text(ui, "notes", text, sizeof(text)) > 0);
+    assert(strcmp(text, "seed") == 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
     assert(clicks2 == 1);
     assert(clicks == 0);
 
+    /* the host still writes a read-only field programmatically */
+    zb_widget_set_text(ui, "notes", "edited");
+    assert(zb_widget_text(ui, "notes", text, sizeof(text)) > 0);
+    assert(strcmp(text, "edited") == 0);
+
     zb_widget_set_text(ui, "count", "Clicks: 1");
     assert(zb_widget_text(ui, "count", text, sizeof(text)) > 0);
     assert(strcmp(text, "Clicks: 1") == 0);
 
-    /* unregister stops the firing; the frame still paints */
+    /* unregister stops the firing; the frame still paints (the focus
+     * cycle is textarea -> button, so two Tabs reach the button) */
     zb_set_event_callback(ui, "ok", NULL, NULL);
+    zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_TAB, 0, 0);
     zb_input(ui, ZB_INPUT_KEY_DOWN, 0, 0, ZB_KEY_ENTER, 0, 0);
     assert(clicks2 == 1);
