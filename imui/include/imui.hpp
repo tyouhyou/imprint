@@ -8,6 +8,7 @@
 #include "dispatcher.hpp"
 #include "flex_panel.hpp"
 #include "gauge_dial.hpp"
+#include "group_box.hpp"
 #include "html.hpp"
 #include "image_view.hpp"
 #include "knob.hpp"

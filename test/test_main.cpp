@@ -5,6 +5,7 @@
 int test_panel();
 int test_button();
 int test_label();
+int test_group_box();
 int test_dialog();
 int test_dispatch();
 int test_hit_override();
@@ -112,6 +113,7 @@ static const suite g_suites[] = {
     {"panel", test_panel},
     {"button", test_button},
     {"label", test_label},
+    {"group_box", test_group_box},
     {"dialog", test_dialog},
     {"dispatch", test_dispatch},
     {"hit_override", test_hit_override},

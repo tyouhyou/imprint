@@ -23,6 +23,7 @@ add_library(
     src/button.cpp
     src/checkbox.cpp
     src/label.cpp
+    src/group_box.cpp
     src/radio_button.cpp
     src/slider.cpp
     src/progress_bar.cpp

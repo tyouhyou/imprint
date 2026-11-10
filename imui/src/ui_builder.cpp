@@ -4,6 +4,7 @@
 #include "checkbox.hpp"
 #include "flex_panel.hpp"
 #include "gauge_dial.hpp"
+#include "group_box.hpp"
 #include "image_view.hpp"
 #include "knob.hpp"
 #include "label.hpp"
@@ -202,7 +203,7 @@ namespace zb::ui
         bool is_container_tag(const std::string &t)
         {
             return t == "column" || t == "row" || t == "panel" ||
-                   t == "scroll_panel";
+                   t == "scroll_panel" || t == "group_box";
         }
 
         // element opacity (P-2d): fixed-point 0..1000, default opaque
@@ -240,7 +241,8 @@ namespace zb::ui
         std::unique_ptr<Widget> make_widget(const ui_node &n, bool *is_flex)
         {
             const std::string &t = n.type;
-            *is_flex = (t == "column" || t == "row" || t == "scroll_panel");
+            *is_flex = (t == "column" || t == "row" ||
+                        t == "scroll_panel" || t == "group_box");
             if (t == "label")
             {
                 return std::make_unique<Label>();
@@ -308,6 +310,10 @@ namespace zb::ui
             if (t == "panel")
             {
                 return std::make_unique<Panel>();
+            }
+            if (t == "group_box")
+            {
+                return std::make_unique<GroupBox>();
             }
             LW << "ui_builder: unknown tag '" << t << "'; node skipped";
             return nullptr;
@@ -1674,6 +1680,12 @@ namespace zb::ui
             if (t == "column" || t == "row" || t == "scroll_panel")
             {
                 apply_flex_config(*as_flex(w), n);
+            }
+            if (t == "group_box")
+            {
+                GroupBox &g = static_cast<GroupBox &>(w);
+                apply_flex_config(g, n, true);
+                g.set_title(prop_of(n, "title", std::string{}));
             }
         }
 

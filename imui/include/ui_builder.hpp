@@ -181,6 +181,16 @@ namespace zb::ui
         }
         return n;
     }
+    inline ui_node group_box(std::string title = {})
+    {
+        ui_node n;
+        n.type = "group_box";
+        if (!title.empty())
+        {
+            n.prop("title", std::move(title));
+        }
+        return n;
+    }
 
     // leaf widgets
     inline ui_node label(std::string text = {})

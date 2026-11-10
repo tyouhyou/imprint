@@ -32,8 +32,9 @@ namespace zb::ui
         }
         bool is_whitelisted_tag(const std::string &t)
         {
-            return t == "div" || t == "p" || t == "span" || t == "label" ||
-                   t == "small" || t == "button" || t == "checkbox" || t == "radio" ||
+            return t == "div" || t == "group-box" || t == "p" ||
+                   t == "span" || t == "label" || t == "small" ||
+                   t == "button" || t == "checkbox" || t == "radio" ||
                    t == "br" || t == "toggle" || t == "gauge" ||
                    t == "knob" || t == "slider" || t == "trend" || t == "meter" ||
                    t == "svg" || t == "vectordial" || t == "img";
@@ -73,7 +74,7 @@ namespace zb::ui
         // tags, and body (the document container)
         bool is_container_html(const std::string &t)
         {
-            return t == "div" || t == "body";
+            return t == "div" || t == "body" || t == "group-box";
         }
         // T-5: the inline text elems that contribute styled runs inside
         // a wrapping paragraph (html-path.md element table)
@@ -2966,6 +2967,10 @@ namespace zb::ui
 
         std::string widget_type(const Elem &e, const std::vector<Decl> &folded)
         {
+            if (e.tag == "group-box")
+            {
+                return "group_box";
+            }
             if (e.tag == "div" || e.tag == "body")
             {
                 // H-4: an overflowing container scrolls instead of
@@ -4472,6 +4477,10 @@ namespace zb::ui
                     // (code-contract §3.5)
                     n.prop("src", a.second);
                 }
+                else if (k == "title" && n.type == "group_box")
+                {
+                    n.prop("title", a.second);
+                }
                 else if ((k == "min" || k == "max" || k == "step" ||
                           k == "value") &&
                          (n.type == "gauge" || n.type == "knob" ||
@@ -4689,7 +4698,8 @@ namespace zb::ui
                        << *fg << "'";
                 }
             }
-            const bool is_container = n.type == "column" || n.type == "row";
+            const bool is_container = n.type == "column" || n.type == "row" ||
+                                      n.type == "group_box";
             if (is_container)
             {
                 if (const std::string *gv = fold_lookup(folded, "gap"))

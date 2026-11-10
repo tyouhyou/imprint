@@ -71,11 +71,13 @@ column id="root" spacing=6 padding=10
 
 The tag and property set is defined by the factory/property tables in
 `imui/src/ui_builder.cpp` — except `flex` and `items`, which are parser-level keys in `imui/src/ui_file.cpp`): containers (`panel`, `column`, `row`,
-`scroll_panel` — a vertical scroll container, H-4) and
+`scroll_panel` — a vertical scroll container, H-4; `group_box` — a titled
+panel container) and
 widgets (`label`, `button`, `checkbox`, `radio`, `slider`,
 `progress_bar`, `toggle`, `gauge`, `knob`, `trend`, `list_box`,
 `text_input`, `svg`, `image_view`), with properties including
-`id`, `text`, `items`, `width`, `height` (px, or `N%` — see below),
+`id`, `text`, `title` (`group_box`), `items`, `width`, `height` (px, or
+`N%` — see below),
 `min_width` / `max_width` / `min_height` / `max_height` (D-1 flex
 clamps, px; 0 = unconstrained),
 `pos_x` / `pos_y` (pixel position), `valign` (`top`, `center`, `bottom`),
@@ -121,9 +123,11 @@ form parses identically from text.
 
 ## Root handling
 
-- A document with exactly one top-level container (`panel`/`column`/
-  `row`) returns that node directly; its container properties
+- A document with exactly one top-level layout container (`panel`/
+  `column`/`row`) returns that node directly; its container properties
   (`spacing`, `padding`, `wrap`) apply to the build host.
+- A top-level `group_box` remains a widget so its title and frame are
+  preserved; its children are laid out vertically inside its padded area.
 - A lone top-level `scroll_panel` always materializes as a `ScrollPanel`
   control: it owns scroll state, so the build host cannot stand in for
   it — it takes the pseudo-root route below, and its `spacing`/`padding`
