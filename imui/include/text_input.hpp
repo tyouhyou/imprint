@@ -1,5 +1,6 @@
 #pragma once
 
+#include "editor_history.hpp"
 #include "event.hpp"
 #include "widget.hpp"
 
@@ -33,6 +34,16 @@ namespace zb::ui
      * and paste are silent no-ops and `changed` stays quiet; caret
      * motion, selection, copy and enter-submitted behave as before,
      * and a programmatic set_text still applies.
+     *
+     * Undo/redo (code-contract §2 "Undo/redo"): every user edit
+     * records one history step; consecutive same-kind edits merge
+     * (a typing run, a backspace run). Ctrl+Z undoes, Ctrl+Y /
+     * Ctrl+Shift+Z redo; the stacks hold at most 5 steps and a new
+     * edit clears the redo side. The history lives for one focus
+     * session — cleared on focus gain and loss — so a programmatic
+     * set_text is never undoable across focus. undo()/redo() are
+     * public (can_undo()/can_redo() report the stacks); read-only
+     * gates them like every other edit primitive.
      *
      * The frame highlights while focused; the text is drawn via the
      * shared text helpers (advance_of / draw_text_at), so custom glyph
@@ -74,6 +85,13 @@ namespace zb::ui
         }
         [[nodiscard]] bool is_read_only() const { return read_only_; }
 
+        // bounded undo/redo (code-contract §2 "Undo/redo"); a call
+        // with an empty stack is a silent no-op
+        void undo();
+        void redo();
+        [[nodiscard]] bool can_undo() const { return history_.can_undo(); }
+        [[nodiscard]] bool can_redo() const { return history_.can_redo(); }
+
         // the current selection as UTF-8 (empty when collapsed)
         [[nodiscard]] std::string selected_text() const;
 
@@ -114,12 +132,21 @@ namespace zb::ui
         void copy_selection();
         void paste_at_caret();
 
+        // §2 "Undo/redo" bookkeeping: the history owns the stacks and
+        // the merge policy; the editor captures a state before each
+        // user edit and applies what undo/redo hand back
+        using history_step = editor_history::step;
+        [[nodiscard]] history_step capture() const;
+        void record_edit(editor_history::kind k, const history_step &before);
+        void apply_state(const history_step &s);
+
         size_t caret = 0;
         // the selection anchor: [min(sel_anchor, caret), max(...));
         // collapsed when it equals the caret
         size_t sel_anchor = 0;
         bool selecting_ = false;  // a selection drag is in flight
         bool read_only_ = false;  // code-contract §2 "Read-only mode"
+        editor_history history_;
         int text_gap = 2;
         // unset = follow the active theme (contract 10.3)
         std::optional<core::Color> border_color;  // override of theme border

@@ -308,12 +308,63 @@ namespace zb::ui
 
     void TextInput::on_focus_change(const bool now_focused)
     {
+        // the undo history lives for one focus session (code-contract
+        // §2): cleared on gain (a pre-focus set_text is never undoable
+        // across) and on loss
+        history_.clear();
         if (!now_focused)
         {
             // focus loss collapses the selection to the caret (FI-02)
             clamp_caret();
             sel_anchor = caret;
             selecting_ = false;
+        }
+    }
+
+    editor_history::step TextInput::capture() const
+    {
+        return {get_text(), caret, sel_anchor};
+    }
+
+    void TextInput::record_edit(const editor_history::kind k,
+                                const history_step &before)
+    {
+        history_.record(k, before, capture());
+    }
+
+    void TextInput::apply_state(const history_step &s)
+    {
+        set_text(s.text);
+        caret = s.caret;
+        sel_anchor = s.sel_anchor;
+        clamp_caret();
+        fire_changed();
+    }
+
+    void TextInput::undo()
+    {
+        if (read_only_)
+        {
+            return;  // read-only gates undo too (code-contract §2)
+        }
+        history_step s;
+        if (history_.undo(capture(), s))
+        {
+            apply_state(s);
+        }
+        // an empty stack is a silent no-op (code-contract §2)
+    }
+
+    void TextInput::redo()
+    {
+        if (read_only_)
+        {
+            return;  // read-only gates redo too (code-contract §2)
+        }
+        history_step s;
+        if (history_.redo(capture(), s))
+        {
+            apply_state(s);
         }
     }
 
@@ -375,7 +426,24 @@ namespace zb::ui
                     copy_selection();
                     return true;
                 case 'v':  // Ctrl+V: paste
+                {
+                    const history_step before = capture();
                     paste_at_caret();
+                    record_edit(editor_history::kind::paste, before);
+                    return true;
+                }
+                case 'z':  // Ctrl+Z: undo (Ctrl+Shift+Z: redo)
+                    if ((ev.mods & zb::input::mod_shift) != 0)
+                    {
+                        redo();
+                    }
+                    else
+                    {
+                        undo();
+                    }
+                    return true;
+                case 'y':  // Ctrl+Y: redo
+                    redo();
                     return true;
                 default:
                     break;  // e.g. ctrl+arrow keeps the plain move
@@ -391,7 +459,9 @@ namespace zb::ui
                 }
                 if ((ev.mods & zb::input::mod_shift) != 0)
                 {
+                    const history_step before = capture();
                     paste_at_caret();  // Shift+Insert: paste
+                    record_edit(editor_history::kind::paste, before);
                     return true;
                 }
                 return false;
@@ -415,7 +485,9 @@ namespace zb::ui
                 }
                 if (ev.ch >= 0x20 && ev.ch <= 0x7E)
                 {
+                    const history_step before = capture();
                     insert(static_cast<char16_t>(ev.ch));
+                    record_edit(editor_history::kind::insert, before);
                     return true;
                 }
                 // a lone surrogate unit drops (A-25: no unpaired half
@@ -424,7 +496,9 @@ namespace zb::ui
                 if (ev.ch >= 0xA0 && ev.ch <= 0xFFFF &&
                     (ev.ch < 0xD800 || ev.ch > 0xDFFF))
                 {
+                    const history_step before = capture();
                     insert(static_cast<char16_t>(ev.ch));
+                    record_edit(editor_history::kind::insert, before);
                     return true;
                 }
                 if (ev.ch >= 0x10000 && ev.ch <= 0x10FFFF)
@@ -436,7 +510,9 @@ namespace zb::ui
                     const char32_t v = static_cast<char32_t>(ev.ch) - 0x10000;
                     pair.push_back(static_cast<char16_t>(0xD800 + (v >> 10)));
                     pair.push_back(static_cast<char16_t>(0xDC00 + (v & 0x3FF)));
+                    const history_step before = capture();
                     insert_text(pair);
+                    record_edit(editor_history::kind::insert, before);
                     return true;
                 }
                 return false;
@@ -444,12 +520,26 @@ namespace zb::ui
             switch (static_cast<input::key_code>(ev.key))
             {
             case input::key_code::space:
+            {
+                const history_step before = capture();
                 insert(u' ');
+                record_edit(editor_history::kind::insert, before);
                 return true;
+            }
             case input::key_code::backspace:
-                return erase_before_caret();
+            {
+                const history_step before = capture();
+                const bool consumed = erase_before_caret();
+                record_edit(editor_history::kind::backspace, before);
+                return consumed;
+            }
             case input::key_code::del:
-                return erase_at_caret();
+            {
+                const history_step before = capture();
+                const bool consumed = erase_at_caret();
+                record_edit(editor_history::kind::del, before);
+                return consumed;
+            }
             case input::key_code::left:
                 return move_caret(-1, extend);
             case input::key_code::right:
