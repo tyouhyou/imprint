@@ -521,8 +521,8 @@ the characters come from.
 - **Read-only mode**: `set_read_only(bool)` / `is_read_only()` on
   both editors gates user edits only. While set, typing and
   IME-committed `ch`, enter (TextArea inserts `\n`), space,
-  backspace, delete, and paste (both chords) are silent no-ops that
-  never fire `changed`. The gated edits are consumed (the editor saw
+  backspace, delete, paste (both chords), and undo/redo are silent
+  no-ops that never fire `changed`. The gated edits are consumed (the editor saw
   them; space/enter must not fall through to activation), while
   backspace/del report not-consumed as in the editable state — no
   dispatcher path acts on either. Everything else is untouched:
@@ -569,10 +569,33 @@ the editing core, for free-form multi-line input.
   scrolls minimally so the caret's line is visible, and mouse wheel
   deltas scroll without moving the caret. Focus ring as
   `TextInput`.
-- No undo/redo and no selection in this batch (caret only); both
-  are additive later without a contract change. `TextInput`
-  behavior is unchanged — the single-line editor keeps its event
+- Undo/redo and selection are shared editor features (below and
+  §3.8), not TextArea-only; `TextInput` otherwise keeps its event
   shape with only the acceptance rule above widened.
+
+**Undo/redo (both editors)**: a bounded, per-focus edit history.
+
+- Every user edit (typing, backspace, delete, paste, enter's `\n`)
+  records one history step; consecutive same-kind edits (a typing
+  run, a backspace run, a delete run) merge into one step — a
+  caret move, a selection change, a paste or an enter breaks the
+  run.
+- The undo stack holds at most 5 steps (the oldest drops when
+  full); a redo stack mirrors it, and a new user edit clears the
+  redo stack.
+- Ctrl+Z undoes; Ctrl+Y and Ctrl+Shift+Z redo (§3.8 chord
+  conventions: key + mods, ch = 0). An empty stack is a silent
+  no-op that still consumes the chord. `changed` fires after a
+  restore, exactly like any edit.
+- A restore puts back the recorded text, caret and selection
+  anchor. `undo()` / `redo()` / `can_undo()` / `can_redo()` are
+  public for apps and tests; read-only gates both chords (§2
+  "Read-only mode").
+- The history lives for one focus session: gaining or losing focus
+  clears both stacks, so a programmatic `set_text` between focus
+  sessions is never undoable across. A mid-focus programmatic
+  `set_text` records no step; the next undo restores the recorded
+  text wholesale (it may revert across the external write).
 
 ---
 
@@ -1338,10 +1361,12 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
 - **Key bindings.** Ctrl+C / Ctrl+Insert copy the selection of the
   focused text widget; Ctrl+V / Shift+Insert paste at the caret
   replacing any selection (clipped to the field's own input rules);
-  Ctrl+A select-all. A read-only field (§2 "Read-only mode") keeps
-  the copy chords and Ctrl+A and drops the paste chords silently.
-  No menu, no mouse-middle paste. The chords ride
-  `input_event::mods` (key = `'c'`/`'v'`/`'a'`/`insert`, ch = 0);
+  Ctrl+A select-all; Ctrl+Z undo and Ctrl+Y / Ctrl+Shift+Z redo
+  (§2 "Undo/redo"). A read-only field (§2 "Read-only mode") keeps
+  the copy chords and Ctrl+A and drops the paste and undo/redo
+  chords silently. No menu, no mouse-middle paste. The chords ride
+  `input_event::mods` (key = `'c'`/`'v'`/`'a'`/`'z'`/`'y'`/`insert`,
+  ch = 0);
   the C-ABI `zb_input` event carries no mods today, so these bindings
   are unreachable from C hosts until the shells translate terminal
   modifier bytes — that translation is a TJ-C3/C4 prerequisite.
