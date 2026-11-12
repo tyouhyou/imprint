@@ -14,23 +14,22 @@ namespace
         using Label::text_height;
     };
 
-    // T-1: a uniform 4px-advance provider covering every code unit. The
+    // T-1: a uniform 4px-advance provider covering every code point. The
     // 5x7 fallback leaves CJK units uncovered (zero advance), so the CJK
     // wrap suites drive the engine through this stub; the wrap rules are
     // provider-agnostic, only the widths matter here.
     struct WideStubProvider : GlyphProvider
     {
-        bool covers(const char16_t) const override { return true; }
-        // A-25: the stub models a font WITH a non-BMP glyph — the pair
-        // is one atomic 8px unit (measure(len 2) = 8), never two 4px
-        // halves (the draw side skips uncovered pairs outright)
-        bool covers_pair(const char16_t *) const override { return true; }
-        text_metrics measure(const char16_t *, const int len) const override
+        bool covers(const char32_t) const override { return true; }
+        // A-25: the stub models a font WITH a non-BMP glyph — the emoji
+        // is one atomic 8px code point (measure(len 1, cp >= 0x10000) =
+        // 8), like the old surrogate pair was one 8px unit
+        text_metrics measure(const char32_t *s, const int len) const override
         {
-            return {4 * len, 7, 7};
+            return {4 * len + (len == 1 && s[0] >= 0x10000 ? 4 : 0), 7, 7};
         }
         text_metrics line_metrics() const override { return {0, 7, 7}; }
-        void write(core::Graphics &, const char16_t *, const int, const int,
+        void write(core::Graphics &, const char32_t *, const int, const int,
                    const int, const core::Color &) const override
         {
         }
@@ -43,11 +42,11 @@ int test_label()
     {
         Label l;
         l.set_text("abc");
-        EXPECT(l.get_text() == std::u16string(u"abc"));
+        EXPECT(l.get_text() == std::string("abc"));
         l.set_text(nullptr);
         EXPECT(l.get_text().empty());
-        l.set_text(std::u16string(u"xyz"));
-        EXPECT(l.get_text() == std::u16string(u"xyz"));
+        l.set_text(std::string("xyz"));
+        EXPECT(l.get_text() == std::string("xyz"));
     }
 
     // invalid UTF-8 bytes become U+FFFD (input is UTF-8 per the contract)
@@ -55,25 +54,18 @@ int test_label()
         Label l;
         l.set_text("\x80\xFF");
         const auto &t = l.get_text();
-        EXPECT(t.size() == 2);
-        if (t.size() == 2)
-        {
-            EXPECT(t[0] == 0xFFFD);
-            EXPECT(t[1] == 0xFFFD);
-        }
+        // two U+FFFD, 3 UTF-8 bytes each
+        EXPECT(t.size() == 6);
+        EXPECT(t == "\xEF\xBF\xBD\xEF\xBF\xBD");
     }
 
-    // multibyte UTF-8 decodes into the right code units
+    // multibyte UTF-8 stores as its UTF-8 bytes
     {
         Label l;
         l.set_text("A\xE4\xB8\xAD");
         const auto &t = l.get_text();
-        EXPECT(t.size() == 2);
-        if (t.size() == 2)
-        {
-            EXPECT(t[0] == u'A');
-            EXPECT(t[1] == 0x4E2D);
-        }
+        EXPECT(t.size() == 4);  // 'A' + the 3-byte 中
+        EXPECT(t == "A\xE4\xB8\xAD");
     }
 
     // background color: drawn once set
@@ -184,17 +176,17 @@ int test_label()
         EXPECT(zero.size() == 1 && zero[0].second == 8);
 
         Label br;
-        br.set_text(std::u16string(u"aa\n bb\n\ncc "));
+        br.set_text(std::string("aa\n bb\n\ncc "));
         br.set_text_wrap(true);
         const auto &sp = br.wrap_spans(10000);
         EXPECT(sp.size() == 4);  // aa | bb | (empty) | cc
         if (sp.size() == 4)
         {
-            const std::u16string &t = br.get_text();
-            EXPECT(t.substr(static_cast<std::size_t>(sp[0].first), static_cast<std::size_t>(sp[0].second)) == u"aa");
-            EXPECT(t.substr(static_cast<std::size_t>(sp[1].first), static_cast<std::size_t>(sp[1].second)) == u"bb");
+            const std::string &t = br.get_text();
+            EXPECT(t.substr(static_cast<std::size_t>(sp[0].first), static_cast<std::size_t>(sp[0].second)) == "aa");
+            EXPECT(t.substr(static_cast<std::size_t>(sp[1].first), static_cast<std::size_t>(sp[1].second)) == "bb");
             EXPECT(t.substr(static_cast<std::size_t>(sp[2].first), static_cast<std::size_t>(sp[2].second)).empty());
-            EXPECT(t.substr(static_cast<std::size_t>(sp[3].first), static_cast<std::size_t>(sp[3].second)) == u"cc");
+            EXPECT(t.substr(static_cast<std::size_t>(sp[3].first), static_cast<std::size_t>(sp[3].second)) == "cc");
         }
     }
 
@@ -235,19 +227,19 @@ int test_label()
     {
         Label l;
         l.set_glyph_provider(zb::make_shared<WideStubProvider>());
-        l.set_text(std::u16string(u"中文段落测试"));
+        l.set_text(std::string("\xe4\xb8\xad\xe6\x96\x87\xe6\xae\xb5\xe8\x90\xbd\xe6\xb5\x8b\xe8\xaf\x95"));
         l.set_text_wrap(true);
         const auto &sp = l.wrap_spans(8);  // 2 units x 4px per line
         EXPECT(sp.size() == 3);
         if (sp.size() == 3)
         {
-            const std::u16string &t = l.get_text();
+            const std::string &t = l.get_text();
             EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
-                            static_cast<std::size_t>(sp[0].second)) == u"中文");
+                            static_cast<std::size_t>(sp[0].second)) == "\xe4\xb8\xad\xe6\x96\x87");
             EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
-                            static_cast<std::size_t>(sp[1].second)) == u"段落");
+                            static_cast<std::size_t>(sp[1].second)) == "\xe6\xae\xb5\xe8\x90\xbd");
             EXPECT(t.substr(static_cast<std::size_t>(sp[2].first),
-                            static_cast<std::size_t>(sp[2].second)) == u"测试");
+                            static_cast<std::size_t>(sp[2].second)) == "\xe6\xb5\x8b\xe8\xaf\x95");
         }
     }
 
@@ -256,17 +248,17 @@ int test_label()
     {
         Label l;
         l.set_glyph_provider(zb::make_shared<WideStubProvider>());
-        l.set_text(std::u16string(u"ab中文字"));
+        l.set_text(std::string("ab\xe4\xb8\xad\xe6\x96\x87\xe5\xad\x97"));
         l.set_text_wrap(true);
         const auto &sp = l.wrap_spans(12);
         EXPECT(sp.size() == 2);
         if (sp.size() == 2)
         {
-            const std::u16string &t = l.get_text();
+            const std::string &t = l.get_text();
             EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
-                            static_cast<std::size_t>(sp[0].second)) == u"ab中");
+                            static_cast<std::size_t>(sp[0].second)) == "ab\xe4\xb8\xad");
             EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
-                            static_cast<std::size_t>(sp[1].second)) == u"文字");
+                            static_cast<std::size_t>(sp[1].second)) == "\xe6\x96\x87\xe5\xad\x97");
         }
     }
 
@@ -277,14 +269,14 @@ int test_label()
     // a CJK candidate boundary at all, so only CJK-set members exercise
     // the retraction.
     {
-        const char16_t head[] = u"、。，．：；？！）］｝〉》」』”’…‥";
-        const char16_t tail[] = u"（［｛〈《「『“‘";
-        for (int i = 0; head[i] != u'\0'; ++i)
+        const char32_t head[] = U"、。，．：；？！）］｝〉》」』”’…‥";
+        const char32_t tail[] = U"（［｛〈《「『“‘";
+        for (int i = 0; head[i] != U'\0'; ++i)
         {
-            const char16_t x = head[i];
-            std::u16string s = u"中中";
-            s += x;
-            s += u"中中中";
+            const char32_t x = head[i];
+            std::string s = "\xe4\xb8\xad\xe4\xb8\xad";
+            append_utf8(s, x);
+            s += "\xe4\xb8\xad\xe4\xb8\xad\xe4\xb8\xad";
             Label l;
             l.set_glyph_provider(zb::make_shared<WideStubProvider>());
             l.set_text(s);
@@ -292,15 +284,18 @@ int test_label()
             const auto &sp = l.wrap_spans(8);
             for (const auto &line : sp)
             {
-                EXPECT(l.get_text()[static_cast<std::size_t>(line.first)] != x);
+                const char *lp =
+                    l.get_text().data() + static_cast<std::size_t>(line.first);
+                EXPECT(decode_utf8_next(
+                           lp, l.get_text().data() + l.get_text().size()) != x);
             }
         }
-        for (int i = 0; tail[i] != u'\0'; ++i)
+        for (int i = 0; tail[i] != U'\0'; ++i)
         {
-            const char16_t x = tail[i];
-            std::u16string s = u"中";
-            s += x;
-            s += u"中中中";
+            const char32_t x = tail[i];
+            std::string s = "\xe4\xb8\xad";
+            append_utf8(s, x);
+            s += "\xe4\xb8\xad\xe4\xb8\xad\xe4\xb8\xad";
             Label l;
             l.set_glyph_provider(zb::make_shared<WideStubProvider>());
             l.set_text(s);
@@ -308,9 +303,10 @@ int test_label()
             const auto &sp = l.wrap_spans(8);
             for (const auto &line : sp)
             {
-                EXPECT(l.get_text()[static_cast<std::size_t>(line.first +
-                                                             line.second) -
-                                    1] != x);
+                const char *lp = l.get_text().data() +
+                                 static_cast<std::size_t>(line.first +
+                                                          line.second);
+                EXPECT(decode_utf8_prev(lp, l.get_text().data()) != x);
             }
         }
 
@@ -318,57 +314,69 @@ int test_label()
         // none ends with 「 or （
         Label h;
         h.set_glyph_provider(zb::make_shared<WideStubProvider>());
-        h.set_text(std::u16string(u"中中。文文"));
+        h.set_text(std::string("\xe4\xb8\xad\xe4\xb8\xad\xe3\x80\x82\xe6\x96\x87\xe6\x96\x87"));
         h.set_text_wrap(true);
         const auto &hs = h.wrap_spans(8);
         EXPECT(hs.size() == 3);
         for (const auto &line : hs)
         {
-            const char16_t c =
-                h.get_text()[static_cast<std::size_t>(line.first)];
-            EXPECT(c != u'。' && c != u'、');
+            const char *lp =
+                h.get_text().data() + static_cast<std::size_t>(line.first);
+            const char32_t c = decode_utf8_next(
+                lp, h.get_text().data() + h.get_text().size());
+            EXPECT(c != U'。' && c != U'、');
         }
         Label t;
         t.set_glyph_provider(zb::make_shared<WideStubProvider>());
-        t.set_text(std::u16string(u"中「中（中"));
+        t.set_text(std::string("\xe4\xb8\xad\xe3\x80\x8c\xe4\xb8\xad\xef\xbc\x88\xe4\xb8\xad"));
         t.set_text_wrap(true);
         const auto &ts = t.wrap_spans(8);
         for (const auto &line : ts)
         {
-            const char16_t c = t.get_text()[static_cast<std::size_t>(
-                line.first + line.second - 1)];
-            EXPECT(c != u'「' && c != u'（');
+            const char *lp = t.get_text().data() +
+                             static_cast<std::size_t>(line.first +
+                                                      line.second);
+            const char32_t c = decode_utf8_prev(lp, t.get_text().data());
+            EXPECT(c != U'「' && c != U'（');
         }
     }
 
-    // T-1 surrogate atomicity: a non-BMP character is one break unit —
-    // no line ever splits its two code units, while the pair edges break
-    // against an adjacent CJK unit
+    // T-1 code-point atomicity: a non-BMP character is one break unit —
+    // no line edge ever falls inside its 4 bytes, and it moves whole to
+    // the next line when it does not fit (the old pair-edge rule is
+    // gone: a non-BMP code point is an ordinary non-CJK unit for
+    // breaking, so the break candidates here are the spaces)
     {
-        std::u16string s = u"中";
-        s += static_cast<char16_t>(0xD83D);
-        s += static_cast<char16_t>(0xDE00);  // U+1F600 as a surrogate pair
-        s += u"文";
+        std::string s = "\xe4\xb8\xad";  // 中
+        s += " \xf0\x9f\x98\x80 ";       // space, U+1F600, space
+        s += "\xe6\x96\x87";             // 文
         Label l;
         l.set_glyph_provider(zb::make_shared<WideStubProvider>());
         l.set_text(s);
         l.set_text_wrap(true);
-        // 12px holds unit+pair; the 文 overflow breaks at pair end | CJK
+        // 12px holds one 4px unit beside the 8px emoji: the emoji moves
+        // whole to the next line
         const auto &sp = l.wrap_spans(12);
-        EXPECT(sp.size() == 2);
-        if (sp.size() == 2)
+        EXPECT(sp.size() == 3);
+        if (sp.size() == 3)
         {
             EXPECT(sp[0].first == 0 && sp[0].second == 3);
-            EXPECT(sp[1].first == 3 && sp[1].second == 1);
+            EXPECT(sp[1].first == 4 && sp[1].second == 4);
+            EXPECT(sp[2].first == 9 && sp[2].second == 3);
         }
-        // 8px holds one unit: the pair moves whole to the next line
-        const auto &sp2 = l.wrap_spans(8);
-        EXPECT(sp2.size() == 3);
-        if (sp2.size() == 3)
+        // 20px holds "中 <emoji>"; the 文 overflow breaks at the space
+        const auto &sp2 = l.wrap_spans(20);
+        EXPECT(sp2.size() == 2);
+        if (sp2.size() == 2)
         {
-            EXPECT(sp2[0].first == 0 && sp2[0].second == 1);
-            EXPECT(sp2[1].first == 1 && sp2[1].second == 2);
-            EXPECT(sp2[2].first == 3 && sp2[2].second == 1);
+            EXPECT(sp2[0].first == 0 && sp2[0].second == 8);
+            EXPECT(sp2[1].first == 9 && sp2[1].second == 3);
+        }
+        for (const auto &line : sp)
+        {
+            // no line edge falls inside the emoji's 4 bytes (offsets 5-7)
+            EXPECT(!(line.first <= 4 && line.first + line.second >= 5 &&
+                     line.first + line.second <= 7));
         }
     }
 
@@ -378,21 +386,21 @@ int test_label()
     {
         Label l;
         l.set_glyph_provider(zb::make_shared<WideStubProvider>());
-        std::u16string s = u"中";
-        s += static_cast<char16_t>(0x3000);
-        s += u"中中";
+        std::string s = "\xe4\xb8\xad";
+        s += "\xe3\x80\x80";  // U+3000
+        s += "\xe4\xb8\xad\xe4\xb8\xad";
         l.set_text(s);
         l.set_text_wrap(true);
         const auto &sp = l.wrap_spans(8);
         EXPECT(sp.size() == 2);
         if (sp.size() == 2)
         {
-            const std::u16string &t = l.get_text();
+            const std::string &t = l.get_text();
             EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
                             static_cast<std::size_t>(sp[0].second)) ==
-                   (std::u16string(u"中") + static_cast<char16_t>(0x3000)));
+                   "\xe4\xb8\xad\xe3\x80\x80");
             EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
-                            static_cast<std::size_t>(sp[1].second)) == u"中中");
+                            static_cast<std::size_t>(sp[1].second)) == "\xe4\xb8\xad\xe4\xb8\xad");
         }
     }
 

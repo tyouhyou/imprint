@@ -103,28 +103,7 @@ namespace
         {
             return {};
         }
-        // u16 -> u8 (BMP plane is all the app ever writes)
-        const auto u16 = w->get_text();
-        std::string out;
-        for (const char16_t c : u16)
-        {
-            if (c < 0x80)
-            {
-                out.push_back(static_cast<char>(c));
-            }
-            else if (c < 0x800)
-            {
-                out.push_back(static_cast<char>(0xC0 | (c >> 6)));
-                out.push_back(static_cast<char>(0x80 | (c & 0x3F)));
-            }
-            else
-            {
-                out.push_back(static_cast<char>(0xE0 | (c >> 12)));
-                out.push_back(static_cast<char>(0x80 | ((c >> 6) & 0x3F)));
-                out.push_back(static_cast<char>(0x80 | (c & 0x3F)));
-            }
-        }
-        return out;
+        return w->get_text();  // stored text is UTF-8 already
     }
 
     // "HH:MM:SS" -> seconds (the mission-clock assertions)

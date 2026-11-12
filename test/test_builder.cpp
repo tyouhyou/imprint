@@ -120,7 +120,7 @@ int test_builder()
         auto *rx = static_cast<RadioButton *>(host.find_by_id("rx"));
         auto *ry = static_cast<RadioButton *>(host.find_by_id("ry"));
         EXPECT(lvl != nullptr && lvl->get_id() == "lvl");
-        EXPECT(lvl->get_text() == u"Level");
+        EXPECT(lvl->get_text() == "Level");
         EXPECT(sld->get_value() == 50);  // range clamps the initial value
         EXPECT(turbo->is_checked());
         EXPECT(lst->get_size().height == 32);  // 2 rows
@@ -248,13 +248,13 @@ int test_builder()
         EXPECT(test::vget<std::string>(doc.children[1].props[0].second) == "hello");
 
         auto *ti = static_cast<TextInput *>(host.find_by_id("name"));
-        EXPECT(ti != nullptr && ti->get_text() == u"hello");
+        EXPECT(ti != nullptr && ti->get_text() == "hello");
 
         // the materialized widget is a live editor: type into it
         InputDispatcher d;
         d.dispatch(host, press_at(40, 12));  // click the far right of the input
         d.dispatch(host, char_down('!'));
-        EXPECT(ti->get_text() == u"hello!");
+        EXPECT(ti->get_text() == "hello!");
     }
 
     // textarea: DOM + materialize + changed action binding; read_only
@@ -272,13 +272,13 @@ int test_builder()
         host.layout();
 
         auto *ta = static_cast<TextArea *>(host.find_by_id("ta"));
-        EXPECT(ta != nullptr && ta->get_text() == u"seed");
+        EXPECT(ta != nullptr && ta->get_text() == "seed");
 
         // an edit fires the bound changed action with the node id
         InputDispatcher d;
         d.dispatch(host, press_at(60, 20));  // click past the text end
         d.dispatch(host, char_down('x'));
-        EXPECT(ta->get_text() == u"seedx");
+        EXPECT(ta->get_text() == "seedx");
         EXPECT(action == "ta");
 
         // read_only=true materializes read-only: typing drops
@@ -294,7 +294,7 @@ int test_builder()
         InputDispatcher d2;
         d2.dispatch(host2, press_at(20, 20));
         d2.dispatch(host2, char_down('x'));
-        EXPECT(r->get_text() == u"seed");
+        EXPECT(r->get_text() == "seed");
     }
 
     // alignment attributes materialization

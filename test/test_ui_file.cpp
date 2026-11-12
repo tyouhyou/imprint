@@ -222,7 +222,7 @@ column id="main" spacing=4 padding=8
         auto *cb = static_cast<Checkbox *>(host.find_by_id("cb"));
         auto *sld = static_cast<Slider *>(host.find_by_id("sld"));
         EXPECT(cb != nullptr && sld != nullptr);
-        EXPECT(cb->get_text() == u"On");
+        EXPECT(cb->get_text() == "On");
         EXPECT(sld->get_value() == 0);
 
         zb::ui::InputDispatcher d;
@@ -305,8 +305,8 @@ column id="main" spacing=4 padding=8
         auto *cancel = static_cast<Button *>(host.find_by_id("cancel"));
         EXPECT(ok != nullptr && cancel != nullptr);
         EXPECT(ok->is_descendant_of(placeholder));
-        EXPECT(ok->get_text() == u"OK");
-        EXPECT(cancel->get_text() == u"Cancel");
+        EXPECT(ok->get_text() == "OK");
+        EXPECT(cancel->get_text() == "Cancel");
 
         // both widgets are clickable through the shared dispatcher
         bool ok_clicked = false;

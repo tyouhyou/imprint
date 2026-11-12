@@ -15,13 +15,13 @@ using namespace zb::ui;
 class StubProvider : public GlyphProvider
 {
 public:
-    bool covers(const char16_t ch) const override { return ch == u'A'; }
-    text_metrics measure(const char16_t *, const int len) const override
+    bool covers(const char32_t ch) const override { return ch == U'A'; }
+    text_metrics measure(const char32_t *, const int len) const override
     {
         return {4 * len, 7, 7};
     }
     text_metrics line_metrics() const override { return {0, 7, 7}; }
-    void write(core::Graphics &g, const char16_t *, const int len,
+    void write(core::Graphics &g, const char32_t *, const int len,
                const int x, const int y, const core::Color &color) const override
     {
         for (int i = 0; i < len; ++i)
@@ -36,13 +36,13 @@ public:
 class GappedProvider : public GlyphProvider
 {
 public:
-    bool covers(const char16_t ch) const override { return ch == u'A'; }
-    text_metrics measure(const char16_t *, const int len) const override
+    bool covers(const char32_t ch) const override { return ch == U'A'; }
+    text_metrics measure(const char32_t *, const int len) const override
     {
         return {4 * len, 7, 7};
     }
     text_metrics line_metrics() const override { return {0, 7, 7}; }
-    void write(core::Graphics &g, const char16_t *, const int len,
+    void write(core::Graphics &g, const char32_t *, const int len,
                const int x, const int y, const core::Color &color) const override
     {
         for (int i = 0; i < len; ++i)
@@ -57,13 +57,13 @@ public:
 class WideAProvider : public GlyphProvider
 {
 public:
-    bool covers(const char16_t ch) const override { return ch == u'A'; }
-    text_metrics measure(const char16_t *, const int len) const override
+    bool covers(const char32_t ch) const override { return ch == U'A'; }
+    text_metrics measure(const char32_t *, const int len) const override
     {
         return {8 * len, 7, 7};
     }
     text_metrics line_metrics() const override { return {0, 7, 7}; }
-    void write(core::Graphics &, const char16_t *, const int, const int,
+    void write(core::Graphics &, const char32_t *, const int, const int,
                const int, const core::Color &) const override
     {
     }
@@ -100,18 +100,11 @@ int test_text()
         EXPECT(*p == '\0');
     }
 
-    // 4-byte sequence (U+1F600) produces a surrogate pair via utf8_to_utf16
+    // 4-byte sequence (U+1F600) decodes to one code point
     {
         const char *p = "\xF0\x9F\x98\x80";
         EXPECT(decode_utf8_next(p) == 0x1F600);
         EXPECT(*p == '\0');
-        const auto u16 = utf8_to_utf16("\xF0\x9F\x98\x80");
-        EXPECT(u16.size() == 2);
-        if (u16.size() == 2)
-        {
-            EXPECT(u16[0] == 0xD83D);
-            EXPECT(u16[1] == 0xDE00);
-        }
     }
 
     // invalid bytes become U+FFFD, consuming one byte each
@@ -149,24 +142,6 @@ int test_text()
         const char *p = "\xF4\x90\x80\x80";
         EXPECT(decode_utf8_next(p) == 0xFFFD);
         EXPECT(*p == '\x90');
-    }
-
-    // utf16_to_utf8 substitutes lone surrogates with U+FFFD
-    {
-        std::u16string lone_lead;
-        lone_lead += static_cast<char16_t>(0xD800);
-        EXPECT(utf16_to_utf8(lone_lead) == "\xEF\xBF\xBD");
-        std::u16string lone_trail;
-        lone_trail += static_cast<char16_t>(0xDC00);
-        EXPECT(utf16_to_utf8(lone_trail) == "\xEF\xBF\xBD");
-    }
-
-    // utf8_to_utf16 on null / empty
-    {
-        EXPECT(utf8_to_utf16(nullptr).empty());
-        EXPECT(utf8_to_utf16("").empty());
-        EXPECT(utf8_to_utf16(nullptr, 4).empty());
-        EXPECT(utf8_to_utf16("abc", 0).empty());
     }
 
     // decode_utf8_prev: the backward mirror -- steps back one whole
@@ -254,14 +229,14 @@ int test_text()
     // bounded slice: embedded NULs are ordinary bytes, not terminators
     {
         const char buf[] = "A\x00\xC3\xA9";
-        const auto u16 = utf8_to_utf16(buf, 4);
-        EXPECT(u16.size() == 3);
-        if (u16.size() == 3)
-        {
-            EXPECT(u16[0] == u'A');
-            EXPECT(u16[1] == 0);
-            EXPECT(u16[2] == 0xE9);
-        }
+        const char *end = buf + 4;
+        const char *p = buf;
+        EXPECT(decode_utf8_next(p, end) == U'A');
+        EXPECT(p == buf + 1);
+        EXPECT(decode_utf8_next(p, end) == 0);  // the NUL decodes as U+0000
+        EXPECT(p == buf + 2);
+        EXPECT(decode_utf8_next(p, end) == 0xE9);
+        EXPECT(p == end);
     }
 
     // bounded slice: a 4-byte sequence cut short at the last byte
@@ -273,39 +248,31 @@ int test_text()
         EXPECT(p == buf + 1);
     }
 
-    // mixed multibyte text round-trips to the right code units
-    {
-        const auto u16 = utf8_to_utf16("A\xC3\xA9\xE4\xB8\xAD");
-        std::u16string expected;
-        expected += u'A';
-        expected += 0xE9;
-        expected += 0x4E2D;
-        EXPECT(u16 == expected);
-        // the counted form of the same text agrees
-        EXPECT(utf8_to_utf16("A\xC3\xA9\xE4\xB8\xAD", 6) == expected);
-    }
-
     // BitmapProvider: coverage and metrics
     {
         BitmapProvider p;
-        EXPECT(p.covers(u'A'));
-        EXPECT(p.covers(u'a'));  // uppercase rendering
-        EXPECT(p.covers(u' '));
+        EXPECT(p.covers(U'A'));
+        EXPECT(p.covers(U'a'));  // uppercase rendering
+        EXPECT(p.covers(U' '));
 #if defined(IMCORE_HAS_SUBSET)
-        // the string literal below is in the generator's scan set, so
-        // the generated subset covers its code unit (batch E)
-        EXPECT(p.covers(u"é"[0]));
-        EXPECT(!p.covers(u'\u4E2D'));  // CJK is never in the 5x7 subset
+        // e-acute is drawn in the hand-drawn extras table (batch E); the
+        // byte literals in this file feed the generator's source scan
+        const char *el = "\xc3\xa9";  // é
+        const char32_t e_acute[] = {decode_utf8_next(el)};
+        EXPECT(p.covers(e_acute[0]));
+        EXPECT(!p.covers(0x4E2D));  // CJK is never in the 5x7 subset
 #else
-        EXPECT(!p.covers(u"é"[0]));  // ASCII-only build
+        EXPECT(!p.covers(0xE9));  // ASCII-only build
 #endif
-        const auto m = p.measure(u"AB", 2);
+        const char32_t ab[] = {U'A', U'B'};
+        const auto m = p.measure(ab, 2);
         EXPECT(m.width == 12);
         EXPECT(m.height == 7);
         EXPECT(m.ascent == 7);
         EXPECT(p.measure(nullptr, 0).width == 0);
-        const auto m2 = p.measure(u"A\u4E2DB", 3);
-        EXPECT(m2.width == 12);  // the uncovered code unit advances 0
+        const char32_t amb[] = {U'A', 0x4E2D, U'B'};
+        const auto m2 = p.measure(amb, 3);
+        EXPECT(m2.width == 12);  // the uncovered code point advances 0
         const auto lm = p.line_metrics();
         EXPECT(lm.width == 0);
         EXPECT(lm.height == 7);
@@ -317,7 +284,8 @@ int test_text()
         auto g = core::Graphics::make_ptr(12, 10);
         g->fill(core::colors::Black);
         BitmapProvider p;
-        p.write(*g, u"A", 1, 0, 7, core::colors::White);                // baseline at y=7
+        const char32_t a[] = {U'A'};
+        p.write(*g, a, 1, 0, 7, core::colors::White);                   // baseline at y=7
         EXPECT(test::pixel_at(*g, 1, 0) == core::colors::White.pixel);  // 'A' top row
         EXPECT(test::pixel_at(*g, 0, 6) == core::colors::White.pixel);  // 'A' bottom row left leg
         EXPECT(test::pixel_at(*g, 4, 6) == core::colors::White.pixel);  // 'A' bottom row right leg
@@ -326,49 +294,57 @@ int test_text()
     }
 
     // BitmapProvider: subset glyphs (batch E) render with the same
-    // advance; an uncovered code unit advances zero width
+    // advance; an uncovered code point advances zero width
     {
         auto g = core::Graphics::make_ptr(20, 10);
         g->fill(core::colors::Black);
         BitmapProvider p;
-        p.write(*g, u"\u4E2D", 1, 0, 7, core::colors::White);
+        const char32_t cjk[] = {0x4E2D};
+        p.write(*g, cjk, 1, 0, 7, core::colors::White);
         EXPECT(test::pixel_at(*g, 0, 0) != core::colors::White.pixel);  // CJK: nothing
 #if defined(IMCORE_HAS_SUBSET)
-        EXPECT(p.measure(u"é", 1).width == 6);
-        p.write(*g, u"é", 1, 0, 7, core::colors::White);                // baseline at y=7
+        const char *dl = "\xc2\xb0";  // ° (dial readouts)
+        const char32_t degree[] = {decode_utf8_next(dl)};
+        const char *kl = "\xe2\x96\xa0";  // ■ (status blocks)
+        const char32_t block[] = {decode_utf8_next(kl)};
+        const char *ml = "\xe2\x97\x86";  // ◆ (footer bullets)
+        const char32_t diamond[] = {decode_utf8_next(ml)};
+        const char *el = "\xc3\xa9";  // é (batch E extras)
+        const char32_t e_acute[] = {decode_utf8_next(el)};
+        EXPECT(p.measure(e_acute, 1).width == 6);
+        p.write(*g, e_acute, 1, 0, 7, core::colors::White);             // baseline at y=7
         EXPECT(test::pixel_at(*g, 2, 0) == core::colors::White.pixel);  // accent dot
         EXPECT(test::pixel_at(*g, 0, 6) == core::colors::White.pixel);  // 'e' bottom row
-        // demo batch (htmldemo dials): the literals below keep these
-        // units in the generator's scan set (code-contract §2.4)
-        EXPECT(p.covers(u"°"[0]));
-        EXPECT(p.covers(u"■"[0]));
-        EXPECT(p.covers(u"◆"[0]));
-        EXPECT(p.measure(u"°", 1).width == 6);
-        p.write(*g, u"°", 1, 10, 7, core::colors::White);
+        // demo batch (htmldemo dials): the byte literals above keep these
+        // code points in the generator's scan set (code-contract §2.4);
+        // the provider API takes the decoded code points
+        EXPECT(p.covers(degree[0]));
+        EXPECT(p.covers(block[0]));
+        EXPECT(p.covers(diamond[0]));
+        EXPECT(p.measure(degree, 1).width == 6);
+        p.write(*g, degree, 1, 10, 7, core::colors::White);
         EXPECT(test::pixel_at(*g, 11, 0) == core::colors::White.pixel);  // ring top
         EXPECT(test::pixel_at(*g, 10, 0) != core::colors::White.pixel);  // ring left gap
-        p.write(*g, u"■", 1, 0, 7, core::colors::White);
+        p.write(*g, block, 1, 0, 7, core::colors::White);
         EXPECT(test::pixel_at(*g, 4, 1) == core::colors::White.pixel);  // block face
         EXPECT(test::pixel_at(*g, 0, 0) != core::colors::White.pixel);  // block top margin
-        p.write(*g, u"◆", 1, 10, 7, core::colors::White);
+        p.write(*g, diamond, 1, 10, 7, core::colors::White);
         EXPECT(test::pixel_at(*g, 12, 4) == core::colors::White.pixel);  // diamond bottom tip
         EXPECT(test::pixel_at(*g, 10, 2) == core::colors::White.pixel);  // diamond waist
 #else
-        EXPECT(p.measure(u"é", 1).width == 0);  // ASCII-only build
+        const char *el = "\xc3\xa9";  // é
+        const char32_t e_acute[] = {decode_utf8_next(el)};
+        EXPECT(p.measure(e_acute, 1).width == 0);  // ASCII-only build
 #endif
     }
 
-    // Widget::set_text decodes UTF-8 into UTF-16 storage
+    // Widget::set_text stores the sanitized UTF-8 bytes
     {
         Widget w;
         w.set_text(u8"A\u4E2D");
         const auto &t = w.get_text();
-        EXPECT(t.size() == 2);
-        if (t.size() == 2)
-        {
-            EXPECT(t[0] == u'A');
-            EXPECT(t[1] == 0x4E2D);
-        }
+        EXPECT(t == "A\xE4\xB8\xAD");
+        EXPECT(t.size() == 4);  // 'A' + the 3-byte 中
         w.set_text(nullptr);
         EXPECT(w.get_text().empty());
     }
@@ -395,7 +371,8 @@ int test_text()
         w.set_size(20, 8);
         w.set_text_color(core::colors::White);
         w.set_glyph_provider(zb::make_shared<StubProvider>());
-        w.set_text(std::u16string(u"A\u4E2DB"));
+        w.set_text(std::string("A\xe4\xb8\xad"
+                               "B"));
         w.draw(*g);
         // 'A' drawn by the stub as a 4x4 square at x=0, rows 0..6
         EXPECT(test::pixel_at(*g, 1, 3) == core::colors::White.pixel);
@@ -414,7 +391,7 @@ int test_text()
         Widget w;
         w.set_size(16, 8);
         w.set_glyph_provider(zb::make_shared<StubProvider>());
-        w.set_text(std::u16string(u"AAAA"));
+        w.set_text(std::string("AAAA"));
         w.set_text_color(core::colors::White);
         w.set_text_runs({text_style_run{1, 2, core::colors::Red}});
         w.draw(*g);
@@ -430,7 +407,7 @@ int test_text()
         WideAProvider wide;
         ProbeWidget w;
         w.set_glyph_provider(zb::make_shared<StubProvider>());
-        w.set_text(std::u16string(u"AAAA"));
+        w.set_text(std::string("AAAA"));
         EXPECT(w.text_advance() == 16);
         w.set_text_runs({text_style_run{0, 2, std::nullopt, &wide}});
         EXPECT(w.text_advance() == 24);  // 8+8 for the run units
@@ -446,7 +423,7 @@ int test_text()
         Widget w;
         w.set_size(16, 8);
         w.set_glyph_provider(zb::make_shared<GappedProvider>());
-        w.set_text(std::u16string(u"AAA"));
+        w.set_text(std::string("AAA"));
         w.set_text_color(core::colors::White);
         w.set_text_runs({text_style_run{2, 1, std::nullopt, nullptr, true}});
         w.draw(*g);
@@ -464,7 +441,7 @@ int test_text()
         Widget w;
         w.set_size(16, 8);
         w.set_glyph_provider(zb::make_shared<StubProvider>());
-        w.set_text(std::u16string(u"AAAA"));
+        w.set_text(std::string("AAAA"));
         w.set_text_color(core::colors::White);
         w.set_text_runs({text_style_run{1, 3, core::colors::Red}});
         w.draw(*g);
@@ -472,13 +449,13 @@ int test_text()
         EXPECT(test::pixel_at(*g, 13, 3) == core::colors::Red.pixel);
 
         // two units left: the run truncates to {1,1}
-        w.set_text(std::u16string(u"AA"));
+        w.set_text(std::string("AA"));
         g->fill(core::colors::Black);
         w.draw(*g);
         EXPECT(test::pixel_at(*g, 5, 3) == core::colors::Red.pixel);
 
         // one unit left: the run sits past the end and drops
-        w.set_text(std::u16string(u"A"));
+        w.set_text(std::string("A"));
         g->fill(core::colors::Black);
         w.draw(*g);
         EXPECT(test::pixel_at(*g, 1, 3) == core::colors::White.pixel);
@@ -491,7 +468,7 @@ int test_text()
         Widget w;
         w.set_size(16, 8);
         w.set_glyph_provider(zb::make_shared<StubProvider>());
-        w.set_text(std::u16string(u"AAAA"));
+        w.set_text(std::string("AAAA"));
         w.set_text_color(core::colors::White);
         w.set_text_runs({text_style_run{0, 4, core::colors::Red},
                          text_style_run{2, 2, core::colors::Blue}});
@@ -510,7 +487,7 @@ int test_text()
         Widget w;
         w.set_size(8, 21);
         w.set_glyph_provider(zb::make_shared<GappedProvider>());
-        w.set_text(std::u16string(u"AA AA AA"));
+        w.set_text(std::string("AA AA AA"));
         w.set_text_wrap(true);
         w.set_text_color(core::colors::White);
         // units 1..3: the tail of line 1 and the head of line 2

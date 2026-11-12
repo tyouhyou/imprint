@@ -92,33 +92,36 @@ namespace
     // real advances (the 5x7 fallback's vary per glyph)
     struct UnitProvider : GlyphProvider
     {
-        bool covers(const char16_t) const override { return true; }
-        text_metrics measure(const char16_t *, const int len) const override
+        bool covers(const char32_t) const override { return true; }
+        text_metrics measure(const char32_t *, const int len) const override
         {
             return {6 * len, 7, 7};
         }
         text_metrics line_metrics() const override { return {0, 7, 7}; }
-        void write(core::Graphics &, const char16_t *, const int, const int,
+        void write(core::Graphics &, const char32_t *, const int, const int,
                    const int, const core::Color &) const override
         {
         }
     };
 
-    // A-25: BMP units 5px; a covered surrogate pair is ONE 9px glyph
-    struct PairProvider : GlyphProvider
+    // BMP code points 5px; a non-BMP code point is ONE 9px glyph. The
+    // widget groups same-provider code points into one measure call, so
+    // the width accumulates per code point (the grouped call still sees
+    // the emoji's own 9px)
+    struct WideCpProvider : GlyphProvider
     {
-        bool covers(const char16_t ch) const override
+        bool covers(const char32_t) const override { return true; }
+        text_metrics measure(const char32_t *s, const int len) const override
         {
-            return !is_surrogate_lead(ch) && !is_surrogate_trail(ch);
-        }
-        bool covers_pair(const char16_t *) const override { return true; }
-        text_metrics measure(const char16_t *s, const int len) const override
-        {
-            return {(len == 2 && is_surrogate_pair(s[0], s[1])) ? 9 : 5 * len,
-                    7, 7};
+            int w = 0;
+            for (int i = 0; i < len; ++i)
+            {
+                w += (s[i] >= 0x10000) ? 9 : 5;
+            }
+            return {w, 7, 7};
         }
         text_metrics line_metrics() const override { return {0, 7, 7}; }
-        void write(core::Graphics &, const char16_t *, const int, const int,
+        void write(core::Graphics &, const char32_t *, const int, const int,
                    const int, const core::Color &) const override
         {
         }
@@ -196,7 +199,7 @@ int test_text_input()
         d.dispatch(root, press_at(15, 20));  // focus + place caret
         d.dispatch(root, char_ev('a'));
         d.dispatch(root, char_ev('b'));
-        EXPECT(input->get_text() == u"ab");
+        EXPECT(input->get_text() == "ab");
         EXPECT(changes == 2);
         EXPECT(last == "ab");
     }
@@ -215,7 +218,7 @@ int test_text_input()
         d.dispatch(root, press_at(15, 20));
         d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::space)));
         d.dispatch(root, char_ev('x'));
-        EXPECT(input->get_text() == u" x");
+        EXPECT(input->get_text() == " x");
     }
 
     // backspace erases before the caret, del after it
@@ -236,7 +239,7 @@ int test_text_input()
         d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::left)));
         // del erases b (at the caret)
         d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::del)));
-        EXPECT(input->get_text() == u"a");
+        EXPECT(input->get_text() == "a");
         // backspace erases a (before the caret, now at the end)
         d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::backspace)));
         EXPECT(input->get_text().empty());
@@ -258,7 +261,7 @@ int test_text_input()
         { ++changes; };
         input->set_text("hi");
         EXPECT(changes == 0);
-        EXPECT(input->get_text() == u"hi");
+        EXPECT(input->get_text() == "hi");
     }
 
     // enter submits the whole text and is consumed by the focused input
@@ -302,24 +305,23 @@ int test_text_input()
 
         d.dispatch(root, press_at(15, 20));
         d.dispatch(root, char_ev(0x4F60));  // 你
-        EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+        EXPECT(input->get_text() == std::string("\xe4\xbd\xa0"));
         EXPECT(last == "\xE4\xBD\xA0");  // changed carries UTF-8 bytes
         // é (Latin-1 supplement, above the C1 block) also inserts
         d.dispatch(root, char_ev(0xE9));
-        EXPECT(input->get_text() == std::u16string(u"\u4F60\xE9"));
+        EXPECT(input->get_text() == std::string("\xe4\xbd\xa0\xc3\xa9"));
 
         // backspace erases one code unit
         d.dispatch(root, key_ev(static_cast<int>(zb::input::key_code::backspace)));
-        EXPECT(input->get_text() == std::u16string(u"\u4F60"));
+        EXPECT(input->get_text() == std::string("\xe4\xbd\xa0"));
 
-        // DEL (0x7F) and the C1 block drop; a non-BMP code point
-        // stores as its surrogate pair (A-25)
+        // DEL (0x7F) and the C1 block drop; a non-BMP code point stores
+        // as its UTF-8 byte sequence (A-25)
         d.dispatch(root, char_ev(0x7F));
         d.dispatch(root, char_ev(0x9F));
         d.dispatch(root, char_ev(0x1F600));
         EXPECT(input->get_text() ==
-               std::u16string(u"\u4F60\xD83D"
-                              u"\xDE00"));
+               std::string("\xe4\xbd\xa0\xf0\x9f\x98\x80"));
     }
 
     // FI-02 single-line selection (code-contract §3.8): drag selects,
@@ -357,7 +359,7 @@ int test_text_input()
         t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
         EXPECT(t.input->selected_text() == "abcdef");
         t.d.dispatch(t.root, char_ev('X'));
-        EXPECT(t.input->get_text() == u"X");
+        EXPECT(t.input->get_text() == "X");
         EXPECT(t.input->selected_text().empty());
         EXPECT(t.last == "X");
     }
@@ -377,8 +379,8 @@ int test_text_input()
         sink.canned = "p\nq\xE4\xBD\xA0";
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
         // the '\n' drops (single line), 你 (U+4F60) stays
-        EXPECT(t.input->get_text() == std::u16string(u"apq\x4F60"
-                                                     "def"));
+        EXPECT(t.input->get_text() == std::string("apq\xe4\xbd\xa0"
+                                                  "def"));
         EXPECT(t.input->selected_text().empty());
         EXPECT(t.last == "apq\xE4\xBD\xA0"
                          "def");
@@ -397,8 +399,8 @@ int test_text_input()
         t.d.dispatch(t.root,
                      key_mod(static_cast<int>(zb::input::key_code::insert),
                              zb::input::mod_shift));
-        EXPECT(t.input->get_text() == std::u16string(u"az\x4F60"
-                                                     "def"));
+        EXPECT(t.input->get_text() == std::string("az\xe4\xbd\xa0"
+                                                  "def"));
     }
 
     // the default null sink: copy drops silently, paste is a no-op
@@ -410,60 +412,60 @@ int test_text_input()
         t.d.dispatch(t.root, move_to(30, 20));
         EXPECT(t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl)));
         EXPECT(t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl)));
-        EXPECT(t.input->get_text() == std::u16string(u"abcdef"));
+        EXPECT(t.input->get_text() == std::string("abcdef"));
         EXPECT(t.input->selected_text() == "bc");
     }
 
-    // A-25 pair atomicity: a typed non-BMP code point stores as its
-    // surrogate pair (ch > U+FFFF: the terminal translator assembles
-    // 4-byte UTF-8 into one full ch) and edits as one atom
+    // a typed non-BMP code point (ch > U+FFFF: the terminal translator
+    // assembles 4-byte UTF-8 into one full ch) stores as its UTF-8 byte
+    // sequence and edits as ONE atom (code-contract §2 code-point
+    // atomicity)
     {
         SelInput t;
         // a click first: char events ride focus
         t.d.dispatch(t.root, press_at(20, 20));
         t.d.dispatch(t.root, release_at(20, 20));
         EXPECT(t.d.dispatch(t.root, char_ev(0x1F600)));
-        EXPECT(t.input->get_text().size() == 2);  // the pair, whole
-        EXPECT(t.input->get_text()[0] == 0xD83D);
-        EXPECT(t.input->get_text()[1] == 0xDE00);
+        EXPECT(t.input->get_text() ==
+               std::string("\xf0\x9f\x98\x80"));  // one code point, 4 bytes
 
-        // arrow steps never stop between the two units: from after the
-        // pair, two lefts reach the pair start, and the typed 'x' lands
-        // BEFORE the pair — a broken snap would split it
+        // two lefts step over 'B' and the whole code point; the typed
+        // 'x' lands BEFORE it — a mid-sequence landing would split the
+        // bytes
         t.d.dispatch(t.root, char_ev('B'));
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
         t.d.dispatch(t.root, char_ev('x'));
         EXPECT(t.input->get_text() ==
-               std::u16string(u"x\xD83D"
-                              u"\xDE00"
-                              u"B"));
+               std::string("x\xf0\x9f\x98\x80"
+                           "B"));
 
-        // Ctrl+A selects the whole text, the pair included — whole
-        // units out, valid UTF-8 back
+        // Ctrl+A selects the whole text — whole code points out, valid
+        // UTF-8 back
         t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
         EXPECT(t.input->selected_text() == "x\xF0\x9F\x98\x80"
                                            "B");
     }
 
-    // A-25: backspace and delete remove both units of a pair
+    // backspace and delete remove one whole code point (a multi-byte
+    // sequence never splits)
     {
         SelInput t;
         t.d.dispatch(t.root, press_at(20, 20));
         t.d.dispatch(t.root, release_at(20, 20));
         t.d.dispatch(t.root, char_ev(0x1F600));
         t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace)));
-        EXPECT(t.input->get_text().empty());  // not a lone lead
+        EXPECT(t.input->get_text().empty());  // all 4 bytes gone
 
         t.d.dispatch(t.root, char_ev(0x1F600));
         t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left)));
         t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::del)));
-        EXPECT(t.input->get_text().empty());  // not a lone trail
+        EXPECT(t.input->get_text().empty());  // not a half-sequence
     }
 
-    // A-25: paste keeps whole pairs; a click inside the pair's span
-    // snaps the caret to the pair's end (shift+right from there selects
-    // "b", never a lone unit)
+    // paste rides the same acceptance (whole code points; an invalid
+    // byte decodes to U+FFFD); a click lands on a code-point boundary
+    // and shift+right selects the next whole code point
     {
         TestSink sink;
         SinkGuard guard(&sink);
@@ -474,57 +476,53 @@ int test_text_input()
                       "b";
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
         EXPECT(t.input->get_text() ==
-               std::u16string(u"a\xD83D"
-                              u"\xDE00"
-                              u"b"));
-        EXPECT(t.input->get_text().size() == 4);
+               std::string("a\xF0\x9F\x98\x80"
+                           "b"));  // whole code points, nothing dropped
+        EXPECT(t.input->get_text().size() == 6);
 
-        // uniform 6px advances; the zero-width pair sits before "b"'s
-        // 6px span — a click just left of the span's midpoint (xx 8)
-        // places the caret after the pair, and shift+right selects "b"
-        // (never a lone unit)
+        // uniform 6px advances: the emoji is one 6px code point — a
+        // click just before its span (xx 8) places the caret before it,
+        // and shift+right selects the emoji whole
         t.d.dispatch(t.root, press_at(20, 20));
         t.d.dispatch(t.root,
                      key_mod(static_cast<int>(zb::input::key_code::right),
                              zb::input::mod_shift));
-        EXPECT(t.input->selected_text() == "b");
+        EXPECT(t.input->selected_text() ==
+               std::string("\xf0\x9f\x98\x80"));
     }
 
-    // A-25: a covers_pair provider receives the whole 2-unit segment —
-    // one advance for the pair, letter-spacing once per pair (observed
-    // through Label::measure, the public single-line advance)
+    // a non-BMP code point fills one glyph through its provider — one
+    // advance, letter-spacing once per code point (observed through
+    // Label::measure, the public single-line advance)
     {
         Label l;
-        l.set_glyph_provider(zb::make_shared<PairProvider>());
-        l.set_text(std::u16string(u"A\xD83D"
-                                  u"\xDE00"));
-        EXPECT(l.measure().width == 14);  // 5 + 9: the pair as one glyph
+        l.set_glyph_provider(zb::make_shared<WideCpProvider>());
+        l.set_text(std::string("A\xf0\x9f\x98\x80"));
+        EXPECT(l.measure().width == 14);  // 5 + 9: one glyph
         l.set_letter_spacing(2);
-        EXPECT(l.measure().width == 18);  // spacing once per pair
+        EXPECT(l.measure().width == 18);  // spacing once per code point
     }
 
-    // A-25: a click landing on a covered pair's glyph snaps the caret
-    // to the pair's end — the load-bearing snap (the pair has real
-    // width; prefixes 5/14/19)
+    // a click landing on a covered non-BMP glyph snaps the caret to a
+    // code-point boundary — the emoji has real width (prefixes 5/14/19)
     {
         Panel root;
         root.set_size(200, 100);
         auto in = std::make_unique<TextInput>();
         in->set_size(120, 20);
         in->set_position(10, 10);
-        in->set_glyph_provider(zb::make_shared<PairProvider>());
+        in->set_glyph_provider(zb::make_shared<WideCpProvider>());
         TextInput *inp = in.get();
         root.add_child(std::move(in));
         InputDispatcher d;
-        inp->set_text(std::u16string(u"A\xD83D"
-                                     u"\xDE00"
-                                     u"B"));
-        d.dispatch(root, press_at(22, 20));  // local 12: inside the pair
+        inp->set_text(std::string("A\xf0\x9f\x98\x80"
+                                  "B"));
+        d.dispatch(root, press_at(22, 20));  // local 12: inside the emoji
         d.dispatch(root, release_at(22, 20));
         d.dispatch(root,
                    key_mod(static_cast<int>(zb::input::key_code::right),
                            zb::input::mod_shift));
-        EXPECT(inp->selected_text() == "B");  // [3, 4), not a lone unit
+        EXPECT(inp->selected_text() == "B");  // [5, 6), a whole code point
     }
 
     // read-only (code-contract §2): typing/paste/backspace drop
@@ -534,7 +532,7 @@ int test_text_input()
         SelInput t;
         t.d.dispatch(t.root, press_at(20, 20));
         t.d.dispatch(t.root, release_at(20, 20));
-        t.input->set_text(std::u16string(u"seed"));
+        t.input->set_text(std::string("seed"));
         t.input->set_read_only(true);
         EXPECT(t.input->is_read_only());
 
@@ -551,7 +549,7 @@ int test_text_input()
                      key_ev(static_cast<int>(zb::input::key_code::space)));
         t.d.dispatch(t.root,
                      key_ev(static_cast<int>(zb::input::key_code::backspace)));
-        EXPECT(t.input->get_text() == std::u16string(u"seed"));
+        EXPECT(t.input->get_text() == std::string("seed"));
         EXPECT(t.last.empty());  // changed never fired
 
         TestSink sink;
@@ -563,7 +561,7 @@ int test_text_input()
                              zb::input::mod_shift));
         t.d.dispatch(t.root,
                      key_ev(static_cast<int>(zb::input::key_code::del)));
-        EXPECT(t.input->get_text() == std::u16string(u"seed"));
+        EXPECT(t.input->get_text() == std::string("seed"));
 
         // enter still submits a read-only field (an affordance, not an edit)
         EXPECT(t.d.dispatch(t.root,
@@ -582,7 +580,7 @@ int test_text_input()
         t.d.dispatch(t.root, release_at(110, 20));
         t.input->set_read_only(false);
         EXPECT(t.d.dispatch(t.root, char_ev('!')));
-        EXPECT(t.input->get_text() == std::u16string(u"seed!"));
+        EXPECT(t.input->get_text() == std::string("seed!"));
     }
 
     // undo/redo (code-contract §2 "Undo/redo"): a typing run is one
@@ -596,7 +594,7 @@ int test_text_input()
         t.d.dispatch(t.root, char_ev('a'));
         t.d.dispatch(t.root, char_ev('b'));
         t.d.dispatch(t.root, char_ev('c'));
-        EXPECT(t.input->get_text() == std::u16string(u"abc"));
+        EXPECT(t.input->get_text() == std::string("abc"));
         EXPECT(t.input->can_undo());
         EXPECT(!t.input->can_redo());
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
@@ -604,18 +602,18 @@ int test_text_input()
         EXPECT(t.last.empty());  // changed fired with the restored text
         EXPECT(t.input->can_redo());
         t.d.dispatch(t.root, char_ev('x'));  // caret was restored to 0
-        EXPECT(t.input->get_text() == std::u16string(u"x"));
+        EXPECT(t.input->get_text() == std::string("x"));
 
         // redo, then undo again; Ctrl+Shift+Z redoes too
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
         t.d.dispatch(t.root, key_mod('y', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"x"));
+        EXPECT(t.input->get_text() == std::string("x"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
         t.d.dispatch(t.root,
                      key_mod('z', zb::input::mod_ctrl | zb::input::mod_shift));
-        EXPECT(t.input->get_text() == std::u16string(u"x"));
+        EXPECT(t.input->get_text() == std::string("x"));
     }
 
     // a caret move breaks the run: undo takes back only the last edit
@@ -628,9 +626,9 @@ int test_text_input()
         t.d.dispatch(t.root,
                      key_ev(static_cast<int>(zb::input::key_code::left)));
         t.d.dispatch(t.root, char_ev('c'));  // "acb"
-        EXPECT(t.input->get_text() == std::u16string(u"acb"));
+        EXPECT(t.input->get_text() == std::string("acb"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"ab"));
+        EXPECT(t.input->get_text() == std::string("ab"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
     }
@@ -648,17 +646,17 @@ int test_text_input()
                      key_ev(static_cast<int>(zb::input::key_code::backspace)));
         t.d.dispatch(t.root,
                      key_ev(static_cast<int>(zb::input::key_code::backspace)));
-        EXPECT(t.input->get_text() == std::u16string(u"a"));
+        EXPECT(t.input->get_text() == std::string("a"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"abc"));
+        EXPECT(t.input->get_text() == std::string("abc"));
 
         // typing replaces a selection (FI-02): its own undo step; the
         // restore brings the recorded selection anchor back too
         t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
         t.d.dispatch(t.root, char_ev('x'));
-        EXPECT(t.input->get_text() == std::u16string(u"x"));
+        EXPECT(t.input->get_text() == std::string("x"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"abc"));
+        EXPECT(t.input->get_text() == std::string("abc"));
         EXPECT(t.input->selected_text() == "abc");  // the select-all range
 
         // paste is its own step: collapse the standing selection with
@@ -669,20 +667,20 @@ int test_text_input()
         sink.canned = "XY";
         SinkGuard guard(&sink);
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"abcXY"));
+        EXPECT(t.input->get_text() == std::string("abcXY"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"abc"));
+        EXPECT(t.input->get_text() == std::string("abc"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
     }
 
-    // a non-BMP typed char (a surrogate pair) is one undo step
+    // a non-BMP typed char (one 4-byte code point) is one undo step
     {
         SelInput t;
         t.d.dispatch(t.root, press_at(20, 20));
         t.d.dispatch(t.root, release_at(20, 20));
         t.d.dispatch(t.root, char_ev(0x1F600));
-        EXPECT(t.input->get_text() == std::u16string(u"\U0001F600"));
+        EXPECT(t.input->get_text() == std::string("\xf0\x9f\x98\x80"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
     }
@@ -699,14 +697,14 @@ int test_text_input()
             t.d.dispatch(t.root,
                          key_ev(static_cast<int>(zb::input::key_code::left)));
         }
-        EXPECT(t.input->get_text() == std::u16string(u"fedcba"));
+        EXPECT(t.input->get_text() == std::string("fedcba"));
         for (int i = 0; i < 5; ++i)
         {
             EXPECT(t.input->can_undo());
             t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         }
         EXPECT(!t.input->can_undo());
-        EXPECT(t.input->get_text() == std::u16string(u"a"));
+        EXPECT(t.input->get_text() == std::string("a"));
     }
 
     // a new edit clears the redo stack
@@ -720,7 +718,7 @@ int test_text_input()
         EXPECT(t.input->can_redo());
         t.d.dispatch(t.root, char_ev('c'));
         EXPECT(!t.input->can_redo());
-        EXPECT(t.input->get_text() == std::u16string(u"c"));
+        EXPECT(t.input->get_text() == std::string("c"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
     }
@@ -746,7 +744,7 @@ int test_text_input()
         t.d.dispatch(t.root, press_at(20, 20));
         t.d.dispatch(t.root, release_at(20, 20));
         t.d.dispatch(t.root, char_ev('a'));
-        t.input->set_text(std::u16string(u"XY"));
+        t.input->set_text(std::string("XY"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.input->get_text().empty());
     }
@@ -762,12 +760,12 @@ int test_text_input()
         t.d.dispatch(t.root, release_at(30, 50));
         // Ctrl+Z now lands on the second (empty stack, consumed)
         EXPECT(t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl)));
-        EXPECT(t.first->get_text() == std::u16string(u"ab"));
+        EXPECT(t.first->get_text() == std::string("ab"));
         t.d.dispatch(t.root, press_at(20, 20));  // back to the first
         t.d.dispatch(t.root, release_at(20, 20));
         EXPECT(!t.first->can_undo());
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.first->get_text() == std::u16string(u"ab"));
+        EXPECT(t.first->get_text() == std::string("ab"));
     }
 
     // read-only gates undo/redo like every other edit primitive
@@ -779,7 +777,7 @@ int test_text_input()
         t.d.dispatch(t.root, char_ev('b'));
         t.input->set_read_only(true);
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.input->get_text() == std::u16string(u"ab"));
+        EXPECT(t.input->get_text() == std::string("ab"));
         EXPECT(t.last == "ab");       // the gated undo never fired changed
         EXPECT(t.input->can_undo());  // the history is intact, just gated
         t.input->set_read_only(false);

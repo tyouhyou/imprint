@@ -130,13 +130,13 @@ namespace
 
     struct UnitProvider : GlyphProvider
     {
-        bool covers(const char16_t) const override { return true; }
-        text_metrics measure(const char16_t *, const int len) const override
+        bool covers(const char32_t) const override { return true; }
+        text_metrics measure(const char32_t *, const int len) const override
         {
             return {6 * len, 7, 7};
         }
         text_metrics line_metrics() const override { return {0, 7, 7}; }
-        void write(core::Graphics &, const char16_t *, const int, const int,
+        void write(core::Graphics &, const char32_t *, const int, const int,
                    const int, const core::Color &) const override
         {
         }
@@ -202,17 +202,17 @@ int test_text_area()
         e.d.dispatch(e.root, key_ev(static_cast<int>(zb::input::key_code::enter)));
         e.d.dispatch(e.root, char_ev('c'));
         e.d.dispatch(e.root, char_ev('d'));
-        EXPECT(e.area->get_text() == std::u16string(u"ab\ncd"));
+        EXPECT(e.area->get_text() == std::string("ab\ncd"));
         EXPECT(e.last == "ab\ncd");
         const auto &sp = e.area->wrap_spans(e.area->get_size().width);
         EXPECT(sp.size() == 2);
         if (sp.size() == 2)
         {
-            const std::u16string &t = e.area->get_text();
+            const std::string &t = e.area->get_text();
             EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
-                            static_cast<std::size_t>(sp[0].second)) == u"ab");
+                            static_cast<std::size_t>(sp[0].second)) == "ab");
             EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
-                            static_cast<std::size_t>(sp[1].second)) == u"cd");
+                            static_cast<std::size_t>(sp[1].second)) == "cd");
         }
     }
 
@@ -221,7 +221,7 @@ int test_text_area()
     // the goal, so up/up lands back where the down/down started
     {
         Editor e;
-        e.area->set_text(std::u16string(u"abcdef\ngh\nijklmno"));
+        e.area->set_text(std::string("abcdef\ngh\nijklmno"));
         // click line 0 after three chars (18px column goal)
         e.d.dispatch(e.root, press_at(20, 3));
         e.d.dispatch(e.root, key_ev(static_cast<int>(zb::input::key_code::down)));
@@ -229,7 +229,7 @@ int test_text_area()
         e.d.dispatch(e.root, key_ev(static_cast<int>(zb::input::key_code::up)));
         e.d.dispatch(e.root, key_ev(static_cast<int>(zb::input::key_code::up)));
         e.d.dispatch(e.root, char_ev('X'));
-        EXPECT(e.area->get_text() == std::u16string(u"abcXdef\ngh\nijklmno"));
+        EXPECT(e.area->get_text() == std::string("abcXdef\ngh\nijklmno"));
     }
 
     // the wheel scrolls without moving the caret (delta > 0 = toward the
@@ -239,19 +239,19 @@ int test_text_area()
     // mapped click.)
     {
         Editor e;
-        e.area->set_text(std::u16string(u"l0\nl1\nl2\nl3\nl4"));
+        e.area->set_text(std::string("l0\nl1\nl2\nl3\nl4"));
         e.d.dispatch(e.root, press_at(10, 3));  // line 0, after one char
         e.d.dispatch(e.root, wheel_ev(-1));     // one line toward the bottom
         e.d.dispatch(e.root, char_ev('X'));
         // inserted at the pre-wheel caret: the wheel moved no caret
         EXPECT(e.area->get_text() ==
-               std::u16string(u"lX0\nl1\nl2\nl3\nl4"));
+               std::string("lX0\nl1\nl2\nl3\nl4"));
         e.d.dispatch(e.root, wheel_ev(-1));
         // the click now lands on the scrolled-in line (line 1 of the text)
         e.d.dispatch(e.root, press_at(10, 3));
         e.d.dispatch(e.root, char_ev('Y'));
         EXPECT(e.area->get_text() ==
-               std::u16string(u"lX0\nlY1\nl2\nl3\nl4"));
+               std::string("lX0\nlY1\nl2\nl3\nl4"));
     }
 
     // after an edit that pushes the caret below the fold, the minimal
@@ -285,25 +285,25 @@ int test_text_area()
     {
         Editor e;
         e.area->set_glyph_provider(zb::make_shared<UnitProvider>());
-        e.area->set_text(std::u16string(u"中文\n文本"));
+        e.area->set_text(std::string("\xe4\xb8\xad\xe6\x96\x87\n\xe6\x96\x87\xe6\x9c\xac"));
         const auto &sp = e.area->wrap_spans(e.area->get_size().width);
         EXPECT(sp.size() == 2);
         if (sp.size() == 2)
         {
-            const std::u16string &t = e.area->get_text();
+            const std::string &t = e.area->get_text();
             EXPECT(t.substr(static_cast<std::size_t>(sp[0].first),
-                            static_cast<std::size_t>(sp[0].second)) == u"中文");
+                            static_cast<std::size_t>(sp[0].second)) == "\xe4\xb8\xad\xe6\x96\x87");
             EXPECT(t.substr(static_cast<std::size_t>(sp[1].first),
-                            static_cast<std::size_t>(sp[1].second)) == u"文本");
+                            static_cast<std::size_t>(sp[1].second)) == "\xe6\x96\x87\xe6\x9c\xac");
         }
         // click the start of line 1 and type 你
         e.d.dispatch(e.root, press_at(2, 10));
         e.d.dispatch(e.root, char_ev(0x4F60));
-        EXPECT(e.area->get_text() == std::u16string(u"中文\n你文本"));
+        EXPECT(e.area->get_text() == std::string("\xe4\xb8\xad\xe6\x96\x87\n\xe4\xbd\xa0\xe6\x96\x87\xe6\x9c\xac"));
         EXPECT(e.last == "中文\n你文本");
         e.d.dispatch(e.root,
                      key_ev(static_cast<int>(zb::input::key_code::backspace)));
-        EXPECT(e.area->get_text() == std::u16string(u"中文\n文本"));
+        EXPECT(e.area->get_text() == std::string("\xe4\xb8\xad\xe6\x96\x87\n\xe6\x96\x87\xe6\x9c\xac"));
     }
 
     // FI-02 selection (code-contract §3.8): a drag sets an anchor and
@@ -311,7 +311,7 @@ int test_text_area()
     // indexes, direction-agnostic
     {
         SelTree t;
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         // press after 'c' (col 18 -> x 20), drag to after 'e' (col 30)
         t.d.dispatch(t.root, press_at(20, 3));
         EXPECT(t.area->selected_text().empty());  // a press is collapsed
@@ -329,7 +329,7 @@ int test_text_area()
     // caret move collapses to the caret
     {
         SelTree t;
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         t.d.dispatch(t.root, press_at(20, 3));  // anchor = caret = 3
         t.d.dispatch(t.root, release_at(20, 3));
 
@@ -346,7 +346,7 @@ int test_text_area()
                      key_ev(static_cast<int>(zb::input::key_code::right)));
         EXPECT(t.area->selected_text().empty());  // collapsed at caret 6
         // shift+up crosses the hard break: [0, 4) is "abc\n"
-        t.area->set_text(std::u16string(u"abc\ndef"));
+        t.area->set_text(std::string("abc\ndef"));
         t.d.dispatch(t.root, press_at(2, 3));  // caret 0
         t.d.dispatch(t.root, release_at(2, 3));
         t.d.dispatch(t.root, key_mod(static_cast<int>(zb::input::key_code::down),
@@ -358,19 +358,19 @@ int test_text_area()
     // collapses to the caret
     {
         SelTree t;
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         t.d.dispatch(t.root, press_at(2, 3));  // focus + caret 0
         t.d.dispatch(t.root, release_at(2, 3));
         t.d.dispatch(t.root,
                      key_mod('a', zb::input::mod_ctrl));
         EXPECT(t.area->selected_text() == "abcdef");
         t.d.dispatch(t.root, char_ev('X'));
-        EXPECT(t.area->get_text() == std::u16string(u"X"));
+        EXPECT(t.area->get_text() == std::string("X"));
         EXPECT(t.area->selected_text().empty());  // the edit collapsed it
         EXPECT(t.last == "X");                    // one changed per edit
 
         // rebuild a selection, then take the focus away
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         t.d.dispatch(t.root, press_at(20, 3));
         t.d.dispatch(t.root, move_to(32, 3));
         EXPECT(t.area->selected_text() == "de");
@@ -382,7 +382,7 @@ int test_text_area()
     // selected_text is UTF-8: CJK multibyte and hard breaks round-trip
     {
         SelTree t;
-        t.area->set_text(std::u16string(u"中文\n文本"));
+        t.area->set_text(std::string("\xe4\xb8\xad\xe6\x96\x87\n\xe6\x96\x87\xe6\x9c\xac"));
         t.d.dispatch(t.root, press_at(2, 3));  // focus
         t.d.dispatch(t.root, release_at(2, 3));
         t.d.dispatch(t.root, key_mod('a', zb::input::mod_ctrl));
@@ -394,7 +394,7 @@ int test_text_area()
     // selection band covers exactly the selected columns of the line
     {
         SelTree t;
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         t.d.dispatch(t.root, press_at(8, 3));  // caret 1 (col 6)
         t.d.dispatch(t.root, move_to(26, 3));  // caret 4 (col 24)
         core::Graphics g(200, 100, nullptr);
@@ -415,7 +415,7 @@ int test_text_area()
         TestSink sink;
         SinkGuard guard(&sink);
         SelTree t;
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         t.d.dispatch(t.root, press_at(8, 3));
         t.d.dispatch(t.root, move_to(26, 3));  // [1, 4)
         t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl));
@@ -424,7 +424,7 @@ int test_text_area()
         sink.canned = "p\nqX";
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
         // the paste replaced the selection; '\n' is content here
-        EXPECT(t.area->get_text() == std::u16string(u"ap\nqXef"));
+        EXPECT(t.area->get_text() == std::string("ap\nqXef"));
         EXPECT(t.area->selected_text().empty());
         EXPECT(t.last == "ap\nqXef");
 
@@ -442,7 +442,7 @@ int test_text_area()
         t.d.dispatch(t.root,
                      key_mod(static_cast<int>(zb::input::key_code::insert),
                              zb::input::mod_shift));
-        EXPECT(t.area->get_text() == std::u16string(u"z\nqXef"));
+        EXPECT(t.area->get_text() == std::string("z\nqXef"));
     }
 
     // the default null sink: copy drops silently, paste is a no-op;
@@ -450,49 +450,48 @@ int test_text_area()
     {
         SinkGuard guard(nullptr);
         SelTree t;
-        t.area->set_text(std::u16string(u"abcdef"));
+        t.area->set_text(std::string("abcdef"));
         t.d.dispatch(t.root, press_at(8, 3));
         t.d.dispatch(t.root, move_to(26, 3));
         EXPECT(t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl)));
         EXPECT(t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl)));
-        EXPECT(t.area->get_text() == std::u16string(u"abcdef"));
+        EXPECT(t.area->get_text() == std::string("abcdef"));
 
         TestSink set_only;  // canned stays empty
         SinkGuard guard2(&set_only);
         EXPECT(t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl)));
-        EXPECT(t.area->get_text() == std::u16string(u"abcdef"));
+        EXPECT(t.area->get_text() == std::string("abcdef"));
         // copy through the set-only sink still works
         t.d.dispatch(t.root, key_mod('c', zb::input::mod_ctrl));
         EXPECT(set_only.sent == "bcd");
     }
 
-    // A-25 pair atomicity in the multi-line editor: a typed non-BMP
-    // code point stores as its surrogate pair, edits as one atom, and
-    // the wrap spans never split it
+    // A-25 code-point atomicity in the multi-line editor: a typed
+    // non-BMP code point stores as its UTF-8 byte sequence, edits as
+    // one atom, and the wrap spans never split it
     {
         SelTree t;
         // a click first: char events ride focus
         t.d.dispatch(t.root, press_at(2, 3));
         t.d.dispatch(t.root, release_at(2, 3));
         EXPECT(t.d.dispatch(t.root, char_ev(0x1F600)));
-        EXPECT(t.area->get_text().size() == 2);
-        EXPECT(t.area->get_text()[0] == 0xD83D);
-        EXPECT(t.area->get_text()[1] == 0xDE00);
+        EXPECT(t.area->get_text() ==
+               std::string("\xf0\x9f\x98\x80"));  // one code point, 4 bytes
 
-        // arrow steps never stop between the two units; the typed 'x'
-        // lands before the pair instead of splitting it
+        // two lefts step over 'B' and the whole code point; the typed
+        // 'x' lands BEFORE it — a mid-sequence landing would split the
+        // bytes
         t.d.dispatch(t.root, char_ev('B'));
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
         t.d.dispatch(t.root, char_ev('x'));
         EXPECT(t.area->get_text() ==
-               std::u16string(u"x\xD83D"
-                              u"\xDE00"
-                              u"B"));
+               std::string("x\xf0\x9f\x98\x80"
+                           "B"));
 
         // walk the caret to the end (the first right hops over the
-        // pair), then three backspaces remove 'B', the pair (as one —
-        // no lone unit survives) and 'x'
+        // emoji), then three backspaces remove 'B', the emoji (whole
+        // bytes, never a half-sequence) and 'x'
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::right))));
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::right))));
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace))));
@@ -500,23 +499,23 @@ int test_text_area()
         EXPECT(t.d.dispatch(t.root, key_ev(static_cast<int>(zb::input::key_code::backspace))));
         EXPECT(t.area->get_text().empty());
 
-        // the pair rides whole through wrap spans: with a break
+        // the emoji rides whole through wrap spans: with a break
         // candidate beside it, the forced break lands on the space, not
-        // inside the pair (indexes: a0 b1 sp2 lead3 trail4 sp5 c6 d7)
-        t.area->set_text(std::u16string(u"ab \xD83D"
-                                        u"\xDE00"
-                                        u" cd"));
-        t.area->set_size(24, 30);  // forces the break after the pair
+        // inside the emoji's bytes (indexes: a0 b1 sp2 emoji 3-6 sp7 c8 d9)
+        t.area->set_text(std::string("ab \xf0\x9f\x98\x80"
+                                     " cd"));
+        t.area->set_size(24, 30);  // forces the break after the emoji
         const auto &sp = t.area->wrap_spans(24);
-        EXPECT(sp.size() == 2);  // "ab <pair>" | "cd"
+        EXPECT(sp.size() == 2);  // "ab <emoji>" | "cd"
         for (const auto &span : sp)
         {
-            // no span ends between the pair's two units (at index 4)
-            EXPECT(!(span.first <= 3 && span.first + span.second == 4));
+            // no span ends inside the emoji's 4 bytes (byte offsets 4-6)
+            EXPECT(!(span.first <= 3 && span.first + span.second >= 4 &&
+                     span.first + span.second <= 6));
         }
     }
 
-    // A-25: paste keeps whole pairs next to '\n' content
+    // A-25: paste keeps whole code points next to '\n' content
     {
         TestSink sink;
         SinkGuard guard(&sink);
@@ -526,9 +525,8 @@ int test_text_area()
         sink.canned = "x\xF0\x9F\x98\x80\ny";
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
         EXPECT(t.area->get_text() ==
-               std::u16string(u"x\xD83D"
-                              u"\xDE00"
-                              u"\ny"));
+               std::string("x\xF0\x9F\x98\x80"
+                           "\ny"));
     }
 
     // read-only (code-contract §2): user edits are silent no-ops and
@@ -565,7 +563,7 @@ int test_text_area()
     // set_text applies throughout and clearing the flag restores editing
     {
         SelTree t;
-        t.area->set_text(std::u16string(u"l0\nl1\nl2\nl3\nl4"));
+        t.area->set_text(std::string("l0\nl1\nl2\nl3\nl4"));
         t.d.dispatch(t.root, press_at(2, 3));  // focus + caret 0
         t.d.dispatch(t.root, release_at(2, 3));
         t.area->set_read_only(true);
@@ -586,8 +584,8 @@ int test_text_area()
             t.root, key_ev(static_cast<int>(zb::input::key_code::left))));
 
         // programmatic set_text still applies (app-driven, not a user edit)
-        t.area->set_text(std::u16string(u"seed"));
-        EXPECT(t.area->get_text() == std::u16string(u"seed"));
+        t.area->set_text(std::string("seed"));
+        EXPECT(t.area->get_text() == std::string("seed"));
 
         // collapse the standing selection with a click past the line end
         // (typing replaces a selection, FI-02), then re-enable editing
@@ -595,7 +593,7 @@ int test_text_area()
         t.d.dispatch(t.root, release_at(38, 3));
         t.area->set_read_only(false);
         EXPECT(t.d.dispatch(t.root, char_ev('!')));
-        EXPECT(t.area->get_text() == std::u16string(u"seed!"));
+        EXPECT(t.area->get_text() == std::string("seed!"));
     }
 
     // undo/redo (code-contract §2 "Undo/redo"): a typing run is one
@@ -606,7 +604,7 @@ int test_text_area()
         t.d.dispatch(t.root, char_ev('a'));
         t.d.dispatch(t.root, char_ev('b'));
         t.d.dispatch(t.root, char_ev('c'));
-        EXPECT(t.area->get_text() == std::u16string(u"abc"));
+        EXPECT(t.area->get_text() == std::string("abc"));
         EXPECT(t.area->can_undo());
         EXPECT(!t.area->can_redo());
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
@@ -614,14 +612,14 @@ int test_text_area()
         EXPECT(t.last.empty());  // changed fired with the restored text
         EXPECT(t.area->can_redo());
         t.d.dispatch(t.root, char_ev('x'));  // caret was restored to 0
-        EXPECT(t.area->get_text() == std::u16string(u"x"));
+        EXPECT(t.area->get_text() == std::string("x"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.area->get_text().empty());
         t.d.dispatch(t.root, key_mod('y', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"x"));
+        EXPECT(t.area->get_text() == std::string("x"));
         t.d.dispatch(t.root,
                      key_mod('z', zb::input::mod_ctrl | zb::input::mod_shift));
-        EXPECT(t.area->get_text() == std::u16string(u"x"));
+        EXPECT(t.area->get_text() == std::string("x"));
     }
 
     // enter is its own undo step (T-4: enter is content here)
@@ -633,11 +631,11 @@ int test_text_area()
                      key_ev(static_cast<int>(zb::input::key_code::enter)));
         t.d.dispatch(t.root, char_ev('c'));
         t.d.dispatch(t.root, char_ev('d'));
-        EXPECT(t.area->get_text() == std::u16string(u"ab\ncd"));
+        EXPECT(t.area->get_text() == std::string("ab\ncd"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab\n"));
+        EXPECT(t.area->get_text() == std::string("ab\n"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.area->get_text().empty());
         EXPECT(!t.area->can_undo());
@@ -659,9 +657,9 @@ int test_text_area()
         EXPECT(t.area->get_text().empty());
         EXPECT(t.area->can_undo());
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab\n"));
+        EXPECT(t.area->get_text() == std::string("ab\n"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.area->get_text().empty());
         EXPECT(!t.area->can_undo());
@@ -675,17 +673,17 @@ int test_text_area()
         t.d.dispatch(t.root,
                      key_ev(static_cast<int>(zb::input::key_code::left)));
         t.d.dispatch(t.root, char_ev('c'));  // "acb"
-        EXPECT(t.area->get_text() == std::u16string(u"acb"));
+        EXPECT(t.area->get_text() == std::string("acb"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
 
         TestSink sink;
         sink.canned = "XY";
         SinkGuard guard(&sink);
         t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"aXYb"));  // caret 1
+        EXPECT(t.area->get_text() == std::string("aXYb"));  // caret 1
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.area->get_text().empty());
     }
@@ -694,7 +692,7 @@ int test_text_area()
     {
         Editor t;
         t.d.dispatch(t.root, char_ev(0x1F600));
-        EXPECT(t.area->get_text() == std::u16string(u"\U0001F600"));
+        EXPECT(t.area->get_text() == std::string("\xf0\x9f\x98\x80"));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         EXPECT(t.area->get_text().empty());
     }
@@ -709,14 +707,14 @@ int test_text_area()
             t.d.dispatch(t.root,
                          key_ev(static_cast<int>(zb::input::key_code::left)));
         }
-        EXPECT(t.area->get_text() == std::u16string(u"fedcba"));
+        EXPECT(t.area->get_text() == std::string("fedcba"));
         for (int i = 0; i < 5; ++i)
         {
             EXPECT(t.area->can_undo());
             t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
         }
         EXPECT(!t.area->can_undo());
-        EXPECT(t.area->get_text() == std::u16string(u"a"));
+        EXPECT(t.area->get_text() == std::string("a"));
     }
 
     // a new edit clears the redo stack
@@ -728,7 +726,7 @@ int test_text_area()
         EXPECT(t.area->can_redo());
         t.d.dispatch(t.root, char_ev('c'));
         EXPECT(!t.area->can_redo());
-        EXPECT(t.area->get_text() == std::u16string(u"c"));
+        EXPECT(t.area->get_text() == std::string("c"));
     }
 
     // empty stacks: the chord is consumed but nothing changes
@@ -753,12 +751,12 @@ int test_text_area()
         t.d.dispatch(t.root, press_at(5, 65));  // the TextInput below
         t.d.dispatch(t.root, release_at(5, 65));
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
         t.d.dispatch(t.root, press_at(5, 5));  // back to the area
         t.d.dispatch(t.root, release_at(5, 5));
         EXPECT(!t.area->can_undo());
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
     }
 
     // read-only gates undo/redo like every other edit primitive
@@ -768,7 +766,7 @@ int test_text_area()
         t.d.dispatch(t.root, char_ev('b'));
         t.area->set_read_only(true);
         t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
-        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.area->get_text() == std::string("ab"));
         EXPECT(t.last == "ab");      // the gated undo never fired changed
         EXPECT(t.area->can_undo());  // the history is intact, just gated
         t.area->set_read_only(false);

@@ -155,7 +155,7 @@ int test_automation()
         d.click(*tp);
         EXPECT(tp->is_focused());
         d.type("hi");
-        EXPECT(tp->get_text() == u"hi");
+        EXPECT(tp->get_text() == "hi");
     }
 
     // keyboard navigation and activation (no coordinates at all)

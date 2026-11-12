@@ -208,7 +208,7 @@ int test_dirty()
         ch.ch = 'a';
         EXPECT(d.dispatch(w.root(), ch));
         w.paint();
-        EXPECT(input->get_text() == u"a");
+        EXPECT(input->get_text() == "a");
         int rx = 0, ry = 0, rw = 0, rh = 0;
         EXPECT(w.dirty_region(rx, ry, rw, rh));
         EXPECT(rx <= 10 && ry <= 10 && rx + rw >= 10 + 100 && ry + rh >= 10 + 7);

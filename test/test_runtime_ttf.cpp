@@ -140,12 +140,12 @@ int test_runtime_ttf()
 
     const auto p16 = family.provider_for(16);
 
-    // coverage: ASCII is covered, a CJK code unit (numeric literal, so
+    // coverage: ASCII is covered, a CJK code point (numeric literal, so
     // the font-subset scanner never sees a source string) is not and
     // falls through the chain to 5x7
-    EXPECT(p16->covers(u'A'));
-    EXPECT(p16->covers(u'a'));
-    EXPECT(!p16->covers(char16_t(0x4E2D)));
+    EXPECT(p16->covers(U'A'));
+    EXPECT(p16->covers(U'a'));
+    EXPECT(!p16->covers(0x4E2D));
 
     // line metrics follow the requested pixel size (no linegap formula)
     EXPECT(p16->line_metrics().width == 0);
@@ -153,28 +153,34 @@ int test_runtime_ttf()
     EXPECT(p16->line_metrics().ascent > 0);
     EXPECT(family.provider_for(24)->line_metrics().height == 24);
 
-    // measure never rasterizes: proportional advances, uncovered units
-    // advance zero
+    // measure never rasterizes: proportional advances, uncovered code
+    // points advance zero
     {
         EXPECT(family.rasterization_count() == 0);
-        const text_metrics wide = p16->measure(u"WW", 2);
-        const text_metrics narrow = p16->measure(u"II", 2);
+        const char32_t ww[] = {U'W', U'W'};
+        const char32_t ii[] = {U'I', U'I'};
+        const text_metrics wide = p16->measure(ww, 2);
+        const text_metrics narrow = p16->measure(ii, 2);
         EXPECT(wide.width > narrow.width);
         EXPECT(wide.height == 16);
-        const char16_t mixed[] = {u'A', 0x4E2D, u'B', 0};
+        const char32_t mixed[] = {U'A', 0x4E2D, U'B'};
+        const char32_t ab[] = {U'A', U'B'};
         const text_metrics with_gap = p16->measure(mixed, 3);
-        EXPECT(with_gap.width == p16->measure(u"AB", 2).width);
+        EXPECT(with_gap.width == p16->measure(ab, 2).width);
         EXPECT(family.rasterization_count() == 0);
     }
 
-    // cache: the first draw rasterizes each distinct code unit, the
+    // cache: the first draw rasterizes each distinct code point, the
     // redraw is warm (no new rasterizations, no allocations), pixels land
     {
         auto g = core::Graphics::make_ptr(300, 60);
         g->fill(core::colors::White);
 
+        const char32_t hello[] = {U'H', U'e', U'l', U'l', U'o', U' ', U'g',
+                                  U'l', U'y', U'p', U'h', U' ', U'c', U'a',
+                                  U'c', U'h', U'e'};
         const long long r0 = family.rasterization_count();
-        p16->write(*g, u"Hello glyph cache", 17, 4, 40, core::colors::Black);
+        p16->write(*g, hello, 17, 4, 40, core::colors::Black);
         EXPECT(family.rasterization_count() - r0 > 0);
 
         int painted = 0;
@@ -193,7 +199,7 @@ int test_runtime_ttf()
         const long long r1 = family.rasterization_count();
         {
             test::scoped_alloc_count c;
-            p16->write(*g, u"Hello glyph cache", 17, 4, 40, core::colors::Black);
+            p16->write(*g, hello, 17, 4, 40, core::colors::Black);
             EXPECT(c.delta() == 0);  // warm draw: zero allocations (§8)
         }
         EXPECT(family.rasterization_count() == r1);
@@ -206,24 +212,27 @@ int test_runtime_ttf()
         TtfFamily tiny = TtfFamily::from_file(IM_TEST_RUNTIME_TTF_FONT, 1);
         auto tp = tiny.provider_for(16);
         auto g = core::Graphics::make_ptr(120, 40);
-        tp->write(*g, u"abc", 3, 2, 30, core::colors::Black);
+        const char32_t abc[] = {U'a', U'b', U'c'};
+        tp->write(*g, abc, 3, 2, 30, core::colors::Black);
         const long long r0 = tiny.rasterization_count();
-        tp->write(*g, u"abc", 3, 2, 30, core::colors::Black);
+        tp->write(*g, abc, 3, 2, 30, core::colors::Black);
         EXPECT(tiny.rasterization_count() - r0 >= 3);
         EXPECT(tiny.cache_bytes() < 4096);
     }
 
     // widget seam: the label rides the provider; a mixed-coverage string
-    // keeps the uncovered unit at zero advance (chain end: 5x7 skips it)
+    // keeps the uncovered code point at zero advance (chain end: 5x7
+    // skips it)
     {
         Label l;
         l.set_text("Hello");
         l.set_glyph_provider(family.provider_for(16));
         EXPECT(l.measure().height == 16);
 
-        const char16_t mixed[] = {u'a', 0x4E2D, u'b', 0};
-        l.set_text(std::u16string(mixed));
-        EXPECT(l.measure().width == p16->measure(u"ab", 2).width);
+        l.set_text("a\xE4\xB8\xAD"
+                   "b");
+        const char32_t ab[] = {U'a', U'b'};
+        EXPECT(l.measure().width == p16->measure(ab, 2).width);
     }
 
     // from_memory borrows: the same bytes rasterize the same advances
@@ -245,9 +254,11 @@ int test_runtime_ttf()
         {
             TtfFamily mem = TtfFamily::from_memory(bytes.data(), bytes.size());
             const auto mp = mem.provider_for(16);
-            EXPECT(mp->measure(u"Hello", 5).width == p16->measure(u"Hello", 5).width);
+            const char32_t hello[] = {U'H', U'e', U'l', U'l', U'o'};
+            EXPECT(mp->measure(hello, 5).width == p16->measure(hello, 5).width);
             auto g = core::Graphics::make_ptr(120, 40);
-            mp->write(*g, u"Hi", 2, 2, 30, core::colors::Black);
+            const char32_t hi[] = {U'H', U'i'};
+            mp->write(*g, hi, 2, 2, 30, core::colors::Black);
             EXPECT(mem.rasterization_count() == 2);
         }
     }
@@ -324,7 +335,7 @@ int test_runtime_ttf()
         FlexPanel host2;
         auto doc2 = column({label("Hi").named("u").font_size(24)});
         build(host2, doc2);
-        Widget *u = host2.find_by_id("u");
+        Widget *u = host2.find_by_id("");
         EXPECT(u != nullptr);
         EXPECT(u->font_size() == 0);
 
@@ -338,31 +349,29 @@ int test_runtime_ttf()
         clear_font_family();
     }
 
-    // A-25 pairing: a surrogate pair resolves through covers_pair to the
-    // combined code point. Inter carries no non-BMP glyph, so the
-    // answers are negative — the pair measures 0 (each lone half is
-    // uncovered) and the pre-A-25 drop semantics stand; a covering
-    // provider receives the whole 2-unit segment (locked by the stub
-    // checks in test_text_input/test_text_area)
+    // A-25: a non-BMP code point resolves through covers() like any
+    // other code point. Inter carries no emoji glyph, so the answer is
+    // negative — it measures 0 (uncovered code points advance nothing)
+    // and the drop semantics stand; a covering provider receives the
+    // whole code point (locked by the stub checks in
+    // test_text_input/test_text_area)
     {
         const auto p = family.provider_for(16);
-        const char16_t emoji[2] = {0xD83D, 0xDE00};  // U+1F600
-        EXPECT(!p->covers_pair(emoji));
-        EXPECT(!p->covers(emoji[0]) && !p->covers(emoji[1]));
+        EXPECT(!p->covers(0x1F600));
 
-        const char16_t with_pair[4] = {u'H', 0xD83D, 0xDE00, u'i'};
-        // the pair contributes nothing: measure == "H" + "i" alone
-        const char16_t plain[2] = {u'H', u'i'};
-        EXPECT(p->measure(with_pair, 4).width == p->measure(plain, 2).width);
+        const char32_t with_emoji[] = {U'H', 0x1F600, U'i'};
+        // the emoji contributes nothing: measure == "H" + "i" alone
+        const char32_t plain[] = {U'H', U'i'};
+        EXPECT(p->measure(with_emoji, 3).width == p->measure(plain, 2).width);
 
-        // drawing the lone pair routes once through the cache keyed by
-        // the combined code point and lands on glyph 0: one probe, an
-        // empty coverage entry, zero cache bytes — the pre-A-25 drop,
-        // now pair-shaped
+        // drawing the uncovered emoji routes once through the cache keyed
+        // by the code point and lands on glyph 0: one probe, an empty
+        // coverage entry, zero cache bytes — the drop, code-point-shaped
         core::Graphics g(64, 32, nullptr);
         const long long before = family.rasterization_count();
         const size_t bytes_before = family.cache_bytes();
-        p->write(g, emoji, 2, 1, 20, core::colors::Black);
+        const char32_t emoji[] = {0x1F600};
+        p->write(g, emoji, 1, 1, 20, core::colors::Black);
         EXPECT(family.rasterization_count() - before == 1);
         EXPECT(family.cache_bytes() == bytes_before);
     }

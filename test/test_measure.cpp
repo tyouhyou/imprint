@@ -22,14 +22,14 @@ namespace
     {
         mutable int measures = 0;
 
-        bool covers(const char16_t) const override { return true; }
-        text_metrics measure(const char16_t *, const int len) const override
+        bool covers(const char32_t) const override { return true; }
+        text_metrics measure(const char32_t *, const int len) const override
         {
             ++measures;
             return {6 * len, 7, 6};
         }
         text_metrics line_metrics() const override { return {0, 7, 6}; }
-        void write(core::Graphics &, const char16_t *, const int, const int,
+        void write(core::Graphics &, const char32_t *, const int, const int,
                    const int, const core::Color &) const override
         {
         }

@@ -29,15 +29,17 @@ int test_ttf_subset()
 
     // coverage + metrics over ASCII (every text font draws these)
     {
-        EXPECT(p.covers(u'A'));
-        EXPECT(p.covers(u'0'));
+        EXPECT(p.covers(U'A'));
+        EXPECT(p.covers(U'0'));
 
-        const text_metrics one = p.measure(u"A", 1);
+        const char32_t a[] = {U'A'};
+        const text_metrics one = p.measure(a, 1);
         EXPECT(one.width > 0);
         EXPECT(one.height == kTtfLineHeight);
         EXPECT(one.ascent == kTtfAscent);
 
-        const text_metrics two = p.measure(u"AA", 2);
+        const char32_t aa[] = {U'A', U'A'};
+        const text_metrics two = p.measure(aa, 2);
         EXPECT(two.width == 2 * one.width);
 
         const text_metrics lm = p.line_metrics();
@@ -52,7 +54,8 @@ int test_ttf_subset()
         g->fill(core::colors::White);
         {
             test::scoped_alloc_count c;
-            p.write(*g, u"A", 1, 4, 24, core::colors::Black);
+            const char32_t a[] = {U'A'};
+            p.write(*g, a, 1, 4, 24, core::colors::Black);
             EXPECT(c.delta() == 0);
         }
         int painted = 0;

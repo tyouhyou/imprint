@@ -204,7 +204,7 @@ int test_svg()
         SvgCanvas v;
         v.set_size(100, 30);
         SvgCanvas::Text t;
-        t.text = u"dB";
+        t.text = "dB";
         t.x = 50;
         t.y = 20;
         t.color = core::colors::Black;
