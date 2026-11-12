@@ -102,6 +102,33 @@ namespace zb::ui
                 out += static_cast<char16_t>(cp);
             }
         }
+
+        // appends one code point as its UTF-8 sequence (1-4 bytes)
+        void append_utf8(std::string &out, const char32_t cp)
+        {
+            if (cp < 0x80)
+            {
+                out += static_cast<char>(cp);
+            }
+            else if (cp < 0x800)
+            {
+                out += static_cast<char>(0xC0 | (cp >> 6));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+            else if (cp < 0x10000)
+            {
+                out += static_cast<char>(0xE0 | (cp >> 12));
+                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+            else
+            {
+                out += static_cast<char>(0xF0 | (cp >> 18));
+                out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+                out += static_cast<char>(0x80 | (cp & 0x3F));
+            }
+        }
     }  // namespace
 
     char32_t decode_utf8_next(const char *&p)
@@ -112,6 +139,88 @@ namespace zb::ui
     char32_t decode_utf8_next(const char *&p, const char *end)
     {
         return decode_bounded(p, end);
+    }
+
+    char32_t decode_utf8_prev(const char *&p, const char *begin)
+    {
+        if (p == nullptr || p <= begin)
+        {
+            return replacement;  // exhausted: nothing to consume
+        }
+
+        // walk back over continuation bytes to the prospective lead
+        const char *lead = p - 1;
+        while (lead >= begin &&
+               (static_cast<unsigned char>(*lead) & 0xC0) == 0x80)
+        {
+            --lead;
+        }
+        if (lead < begin)
+        {
+            p = p - 1;  // only continuation bytes behind: one stray byte
+            return replacement;
+        }
+
+        const auto c0 = static_cast<unsigned char>(*lead);
+        int extra = 0;
+        char32_t cp = 0;
+        char32_t cp_min = 0;
+        if (c0 < 0x80)
+        {
+            cp = c0;
+        }
+        else if ((c0 & 0xE0) == 0xC0)
+        {
+            extra = 1;
+            cp = c0 & 0x1F;
+            cp_min = 0x80;
+        }
+        else if ((c0 & 0xF0) == 0xE0)
+        {
+            extra = 2;
+            cp = c0 & 0x0F;
+            cp_min = 0x800;
+        }
+        else if ((c0 & 0xF8) == 0xF0)
+        {
+            extra = 3;
+            cp = c0 & 0x07;
+            cp_min = 0x10000;
+        }
+        else
+        {
+            p = p - 1;  // a stray continuation (4+ in a row) or bad lead
+            return replacement;
+        }
+
+        // the walk must have landed exactly one sequence back: a
+        // shorter run is a truncated sequence, a longer one cannot
+        // happen (the walk stops at the first non-continuation byte)
+        if (static_cast<int>(p - lead) != extra + 1)
+        {
+            p = p - 1;
+            return replacement;
+        }
+
+        for (int i = 1; i <= extra; ++i)
+        {
+            const auto cc = static_cast<unsigned char>(lead[i]);
+            if ((cc & 0xC0) != 0x80)
+            {
+                p = p - 1;
+                return replacement;
+            }
+            cp = (cp << 6) | (cc & 0x3F);
+        }
+
+        if (cp < cp_min || cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+        {
+            p = p - 1;  // overlong encoding, out of range, or a surrogate
+            return replacement;
+        }
+
+        p = lead;
+        return cp;
     }
 
     std::u16string utf8_to_utf16(const char *utf8)
@@ -170,28 +279,37 @@ namespace zb::ui
                 cp = 0xFFFD;  // lone trailing surrogate
             }
 
-            if (cp < 0x80)
-            {
-                out += static_cast<char>(cp);
-            }
-            else if (cp < 0x800)
-            {
-                out += static_cast<char>(0xC0 | (cp >> 6));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-            else if (cp < 0x10000)
-            {
-                out += static_cast<char>(0xE0 | (cp >> 12));
-                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-            else
-            {
-                out += static_cast<char>(0xF0 | (cp >> 18));
-                out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
+            append_utf8(out, cp);
+        }
+        return out;
+    }
+
+    std::string sanitize_utf8(const char *utf8)
+    {
+        std::string out;
+        if (utf8 == nullptr)
+        {
+            return out;
+        }
+        for (const char *p = utf8; *p != '\0';)
+        {
+            append_utf8(out, decode_bounded(p, nullptr));
+        }
+        return out;
+    }
+
+    std::string sanitize_utf8(const char *utf8, const size_t len)
+    {
+        std::string out;
+        if (utf8 == nullptr || len == 0)
+        {
+            return out;
+        }
+        out.reserve(len);
+        const char *const end = utf8 + len;
+        for (const char *p = utf8; p < end;)
+        {
+            append_utf8(out, decode_bounded(p, end));
         }
         return out;
     }

@@ -169,6 +169,67 @@ int test_text()
         EXPECT(utf8_to_utf16("abc", 0).empty());
     }
 
+    // decode_utf8_prev: the backward mirror -- steps back one whole
+    // sequence, exhausted at the bound returns U+FFFD without moving
+    {
+        const char buf[] = "abc";
+        const char *p = buf + 3;
+        EXPECT(decode_utf8_prev(p, buf) == 'c');
+        EXPECT(decode_utf8_prev(p, buf) == 'b');
+        EXPECT(decode_utf8_prev(p, buf) == 'a');
+        EXPECT(p == buf);
+        EXPECT(decode_utf8_prev(p, buf) == 0xFFFD);
+        EXPECT(p == buf);  // exhausted: no move
+        const char *np = nullptr;
+        EXPECT(decode_utf8_prev(np, buf) == 0xFFFD);
+
+        const char cn[] = "a\xE4\xB8\xAD\xF0\x9F\x98\x80";  // a 中 😀
+        const char *q = cn + 8;
+        EXPECT(decode_utf8_prev(q, cn) == 0x1F600);
+        EXPECT(q == cn + 4);
+        EXPECT(decode_utf8_prev(q, cn) == 0x4E2D);
+        EXPECT(q == cn + 1);
+        EXPECT(decode_utf8_prev(q, cn) == static_cast<char32_t>('a'));
+        EXPECT(q == cn);
+
+        // an invalid tail byte is one U+FFFD of its own, one byte back
+        const char bad[] = "\x80";
+        const char *r = bad + 1;
+        EXPECT(decode_utf8_prev(r, bad) == 0xFFFD);
+        EXPECT(r == bad);
+        // a truncated sequence (lead + 1 of 2 continuations) likewise
+        const char trunc[] = "a\xE4\xB8";
+        const char *s = trunc + 3;
+        EXPECT(decode_utf8_prev(s, trunc) == 0xFFFD);
+        EXPECT(s == trunc + 2);
+        // a 3-continuation run has no lead within reach
+        const char stray[] = "\x80\x80\x80\x80";
+        const char *u = stray + 4;
+        EXPECT(decode_utf8_prev(u, stray) == 0xFFFD);
+        EXPECT(u == stray + 3);
+    }
+
+    // sanitize_utf8: valid text passes through byte-identical, an
+    // invalid or truncated byte becomes U+FFFD, embedded NULs follow
+    // the same bound rule as the decoders
+    {
+        EXPECT(sanitize_utf8("abc") == "abc");
+        EXPECT(sanitize_utf8("a\xE4\xB8\xAD\xF0\x9F\x98\x80z") ==
+               "a\xE4\xB8\xAD\xF0\x9F\x98\x80z");
+        EXPECT(sanitize_utf8("a\xFF"
+                             "b") == "a\xEF\xBF\xBD"
+                                     "b");
+        EXPECT(sanitize_utf8("a\xE4") == "a\xEF\xBF\xBD");  // truncated tail
+        EXPECT(sanitize_utf8(nullptr).empty());
+        // counted form keeps the embedded NUL
+        const char nul[] = "a\0b";
+        const std::string s = sanitize_utf8(nul, 3);
+        EXPECT(s.size() == 3);
+        EXPECT(s[0] == 'a' && s[1] == '\0' && s[2] == 'b');
+        // NUL-terminated form stops at the first NUL
+        EXPECT(sanitize_utf8(nul) == "a");
+    }
+
     // bounded slice decoding (W-4): a sequence truncated by the slice end
     // is reported invalid on the lead byte, and no byte at or past `end`
     // is ever read -- the packed-bytes form (no NUL terminator)

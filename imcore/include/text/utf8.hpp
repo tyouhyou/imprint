@@ -7,9 +7,9 @@
 namespace zb::ui
 {
     /*
-     * UTF-8 <-> UTF-16 helpers (see docs/code-contract.md section 2:
-     * framework API text input is always UTF-8, widget text is stored as
-     * UTF-16).
+     * UTF-8 decode/encode helpers (docs/code-contract.md section 2.1
+     * owns the storage ruling: framework API text input is always
+     * UTF-8; widget text is stored as UTF-8 bytes).
      *
      * decode_utf8_next(): decodes the sequence starting at *p, advances *p
      * past it and returns the code point. Invalid input bytes (truncated
@@ -35,6 +35,20 @@ namespace zb::ui
     char32_t decode_utf8_next(const char *&p, const char *end);
 
     /*
+     * The backward mirror of decode_utf8_next: steps *p back to the
+     * start of the sequence that ENDS at *p and returns its code
+     * point. Counted form only -- `begin` is the exclusive backward
+     * bound the walk never crosses (a backward walk has no NUL
+     * convention). p <= begin (or nullptr) decodes nothing and
+     * returns U+FFFD without moving. An invalid or truncated sequence
+     * is one U+FFFD of its own: *p steps back exactly one byte, the
+     * backward counterpart of the forward decoder's one-byte advance.
+     * On sanitized storage (code-contract §2.1 -- the only in-framework
+     * input) the walk always lands on a real boundary.
+     */
+    char32_t decode_utf8_prev(const char *&p, const char *begin);
+
+    /*
      * Converts an UTF-8 string to UTF-16. Conversion stops at the first
      * NUL (the C-string convention: an embedded NUL ends the text, it is
      * not preserved as a code unit). The counted overload converts the
@@ -51,6 +65,17 @@ namespace zb::ui
      * UTF-8.
      */
     std::string utf16_to_utf8(const std::u16string &u16);
+
+    /*
+     * The sanitize pass for stored text (code-contract §2.1): decodes
+     * and re-encodes, so the result is always valid UTF-8 — an
+     * invalid or truncated byte becomes one U+FFFD. The NUL-terminated
+     * form stops at the first NUL like every decode entry point; the
+     * counted form preserves embedded NULs (the form for packed
+     * bytes).
+     */
+    std::string sanitize_utf8(const char *utf8);
+    std::string sanitize_utf8(const char *utf8, size_t len);
 
     /*
      * Surrogate-pair helpers (A-25 pair atomicity, code-contract §2):
