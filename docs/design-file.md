@@ -151,7 +151,8 @@ form parses identically from text.
   remaining space are scaled into it proportionally; `flex=` on the same
   child is ignored); under a non-flex parent it stays unresolved and the
   axis keeps its current size.
-- `text` is accepted as UTF-8 and stored internally as UTF-16.
+- `text` is accepted as UTF-8 and stored as UTF-8 bytes
+  (code-contract §2.1).
 
 ## What a design file cannot express
 

@@ -101,12 +101,20 @@ same-shaped `Font::error` type left the codebase with the FreeType path
 
 ## 2. Text / Unicode interface decisions
 
-### 2.1 Internal representation: `std::u16string` (current, keep)
+### 2.1 Internal representation: `std::string` (UTF-8 bytes)
 
-- `Widget` stores text as `std::u16string` (`widget.hpp`).
-- Provider `measure` / `write` accept `const char16_t*` (UTF-16
-  semantics); widget drawing passes the internal buffer directly, no
-  copy/convert.
+- `Widget` stores text as `std::string` (UTF-8 bytes, `widget.hpp`);
+  stored text is always valid UTF-8 — every setter sanitizes (decode
+  → re-encode in place; an invalid byte becomes U+FFFD, the
+  terminal-translator rule).
+- Provider `measure` / `write` accept `const char32_t*` (code
+  points); widget drawing decodes the stored bytes once and feeds
+  code-point arrays — there is no UTF-16 anywhere.
+- Index currency: every text index (caret, selection anchor, style
+  runs, wrap spans) is a **byte offset into the stored UTF-8**,
+  always on a code-point boundary. One code point = one atom — the
+  property the u16 surrogate-pair machinery (A-25) existed to
+  approximate; that machinery is deleted.
 
 ### 2.2 Input form: framework APIs are UTF-8, always
 
@@ -116,28 +124,31 @@ same-shaped `Font::error` type left the codebase with the FreeType path
   straight through the C-ABI (zbapi), native on Linux/NDS; the Win32 shell
   is responsible for wchar↔UTF-8 conversion and `wchar_t` never enters
   the framework API (root cure for Win32 `TEXT()`/MBCS width problems).
-- **Landed**: `set_text(const char*)` decodes via `utf8_to_utf16`
-  (`imcore/text/utf8.hpp`); signature unchanged.
+- **Landed**: `set_text(const char*)` sanitizes and stores the bytes;
+  signature unchanged.
 
-### 2.3 Conversion layer location
+### 2.3 Decoding layer location
 
-- The UTF-8 ↔ UTF-16 converter lives in `imcore/text/utf8.hpp`
-  (`utf8_to_utf16` / `utf16_to_utf8`, landed), the same layer as the
-  text providers.
-- `imcore` does not depend on `imui`; conversion at the widget layer is
-  just "decode → append to the u16 buffer".
+- The UTF-8 decode primitives live in `imcore/text/utf8.hpp`
+  (`decode_utf8_next` / `decode_utf8_prev`), the same layer as the
+  text providers. `imcore` does not depend on `imui`.
+- There is no transcode: text arrives as UTF-8 and is stored as
+  UTF-8 (the sanitize pass is decode → re-encode in place). The
+  former `utf8_to_utf16` / `utf16_to_utf8` converters are deleted
+  with the u16 storage.
 - **Two input bounds, because "UTF-8 string" is two shapes.** The
-  `const char*` overloads are NUL-terminated: conversion stops at the
-  first NUL (the C-string convention — an embedded NUL ends the text, it
-  is not preserved as a code unit). Text that is *not* NUL-terminated
-  (packed design-file bytes, a string-view field) must use the counted
-  overloads — `utf8_to_utf16(p, len)` and `decode_utf8_next(p, end)`,
-  where `end` is the exclusive read bound the decoder never reaches or
-  passes. A sequence truncated by the bound is reported as U+FFFD on its
-  lead byte, exactly like any other invalid byte; decoding an exhausted
-  bound returns U+FFFD *without* advancing, so `while (p < end)` loops
-  terminate. The unbounded form is not a shorthand for "any buffer": it
-  stops at the first NUL it meets and reads no further.
+  `const char*` decode overloads are NUL-terminated: decoding stops
+  at the first NUL (the C-string convention — an embedded NUL ends
+  the text, it is not preserved as a code point). Text that is *not*
+  NUL-terminated (packed design-file bytes, a string-view field)
+  must use the counted overloads — `decode_utf8_next(p, end)` and
+  `decode_utf8_prev(p, begin)`, where the bound is never reached or
+  passed. A sequence truncated by the bound is reported as U+FFFD on
+  its lead byte, exactly like any other invalid byte; decoding an
+  exhausted bound returns U+FFFD *without* advancing, so
+  `while (p < end)` loops terminate. The unbounded form is not a
+  shorthand for "any buffer": it stops at the first NUL it meets and
+  reads no further.
 
 ### 2.4 Dual glyph providers (landed)
 
@@ -149,26 +160,25 @@ Standing contract obligations:
 
 - Fallback chain: main provider reports "glyph not covered" → fallback
   provider → still missing → skip.
-- **Non-BMP pairing (A-25)**: a surrogate pair in stored text is one
-  atomic segment on every text walk — a provider-run boundary never
-  falls between the two units (a style-run edge inside a pair extends
-  to the lead's run), letter-spacing adds once per pair, and a
-  provider is selected for the pair through
-  `virtual bool covers_pair(const char16_t *str) const` — default
-  `false` (`str` holds ≥ 2 units, `str[0]` a lead surrogate), so every
-  BMP-only provider answers "not covered" without overriding. A
-  provider that covers the pair receives the whole 2-unit segment in
-  `measure`/`write` and renders it as ONE glyph with one advance. No
-  covering provider → the pair is skipped outright at zero width
-  (halves are never rendered as units — the pre-A-25 drop semantics,
-  unchanged; this holds for every first-party provider and is the
-  walk-level rule, not a per-unit chain).
+- **Code-point currency**: a provider is selected per code point
+  through `virtual bool covers(char32_t cp) const`; `measure` /
+  `write` receive code-point arrays (`const char32_t*`). A non-BMP
+  code point is an ordinary code point — a provider that covers it
+  renders it as ONE glyph with one advance; BMP-only providers
+  answer "not covered" and the chain moves on. No covering provider
+  → the code point is skipped outright at zero width (the walk-level
+  rule, not a per-unit chain). There is no `covers_pair`: with UTF-8
+  storage a code point is one unit everywhere, and the surrogate
+  pair-atomicity machinery (A-25's `snap_pair_end`, lead/trail
+  gates, pair-aware paste filters) is deleted.
 - Provider conditional compilation (`IMCORE_HAS_TTF_RUNTIME`; formerly
   the FreeType `USE_FONT`, removed 2026-09-06) is only allowed at the
   provider-selection point; the widget draw path is unconditional.
-- The shape of `set_text` / the internal u16 buffer does not change;
-  `make_text_image` stays an independent API (tictactoe depends on it:
-  direct bitmap-font blitting, not the widget text path).
+- `set_text` keeps its `const char*` signature; the internal buffer
+  is UTF-8 bytes (§2.1). `make_text_image` stays an independent API
+  (tictactoe depends on it: direct bitmap-font blitting, not the
+  widget text path); its text parameter is UTF-8 in, code points to
+  the provider.
 
 **Font subset (batch E final, 2026-08-15; A-7 added 2026-08-28)**: the
 BitmapProvider 5x7 table has two segments: built-in ASCII 32..95
@@ -283,8 +293,7 @@ TU and defines `IMCORE_HAS_TTF_RUNTIME` PUBLIC. Contract:
   static font / a value held for the app's lifetime) while widgets hold
   providers for their subtree.
 - **Bounded glyph cache (§8)**: entries keyed `(pixel size, code
-  unit)` — a surrogate pair keys by its combined code point (A-25) —
-  rasterize lazily on first draw; the cache counts bytes and drops
+  point)` — rasterize lazily on first draw; the cache counts bytes and drops
   everything when over budget (the ListBox row-cache rule) — rendered
   pixels never depend on cache state. First-frame rasterization may
   allocate; a warm draw allocates nothing. Observability seams on the
@@ -400,21 +409,21 @@ wrapping):
   `line_h`), so bare widgets stay allocation-free and the inline
   size gates hold. `set_line_height` clamps negatives to 0 and
   reports damage + layout invalidation like every text setter.
-- The engine is greedy wrapping over the stored u16 text: break
-  candidates are (a) spaces (U+0020; the break space drops at a wrap,
-  leading spaces collapse), (b) `\n` as a hard break (the html `br`
+- The engine is greedy wrapping over the stored UTF-8 text, walked
+  one code point at a time: break candidates are (a) spaces
+  (U+0020; the break space drops at a wrap, leading spaces collapse),
+  (b) `\n` as a hard break (the html `br`
   inside a wrapping element), and (c) **CJK breaks (T-1)**: the
-  boundary between two adjacent code units that both lie in the CJK
+  boundary between two adjacent code points that both lie in the CJK
   break set — U+2E80–U+9FFF, U+F900–U+FAFF, U+FF00–U+FFEF (radicals,
   CJK punctuation, kana, ideographs, compatibility ideographs,
   fullwidth forms; Hangul and Latin stay word-wrapped). No
   hyphenation. A run with no break candidate (a long Latin word, a
   URL) wider than the whole width sits alone on its line and clips.
-- **Surrogate atomicity (T-1)**: a non-BMP character (a surrogate
-  pair) is one break-atomic unit — no candidate exists between its
-  two code units, and surrogates are not in the CJK break set; a
-  pair adjacent to a CJK unit still breaks between the pair end and
-  that unit.
+- **Code-point atomicity (T-1)**: every code point is one
+  break-atomic unit — a multi-byte sequence never splits, and a
+  non-BMP code point (not in the CJK break set) is one ordinary
+  unit.
 - **Kinsoku-lite (T-1, one-unit retraction)**: a CJK break is
   retracted before the previous unit when it would start a line with
   a member of the line-head-forbidden set
@@ -474,7 +483,9 @@ colored, bolded, or drawn through another glyph provider.
   property per run (`text_run`: `off|len|color|font-size|bold`),
   consumed by the builder — a builder-internal key: no design-file
   table row, no `.ui` authoring syntax, no C-ABI export.
-- Indices address the stored u16 text. `set_text_runs` sorts by
+- Indices address the stored UTF-8 text as **byte offsets**, always
+  code-point aligned (a run edge that would land mid-sequence snaps
+  out to the boundary). `set_text_runs` sorts by
   offset and drops zero-length entries at set time (the stored form
   is the normalized list; setters never throw). `set_text`
   re-clamps every run to the new length — a run left past the end
@@ -511,13 +522,13 @@ the characters come from.
   its own, re-parsed from the ground state — no byte is ever
   swallowed.
 - Editor acceptance (`TextInput`, `TextArea`): U+0020–U+007E (as
-  today) plus code points ≥ U+00A0, inserted as a BMP code unit. A
-  code point > U+FFFF (A-25: typed on the terminal path, whose
-  translator already assembles 4-byte UTF-8 into one full `ch`) is
-  accepted and stored as its UTF-16 surrogate pair. No other gate: an
-  uncovered code unit renders through the normal fallback chain
-  (primary → 5×7 → skip), which is a font-coverage concern, not an
-  input concern.
+  today) plus code points ≥ U+00A0. A code point > U+FFFF (A-25:
+  typed on the terminal path, whose translator already assembles
+  4-byte UTF-8 into one full `ch`) is accepted and stored as its
+  UTF-8 byte sequence — one code point, one editing atom. No other
+  gate: an uncovered code point renders through the normal fallback
+  chain (primary → 5×7 → skip), which is a font-coverage concern,
+  not an input concern.
 - **Read-only mode**: `set_read_only(bool)` / `is_read_only()` on
   both editors gates user edits only. While set, typing and
   IME-committed `ch`, enter (TextArea inserts `\n`), space,
@@ -531,15 +542,15 @@ the characters come from.
   (Enter still submits a read-only field). Programmatic `set_text`
   keeps working (app-driven, not a user edit; it still does not fire
   `changed`). No default visual change.
-- **Pair atomicity (A-25)**: stored text may contain surrogate pairs
-  (typed `ch > U+FFFF`, IME or paste through `utf8_to_utf16`). Every
-  editing step treats a pair as one atom: caret motion, deletion
-  (backspace and delete) and selection boundaries never split a pair,
-  and a caret landed inside one (click hit-testing) snaps to the
-  pair's end. Paste filters keep whole pairs (a lone surrogate unit
-  still drops — the pre-A-25 T-2 rule, preserved for degenerate
-  input). `selected_text()` therefore re-encodes whole pairs and the
-  result is always valid UTF-8.
+- **Code-point atomicity**: stored text is valid UTF-8 (§2.1), so
+  every multi-byte sequence is one editing atom by construction —
+  caret motion, deletion (backspace and delete) and selection
+  boundaries step whole code points (`decode_utf8_next` /
+  `decode_utf8_prev`), and a caret landed mid-sequence (a stale
+  index after a programmatic `set_text`) snaps out to the boundary.
+  Paste filters keep whole code points; an invalid byte in pasted
+  text becomes U+FFFD (the decode rule). `selected_text()` is a byte
+  slice of valid UTF-8 — always valid.
 - **IME composition stays a declared non-goal**: the framework never
   composes; composition is the platform IME's (or the host's) job, and
   the editor only ever sees finished code points. Desktop shells relay
@@ -547,7 +558,9 @@ the characters come from.
   through an XIM input context with root-window preedit, win32 through
   `WM_CHAR` on a W-variant window, mac through the key event's
   `characters` string — BMP code points relay as `ch` with key = 0
-  (T-2), surrogate lead units stay dropped (A-25), and a shell without
+  (T-2); the win32 relay still drops surrogate lead units (a non-BMP
+  character arrives as two `WM_CHAR` units — the shell-level rule,
+  unchanged), and a shell without
   a working input method keeps the legacy ASCII-only emission
   unchanged.
 
@@ -560,7 +573,8 @@ the editing core, for free-form multi-line input.
   one. **No `submitted` event** — submit affordances are app-side
   (a button); `changed` fires with the whole text after every edit,
   exactly like `TextInput`.
-- Caret semantics are `TextInput`'s (a u16 index, clamped on every
+- Caret semantics are `TextInput`'s (a UTF-8 byte index, code-point
+  aligned, clamped on every
   edit) plus vertical movement: up/down move the caret between the
   lines `wrap_spans` reports, keeping a pixel column goal across
   lines; click placement maps (x, y) through the spans. Horizontal
@@ -803,8 +817,8 @@ whitelist is the boundary):
 - `input_event.ch` (int, 0 = no character) is the **printable character**
   channel carried by key_down/key_up. Current semantics = ASCII code
   points (0x20~0x7e); the contract is already written for Unicode code
-  points — when extended to UTF-32 values, `key` and the in-widget u16
-  conversion layer follow in step, API signatures unchanged.
+  points — when extended to UTF-32 values, `key` and the widget decode
+  layer follow in step, API signatures unchanged.
 - Semantic split: `key` carries navigation/editing keys (`key_code`:
   tab/enter/space/arrows/backspace/del/escape), `ch` carries characters.
   The two fields are independent: navigation keys set only `key`
@@ -1341,7 +1355,7 @@ Selection is TextArea's already-declared additive shape (the "caret
 only" batch note); the clipboard is a new seam, designed host-sinks.
 
 - **Selection (TextArea).** Pointer drag sets an anchor and moves the
-  caret (the selection is [min, max) of the two u16 indexes);
+  caret (the selection is [min, max) of the two byte indexes);
   shift+click and shift+arrow extend from the anchor; Ctrl+A selects
   all. Any edit, any non-shift caret move, and focus loss collapse
   the selection to the caret. The selected range draws with an
@@ -1370,13 +1384,11 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
   the C-ABI `zb_input` event carries no mods today, so these bindings
   are unreachable from C hosts until the shells translate terminal
   modifier bytes — that translation is a TJ-C3/C4 prerequisite.
-- **Surrogate boundaries.** Selection indexes never land inside a
-  surrogate pair: caret motion, deletion and selection extents are
-  pair-atomic (§2 T-2 pair atomicity), so `selected_text()` always
-  re-encodes whole pairs — never a U+FFFD from a split, never invalid
-  UTF-8. A lone surrogate (degenerate input only; the acceptance and
-  paste filters drop those units) still maps to U+FFFD in the UTF-8
-  conversion.
+- **Code-point boundaries.** Selection indexes never land inside a
+  multi-byte sequence: caret motion, deletion and selection extents
+  are code-point-atomic (§2 T-2 code-point atomicity), so
+  `selected_text()` is always a byte slice of valid UTF-8 — never
+  invalid, never a split sequence.
 - **Not contracted here.** Selection across message-stream rows (the
   quote-from-the-stream use case) is a stream-level feature of the
   tianji client, not a TextArea/TextInput behavior — the client owns
@@ -1614,8 +1626,8 @@ only" batch note); the clipboard is a new seam, designed host-sinks.
   layout, otherwise Panel linear layout.
 - Property-resolution tolerance: missing or mistyped props → default
   values (silently, no throw; the init path no-throw principle applies);
-  the `text` prop is accepted as a UTF-8 string (converted to u16
-  internally).
+  the `text` prop is accepted as a UTF-8 string (stored as UTF-8,
+  §2.1).
 - No-RTTI constraint: materialize's `static_cast` is legal because the
   property-resolution table only runs on widgets created by the factory
   table — the tag table and the apply branches must stay in sync; any
