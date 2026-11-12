@@ -24,7 +24,10 @@ namespace zb::ui
      * bitmap glyphs for uncovered characters (see Widget::draw_text and
      * BitmapProvider).
      *
-     * Implementations are hot path: they must never throw.
+     * Implementations are hot path: they must never throw, and they
+     * must not re-enter the widget text helpers (advance_of /
+     * draw_text_at keep per-thread decode scratch that a re-entrant
+     * call would clobber mid-pass).
      */
     class GlyphProvider
     {

@@ -149,7 +149,7 @@ int main(int argc, char **argv)
     {
         frame(app);
     }
-    click(app, win, "mv_pitch_");
+    click(app, win, "mv_pitch_u");
     for (int i = 0; i < 10; ++i)
     {
         frame(app);

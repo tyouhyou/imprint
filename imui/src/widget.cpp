@@ -666,6 +666,11 @@ namespace zb::ui
                              });
             ext_->runs = std::move(runs);
         }
+        // the stored form is normalized (T-3): edges snap onto
+        // code-point boundaries, past-the-end/past-the-field runs drop,
+        // a run crossing the end truncates -- the same clamp set_text
+        // applies
+        clamp_text_runs();
         reset_wrap_cache();
         mark_dirty();
         mark_layout_dirty();

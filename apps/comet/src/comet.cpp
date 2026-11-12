@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)
 #include "comet_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
@@ -362,16 +363,11 @@ void SkyCanvas::draw_at(core::Graphics &area) const
         }
     }
 
-    char16_t tip[48];
-    int n = 0;
     const char *msg = cleared_
                         ? "ROUTE CLEAR"
                         : (flying_ ? "FLYING" : "DRAG ANYWHERE - RELEASE TO LAUNCH");
-    for (; msg[n] != 0 && n < 47; ++n)
-    {
-        tip[n] = static_cast<char16_t>(msg[n]);
-    }
-    draw_text_at(area, tip, n, X(10), Y(4), cleared_ ? kDepot : kDim);
+    draw_text_at(area, msg, static_cast<int>(std::strlen(msg)),
+                 X(10), Y(4), cleared_ ? kDepot : kDim);
 }
 
 void Comet::install_font()

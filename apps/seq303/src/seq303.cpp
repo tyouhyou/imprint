@@ -55,7 +55,7 @@ namespace
     {
         const char *name;
         int midi[8];
-        const char16_t *labels[8];
+        const char *labels[8];
     };
     const scale_def kScaleTable[] = {
         {"PENTA", {76, 74, 72, 69, 67, 64, 62, 60}, {"E5", "D5", "C5", "A4", "G4", "E4", "D4", "C4"}},
@@ -480,7 +480,7 @@ int SeqGrid::row_midi(const int row) const
     return (row >= 0 && row < kMelodyRows) ? kScaleTable[scale_].midi[row] : 0;
 }
 
-void SeqGrid::draw_tag(core::Graphics &area, const char16_t *text, const int len,
+void SeqGrid::draw_tag(core::Graphics &area, const char *text, const int len,
                        const int x, const int y, const core::Color &c) const
 {
     draw_text_at(area, text, len, x, y, c);
@@ -491,7 +491,7 @@ void SeqGrid::draw_at(core::Graphics &area) const
     const int cs = pitch_ - 2;
     area.fill(kBoardBg);
 
-    static const char16_t *const kDrumName[kDrumRows] = {"HAT", "SNR", "KIK"};
+    static const char *const kDrumName[kDrumRows] = {"HAT", "SNR", "KIK"};
     static const int kDrumNameLen[kDrumRows] = {3, 3, 3};
 
     for (int row = 0; row < kRows; ++row)
@@ -508,17 +508,17 @@ void SeqGrid::draw_at(core::Graphics &area) const
         }
         else
         {
-            char16_t lab[8] = {};
+            char lab[8] = {};
             int len = 0;
-            while (len < 7 && kScaleTable[scale_].labels[row][len] != u'\0')
+            while (len < 7 && kScaleTable[scale_].labels[row][len] != '\0')
             {
                 lab[len] = kScaleTable[scale_].labels[row][len];
                 ++len;
             }
-            if (layer_ == 1 && len > 0 && lab[len - 1] >= u'0' + 2)
+            if (layer_ == 1 && len > 0 && lab[len - 1] >= '0' + 2)
             {
                 // the bass ladder reads the same scale two octaves down
-                lab[len - 1] = static_cast<char16_t>(lab[len - 1] - 2);
+                lab[len - 1] = static_cast<char>(lab[len - 1] - 2);
             }
             draw_tag(area, lab, len, 2, y + cs / 2 - 3, kCream);
         }

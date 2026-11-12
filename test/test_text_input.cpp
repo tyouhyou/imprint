@@ -322,6 +322,17 @@ int test_text_input()
         d.dispatch(root, char_ev(0x1F600));
         EXPECT(input->get_text() ==
                std::string("\xe4\xbd\xa0\xf0\x9f\x98\x80"));
+
+        // a surrogate value and a value past U+10FFFF are not code
+        // points: the T-2 gate drops them (a C-ABI host can put any int
+        // in ch — the untrusted-input rule; append_utf8 would encode
+        // garbage otherwise)
+        d.dispatch(root, char_ev(0xD800));
+        d.dispatch(root, char_ev(0xDE00));
+        d.dispatch(root, char_ev(0x110000));
+        d.dispatch(root, char_ev(0x7FFFFFFF));
+        EXPECT(input->get_text() ==
+               std::string("\xe4\xbd\xa0\xf0\x9f\x98\x80"));
     }
 
     // FI-02 single-line selection (code-contract §3.8): drag selects,

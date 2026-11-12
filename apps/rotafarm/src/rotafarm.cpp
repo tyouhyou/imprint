@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdio>
+#include <cstring>
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)
 #include "rotafarm_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
@@ -329,14 +330,9 @@ void FarmCanvas::draw_at(core::Graphics &area) const
         area.fill_circle(X(x), Y(y), 4 * s_, kSunCore);
     }
 
-    char16_t tip[40];
-    int n = 0;
     const char *msg = "TAP SECTORS TO PLANT - HARVEST WHEN GOLD";
-    for (; msg[n] != 0 && n < 39; ++n)
-    {
-        tip[n] = static_cast<char16_t>(msg[n]);
-    }
-    draw_text_at(area, tip, n, X(58), Y(4), kDim);
+    draw_text_at(area, msg, static_cast<int>(std::strlen(msg)),
+                 X(58), Y(4), kDim);
 }
 
 void Rotafarm::install_font()

@@ -5299,7 +5299,8 @@ namespace zb::ui
         // span/label/small is not a child label — its text already merged
         // into the paragraph in document order, and its style lands as
         // styled runs (code-contract §2 "Styled text runs"). The run
-        // indices address the u16 text; each segment's offset comes from
+        // indices are byte offsets into the stored UTF-8 text; each
+        // segment's offset comes from
         // the exact append-time relocation resolved at finalize (see
         // resolve_inline_offsets) — never a content search. The run props
         // carry the raw CSS strings; the builder parses them with the

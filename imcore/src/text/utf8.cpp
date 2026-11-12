@@ -151,8 +151,9 @@ namespace zb::ui
         }
 
         // the walk must have landed exactly one sequence back: a
-        // shorter run is a truncated sequence, a longer one cannot
-        // happen (the walk stops at the first non-continuation byte)
+        // shorter run is a truncated sequence, a longer one (a lead
+        // promising fewer continuations than the run behind it) is
+        // stray bytes -- the check rejects both
         if (static_cast<int>(p - lead) != extra + 1)
         {
             p = p - 1;
@@ -182,27 +183,33 @@ namespace zb::ui
 
     void append_utf8(std::string &out, const char32_t cp)
     {
-        if (cp < 0x80)
+        // a non-scalar input (a surrogate value, or one past U+10FFFF)
+        // encodes as one U+FFFD -- the encode mirror of the decode rule,
+        // so the result is valid UTF-8 for any input
+        const char32_t v = (cp > 0x10FFFF || (cp >= 0xD800 && cp <= 0xDFFF))
+                             ? 0xFFFD
+                             : cp;
+        if (v < 0x80)
         {
-            out += static_cast<char>(cp);
+            out += static_cast<char>(v);
         }
-        else if (cp < 0x800)
+        else if (v < 0x800)
         {
-            out += static_cast<char>(0xC0 | (cp >> 6));
-            out += static_cast<char>(0x80 | (cp & 0x3F));
+            out += static_cast<char>(0xC0 | (v >> 6));
+            out += static_cast<char>(0x80 | (v & 0x3F));
         }
-        else if (cp < 0x10000)
+        else if (v < 0x10000)
         {
-            out += static_cast<char>(0xE0 | (cp >> 12));
-            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-            out += static_cast<char>(0x80 | (cp & 0x3F));
+            out += static_cast<char>(0xE0 | (v >> 12));
+            out += static_cast<char>(0x80 | ((v >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (v & 0x3F));
         }
         else
         {
-            out += static_cast<char>(0xF0 | (cp >> 18));
-            out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-            out += static_cast<char>(0x80 | (cp & 0x3F));
+            out += static_cast<char>(0xF0 | (v >> 18));
+            out += static_cast<char>(0x80 | ((v >> 12) & 0x3F));
+            out += static_cast<char>(0x80 | ((v >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (v & 0x3F));
         }
     }
 

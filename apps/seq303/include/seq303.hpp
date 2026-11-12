@@ -113,7 +113,7 @@ namespace zb::app::seq303
         void trigger_step(int step);
         // queue one step's notes for one voice slice: layer < 0 = drums
         void push_step(int step, int g, int layer);
-        void draw_tag(zb::ui::core::Graphics &area, const char16_t *text,
+        void draw_tag(zb::ui::core::Graphics &area, const char *text,
                       int len, int x, int y, const zb::ui::core::Color &c) const;
 
         // the song: 4 pattern slots x 2 melody layers x 8 rows x 16

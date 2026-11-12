@@ -1,6 +1,7 @@
 #include "windloom.hpp"
 
 #include <cstdio>
+#include <cstring>
 
 #if defined(IMCORE_HAS_TTF_RUNTIME)
 #include "windloom_font.gen.hpp"  // bytes_embed blob (wasm; desktop USE_TTF_RUNTIME=ON)
@@ -324,13 +325,8 @@ void WindCanvas::draw_at(core::Graphics &area) const
         area.fill_ellipse(X(p[k].x), Y(p[k].y), p[k].rx * s_, p[k].ry * s_, kSoil);
         area.draw_ellipse(X(p[k].x), Y(p[k].y), p[k].rx * s_, p[k].ry * s_, kSoilRim);
         std::snprintf(buf, sizeof(buf), "%d/%d", p[k].got, p[k].need);
-        char16_t ub[12];
-        int n = 0;
-        for (; buf[n] != 0 && n < 11; ++n)
-        {
-            ub[n] = static_cast<char16_t>(buf[n]);
-        }
-        draw_text_at(area, ub, n, X(p[k].x + p[k].rx - 4), Y(p[k].y - 3), kSoilRim);
+        draw_text_at(area, buf, static_cast<int>(std::strlen(buf)),
+                     X(p[k].x + p[k].rx - 4), Y(p[k].y - 3), kSoilRim);
     }
 
     // thorn rosettes

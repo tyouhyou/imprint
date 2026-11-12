@@ -585,10 +585,14 @@ namespace zb::ui
                     return false;
                 }
                 // T-2 acceptance (code-contract §2 "Text input scope"):
-                // printable ASCII plus code points >= U+00A0 — one code
-                // point, one editing atom; the terminal translator
-                // assembles multi-byte UTF-8 into one full ch
-                if ((ev.ch >= 0x20 && ev.ch <= 0x7E) || ev.ch >= 0xA0)
+                // printable ASCII plus any scalar code point >= U+00A0 —
+                // one code point, one editing atom; the terminal
+                // translator assembles multi-byte UTF-8 into one full ch.
+                // The bounds and the surrogate exclusion gate untrusted
+                // C-ABI hosts (a surrogate value is not a code point)
+                if ((ev.ch >= 0x20 && ev.ch <= 0x7E) ||
+                    (ev.ch >= 0xA0 && ev.ch <= 0x10FFFF &&
+                     (ev.ch < 0xD800 || ev.ch > 0xDFFF)))
                 {
                     const history_step before = capture();
                     insert(static_cast<char32_t>(ev.ch));

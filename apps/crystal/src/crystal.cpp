@@ -337,16 +337,11 @@ void TankCanvas::draw_at(core::Graphics &area) const
     area.fill_rect(0, H - 6, W - 1, H - 1, kBarTrack);
     area.fill_rect(0, H - 5, bar_w, H - 2, kBar);
 
-    char16_t hint[48];
-    int n = 0;
     const char *msg = done()   ? "LATTICE COMPLETE"
                     : failed() ? "SOLUTION DEPLETED"
                                : "DRAW CATALYST LINES - ROUTE THE GROWTH";
-    for (; msg[n] != 0 && n < 47; ++n)
-    {
-        hint[n] = static_cast<char16_t>(msg[n]);
-    }
-    draw_text_at(area, hint, n, X(60), Y(4), done() ? kAnchor : kDim);
+    draw_text_at(area, msg, static_cast<int>(std::strlen(msg)),
+                 X(60), Y(4), done() ? kAnchor : kDim);
 }
 
 void Crystal::install_font()

@@ -502,11 +502,11 @@ satisfies. Changing any of these is an architecture change.
   point is an ordinary code point, no surrogate pairs exist (code-contract
   §2.4).
 - The 5x7 table covers ASCII (plus lowercase → uppercase) and, when Python
-  is available at configure time, a build-generated subset of code units
+  is available at configure time, a build-generated subset of code points
   actually used in app/test sources (`FONT_SUBSET`).
 - Plan 2 (batch S2): with `TTF_FONT` set, a build-time tool
   (`tools/ttf_subset`, vendored stb_truetype) rasterizes the font into a
-  subset table for the code units the sources use; `TtfSubsetProvider`
+  subset table for the code points the sources use; `TtfSubsetProvider`
   is installable as a widget's primary provider through the
   `set_glyph_provider` seam — legible proportional text with no runtime
   font dependency, 5x7 stays the default (`USE_FONT_SIZE` switches the

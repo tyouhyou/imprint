@@ -479,7 +479,9 @@ namespace zb::ui
                 {
                     return false;
                 }
-                if ((ev.ch >= 0x20 && ev.ch <= 0x7E) || ev.ch >= 0xA0)
+                if ((ev.ch >= 0x20 && ev.ch <= 0x7E) ||
+                    (ev.ch >= 0xA0 && ev.ch <= 0x10FFFF &&
+                     (ev.ch < 0xD800 || ev.ch > 0xDFFF)))
                 {
                     const history_step before = capture();
                     insert(static_cast<char32_t>(ev.ch));

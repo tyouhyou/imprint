@@ -1948,7 +1948,7 @@ above holds no matter in which order `set_modal` and the press happen.
   bullet).
 - **Runtime glyph cache (L-5)**: `TtfFamily`'s cache is bounded (default
   budget 64 KB, constructor parameter) with drop-all eviction (the
-  ListBox rule). The first draw of a `(size, code unit)` rasterizes and
+  ListBox rule). The first draw of a `(size, code point)` rasterizes and
   may allocate; a warm draw allocates nothing. `test_runtime_ttf` gates
   warm `write` at zero allocations and pins miss deltas through
   `rasterization_count()` — allocation deltas are not portable proof

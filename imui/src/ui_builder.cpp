@@ -1159,7 +1159,7 @@ namespace zb::ui
             // T-5 styled runs (html inline spans, code-contract §2): one
             // "text_run" prop per run — "off|len|color|font-size|bold"
             // with '-' marking an absent field, indices addressing the
-            // stored u16 text. Emitted by the html front-end only (the
+            // stored UTF-8 text. Emitted by the html front-end only (the
             // .ui grammar carries no run syntax); applied after the text
             // so set_text's re-clamp never sees them half-installed.
             {
@@ -1204,7 +1204,7 @@ namespace zb::ui
                         !parse_run_number(fields[1], len) || off < 0 ||
                         len <= 0 || off > 65535 || len > 65535)
                     {
-                        continue;  // cannot address the u16 text: dropped
+                        continue;  // cannot address the stored text: dropped
                     }
                     text_style_run r;
                     r.offset = static_cast<uint16_t>(off);

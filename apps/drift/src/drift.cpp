@@ -218,13 +218,7 @@ void SceneWidget::tick()
 void SceneWidget::draw_ascii(core::Graphics &g, const char *text, const int x,
                              const int y, const core::Color &c) const
 {
-    char16_t tmp[80];
-    int n = 0;
-    for (; text[n] != 0 && n < 79; ++n)
-    {
-        tmp[n] = static_cast<char16_t>(text[n]);
-    }
-    draw_text_at(g, tmp, n, x, y, c);
+    draw_text_at(g, text, static_cast<int>(std::strlen(text)), x, y, c);
 }
 
 void SceneWidget::draw_scene(core::Graphics &g, const unsigned t,

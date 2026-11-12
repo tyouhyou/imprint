@@ -237,7 +237,7 @@ int test_render_mode()
     }
 
     // S-2 sketch: deterministic hand-drawn jitter. The wobble is a pure
-    // function of the coordinates \xe2\x80\x94 two renders agree byte-for-byte,
+    // function of the coordinates — two renders agree byte-for-byte,
     // a line's endpoints wobble by at most 1 px, and fills keep their
     // interior while their boundary turns uneven.
     {
@@ -330,7 +330,7 @@ int test_render_mode()
         EXPECT(right_most >= 45 && right_most <= 46);
 
         // sketch draws with the wireframe-style entry too: the mask
-        // helpers (ListBox row images and the like) keep FULL behavior \xe2\x80\x94
+        // helpers (ListBox row images and the like) keep FULL behavior —
         // text and images are untouched, verified via the fill()
         // immune primitive
         Graphics m(60, 40, nullptr);

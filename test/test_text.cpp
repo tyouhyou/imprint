@@ -205,6 +205,18 @@ int test_text()
         EXPECT(sanitize_utf8(nul) == "a");
     }
 
+    // append_utf8: a non-scalar input (a surrogate value, one past
+    // U+10FFFF) encodes as one U+FFFD -- the encode mirror of the decode
+    // rule, so the result is valid UTF-8 for any input
+    {
+        std::string s;
+        append_utf8(s, U'a');
+        append_utf8(s, 0xD800);
+        append_utf8(s, 0x110000);
+        append_utf8(s, 0x4E2D);
+        EXPECT(s == "a\xEF\xBF\xBD\xEF\xBF\xBD\xE4\xB8\xAD");
+    }
+
     // bounded slice decoding (W-4): a sequence truncated by the slice end
     // is reported invalid on the lead byte, and no byte at or past `end`
     // is ever read -- the packed-bytes form (no NUL terminator)
