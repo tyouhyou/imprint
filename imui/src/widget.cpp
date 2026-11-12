@@ -586,35 +586,51 @@ namespace zb::ui
             clamp_text_runs();
             return;
         }
-        text_ = utf8_to_utf16(text);
+        text_ = sanitize_utf8(text);  // stored text is always valid UTF-8
         clamp_text_runs();
     }
 
-    // T-3: runs are indices into text_ — after the text changed, a run
-    // left past the new end drops and one crossing the end truncates
-    // (code-contract §2 "Styled text runs")
+    // T-3: runs are byte offsets into text_ — after the text changed, a
+    // run left past the new end drops, one crossing the end truncates,
+    // and an edge that would land inside a multi-byte sequence snaps
+    // out to the boundary (code-contract §2 "Styled text runs"). The
+    // uint16_t fields bound a run to 65535: a run whose snapped offset
+    // no longer fits drops (the field cannot address it), and a length
+    // over the cap steps back to the nearest boundary.
     void Widget::clamp_text_runs()
     {
         if (ext_ == nullptr || ext_->runs.empty())
         {
             return;
         }
-        const int n = static_cast<int>(text_.size());
+        const size_t n = text_.size();
         std::vector<text_style_run> kept;
         kept.reserve(ext_->runs.size());
         for (const text_style_run &r : ext_->runs)
         {
-            if (static_cast<int>(r.offset) >= n)
+            const size_t off =
+                snap_boundary(text_, static_cast<size_t>(r.offset));
+            if (off >= n || off > 0xFFFF)
             {
-                continue;  // past the new end: dropped
+                continue;  // past the new end / past the field: dropped
+            }
+            // the snapped-off end: the run's own end boundary, then the
+            // field cap — whichever is smaller
+            size_t end = snap_boundary(
+                text_, off + static_cast<size_t>(r.len));
+            const size_t cap = off + 0xFFFF < n ? off + 0xFFFF : n;
+            if (end > cap)
+            {
+                end = cap;
+                while (end > off && end < n &&
+                       (static_cast<unsigned char>(text_[end]) & 0xC0) == 0x80)
+                {
+                    --end;  // a capped edge steps back to the boundary
+                }
             }
             text_style_run c = r;
-            const int room = n - static_cast<int>(r.offset);
-            if (static_cast<int>(c.len) > room)
-            {
-                // room < c.len <= 65535 here, so the cast cannot narrow
-                c.len = static_cast<uint16_t>(room);
-            }
+            c.offset = static_cast<uint16_t>(off);
+            c.len = static_cast<uint16_t>(end - off);  // <= 0xFFFF by the cap
             kept.push_back(c);
         }
         ext_->runs = std::move(kept);
@@ -1187,7 +1203,7 @@ namespace zb::ui
         const GlyphProvider *const fallback = bitmap_fallback_.get();
 
         const auto s = get_size();
-        const char16_t *const data = text_.data();
+        const char *const data = text_.data();
         const int len = static_cast<int>(text_.size());
 
         // line metrics come from the primary provider, or the fallback;
@@ -1288,34 +1304,23 @@ namespace zb::ui
 
     // T-1 CJK break set (code-contract §2 "Wrapped text"): radicals, CJK
     // punctuation, kana, ideographs, compatibility ideographs, fullwidth
-    // forms. Surrogates (U+D800..DFFF) fall outside all three ranges, so a
-    // surrogate pair is never a break unit and never breaks inside.
-    static bool is_cjk_break_unit(const char16_t ch)
+    // forms.
+    static bool is_cjk_break_unit(const char32_t ch)
     {
         return (ch >= 0x2E80 && ch <= 0x9FFF) ||
                (ch >= 0xF900 && ch <= 0xFAFF) ||
                (ch >= 0xFF00 && ch <= 0xFFEF);
     }
 
-    static bool is_high_surrogate(const char16_t ch)
-    {
-        return ch >= 0xD800 && ch <= 0xDBFF;
-    }
-
-    static bool is_low_surrogate(const char16_t ch)
-    {
-        return ch >= 0xDC00 && ch <= 0xDFFF;
-    }
-
     // kinsoku-lite pinned sets (T-1): exactly the strings the contract
     // pins — do not edit without the contract amendment
-    const char16_t kLineHeadForbidden[] =
-        u"、。，．：；？！）］｝〉》」』”’…‥";
-    const char16_t kLineTailForbidden[] = u"（［｛〈《「『“‘";
+    const char32_t kLineHeadForbidden[] =
+        U"、。，．：；？！）］｝〉》」』”’…‥";
+    const char32_t kLineTailForbidden[] = U"（［｛〈《「『“‘";
 
-    static bool in_pinned_set(const char16_t ch, const char16_t *set)
+    static bool in_pinned_set(const char32_t ch, const char32_t *set)
     {
-        for (int i = 0; set[i] != u'\0'; ++i)
+        for (int i = 0; set[i] != U'\0'; ++i)
         {
             if (set[i] == ch)
             {
@@ -1323,62 +1328,6 @@ namespace zb::ui
             }
         }
         return false;
-    }
-
-    // T-1: is there a break candidate between the units ending at i-1 and
-    // starting at i? CJK|CJK, and a surrogate pair is break-atomic: no
-    // candidate inside a pair, but a pair adjacent to a CJK unit breaks at
-    // the pair edge (either side).
-    static bool cjk_breakable(const std::u16string &text, const int i)
-    {
-        const char16_t prev = text[static_cast<std::size_t>(i) - 1];
-        const char16_t next = text[static_cast<std::size_t>(i)];
-        if (is_low_surrogate(next))
-        {
-            return false;  // inside a surrogate pair
-        }
-        if (is_high_surrogate(next))
-        {
-            return is_cjk_break_unit(prev);  // CJK unit | pair start
-        }
-        if (is_high_surrogate(prev) || is_low_surrogate(prev))
-        {
-            return is_cjk_break_unit(next);  // pair end | CJK unit
-        }
-        return is_cjk_break_unit(prev) && is_cjk_break_unit(next);
-    }
-
-    // kinsoku-lite single-step retraction (T-1): a CJK break at `k` that
-    // would start the next line on a head-forbidden unit or end the line
-    // on a tail-forbidden unit retracts to before the previous unit
-    // (stepping over a surrogate pair when the retraction would split
-    // one). One step only — no chains — and a retraction that cannot
-    // produce a shorter non-empty line leaves the break where it is.
-    static int kinsoku_retract(const std::u16string &text, const int line_top,
-                               const int k)
-    {
-        const int n = static_cast<int>(text.size());
-        const bool head_bad =
-            k < n && in_pinned_set(text[static_cast<std::size_t>(k)],
-                                   kLineHeadForbidden);
-        const bool tail_bad =
-            k > 0 && in_pinned_set(text[static_cast<std::size_t>(k) - 1],
-                                   kLineTailForbidden);
-        if (!head_bad && !tail_bad)
-        {
-            return k;
-        }
-        int k2 = k - 1;
-        if (k2 > 0 && is_low_surrogate(text[static_cast<std::size_t>(k2)]))
-        {
-            // the previous unit is a surrogate pair: retract before the pair
-            --k2;
-        }
-        if (k2 <= line_top)
-        {
-            return k;  // no room: the break stays
-        }
-        return k2;
     }
 
     // T-3: the first run (offset-sorted, ties keep set order) covering
@@ -1401,47 +1350,43 @@ namespace zb::ui
     }
 
     // H-1 greedy word wrap (code-contract §2 "Wrapped text"): breaks at
-    // U+0020, '\n', and (T-1) between adjacent CJK break-set units, a line
+    // U+0020, '\n', and (T-1) between adjacent CJK break-set code points,
+    // walked one code point at a time over the stored UTF-8 bytes; a line
     // trims its leading/trailing spaces, the break space drops at a wrap,
     // a run with no break candidate wider than the whole width sits alone
     // on its line (the draw clip keeps the edge), and consecutive hard
-    // breaks keep their empty lines. Per-unit advances match the draw pen
-    // exactly (letter-spacing rides every covered unit; T-3: a covering
-    // style run's provider overrides the primary/fallback pick).
-    static void greedy_wrap(const std::u16string &text,
+    // breaks keep their empty lines. Per-code-point advances match the
+    // draw pen exactly (letter-spacing rides every covered code point;
+    // T-3: a covering style run's provider overrides the primary/fallback
+    // pick). Spans are [byte offset, byte length) pairs.
+    static void greedy_wrap(const std::string &text,
                             const GlyphProvider *primary,
                             const GlyphProvider *fallback, const int letter,
                             const int width,
                             const std::vector<text_style_run> *runs,
                             std::vector<std::pair<int, int>> &out)
     {
-        const auto pick = [&](const char16_t ch) -> const GlyphProvider *
+        const auto pick = [&](const char32_t cp) -> const GlyphProvider *
         {
-            if (primary != nullptr && primary->covers(ch))
+            if (primary != nullptr && primary->covers(cp))
             {
                 return primary;
             }
-            if (fallback->covers(ch))
+            if (fallback->covers(cp))
             {
                 return fallback;
             }
             return nullptr;
         };
+        const char *const data = text.data();
         const int n = static_cast<int>(text.size());
-        const auto w_of = [&](const int i) -> int
+        const char *const dend = data + n;
+        const auto w_of = [&](const int i, const char32_t cp) -> int
         {
-            // A-25: a lone half never renders — zero width, the wrap
-            // accumulator stays monotonic for any provider
-            const char16_t unit = text[static_cast<std::size_t>(i)];
-            if (is_high_surrogate(unit) || is_low_surrogate(unit))
-            {
-                return 0;
-            }
             const GlyphProvider *p = nullptr;
             if (runs != nullptr)
             {
-                if (const text_style_run *const r =
-                        covering_run(*runs, i);
+                if (const text_style_run *const r = covering_run(*runs, i);
                     r != nullptr && r->provider != nullptr)
                 {
                     p = r->provider;
@@ -1449,40 +1394,9 @@ namespace zb::ui
             }
             if (p == nullptr)
             {
-                p = pick(unit);
+                p = pick(cp);
             }
-            return p != nullptr
-                     ? p->measure(text.data() + i, 1).width + letter
-                     : 0;
-        };
-        const auto w_of_pair = [&](const int i) -> int
-        {
-            // A-25: the pair fills the wrap as one atomic unit through
-            // covers_pair — its whole advance once, letter-spacing once
-            // (mirrors the draw pen); no covering provider fills zero
-            const GlyphProvider *p = nullptr;
-            if (runs != nullptr)
-            {
-                if (const text_style_run *const r =
-                        covering_run(*runs, i);
-                    r != nullptr && r->provider != nullptr &&
-                    r->provider->covers_pair(text.data() + i))
-                {
-                    p = r->provider;
-                }
-            }
-            if (p == nullptr && primary != nullptr &&
-                primary->covers_pair(text.data() + i))
-            {
-                p = primary;
-            }
-            if (p == nullptr && fallback->covers_pair(text.data() + i))
-            {
-                p = fallback;
-            }
-            return p != nullptr
-                     ? p->measure(text.data() + i, 2).width + letter
-                     : 0;
+            return p != nullptr ? p->measure(&cp, 1).width + letter : 0;
         };
         const auto emit_line = [&](const int start, int end)
         {
@@ -1492,52 +1406,86 @@ namespace zb::ui
             }
             out.emplace_back(start, end - start);
         };
+        // kinsoku-lite single-step retraction (T-1): a CJK break at the
+        // byte offset `k` that would start the next line on a
+        // head-forbidden code point or end the line on a tail-forbidden
+        // one retracts one code point back. One step only — no chains —
+        // and a retraction that cannot produce a shorter non-empty line
+        // leaves the break where it is.
+        const auto kinsoku_retract = [&](const int line_top,
+                                         const int k) -> int
+        {
+            const char *hp = data + k;
+            const bool head_bad =
+                k < n && in_pinned_set(decode_utf8_next(hp, dend),
+                                       kLineHeadForbidden);
+            const char *tp = data + k;
+            const bool tail_bad =
+                k > 0 &&
+                in_pinned_set(decode_utf8_prev(tp, data), kLineTailForbidden);
+            if (!head_bad && !tail_bad)
+            {
+                return k;
+            }
+            // one code point back from k: the start of the unit that
+            // ends the line
+            const char *bp = data + k;
+            (void)decode_utf8_prev(bp, data);
+            const int k2 = static_cast<int>(bp - data);
+            if (k2 <= line_top)
+            {
+                return k;  // no room: the break stays
+            }
+            return k2;
+        };
 
         int line_top = 0;
-        int p = 0;
+        int p = 0;  // byte cursor: the next code point
         int acc = 0;
         int break_before = -1;  // U+0020: the break space drops at the wrap
         int cjk_before = -1;    // T-1 CJK boundary: the break keeps both units
+        bool prev_cjk = false;  // the code point before p sat in the break set
         while (p < n)
         {
-            const char16_t ch = text[static_cast<std::size_t>(p)];
-            if (p == line_top && ch == ' ')
+            const char *pp = data + p;
+            const char32_t cp = decode_utf8_next(pp, dend);
+            const int len = static_cast<int>(pp - (data + p));
+            const bool cjk = is_cjk_break_unit(cp);
+            if (prev_cjk && cjk)
+            {
+                // T-1: the boundary between two adjacent CJK units — the
+                // break keeps both
+                cjk_before = p;
+            }
+            if (p == line_top && cp == U' ')
             {
                 // leading whitespace collapses off a fresh line (U+3000 is
                 // an ordinary CJK unit, never this path)
-                ++p;
+                p += len;
                 line_top = p;
                 acc = 0;
                 break_before = -1;
                 cjk_before = -1;
+                prev_cjk = false;
                 continue;
             }
-            if (ch == '\n')
+            if (cp == U'\n')
             {
                 emit_line(line_top, p);
-                ++p;
+                p += len;
                 line_top = p;
                 acc = 0;
                 break_before = -1;
                 cjk_before = -1;
+                prev_cjk = false;
                 continue;
             }
-            if (ch == ' ')
+            if (cp == U' ')
             {
                 break_before = p;
             }
-            // A-25: a pair fills as one atomic unit
-            if (p + 1 < n && is_high_surrogate(ch) &&
-                is_low_surrogate(text[static_cast<std::size_t>(p) + 1]))
-            {
-                acc += w_of_pair(p);
-                p += 2;
-            }
-            else
-            {
-                acc += w_of(p);
-                ++p;
-            }
+            acc += w_of(p, cp);
+            p += len;
             if (acc > width)
             {
                 // greedy: the later candidate fills the line further; a
@@ -1548,13 +1496,14 @@ namespace zb::ui
                 if (cjk_before != -1 &&
                     (break_before == -1 || cjk_before > break_before))
                 {
-                    const int k = kinsoku_retract(text, line_top, cjk_before);
+                    const int k = kinsoku_retract(line_top, cjk_before);
                     emit_line(line_top, k);
                     p = k;
                     line_top = p;
                     acc = 0;
                     break_before = -1;
                     cjk_before = -1;
+                    prev_cjk = false;
                 }
                 else if (break_before != -1)
                 {
@@ -1564,26 +1513,42 @@ namespace zb::ui
                     acc = 0;
                     break_before = -1;
                     cjk_before = -1;
+                    prev_cjk = false;
                 }
                 else
                 {
                     // an over-wide run: it ends at the next space, hard
                     // break, or (T-1) the first CJK boundary after the
                     // line start, and sits alone on its line
-                    int next = line_top + 1;
-                    while (next < n &&
-                           text[static_cast<std::size_t>(next)] != ' ' &&
-                           text[static_cast<std::size_t>(next)] != '\n' &&
-                           !cjk_breakable(text, next))
+                    int next = line_top;
+                    bool pc = false;  // the previous unit was CJK
+                    bool first = true;
+                    bool cjk_stop = false;
+                    while (next < n)
                     {
-                        ++next;
+                        const char *np = data + next;
+                        const char32_t ncp = decode_utf8_next(np, dend);
+                        const int unit_start = next;
+                        const bool ncjk = is_cjk_break_unit(ncp);
+                        next = static_cast<int>(np - data);
+                        if (!first && (ncp == U' ' || ncp == U'\n'))
+                        {
+                            next = unit_start;
+                            break;
+                        }
+                        if (!first && pc && ncjk)
+                        {
+                            cjk_stop = true;
+                            next = unit_start;
+                            break;
+                        }
+                        first = false;
+                        pc = ncjk;
                     }
-                    if (next < n &&
-                        text[static_cast<std::size_t>(next)] != ' ' &&
-                        text[static_cast<std::size_t>(next)] != '\n')
+                    if (cjk_stop)
                     {
                         // CJK-boundary stop: nothing drops, kinsoku applies
-                        const int k = kinsoku_retract(text, line_top, next);
+                        const int k = kinsoku_retract(line_top, next);
                         emit_line(line_top, k);
                         p = k;
                     }
@@ -1596,11 +1561,12 @@ namespace zb::ui
                     acc = 0;
                     break_before = -1;
                     cjk_before = -1;
+                    prev_cjk = false;
                 }
             }
-            else if (p < n && cjk_breakable(text, p))
+            else
             {
-                cjk_before = p;
+                prev_cjk = cjk;
             }
         }
         if (line_top < n || out.empty())
@@ -1711,18 +1677,18 @@ namespace zb::ui
         return m.ascent;
     }
 
-    // T-3: the provider for the code unit at relative index i of `data` —
+    // T-3: the provider for the code point at byte offset `i` of `data` —
     // the first covering style run's provider wins over the primary /
     // fallback chain. Runs apply only when `data` addresses this
     // widget's own text_ (advance_of/draw_text_at stay generic helpers);
     // a covering run without a provider leaves the base chain in charge.
     // nullptr means "not covered" — the pen keeps its position.
-    const GlyphProvider *Widget::pick_provider(const char16_t *data,
+    const GlyphProvider *Widget::pick_provider(const char *data,
                                                const int i) const
     {
         if (ext_ != nullptr && !ext_->runs.empty() && !text_.empty())
         {
-            const char16_t *const begin = text_.data();
+            const char *const begin = text_.data();
             if (data >= begin && data <= begin + text_.size())
             {
                 const int idx = static_cast<int>(data - begin) + i;
@@ -1734,156 +1700,88 @@ namespace zb::ui
                 }
             }
         }
-        const char16_t ch = data[i];
+        const char *p = data + i;
+        const char32_t cp = decode_utf8_next(p);
         const GlyphProvider *const primary = primary_provider();
-        if (primary != nullptr && primary->covers(ch))
+        if (primary != nullptr && primary->covers(cp))
         {
             return primary;
         }
-        if (bitmap_fallback_->covers(ch))
+        if (bitmap_fallback_->covers(cp))
         {
             return bitmap_fallback_.get();
         }
         return nullptr;
     }
 
-    const GlyphProvider *Widget::pick_provider_pair(const char16_t *data,
-                                                    const int i) const
-    {
-        // the A-25 pair counterpart of pick_provider: the same candidate
-        // order (covering run's provider -> primary -> bitmap), answered
-        // by covers_pair on the pair at data[i..i+1]
-        if (ext_ != nullptr && !ext_->runs.empty() && !text_.empty())
-        {
-            const char16_t *const begin = text_.data();
-            if (data >= begin && data <= begin + text_.size())
-            {
-                const int idx = static_cast<int>(data - begin) + i;
-                if (const text_style_run *const r =
-                        covering_run(ext_->runs, idx);
-                    r != nullptr && r->provider != nullptr &&
-                    r->provider->covers_pair(data + i))
-                {
-                    return r->provider;
-                }
-            }
-        }
-        const GlyphProvider *const primary = primary_provider();
-        if (primary != nullptr && primary->covers_pair(data + i))
-        {
-            return primary;
-        }
-        if (bitmap_fallback_->covers_pair(data + i))
-        {
-            return bitmap_fallback_.get();
-        }
-        return nullptr;
-    }
-
-    int Widget::advance_of(const char16_t *data, const int len) const
+    int Widget::advance_of(const char *data, const int len) const
     {
         if (len <= 0)
         {
             return 0;
         }
-        // pick the provider for a code unit (T-3: style runs first);
-        // nullptr means "not covered"
-        const auto pick = [&](const int i) -> const GlyphProvider *
-        {
-            return pick_provider(data, i);
-        };
-
-        // letter-spacing (P-2a): per covered code unit, trailing unit
-        // included. The zero-spacing run path below stays untouched so
-        // plain text is bit-identical (splitting is safe — no provider
-        // kerns — but the runs also skip one measure call per glyph)
+        // letter-spacing (P-2a): per covered code point, trailing code
+        // point included. The zero-spacing grouped path below stays, so
+        // plain text keeps one measure call per provider run
         const int letter =
             (ext_ != nullptr && ext_->has_text != 0) ? ext_->letter_px : 0;
-        if (letter > 0)
-        {
-            int spaced = 0;
-            for (int i = 0; i < len;)
-            {
-                // A-25: a pair is one character — spacing once per pair
-                if (i + 1 < len && is_high_surrogate(data[i]) &&
-                    is_low_surrogate(data[i + 1]))
-                {
-                    const GlyphProvider *const p = pick_provider_pair(data, i);
-                    if (p != nullptr)
-                    {
-                        spaced += p->measure(data + i, 2).width + letter;
-                    }
-                    i += 2;
-                    continue;
-                }
-                // a lone half never renders (no font indexes a surrogate
-                // unit): zero advance, provider never consulted
-                if (!is_high_surrogate(data[i]) && !is_low_surrogate(data[i]))
-                {
-                    const GlyphProvider *const p = pick(i);
-                    if (p != nullptr)
-                    {
-                        spaced += p->measure(data + i, 1).width + letter;
-                    }
-                }
-                ++i;
-            }
-            return spaced;
-        }
+        const char *const end = data + len;
+        // reused decode scratch: a warm call never allocates (the §8
+        // warm-draw rule)
+        thread_local std::u32string scratch;
         int total = 0;
-        for (int i = 0; i < len;)
+        const char *p = data;
+        while (p < end)
         {
-            // A-25: a surrogate pair is one atomic segment — its provider
-            // resolves via covers_pair and it never splits across runs
-            if (i + 1 < len && is_high_surrogate(data[i]) &&
-                is_low_surrogate(data[i + 1]))
+            // decode one code point, resolve its provider (T-3: style
+            // runs first); nullptr means "not covered" — zero advance
+            const int start = static_cast<int>(p - data);
+            const char32_t first = decode_utf8_next(p, end);
+            const GlyphProvider *cur = pick_provider(data, start);
+            if (cur == nullptr)
             {
-                const GlyphProvider *const p = pick_provider_pair(data, i);
-                if (p != nullptr)
+                continue;  // the pen keeps its position
+            }
+            if (letter > 0)
+            {
+                total += cur->measure(&first, 1).width + letter;
+                continue;
+            }
+            // group the following code points that share this provider
+            // into one measure call
+            scratch.clear();
+            scratch.push_back(first);
+            while (p < end)
+            {
+                const int next_idx = static_cast<int>(p - data);
+                const char *q = p;
+                const char32_t cp = decode_utf8_next(q, end);
+                if (pick_provider(data, next_idx) != cur)
                 {
-                    total += p->measure(data + i, 2).width;
+                    break;
                 }
-                i += 2;
-                continue;
+                scratch.push_back(cp);
+                p = q;
             }
-            // a lone half never renders: zero advance (the prefix walk
-            // stays monotonic for any provider)
-            if (is_high_surrogate(data[i]) || is_low_surrogate(data[i]))
-            {
-                ++i;
-                continue;
-            }
-            const GlyphProvider *cur = pick(i);
-            int j = i + 1;
-            // a group segment never contains a surrogate unit — a pair
-            // is the atomic branch above, and a half measured as a run
-            // member would report a phantom advance
-            while (j < len && pick(j) == cur &&
-                   !is_high_surrogate(data[j]) && !is_low_surrogate(data[j]))
-            {
-                ++j;
-            }
-            if (cur != nullptr)
-            {
-                total += cur->measure(data + i, j - i).width;
-            }
-            i = j;
+            total += cur->measure(scratch.data(),
+                                  static_cast<int>(scratch.size()))
+                         .width;
         }
         return total;
     }
 
-    void Widget::draw_text_at(core::Graphics &area, const char16_t *data, const int len,
+    void Widget::draw_text_at(core::Graphics &area, const char *data, const int len,
                               const int x, const int y) const
     {
         draw_text_at(area, data, len, x, y, effective_text_color());
     }
 
-    void Widget::draw_text_at(core::Graphics &area, const char16_t *data, const int len,
+    void Widget::draw_text_at(core::Graphics &area, const char *data, const int len,
                               const int x, const int y, const core::Color &color) const
     {
         // one run of glyphs at (x0, y0): the provider-run fast path
-        // when tracking is off, per-unit pen (unit advance + spacing)
-        // when on. Uncovered units keep the pen position either way
+        // when tracking is off, per-code-point pen (advance + spacing)
+        // when on. Uncovered code points keep the pen position either way
         const int letter =
             (ext_ != nullptr && ext_->has_text != 0) ? ext_->letter_px : 0;
         const bool is_bold = bold();
@@ -1893,95 +1791,72 @@ namespace zb::ui
             has_text_shadow() ? static_cast<int>(ext_->shadow_dx) : 0;
         const int sh_dy =
             has_text_shadow() ? static_cast<int>(ext_->shadow_dy) : 0;
-        const auto pick = [&](const int i) -> const GlyphProvider *
-        {
-            return pick_provider(data, i);
-        };
+        const char *const end = data + len;
+        // reused decode scratch: a warm call never allocates (the §8
+        // warm-draw rule)
+        thread_local std::u32string scratch;
         const auto pass = [&](const int i0, const int i1, const int x0,
                               const int y0, const core::Color &c)
         {
-            // units [i0, i1) at (x0, y0)
+            // code points in the byte span [i0, i1) at (x0, y0)
+            const char *const pend = data + i1;
+            const char *p = data + i0;
             if (letter <= 0)
             {
                 int pen = 0;
-                for (int i = i0; i < i1;)
+                while (p < pend)
                 {
-                    // A-25: a pair draws whole through covers_pair
-                    if (i + 1 < len && is_high_surrogate(data[i]) &&
-                        is_low_surrogate(data[i + 1]))
+                    const int start = static_cast<int>(p - data);
+                    const char32_t first = decode_utf8_next(p, pend);
+                    const GlyphProvider *cur = pick_provider(data, start);
+                    if (cur == nullptr)
                     {
-                        const GlyphProvider *const p =
-                            pick_provider_pair(data, i);
-                        if (p != nullptr)
+                        continue;  // the pen keeps its position
+                    }
+                    // group the following code points that share this
+                    // provider into one write call
+                    scratch.clear();
+                    scratch.push_back(first);
+                    while (p < pend)
+                    {
+                        const int next_idx = static_cast<int>(p - data);
+                        const char *q = p;
+                        const char32_t cp = decode_utf8_next(q, pend);
+                        if (pick_provider(data, next_idx) != cur)
                         {
-                            p->write(area, data + i, 2, x0 + pen, y0, c);
-                            pen += p->measure(data + i, 2).width;
+                            break;
                         }
-                        i += 2;
-                        continue;
+                        scratch.push_back(cp);
+                        p = q;
                     }
-                    // a lone half never renders (no font indexes a surrogate
-                    // unit): the pen keeps its position
-                    if (is_high_surrogate(data[i]) || is_low_surrogate(data[i]))
-                    {
-                        ++i;
-                        continue;
-                    }
-                    const GlyphProvider *cur = pick(i);
-                    int j = i + 1;
-                    // a group segment never contains a surrogate unit (same
-                    // rule as advance_of — halves report no phantom advance)
-                    while (j < i1 && pick(j) == cur &&
-                           !is_high_surrogate(data[j]) &&
-                           !is_low_surrogate(data[j]))
-                    {
-                        ++j;
-                    }
-                    if (cur != nullptr)
-                    {
-                        cur->write(area, data + i, j - i, x0 + pen, y0, c);
-                        pen += cur->measure(data + i, j - i).width;
-                    }
-                    i = j;
+                    cur->write(area, scratch.data(),
+                               static_cast<int>(scratch.size()), x0 + pen, y0, c);
+                    pen += cur->measure(scratch.data(),
+                                        static_cast<int>(scratch.size()))
+                               .width;
                 }
                 return;
             }
             int pen = 0;
-            for (int i = i0; i < i1;)
+            while (p < pend)
             {
-                // A-25: a pair is one character — spacing once per pair
-                if (i + 1 < len && is_high_surrogate(data[i]) &&
-                    is_low_surrogate(data[i + 1]))
+                const int start = static_cast<int>(p - data);
+                const char32_t cp = decode_utf8_next(p, pend);
+                const GlyphProvider *const pr = pick_provider(data, start);
+                if (pr != nullptr)
                 {
-                    const GlyphProvider *const p = pick_provider_pair(data, i);
-                    if (p != nullptr)
-                    {
-                        p->write(area, data + i, 2, x0 + pen, y0, c);
-                        pen += p->measure(data + i, 2).width + letter;
-                    }
-                    i += 2;
-                    continue;
+                    pr->write(area, &cp, 1, x0 + pen, y0, c);
+                    pen += pr->measure(&cp, 1).width + letter;
                 }
-                // a lone half never renders: the pen keeps its position
-                if (is_high_surrogate(data[i]) || is_low_surrogate(data[i]))
-                {
-                    ++i;
-                    continue;
-                }
-                const GlyphProvider *const p = pick(i);
-                if (p != nullptr)
-                {
-                    p->write(area, data + i, 1, x0 + pen, y0, c);
-                    pen += p->measure(data + i, 1).width + letter;
-                }
-                ++i;
             }
         };
 
         // T-3: [0, len) splits at style-run boundaries — each part draws
-        // with its run's color and bold (the provider rides the per-unit
-        // pick); uncovered units keep the base style. Runs never change
-        // the pen math, only what a part looks like.
+        // with its run's color and bold (the provider rides the
+        // per-code-point pick); uncovered code points keep the base
+        // style. Runs never change the pen math, only what a part looks
+        // like. Parts end on code-point boundaries by construction (the
+        // walk steps whole sequences).
         const bool has_runs = ext_ != nullptr && !ext_->runs.empty();
         const auto run_at = [&](const int i) -> const text_style_run *
         {
@@ -1989,7 +1864,7 @@ namespace zb::ui
             {
                 return nullptr;
             }
-            const char16_t *const begin = text_.data();
+            const char *const begin = text_.data();
             if (data < begin || data > begin + text_.size())
             {
                 return nullptr;  // foreign data: no run context applies
@@ -2002,18 +1877,20 @@ namespace zb::ui
             while (i < len)
             {
                 const text_style_run *const r = run_at(i);
-                int j = i + 1;
-                while (j < len && run_at(j) == r)
+                int j = i;
+                const char *pp = data + i;
+                while (pp < end)
                 {
-                    ++j;
-                }
-                // A-25: a part never ends between a lead and its trail —
-                // extend into the next run so the pair renders whole with
-                // the lead's run's style
-                if (j < len && is_high_surrogate(data[j - 1]) &&
-                    is_low_surrogate(data[j]))
-                {
-                    ++j;
+                    const char *q = pp;
+                    (void)decode_utf8_next(q, end);
+                    const int next_i = static_cast<int>(q - data);
+                    if (next_i < len && run_at(next_i) != r)
+                    {
+                        j = next_i;  // the next code point starts a new part
+                        break;
+                    }
+                    j = next_i;
+                    pp = q;
                 }
                 core::Color c = color;
                 bool b = is_bold;
@@ -2025,9 +1902,10 @@ namespace zb::ui
                     }
                     b = is_bold || r->bold;
                 }
-                // the part's pen starts where the preceding units ended:
-                // the prefix advance uses the same picks and batching as
-                // the per-part pen math, so the seams stay exact
+                // the part's pen starts where the preceding code points
+                // ended: the prefix advance uses the same picks and
+                // batching as the per-part pen math, so the seams stay
+                // exact
                 fn(i, j, x + advance_of(data, i), c, b);
                 i = j;
             }

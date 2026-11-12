@@ -58,12 +58,12 @@ namespace
         const char16_t *labels[8];
     };
     const scale_def kScaleTable[] = {
-        {"PENTA", {76, 74, 72, 69, 67, 64, 62, 60}, {u"E5", u"D5", u"C5", u"A4", u"G4", u"E4", u"D4", u"C4"}},
-        {"MAJOR", {72, 71, 69, 67, 65, 64, 62, 60}, {u"C5", u"B4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
-        {"MINOR", {72, 70, 68, 67, 65, 63, 62, 60}, {u"C5", u"Bb4", u"Ab4", u"G4", u"F4", u"Eb4", u"D4", u"C4"}},
-        {"DORIAN", {72, 70, 69, 67, 65, 64, 62, 60}, {u"C5", u"Bb4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
-        {"MIXO", {72, 71, 69, 67, 65, 64, 62, 60}, {u"C5", u"B4", u"A4", u"G4", u"F4", u"E4", u"D4", u"C4"}},
-        {"CHROM", {72, 71, 70, 69, 68, 67, 66, 65}, {u"C5", u"B4", u"Bb4", u"A4", u"Ab4", u"G4", u"Gb4", u"F4"}},
+        {"PENTA", {76, 74, 72, 69, 67, 64, 62, 60}, {"E5", "D5", "C5", "A4", "G4", "E4", "D4", "C4"}},
+        {"MAJOR", {72, 71, 69, 67, 65, 64, 62, 60}, {"C5", "B4", "A4", "G4", "F4", "E4", "D4", "C4"}},
+        {"MINOR", {72, 70, 68, 67, 65, 63, 62, 60}, {"C5", "Bb4", "Ab4", "G4", "F4", "Eb4", "D4", "C4"}},
+        {"DORIAN", {72, 70, 69, 67, 65, 64, 62, 60}, {"C5", "Bb4", "A4", "G4", "F4", "E4", "D4", "C4"}},
+        {"MIXO", {72, 71, 69, 67, 65, 64, 62, 60}, {"C5", "B4", "A4", "G4", "F4", "E4", "D4", "C4"}},
+        {"CHROM", {72, 71, 70, 69, 68, 67, 66, 65}, {"C5", "B4", "Bb4", "A4", "Ab4", "G4", "Gb4", "F4"}},
     };
     constexpr int kScaleCount =
         static_cast<int>(sizeof(kScaleTable) / sizeof(kScaleTable[0]));
@@ -491,7 +491,7 @@ void SeqGrid::draw_at(core::Graphics &area) const
     const int cs = pitch_ - 2;
     area.fill(kBoardBg);
 
-    static const char16_t *const kDrumName[kDrumRows] = {u"HAT", u"SNR", u"KIK"};
+    static const char16_t *const kDrumName[kDrumRows] = {"HAT", "SNR", "KIK"};
     static const int kDrumNameLen[kDrumRows] = {3, 3, 3};
 
     for (int row = 0; row < kRows; ++row)
@@ -563,9 +563,9 @@ void SeqGrid::draw_at(core::Graphics &area) const
                                  lit ? kMelodyOn : kCellOffBeat);
             if (pitch_ >= 12)
             {
-                const int adv = advance_of(u"SL", 2);
+                const int adv = advance_of("SL", 2);
                 const int tx = px + 1 + (slide_w_ - 3 - adv) / 2;
-                draw_tag(area, u"SL", 2, tx > px ? tx : px, y + cs / 2 - 3,
+                draw_tag(area, "SL", 2, tx > px ? tx : px, y + cs / 2 - 3,
                          lit ? kBoardBg : kDim);
             }
         }

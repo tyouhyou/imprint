@@ -6,15 +6,15 @@ namespace zb::ui
 {
     namespace
     {
-        // binary search over the code-unit-sorted table
-        const TtfGlyph *find_glyph(const char16_t ch)
+        // binary search over the code-point-sorted table
+        const TtfGlyph *find_glyph(const char32_t cp)
         {
             int lo = 0;
             int hi = static_cast<int>(kTtfGlyphCount);
             while (lo < hi)
             {
                 const int mid = (lo + hi) / 2;
-                if (kTtfGlyphs[mid].ch < ch)
+                if (kTtfGlyphs[mid].ch < cp)
                 {
                     lo = mid + 1;
                 }
@@ -23,7 +23,7 @@ namespace zb::ui
                     hi = mid;
                 }
             }
-            if (lo < static_cast<int>(kTtfGlyphCount) && kTtfGlyphs[lo].ch == ch)
+            if (lo < static_cast<int>(kTtfGlyphCount) && kTtfGlyphs[lo].ch == cp)
             {
                 return &kTtfGlyphs[lo];
             }
@@ -31,12 +31,12 @@ namespace zb::ui
         }
     }  // namespace
 
-    bool TtfSubsetProvider::covers(const char16_t ch) const
+    bool TtfSubsetProvider::covers(const char32_t cp) const
     {
-        return find_glyph(ch) != nullptr;
+        return find_glyph(cp) != nullptr;
     }
 
-    text_metrics TtfSubsetProvider::measure(const char16_t *str, const int len) const
+    text_metrics TtfSubsetProvider::measure(const char32_t *str, const int len) const
     {
         text_metrics m;
         m.height = kTtfLineHeight;
@@ -51,7 +51,7 @@ namespace zb::ui
             {
                 m.width += g->advance;
             }
-            // uncovered code units advance zero width
+            // uncovered code points advance zero width
         }
         return m;
     }
@@ -61,7 +61,7 @@ namespace zb::ui
         return {0, kTtfLineHeight, kTtfAscent};
     }
 
-    void TtfSubsetProvider::write(core::Graphics &g, const char16_t *str, const int len,
+    void TtfSubsetProvider::write(core::Graphics &g, const char32_t *str, const int len,
                                   const int x, const int y, const core::Color &color) const
     {
         if (str == nullptr || len <= 0)

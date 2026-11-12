@@ -346,7 +346,7 @@ void GroveCanvas::draw_at(core::Graphics &area) const
     area.fill_circle(X(kGroveX), Y(118), 16 * s_, core::Color::from(0x3d, 0x30, 0x1c));
     area.fill_circle(X(kGroveX), Y(118), 8 * s_, core::Color::from(0x5a, 0x45, 0x26));
     area.fill_circle(X(kGroveX), Y(118), 3 * s_, kLampHot);
-    draw_text_at(area, u"GROVE", 5, X(kGroveX - 10), Y(196), kWeb);
+    draw_text_at(area, "GROVE", 5, X(kGroveX - 10), Y(196), kWeb);
 
     // spider webs: outline + three fixed spokes
     for (const webdef &w : kWebs)

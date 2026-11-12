@@ -50,7 +50,7 @@ namespace zb::app::showcase
         {
             if (w != nullptr)
             {
-                w->set_text(zb::ui::utf8_to_utf16(s.c_str()));
+                w->set_text(s);
             }
         }
 

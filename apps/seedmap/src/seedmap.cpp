@@ -109,13 +109,12 @@ void Seedmap::carve_corridor(const int x1, const int y1, const int x2, const int
 
 void Seedmap::generate()
 {
-    // FNV-1a over the seed text (UTF-16 code units, fixed width) -> LCG
+    // FNV-1a over the seed text (UTF-8 bytes) -> LCG
     state_ = 2166136261u;
-    const std::u16string seed = seed_box_->get_text();
-    for (const char16_t ch : seed)
+    const std::string seed = seed_box_->get_text();
+    for (const char ch : seed)
     {
-        state_ = (state_ ^ (static_cast<unsigned>(ch) & 0xffu)) * 16777619u;
-        state_ = (state_ ^ (static_cast<unsigned>(ch) >> 8)) * 16777619u;
+        state_ = (state_ ^ static_cast<unsigned char>(ch)) * 16777619u;
     }
     if (state_ == 0)
     {

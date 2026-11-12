@@ -23,15 +23,16 @@ namespace zb::ui
         {
             sel_anchor = get_text().size();
         }
-        // A-25: a programmatic set_text can leave an index mid-pair —
-        // snap before any edit or selection math reads it
-        caret = snap_pair_end(get_text(), caret);
-        sel_anchor = snap_pair_end(get_text(), sel_anchor);
+        // a programmatic set_text can leave an index mid-sequence —
+        // snap to the code-point boundary before any edit or selection
+        // math reads it (code-contract §2.1)
+        caret = snap_boundary(get_text(), caret);
+        sel_anchor = snap_boundary(get_text(), sel_anchor);
     }
 
     void TextInput::fire_changed()
     {
-        changed(utf16_to_utf8(get_text()));
+        changed(get_text());  // the stored bytes are the UTF-8 payload
     }
 
     std::string TextInput::selected_text() const
@@ -51,8 +52,7 @@ namespace zb::ui
         {
             return {};
         }
-        return utf16_to_utf8(
-            get_text().substr(std::min(a, c), std::max(a, c) - std::min(a, c)));
+        return get_text().substr(std::min(a, c), std::max(a, c) - std::min(a, c));
     }
 
     bool TextInput::erase_selection(const bool fire)
@@ -64,7 +64,7 @@ namespace zb::ui
         {
             return false;
         }
-        std::u16string t = get_text();
+        std::string t = get_text();
         t.erase(lo, hi - lo);
         caret = lo;
         sel_anchor = lo;
@@ -77,7 +77,7 @@ namespace zb::ui
         return true;
     }
 
-    void TextInput::insert_text(const std::u16string &units)
+    void TextInput::insert_text(const std::string &units)
     {
         if (read_only_)
         {
@@ -89,7 +89,7 @@ namespace zb::ui
         {
             return;
         }
-        std::u16string t = get_text();
+        std::string t = get_text();
         t.insert(caret, units);
         caret += units.size();
         sel_anchor = caret;  // the edit collapses the selection
@@ -98,28 +98,19 @@ namespace zb::ui
         fire_changed();
     }
 
-    std::u16string TextInput::paste_filter(const std::u16string &in) const
+    std::string TextInput::paste_filter(const std::string &in) const
     {
-        std::u16string out;
-        for (size_t i = 0; i < in.size();)
+        std::string out;
+        for (const char *p = in.c_str(), *const end = p + in.size(); p < end;)
         {
-            // the T-2 acceptance; no line break (single line). A whole
-            // surrogate pair rides (A-25); a lone surrogate unit drops
-            if (i + 1 < in.size() &&
-                is_surrogate_pair(in[i], in[i + 1]))
+            // the T-2 acceptance; no line break (single line). Code
+            // points walk whole sequences; an invalid byte decodes to
+            // U+FFFD and rides the >= U+00A0 branch like any code point
+            const char32_t cp = decode_utf8_next(p, end);
+            if ((cp >= 0x20 && cp <= 0x7E) || cp >= 0xA0)
             {
-                out.push_back(in[i]);
-                out.push_back(in[i + 1]);
-                i += 2;
-                continue;
+                append_utf8(out, cp);
             }
-            const int u = static_cast<int>(in[i]);
-            if (((u >= 0x20 && u <= 0x7E) || u >= 0xA0) &&
-                (u < 0xD800 || u > 0xDFFF))
-            {
-                out.push_back(in[i]);
-            }
-            ++i;
         }
         return out;
     }
@@ -146,10 +137,10 @@ namespace zb::ui
         {
             return;  // nothing to paste (a set-only sink lands here too)
         }
-        insert_text(paste_filter(utf8_to_utf16(text.c_str())));
+        insert_text(paste_filter(text));
     }
 
-    void TextInput::insert(const char16_t ch)
+    void TextInput::insert(const char32_t cp)
     {
         if (read_only_)
         {
@@ -157,9 +148,11 @@ namespace zb::ui
         }
         erase_selection(false);  // typing replaces the selection
         clamp_caret();
-        std::u16string t = get_text();
-        t.insert(caret, 1, ch);
-        ++caret;
+        std::string seq;
+        append_utf8(seq, cp);
+        std::string t = get_text();
+        t.insert(caret, seq);
+        caret += seq.size();
         sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
         set_text(t);
@@ -181,12 +174,12 @@ namespace zb::ui
         {
             return false;
         }
-        std::u16string t = get_text();
-        // A-25: backspacing into a pair removes both units
-        const size_t back = (caret >= 2 && is_surrogate_pair(t[caret - 2],
-                                                             t[caret - 1]))
-                              ? 2
-                              : 1;
+        std::string t = get_text();
+        // one code point back: the byte span to erase (multi-byte CJK
+        // deletes whole — code-contract §2.1)
+        const char *p = t.data() + caret;
+        (void)decode_utf8_prev(p, t.data());
+        const size_t back = static_cast<size_t>(t.data() + caret - p);
         t.erase(caret - back, back);
         caret -= back;
         sel_anchor = caret;  // the edit collapses the selection
@@ -211,12 +204,11 @@ namespace zb::ui
         {
             return false;
         }
-        std::u16string t = get_text();
-        // A-25: deleting across a pair removes both units
-        const size_t fwd = (caret + 1 < t.size() &&
-                            is_surrogate_pair(t[caret], t[caret + 1]))
-                             ? 2
-                             : 1;
+        std::string t = get_text();
+        // one code point forward: the byte span to erase
+        const char *p = t.data() + caret;
+        (void)decode_utf8_next(p, t.data() + t.size());
+        const size_t fwd = static_cast<size_t>(p - (t.data() + caret));
         t.erase(caret, fwd);
         sel_anchor = caret;  // the edit collapses the selection
         mark_dirty();
@@ -228,21 +220,20 @@ namespace zb::ui
     bool TextInput::move_caret(const int dir, const bool extend_selection)
     {
         clamp_caret();
-        const size_t n = get_text().size();
+        const std::string &t = get_text();
+        const size_t n = t.size();
         size_t next = caret;
         if (dir > 0 && caret < n)
         {
-            next = snap_pair_end(get_text(), caret + 1);
+            const char *p = t.data() + caret;
+            (void)decode_utf8_next(p, t.data() + n);  // one code point forward
+            next = static_cast<size_t>(p - t.data());
         }
         else if (dir < 0 && caret > 0)
         {
-            next = caret - 1;
-            // A-25: never stop between a lead and its trail
-            if (next > 0 && is_surrogate_lead(get_text()[next - 1]) &&
-                is_surrogate_trail(get_text()[next]))
-            {
-                --next;
-            }
+            const char *p = t.data() + caret;
+            (void)decode_utf8_prev(p, t.data());  // one code point back
+            next = static_cast<size_t>(p - t.data());
         }
         else
         {
@@ -260,11 +251,14 @@ namespace zb::ui
 
     void TextInput::place_caret_at(const int x)
     {
-        // caret under the click: walk the run until the prefix advance
-        // passes the click x (text starts right after the gap)
+        // caret under the click: walk the code points until the running
+        // advance passes the click x (text starts right after the gap);
+        // the running pen matches advance_of exactly (per covered code
+        // point, letter-spacing included, uncovered zero)
         clamp_caret();
-        const char16_t *const data = get_text().data();
-        const int len = static_cast<int>(get_text().size());
+        const std::string &t = get_text();
+        const char *const data = t.data();
+        const char *const dend = data + t.size();
         const int xx = x - text_gap;
         if (xx <= 0)
         {
@@ -273,33 +267,34 @@ namespace zb::ui
             return;
         }
         const size_t before = caret;
-        caret = 0;
-        for (int i = 1; i <= len; ++i)
+        const int letter = letter_spacing();
+        int pen = 0;
+        const char *p = data;
+        const char *bound = data;  // the caret lands on a walked boundary
+        while (p < dend)
         {
-            if (advance_of(data, i) <= xx)
+            const char32_t cp = decode_utf8_next(p, dend);
+            // the pick_provider rule: covering style run first, then the
+            // primary/fallback chain (data is text_.data() here)
+            const GlyphProvider *const prov =
+                pick_provider(data, static_cast<int>(bound - data));
+            const int w = prov != nullptr ? prov->measure(&cp, 1).width + letter : 0;
+            if (pen + w <= xx)
             {
-                caret = static_cast<size_t>(i);
+                pen += w;
+                bound = p;
+                continue;
             }
-            else
+            // nearest boundary wins when the click sits inside glyph:
+            // past the glyph's midpoint the caret goes after it
+            const int half = pen + w / 2;
+            if (xx >= half)
             {
-                // nearest boundary wins when the click sits inside glyph
-                // i: past the glyph's midpoint the caret goes after it
-                // (the old formula used the NEXT glyph's span, which is
-                // always beyond the click, and could never place the
-                // caret after the clicked glyph)
-                const int half = (advance_of(data, i - 1) + advance_of(data, i)) / 2;
-                if (xx >= half)
-                {
-                    caret = static_cast<size_t>(i);
-                }
-                else
-                {
-                    caret = static_cast<size_t>(i) - 1;
-                }
-                break;
+                bound = p;
             }
+            break;
         }
-        caret = snap_pair_end(get_text(), caret);
+        caret = static_cast<size_t>(bound - data);
         if (caret != before)
         {
             mark_dirty();
@@ -470,9 +465,10 @@ namespace zb::ui
             // character input (space arrives as a key, see the key
             // mapping in the shells). T-2 acceptance (code-contract §2
             // "Text input scope"): printable ASCII plus any code point
-            // >= U+00A0 inserts as a BMP code unit; a code point >
-            // U+FFFF stores as its surrogate pair (A-25); lone surrogate
-            // units and C1 controls drop
+            // >= U+00A0 — one code point, one editing atom. The terminal
+            // translator assembles multi-byte UTF-8 into one full ch, so
+            // a non-BMP code point needs no special path (it stores as
+            // its UTF-8 byte sequence)
             if (ev.ch != 0)
             {
                 // a chord never inserts text: alt/meta combos and any
@@ -483,35 +479,10 @@ namespace zb::ui
                 {
                     return false;
                 }
-                if (ev.ch >= 0x20 && ev.ch <= 0x7E)
+                if ((ev.ch >= 0x20 && ev.ch <= 0x7E) || ev.ch >= 0xA0)
                 {
                     const history_step before = capture();
-                    insert(static_cast<char16_t>(ev.ch));
-                    record_edit(editor_history::kind::insert, before);
-                    return true;
-                }
-                // a lone surrogate unit drops (A-25: no unpaired half
-                // enters the buffer — the same rule paste_filter applies
-                // to pasted text)
-                if (ev.ch >= 0xA0 && ev.ch <= 0xFFFF &&
-                    (ev.ch < 0xD800 || ev.ch > 0xDFFF))
-                {
-                    const history_step before = capture();
-                    insert(static_cast<char16_t>(ev.ch));
-                    record_edit(editor_history::kind::insert, before);
-                    return true;
-                }
-                if (ev.ch >= 0x10000 && ev.ch <= 0x10FFFF)
-                {
-                    // A-25: a non-BMP code point stores as its surrogate
-                    // pair (the terminal translator assembles 4-byte
-                    // UTF-8 into one full ch)
-                    std::u16string pair;
-                    const char32_t v = static_cast<char32_t>(ev.ch) - 0x10000;
-                    pair.push_back(static_cast<char16_t>(0xD800 + (v >> 10)));
-                    pair.push_back(static_cast<char16_t>(0xDC00 + (v & 0x3FF)));
-                    const history_step before = capture();
-                    insert_text(pair);
+                    insert(static_cast<char32_t>(ev.ch));
                     record_edit(editor_history::kind::insert, before);
                     return true;
                 }
@@ -522,7 +493,7 @@ namespace zb::ui
             case input::key_code::space:
             {
                 const history_step before = capture();
-                insert(u' ');
+                insert(U' ');
                 record_edit(editor_history::kind::insert, before);
                 return true;
             }
@@ -545,7 +516,7 @@ namespace zb::ui
             case input::key_code::right:
                 return move_caret(1, extend);
             case input::key_code::enter:
-                submitted(utf16_to_utf8(get_text()));
+                submitted(get_text());
                 return true;
             default:
                 return false;
@@ -579,7 +550,7 @@ namespace zb::ui
         area.draw_rect(0, 0, s.width - 1, s.height - 1, edge);
 
         // text baseline: gap + vertical centering (like draw_text)
-        const char16_t *const data = get_text().data();
+        const char *const data = get_text().data();
         const int len = static_cast<int>(get_text().size());
         const int x0 = text_gap;
         const int y0 = (s.height - line_h) / 2 + ascent;

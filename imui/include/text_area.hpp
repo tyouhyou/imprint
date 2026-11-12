@@ -13,7 +13,8 @@ namespace zb::ui
      * submit affordances are app-side (a button); `changed` fires with
      * the whole UTF-8 text after every edit, exactly like TextInput.
      *
-     * The caret is a u16 index (clamped on every edit, like TextInput).
+     * The caret is a UTF-8 byte offset on code-point boundaries
+     * (clamped on every edit, like TextInput).
      * Up/down move between the lines wrap_spans reports, keeping a pixel
      * column goal across lines; click placement maps (x, y) through the
      * spans. Horizontal overflow within a line clips — there is no
@@ -25,7 +26,7 @@ namespace zb::ui
      * the top, the ScrollPanel convention). Focus ring as TextInput.
      *
      * Selection (FI-02, code-contract §3.8): a pointer drag sets an
-     * anchor and moves the caret ([min, max) of the two u16 indexes);
+     * anchor and moves the caret ([min, max) of the two byte offsets);
      * shift+click and shift+arrow extend from the anchor; Ctrl+A selects
      * all. Any edit, any non-shift caret move and focus loss collapse
      * the selection to the caret; the selected range draws with the
@@ -111,10 +112,11 @@ namespace zb::ui
         void on_focus_change(const bool focused) override;
 
     private:
-        // the editing core mirrors TextInput's (a u16 caret clamped on
-        // every edit); enter inserts '\n' instead of submitting
+        // the editing core mirrors TextInput's (a byte-offset caret on
+        // code-point boundaries, clamped on every edit); enter inserts
+        // '\n' instead of submitting
         void clamp_caret();
-        void insert(const char16_t ch);
+        void insert(const char32_t cp);
         bool erase_before_caret();
         bool erase_at_caret();
         bool move_caret(const int dir, const bool extend_selection = false);
@@ -129,10 +131,10 @@ namespace zb::ui
         // insert_text inserts a whole string (paste) through the same
         // rules; copy/paste route through the process ClipboardSink
         bool erase_selection(bool fire = true);
-        void insert_text(const std::u16string &units);
+        void insert_text(const std::string &units);
         // the field's own input rules applied to pasted text: the T-2
         // acceptance plus '\n' (enter is content here)
-        [[nodiscard]] std::u16string paste_filter(const std::u16string &in) const;
+        [[nodiscard]] std::string paste_filter(const std::string &in) const;
         void copy_selection();
         void paste_at_caret();
 
@@ -153,10 +155,10 @@ namespace zb::ui
         // the END of the earlier line) as an index into `spans`
         [[nodiscard]] int caret_line(
             const std::vector<std::pair<int, int>> &spans) const;
-        // the unit index within [0, len] whose caret column best matches
-        // the pixel column `col` (past the glyph's midpoint the caret
-        // goes after it — the TextInput click rule)
-        [[nodiscard]] size_t column_to_caret(const char16_t *data,
+        // the byte offset within [0, len] whose caret column best
+        // matches the pixel column `col` (past the glyph's midpoint the
+        // caret goes after it — the TextInput click rule)
+        [[nodiscard]] size_t column_to_caret(const char *data,
                                              const int len,
                                              const int col) const;
         [[nodiscard]] int caret_pixel_column() const;

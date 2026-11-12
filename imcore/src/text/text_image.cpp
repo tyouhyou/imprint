@@ -1,5 +1,7 @@
 #include "text_image.hpp"
 
+#include <string>
+
 #include "bitmap_provider.hpp"
 #include "utf8.hpp"
 
@@ -35,11 +37,17 @@ namespace zb::ui
         static const BitmapProvider bitmap_fallback;
         const GlyphProvider &font =
             (provider != nullptr) ? *provider : bitmap_fallback;
-        const auto u16 = utf8_to_utf16(text);
-        const auto m = font.measure(u16.data(), static_cast<int>(u16.size()));
+        // one decode pass: the stored/API currency is UTF-8, the provider
+        // seam takes code points
+        std::u32string cps;
+        for (const char *p = text; *p != '\0';)
+        {
+            cps.push_back(decode_utf8_next(p));
+        }
+        const auto m = font.measure(cps.data(), static_cast<int>(cps.size()));
         const int x0 = left_align ? 0 : (width - m.width) / 2;
         const int y0 = (height - m.height) / 2 + m.ascent;  // baseline
-        font.write(*g, u16.data(), static_cast<int>(u16.size()), x0, y0,
+        font.write(*g, cps.data(), static_cast<int>(cps.size()), x0, y0,
                    foreground);
         return g;
     }

@@ -17,12 +17,12 @@ namespace zb::ui
     };
 
     /*
-     * Glyph provider: renders UTF-16 text runs onto a Graphics surface.
-     * This is the single seam between widgets and the text rendering
-     * backends, so a widget can fall back from its primary provider
-     * (build-time subset, runtime TTF, ...) to the built-in 5x7 bitmap
-     * glyphs for uncovered
-     * characters (see Widget::draw_text and BitmapProvider).
+     * Glyph provider: renders code-point text runs onto a Graphics
+     * surface. This is the single seam between widgets and the text
+     * rendering backends, so a widget can fall back from its primary
+     * provider (build-time subset, runtime TTF, ...) to the built-in 5x7
+     * bitmap glyphs for uncovered characters (see Widget::draw_text and
+     * BitmapProvider).
      *
      * Implementations are hot path: they must never throw.
      */
@@ -31,30 +31,16 @@ namespace zb::ui
     public:
         virtual ~GlyphProvider() = default;
 
-        /* whether this provider has a glyph for the given code unit */
-        virtual bool covers(const char16_t ch) const = 0;
-
-        /*
-         * Whether this provider has a glyph for the non-BMP code point
-         * the surrogate pair at str[0..1] encodes (A-25; str holds >= 2
-         * units and str[0] is a lead surrogate). The default answers
-         * "no", so BMP-only providers never override it; a provider
-         * that answers yes receives the whole 2-unit segment in
-         * measure/write and renders it as one glyph with one advance.
-         */
-        virtual bool covers_pair(const char16_t *str) const
-        {
-            (void)str;
-            return false;
-        }
+        /* whether this provider has a glyph for the given code point */
+        virtual bool covers(const char32_t cp) const = 0;
 
         /* advance width / line height / ascent of the whole run */
-        virtual text_metrics measure(const char16_t *str, const int len) const = 0;
+        virtual text_metrics measure(const char32_t *str, const int len) const = 0;
 
         /*
          * Line height and ascent without scanning the string (width is 0).
          * Cheaper than measure() on providers whose metrics cost a glyph
-         * load per code unit (e.g. the runtime TTF provider); used for vertical alignment.
+         * load per code point (e.g. the runtime TTF provider); used for vertical alignment.
          */
         virtual text_metrics line_metrics() const = 0;
 
@@ -63,7 +49,7 @@ namespace zb::ui
          * matching Font::write. Out-of-bounds pixels are clipped by
          * Graphics::draw_pixel, so no bounds check is needed here.
          */
-        virtual void write(core::Graphics &g, const char16_t *str, const int len,
+        virtual void write(core::Graphics &g, const char32_t *str, const int len,
                            const int x, const int y, const core::Color &color) const = 0;
     };
 

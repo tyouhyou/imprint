@@ -1495,7 +1495,7 @@ namespace zb::ui
                             continue;
                         }
                         SvgCanvas::Text txt;
-                        txt.text = utf8_to_utf16(s.c_str());
+                        txt.text = s;
                         txt.x = px_offset_of(c, "x");
                         txt.y = px_offset_of(c, "y");
                         core::Color fill;

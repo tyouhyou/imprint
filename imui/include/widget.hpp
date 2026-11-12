@@ -14,14 +14,16 @@
 #include "theme.hpp"
 
 #include "text/bitmap_provider.hpp"
+#include "text/utf8.hpp"
 
 namespace zb::ui
 {
     /*
-     * Per-unit style intervals on the text seam (T-3, code-contract §2
-     * "Styled text runs"). Indices address the stored u16 text; a unit
-     * takes the first run (by offset) that covers it, and uncovered units
-     * keep the widget's base style. Runs decide only how the text draws
+     * Per-code-point style intervals on the text seam (T-3, code-contract
+     * §2 "Styled text runs"). Indices are byte offsets into the stored
+     * UTF-8 text, always code-point aligned; a code point takes the first
+     * run (by offset) that covers it, and uncovered code points keep the
+     * widget's base style. Runs decide only how the text draws
      * and measures — the text itself and the wrap break rules stay
      * run-agnostic.
      *
@@ -57,11 +59,12 @@ namespace zb::ui
      * Background: optional color and/or image (the image wins over the
      * color). Drawn by the base class before draw_at().
      *
-     * Text: always rendered (UTF-8 input, UTF-16 storage). The primary
+     * Text: always rendered (UTF-8 in, UTF-8 bytes stored, code points
+     * to the providers). The primary
      * glyph provider is the one assigned via set_glyph_provider() or the
-     * process-wide default (set_default_glyph_provider); code units the
+     * process-wide default (set_default_glyph_provider); code points the
      * primary provider does not cover fall back to the built-in 5x7
-     * bitmap glyphs, and code units nothing covers are skipped (see
+     * bitmap glyphs, and code points nothing covers are skipped (see
      * docs/code-contract.md section 2.4). draw_at() defaults to drawing
      * the text, so a widget that just shows background and text needs no
      * override (Label).
@@ -923,19 +926,21 @@ namespace zb::ui
             mark_dirty();
         }
 
-        // text (input is UTF-8, see docs/code-contract.md section 2)
+        // text (input is UTF-8, see docs/code-contract.md section 2;
+        // stored as UTF-8 bytes — every setter sanitizes)
         void set_text(const char *text);
-        void set_text(const std::u16string &text)
+        void set_text(const std::string &text)
         {
-            text_ = text;
+            text_ = sanitize_utf8(text.data(), text.size());
             clamp_text_runs();
             reset_wrap_cache();
             mark_dirty();
             mark_layout_dirty();
         }
         /*
-         * Styled text runs (T-3): per-unit color / provider / bold
-         * intervals over the stored u16 text (see text_style_run). A
+         * Styled text runs (T-3): per-code-point color / provider / bold
+         * intervals over the stored UTF-8 text (byte offsets, see
+         * text_style_run). A
          * content setter like set_text: normalized at set time (sorted
          * by offset, zero-length entries dropped), damage + layout
          * invalidation, advance and wrap caches cleared. An empty vector
@@ -943,7 +948,7 @@ namespace zb::ui
          * widget's use of it (see text_style_run).
          */
         void set_text_runs(std::vector<text_style_run> runs);
-        [[nodiscard]] const std::u16string &get_text() const { return text_; }
+        [[nodiscard]] const std::string &get_text() const { return text_; }
         // per-widget override of the theme's `text` token (contract 10.3)
         void set_text_color(const core::Color &c)
         {
@@ -1249,24 +1254,35 @@ namespace zb::ui
         [[nodiscard]] int text_ascent() const;
 
         /*
-         * Advance width of an arbitrary UTF-16 run (not just text_),
+         * Advance width of an arbitrary UTF-8 run (not just text_),
          * split into covered runs like text_advance(). Text-hosting
          * widgets (TextInput) use it for caret math.
          */
-        [[nodiscard]] int advance_of(const char16_t *data, const int len) const;
+        [[nodiscard]] int advance_of(const char *data, const int len) const;
 
         /*
-         * Draws an arbitrary UTF-16 run (not just text_) with the
+         * T-3 provider pick for the code point at byte offset `i` of
+         * `data` (the covering style run's provider first, then the
+         * primary/fallback chain; runs apply only when `data` addresses
+         * this widget's own text_). Protected: text-hosting widgets
+         * (TextInput/TextArea caret walks) resolve their pen with the
+         * same rule the draw uses.
+         */
+        [[nodiscard]] const GlyphProvider *
+        pick_provider(const char *data, const int byte_index) const;
+
+        /*
+         * Draws an arbitrary UTF-8 run (not just text_) with the
          * baseline of the first (only) line at (x, y). Text-hosting
          * widgets (TextInput) render their own buffer with it.
          */
-        void draw_text_at(core::Graphics &area, const char16_t *data, const int len,
+        void draw_text_at(core::Graphics &area, const char *data, const int len,
                           const int x, const int y) const;
         /*
          * draw_text_at with an explicit color (svg <text fill>): the
          * five-argument form above delegates with effective_text_color().
          */
-        void draw_text_at(core::Graphics &area, const char16_t *data, const int len,
+        void draw_text_at(core::Graphics &area, const char *data, const int len,
                           const int x, const int y, const core::Color &color) const;
 
         /*
@@ -1639,18 +1655,12 @@ namespace zb::ui
         }
 
         // text
-        // T-3 helpers: pick_provider resolves the per-unit provider with
-        // the style runs consulted first; clamp_text_runs re-clamps the
-        // stored runs after text_ changed (a run left past the new end
-        // drops, one crossing it truncates)
-        [[nodiscard]] const GlyphProvider *
-        pick_provider(const char16_t *data, const int i) const;
-        // A-25: the pair counterpart — same candidate order, answered by
-        // covers_pair on the surrogate pair at data[i..i+1]
-        [[nodiscard]] const GlyphProvider *
-        pick_provider_pair(const char16_t *data, const int i) const;
+        // T-3 helper: clamp_text_runs re-clamps the stored runs after
+        // text_ changed (a run left past the new end drops, one crossing
+        // it truncates, an edge inside a multi-byte sequence snaps out
+        // to the boundary)
         void clamp_text_runs();
-        std::u16string text_;
+        std::string text_;
         // unset = follow the active theme's `text` token (contract 10.3)
         std::optional<core::Color> text_color_;
         // layout hint applied at draw time; widgets set it when the

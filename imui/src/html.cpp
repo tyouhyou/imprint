@@ -5374,11 +5374,12 @@ namespace zb::ui
                     continue;  // an unstyled span: no run to carry
                 }
 
-                const long long off =
-                    static_cast<long long>(utf8_to_utf16(e.text.data(), pos)
-                                               .size());
-                const long long len = static_cast<long long>(
-                    utf8_to_utf16(in.text.data(), in.text.size()).size());
+                // runs address the stored UTF-8 text as byte offsets
+                // (code-contract §2 "Styled text runs"); `pos` already is
+                // a byte position in the paragraph text
+                const long long off = static_cast<long long>(pos);
+                const long long len =
+                    static_cast<long long>(in.text.size());
                 // one prop per run; the builder owns the grammar
                 // (off|len|color|font-size|bold, '-' = absent)
                 n.prop("text_run",

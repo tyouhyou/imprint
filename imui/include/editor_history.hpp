@@ -40,10 +40,11 @@ namespace zb::ui
             other,
         };
 
-        // one restore point: the full editor text state
+        // one restore point: the full editor text state (the stored
+        // UTF-8 bytes plus the caret/anchor byte offsets)
         struct step
         {
-            std::u16string text;
+            std::string text;
             size_t caret = 0;
             size_t sel_anchor = 0;
 

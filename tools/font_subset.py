@@ -191,7 +191,7 @@ def main():
             used |= scan_literals(path, threshold)
 
     if args.codepoints_out:
-        # BMP only: the runtime text model addresses char16_t units
+        # BMP only: the 5x7/subset tables stay bounded to the BMP
         selected = sorted(cp for cp in used | ui_used if cp <= 0xFFFF)
         body = "\n".join(str(cp) for cp in selected) + "\n"
         write_atomic(args.codepoints_out, body.encode("utf-8"))
@@ -223,7 +223,7 @@ def main():
     lines.append("{")
     lines.append("    struct SubsetGlyph")
     lines.append("    {")
-    lines.append("        char16_t ch;      // the code unit")
+    lines.append("        char32_t ch;      // the code point")
     lines.append("        uint8_t rows[7];  // 5x7 bitmap, row 0 on top")
     lines.append("    };")
     lines.append("")
@@ -232,7 +232,7 @@ def main():
     lines.append("    inline constexpr SubsetGlyph kSubsetGlyphs[] = {")
     for cp in selected:
         rows = ", ".join("0b%05d" % int(format(r, "b") if r else 0) for r in extras_by_cp[cp])
-        lines.append("        {u'\\u%04X', {%s}}," % (cp, rows))
+        lines.append("        {U'\\U%08X', {%s}}," % (cp, rows))
     lines.append("    };")
     lines.append("")
     lines.append("    inline constexpr size_t kSubsetGlyphCount =")

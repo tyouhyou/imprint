@@ -40,10 +40,9 @@ namespace zb::ui
         size_t budget = TtfFamily::kDefaultCacheBudget;
 
         // one rasterized glyph; the key is (pixel size, code point) --
-        // everything that changes the rendered pixels. A BMP unit keys
-        // as itself; a surrogate pair keys by its combined code point
-        // (A-25). Every field is default-initialized: an empty bitmap
-        // (e.g. the space glyph) leaves w/h at 0, never indeterminate
+        // everything that changes the rendered pixels. Every field is
+        // default-initialized: an empty bitmap (e.g. the space glyph)
+        // leaves w/h at 0, never indeterminate
         struct GlyphEntry
         {
             int px = 0;
@@ -125,13 +124,11 @@ namespace zb::ui
 
         int glyph_index(const TtfFamilyState &s, const char32_t cp)
         {
-            // cp is a BMP unit or a combined pair (<= 0x10FFFF): the
-            // int cast is value-preserving
+            // cp <= 0x10FFFF: the int cast is value-preserving
             return stbtt_FindGlyphIndex(&s.info, static_cast<int>(cp));
         }
 
-        // the pre-rounded advance of one code point (a BMP unit, or a
-        // surrogate pair's combined code point -- A-25); never rasterizes
+        // the pre-rounded advance of one code point; never rasterizes
         // (measure only needs metrics). A font may declare a negative
         // advance (italic kerning, some CJK fonts): clamp at the provider
         // boundary so the widget advance cache never receives a negative
@@ -355,38 +352,21 @@ namespace zb::ui
         line_ = text_metrics{0, a - d, a};
     }
 
-    bool TtfRuntimeProvider::covers(const char16_t ch) const
+    bool TtfRuntimeProvider::covers(const char32_t cp) const
     {
-        return glyph_index(*state_, ch) != 0;
+        return glyph_index(*state_, cp) != 0;
     }
 
-    bool TtfRuntimeProvider::covers_pair(const char16_t *str) const
-    {
-        return str != nullptr && is_surrogate_pair(str[0], str[1]) &&
-               glyph_index(*state_,
-                           combine_surrogate_pair(str[0], str[1])) != 0;
-    }
-
-    text_metrics TtfRuntimeProvider::measure(const char16_t *str, const int len) const
+    text_metrics TtfRuntimeProvider::measure(const char32_t *str, const int len) const
     {
         text_metrics m = line_;
         if (str == nullptr || len <= 0)
         {
             return m;
         }
-        for (int i = 0; i < len;)
+        for (int i = 0; i < len; ++i)
         {
-            // A-25: a lead+trail pair measures as its combined code
-            // point; each lone half stays uncovered (glyph 0 -> 0)
-            if (i + 1 < len && is_surrogate_pair(str[i], str[i + 1]))
-            {
-                m.width += advance_px(
-                    *state_, scale_, combine_surrogate_pair(str[i], str[i + 1]));
-                i += 2;
-                continue;
-            }
             m.width += advance_px(*state_, scale_, str[i]);
-            ++i;
         }
         return m;
     }
@@ -396,7 +376,7 @@ namespace zb::ui
         return line_;
     }
 
-    void TtfRuntimeProvider::write(core::Graphics &g, const char16_t *str, const int len,
+    void TtfRuntimeProvider::write(core::Graphics &g, const char32_t *str, const int len,
                                    const int x, const int y, const core::Color &color) const
     {
         if (str == nullptr || len <= 0)
@@ -418,19 +398,9 @@ namespace zb::ui
         } restore{g, bak};
         g.enable_alpha(true);
         int pen = x;
-        for (int i = 0; i < len;)
+        for (int i = 0; i < len; ++i)
         {
-            // A-25: a pair draws its combined code point's one glyph
-            char32_t cp = str[i];
-            if (i + 1 < len && is_surrogate_pair(str[i], str[i + 1]))
-            {
-                cp = combine_surrogate_pair(str[i], str[i + 1]);
-                i += 2;
-            }
-            else
-            {
-                ++i;
-            }
+            const char32_t cp = str[i];
             const TtfFamilyState::GlyphEntry *e = nullptr;
             try
             {

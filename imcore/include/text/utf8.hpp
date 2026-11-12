@@ -49,24 +49,6 @@ namespace zb::ui
     char32_t decode_utf8_prev(const char *&p, const char *begin);
 
     /*
-     * Converts an UTF-8 string to UTF-16. Conversion stops at the first
-     * NUL (the C-string convention: an embedded NUL ends the text, it is
-     * not preserved as a code unit). The counted overload converts the
-     * whole slice instead, embedded NULs included -- the form for packed
-     * bytes.
-     */
-    std::u16string utf8_to_utf16(const char *utf8);
-    std::u16string utf8_to_utf16(const char *utf8, size_t len);
-
-    /*
-     * Converts an UTF-16 string back to UTF-8 (the string shape the
-     * framework API hands out; widget text is stored as UTF-16). Lone
-     * surrogates are emitted as U+FFFD, so the result is always valid
-     * UTF-8.
-     */
-    std::string utf16_to_utf8(const std::u16string &u16);
-
-    /*
      * The sanitize pass for stored text (code-contract §2.1): decodes
      * and re-encodes, so the result is always valid UTF-8 — an
      * invalid or truncated byte becomes one U+FFFD. The NUL-terminated
@@ -77,45 +59,23 @@ namespace zb::ui
     std::string sanitize_utf8(const char *utf8);
     std::string sanitize_utf8(const char *utf8, size_t len);
 
-    /*
-     * Surrogate-pair helpers (A-25 pair atomicity, code-contract §2):
-     * a non-BMP code point stores as a lead+trail pair, and every
-     * editing/walk step treats the pair as one atom.
-     */
-    constexpr bool is_surrogate_lead(const char16_t u)
-    {
-        return u >= 0xD800 && u <= 0xDBFF;
-    }
+    /* appends one code point as its UTF-8 sequence (1-4 bytes) — the
+     * editor insert path and any single-character builder */
+    void append_utf8(std::string &out, char32_t cp);
 
-    constexpr bool is_surrogate_trail(const char16_t u)
+    /* the nearest code-point boundary at or after `pos`: an index in
+     * the middle of a multi-byte sequence snaps forward to the
+     * sequence's end (code-contract §2.1 — no caret, anchor, run edge
+     * or span boundary sits inside a sequence). On sanitized text the
+     * walk is at most 3 bytes. */
+    inline size_t snap_boundary(const std::string &text, const size_t pos)
     {
-        return u >= 0xDC00 && u <= 0xDFFF;
-    }
-
-    constexpr bool is_surrogate_pair(const char16_t lead, const char16_t trail)
-    {
-        return is_surrogate_lead(lead) && is_surrogate_trail(trail);
-    }
-
-    /* the code point a valid lead+trail pair encodes (undefined for
-     * units that do not form a pair) */
-    constexpr char32_t combine_surrogate_pair(const char16_t lead,
-                                              const char16_t trail)
-    {
-        return 0x10000 + ((static_cast<char32_t>(lead) - 0xD800) << 10) +
-               (static_cast<char32_t>(trail) - 0xDC00);
-    }
-
-    /* the nearest legal stop at or after `pos`: an index between a lead
-     * and its trail snaps to the pair's end (A-25 pair atomicity — no
-     * caret, anchor or span boundary sits inside a pair) */
-    inline size_t snap_pair_end(const std::u16string &t, const size_t pos)
-    {
-        if (pos > 0 && pos < t.size() &&
-            is_surrogate_lead(t[pos - 1]) && is_surrogate_trail(t[pos]))
+        size_t p = pos <= text.size() ? pos : text.size();
+        while (p < text.size() &&
+               (static_cast<unsigned char>(text[p]) & 0xC0) == 0x80)
         {
-            return pos + 1;
+            ++p;
         }
-        return pos;
+        return p;
     }
 }  // namespace zb::ui

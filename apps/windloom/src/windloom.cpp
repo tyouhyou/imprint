@@ -392,11 +392,11 @@ void WindCanvas::draw_at(core::Graphics &area) const
 
     if (delivered_ >= kGoal)
     {
-        draw_text_at(area, u"GARDEN COMPLETE", 15, X(120), Y(40), kPetalIn);
+        draw_text_at(area, "GARDEN COMPLETE", 15, X(120), Y(40), kPetalIn);
     }
     else
     {
-        draw_text_at(area, u"DRAW WIND - DELIVER SEEDS", 25, X(96), Y(6), kDim);
+        draw_text_at(area, "DRAW WIND - DELIVER SEEDS", 25, X(96), Y(6), kDim);
     }
 }
 

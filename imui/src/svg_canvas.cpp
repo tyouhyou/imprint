@@ -1472,7 +1472,14 @@ namespace zb::ui
             {
                 continue;
             }
-            const int len = static_cast<int>(t.text.size());
+            // one decode pass: the item carries UTF-8, the provider seam
+            // takes code points
+            std::u32string cps;
+            for (const char *p = t.text.c_str(); *p != '\0';)
+            {
+                cps.push_back(decode_utf8_next(p));
+            }
+            const int len = static_cast<int>(cps.size());
             // a declared font-size scales with the viewBox (browser: the
             // font-size rides the CTM); it resolves against the process
             // font family like every widget seam, the bitmap fallback
@@ -1518,17 +1525,17 @@ namespace zb::ui
             if (provider != nullptr)
             {
                 // §2.4 applies at the svg seam too: the item-level
-                // provider is the run's main provider per code unit,
-                // uncovered units fall to the 5x7 bitmap provider, still
-                // missing units are skipped. The raw measure/write fast
-                // path dropped code units the TTF lacks (glyph index 0
-                // measures 0 and rasterizes empty) and mis-measured
-                // mixed-script runs; the widget seam behaves the same
-                // for the identical string.
+                // provider is the run's main provider per code point,
+                // uncovered code points fall to the 5x7 bitmap provider,
+                // still missing ones are skipped. The raw measure/write
+                // fast path dropped code points the TTF lacks (glyph
+                // index 0 measures 0 and rasterizes empty) and
+                // mis-measured mixed-script runs; the widget seam behaves
+                // the same for the identical string.
                 bool all_covered = true;
                 for (int i = 0; i < len; ++i)
                 {
-                    if (!provider->covers(t.text[static_cast<std::size_t>(i)]))
+                    if (!provider->covers(cps[static_cast<std::size_t>(i)]))
                     {
                         all_covered = false;
                         break;
@@ -1536,7 +1543,7 @@ namespace zb::ui
                 }
                 if (all_covered)
                 {
-                    const int adv = provider->measure(t.text.data(), len).width;
+                    const int adv = provider->measure(cps.data(), len).width;
                     if (t.anchor == 1)
                     {
                         pen -= adv / 2;
@@ -1545,14 +1552,14 @@ namespace zb::ui
                     {
                         pen -= adv;
                     }
-                    provider->write(area, t.text.data(), len, pen, baseline,
+                    provider->write(area, cps.data(), len, pen, baseline,
                                     t.has_color ? t.color : theme().text);
                     continue;
                 }
-                // mixed run: the chain per code unit (contiguous covered
-                // spans still batch per unit through the provider)
+                // mixed run: the chain per code point (contiguous covered
+                // spans still batch per code point through the provider)
                 const BitmapProvider bitmap_fallback{};
-                const auto pick = [&](const char16_t ch) -> const GlyphProvider *
+                const auto pick = [&](const char32_t ch) -> const GlyphProvider *
                 {
                     if (provider->covers(ch))
                     {
@@ -1563,9 +1570,9 @@ namespace zb::ui
                 int adv = 0;
                 for (int i = 0; i < len; ++i)
                 {
-                    if (const GlyphProvider *p = pick(t.text[static_cast<std::size_t>(i)]))
+                    if (const GlyphProvider *p = pick(cps[static_cast<std::size_t>(i)]))
                     {
-                        adv += p->measure(t.text.data() + i, 1).width;
+                        adv += p->measure(cps.data() + i, 1).width;
                     }
                 }
                 if (t.anchor == 1)
@@ -1579,17 +1586,18 @@ namespace zb::ui
                 const core::Color col = t.has_color ? t.color : theme().text;
                 for (int i = 0; i < len; ++i)
                 {
-                    if (const GlyphProvider *p = pick(t.text[static_cast<std::size_t>(i)]))
+                    if (const GlyphProvider *p = pick(cps[static_cast<std::size_t>(i)]))
                     {
-                        p->write(area, t.text.data() + i, 1, pen, baseline, col);
-                        pen += p->measure(t.text.data() + i, 1).width;
+                        p->write(area, cps.data() + i, 1, pen, baseline, col);
+                        pen += p->measure(cps.data() + i, 1).width;
                     }
-                    // an uncovered unit keeps the pen position (its slot
-                    // is empty; the string never reflows mid-run)
+                    // an uncovered code point keeps the pen position (its
+                    // slot is empty; the string never reflows mid-run)
                 }
                 continue;
             }
-            const int adv = advance_of(t.text.data(), len);
+            const int adv = advance_of(t.text.data(),
+                                       static_cast<int>(t.text.size()));
             if (t.anchor == 1)
             {
                 pen -= adv / 2;
@@ -1600,7 +1608,7 @@ namespace zb::ui
             }
             // themed items read theme().text live (no widget color is
             // consulted: svg text never inherits, per the subset contract)
-            draw_text_at(area, t.text.data(), len,
+            draw_text_at(area, t.text.data(), static_cast<int>(t.text.size()),
                          pen, baseline,
                          t.has_color ? t.color : theme().text);
         }

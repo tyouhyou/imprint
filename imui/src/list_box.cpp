@@ -663,13 +663,17 @@ namespace zb::ui
         if (area.get_render_mode() == core::Graphics::render_mode::wireframe)
         {
             const std::string text = text_fn(text_arg, r);
-            const auto u16 = utf8_to_utf16(text.c_str());
+            std::u32string cps;
+            for (const char *p = text.c_str(); *p != '\0';)
+            {
+                cps.push_back(decode_utf8_next(p));
+            }
             const BitmapProvider provider;
             const auto m =
-                provider.measure(u16.data(), static_cast<int>(u16.size()));
+                provider.measure(cps.data(), static_cast<int>(cps.size()));
             const int tx = (text_w - m.width) / 2;
             const int ty = y0 + (rh - m.height) / 2 + m.ascent;
-            provider.write(area, u16.data(), static_cast<int>(u16.size()),
+            provider.write(area, cps.data(), static_cast<int>(cps.size()),
                            tx, ty, fg);
             return;
         }

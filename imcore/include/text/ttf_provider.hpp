@@ -9,18 +9,18 @@ namespace zb::ui
      * (batch S2; code-contract 2.4, plan 2). Stateless and shareable.
      * Widgets opt in through set_glyph_provider (the same selection
      * point as the runtime TTF provider); the default stays the 5x7 bitmap
-     * rendering. Units absent from the table report uncovered, so the
-     * fallback chain hands them to the bitmap provider. Coverage bytes
-     * are drawn as the foreground color's alpha (zero allocation in
+     * rendering. Code points absent from the table report uncovered, so
+     * the fallback chain hands them to the bitmap provider. Coverage
+     * bytes are drawn as the foreground color's alpha (zero allocation in
      * write).
      */
     class TtfSubsetProvider : public GlyphProvider
     {
     public:
-        bool covers(const char16_t ch) const override;
-        text_metrics measure(const char16_t *str, const int len) const override;
+        bool covers(const char32_t cp) const override;
+        text_metrics measure(const char32_t *str, const int len) const override;
         text_metrics line_metrics() const override;
-        void write(core::Graphics &g, const char16_t *str, const int len,
+        void write(core::Graphics &g, const char32_t *str, const int len,
                    const int x, const int y, const core::Color &color) const override;
     };
 

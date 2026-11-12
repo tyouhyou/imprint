@@ -108,15 +108,15 @@ namespace zb::ui
         // number of built-in 5x7 glyphs; subset glyphs index after these
         constexpr int kBaseGlyphCount = 64;
 
-        // normalizes a code unit to the glyph-table index or -1: the
+        // normalizes a code point to the glyph-table index or -1: the
         // built-in 5x7 range, then the generated subset (binary search
         // over the sorted table)
-        int glyph_index(const char16_t ch)
+        int glyph_index(const char32_t cp)
         {
-            char16_t cc = ch;
-            if (cc >= u'a' && cc <= u'z')
+            char32_t cc = cp;
+            if (cc >= U'a' && cc <= U'z')
             {
-                cc = static_cast<char16_t>(cc - u'a' + u'A');
+                cc = cc - U'a' + U'A';
             }
             if (cc >= 32 && cc < 96)
             {
@@ -160,12 +160,12 @@ namespace zb::ui
         }
     }  // namespace
 
-    bool BitmapProvider::covers(const char16_t ch) const
+    bool BitmapProvider::covers(const char32_t cp) const
     {
-        return glyph_index(ch) >= 0;
+        return glyph_index(cp) >= 0;
     }
 
-    text_metrics BitmapProvider::measure(const char16_t *str, const int len) const
+    text_metrics BitmapProvider::measure(const char32_t *str, const int len) const
     {
         text_metrics m;
         m.height = glyph_height;
@@ -189,7 +189,7 @@ namespace zb::ui
         return {0, glyph_height, glyph_height};
     }
 
-    void BitmapProvider::write(core::Graphics &g, const char16_t *str, const int len,
+    void BitmapProvider::write(core::Graphics &g, const char32_t *str, const int len,
                                const int x, const int y, const core::Color &color) const
     {
         if (str == nullptr || len <= 0)
@@ -222,7 +222,7 @@ namespace zb::ui
                 }
                 pen += glyph_advance;
             }
-            // uncovered code units advance zero width
+            // uncovered code points advance zero width
         }
     }
 }  // namespace zb::ui

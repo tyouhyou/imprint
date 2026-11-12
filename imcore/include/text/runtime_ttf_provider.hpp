@@ -87,11 +87,10 @@ namespace zb::ui
     class TtfRuntimeProvider final : public GlyphProvider
     {
     public:
-        bool covers(const char16_t ch) const override;
-        bool covers_pair(const char16_t *str) const override;
-        text_metrics measure(const char16_t *str, const int len) const override;
+        bool covers(const char32_t cp) const override;
+        text_metrics measure(const char32_t *str, const int len) const override;
         text_metrics line_metrics() const override;
-        void write(core::Graphics &g, const char16_t *str, const int len,
+        void write(core::Graphics &g, const char32_t *str, const int len,
                    const int x, const int y, const core::Color &color) const override;
 
     private:

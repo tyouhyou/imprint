@@ -244,7 +244,7 @@ int main(const int argc, const char **argv)
     out += std::to_string(entries.size()) + " glyphs (code-contract 2.4, plan 2)\n";
     out += "#pragma once\n\n#include <cstdint>\n\nnamespace zb::ui\n{\n";
     out += "    struct TtfGlyph\n    {\n";
-    out += "        char16_t ch;\n";
+    out += "        char32_t ch;\n";
     out += "        uint16_t advance;  // pen advance, px\n";
     out += "        uint8_t width, height;\n";
     out += "        int16_t xoff, yoff;  // bitmap top-left relative to (pen, baseline)\n";
@@ -261,7 +261,7 @@ int main(const int argc, const char **argv)
     for (const Entry &e : entries)
     {
         std::snprintf(line, sizeof line,
-                      "        {static_cast<char16_t>(0x%04X), %u, %u, %u, %d, %d, %u},\n",
+                      "        {0x%X, %u, %u, %u, %d, %d, %u},\n",
                       e.cp, e.advance, e.width, e.height, e.xoff, e.yoff, e.alpha_off);
         out += line;
     }

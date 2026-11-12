@@ -7,15 +7,17 @@
 namespace zb::ui
 {
     /*
-     * Single-line text editor. ASCII scope for now (see docs/code-
-     * contract.md, batch B): printable characters insert at the caret,
-     * backspace deletes before it, del deletes after it, left/right move
-     * the caret, enter submits. The caret is a static block (no timer,
-     * no blink animation).
+     * Single-line text editor. Accepts printable ASCII plus any code
+     * point >= U+00A0 (docs/code-contract.md §2 "Text input scope");
+     * printable characters insert at the caret, backspace deletes one
+     * whole code point before it, del deletes one after it, left/right
+     * move the caret, enter submits. The caret is a static block (no
+     * timer, no blink animation).
      *
-     * The text lives in Widget::text_slots (the base text_): set_text()
-     * is inherited and works through a Widget reference (builder
-     * materialization included). The caret is an index into it, clamped
+     * The text lives in Widget::text_ (UTF-8 bytes, code-contract
+     * §2.1): set_text() is inherited and works through a Widget
+     * reference (builder materialization included). The caret is a
+     * byte offset into it, always on a code-point boundary, clamped
      * to the current length at every edit and at draw; a programmatic
      * set_text shorter than the caret therefore lands the caret at the
      * new end (it never resets to the start).
@@ -113,7 +115,7 @@ namespace zb::ui
 
     private:
         void clamp_caret();
-        void insert(const char16_t ch);
+        void insert(const char32_t cp);
         bool erase_before_caret();
         bool erase_at_caret();
         bool move_caret(const int dir, const bool extend_selection = false);
@@ -125,10 +127,10 @@ namespace zb::ui
         // insert paths erase silently so one user edit fires once);
         // insert_text inserts a whole string (paste)
         bool erase_selection(bool fire = true);
-        void insert_text(const std::u16string &units);
+        void insert_text(const std::string &units);
         // the field's own input rules applied to pasted text: the T-2
         // acceptance, no line break (single line)
-        [[nodiscard]] std::u16string paste_filter(const std::u16string &in) const;
+        [[nodiscard]] std::string paste_filter(const std::string &in) const;
         void copy_selection();
         void paste_at_caret();
 

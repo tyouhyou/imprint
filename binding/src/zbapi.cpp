@@ -562,7 +562,8 @@ extern "C" int zb_widget_text(zb_app_t *self, const char *widget_id,
         {
             return -1;
         }
-        const std::string utf8 = zb::ui::utf16_to_utf8(w->get_text());
+        // the stored text IS UTF-8: the C ABI copies it out directly
+        const std::string &utf8 = w->get_text();
         const int n = static_cast<int>(utf8.size());
         const int copy = (n < cap - 1) ? n : cap - 1;
         if (copy > 0)
@@ -592,7 +593,7 @@ extern "C" void zb_widget_set_text(zb_app_t *self, const char *widget_id,
         zb::ui::Widget *w = self->ui->canvas()->root().find_by_id(widget_id);
         if (w != nullptr)
         {
-            w->set_text(zb::ui::utf8_to_utf16(utf8_text));
+            w->set_text(utf8_text);
         }
         else
         {

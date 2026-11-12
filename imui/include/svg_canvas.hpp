@@ -99,7 +99,7 @@ namespace zb::ui
         };
         struct Text
         {
-            std::u16string text;
+            std::string text;
             int x = 0, y = 0;  // viewBox units; y is the baseline
             core::Color color{};
             bool has_color = false;  // unset = theme text at draw time

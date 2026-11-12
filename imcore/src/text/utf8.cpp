@@ -86,49 +86,6 @@ namespace zb::ui
             p = q;
             return cp;
         }
-
-        // appends one decoded code point, splitting supplementary planes
-        // into a surrogate pair
-        void append_utf16(std::u16string &out, const char32_t cp)
-        {
-            if (cp > 0xFFFF)
-            {
-                const char32_t v = cp - 0x10000;
-                out += static_cast<char16_t>(0xD800 + (v >> 10));
-                out += static_cast<char16_t>(0xDC00 + (v & 0x3FF));
-            }
-            else
-            {
-                out += static_cast<char16_t>(cp);
-            }
-        }
-
-        // appends one code point as its UTF-8 sequence (1-4 bytes)
-        void append_utf8(std::string &out, const char32_t cp)
-        {
-            if (cp < 0x80)
-            {
-                out += static_cast<char>(cp);
-            }
-            else if (cp < 0x800)
-            {
-                out += static_cast<char>(0xC0 | (cp >> 6));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-            else if (cp < 0x10000)
-            {
-                out += static_cast<char>(0xE0 | (cp >> 12));
-                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-            else
-            {
-                out += static_cast<char>(0xF0 | (cp >> 18));
-                out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
-                out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
-                out += static_cast<char>(0x80 | (cp & 0x3F));
-            }
-        }
     }  // namespace
 
     char32_t decode_utf8_next(const char *&p)
@@ -223,65 +180,30 @@ namespace zb::ui
         return cp;
     }
 
-    std::u16string utf8_to_utf16(const char *utf8)
+    void append_utf8(std::string &out, const char32_t cp)
     {
-        std::u16string out;
-        if (utf8 == nullptr)
+        if (cp < 0x80)
         {
-            return out;
+            out += static_cast<char>(cp);
         }
-        for (const char *p = utf8; *p != '\0';)
+        else if (cp < 0x800)
         {
-            append_utf16(out, decode_bounded(p, nullptr));
+            out += static_cast<char>(0xC0 | (cp >> 6));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
         }
-        return out;
-    }
-
-    std::u16string utf8_to_utf16(const char *utf8, const size_t len)
-    {
-        std::u16string out;
-        if (utf8 == nullptr || len == 0)
+        else if (cp < 0x10000)
         {
-            return out;
+            out += static_cast<char>(0xE0 | (cp >> 12));
+            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
         }
-        const char *const end = utf8 + len;
-        for (const char *p = utf8; p < end;)
+        else
         {
-            append_utf16(out, decode_bounded(p, end));
+            out += static_cast<char>(0xF0 | (cp >> 18));
+            out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+            out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+            out += static_cast<char>(0x80 | (cp & 0x3F));
         }
-        return out;
-    }
-
-    std::string utf16_to_utf8(const std::u16string &u16)
-    {
-        std::string out;
-        out.reserve(u16.size());
-        for (size_t i = 0; i < u16.size(); ++i)
-        {
-            char32_t cp = u16[i];
-            if (cp >= 0xD800 && cp <= 0xDBFF)
-            {
-                // lead surrogate: consume the trailing one when present
-                const char32_t hi = cp - 0xD800;
-                if (i + 1 < u16.size() && u16[i + 1] >= 0xDC00 && u16[i + 1] <= 0xDFFF)
-                {
-                    cp = 0x10000 + (hi << 10) + (u16[i + 1] - 0xDC00);
-                    ++i;
-                }
-                else
-                {
-                    // lone lead surrogate: invalid, substitute
-                    cp = 0xFFFD;
-                }
-            }
-            else if (cp >= 0xDC00 && cp <= 0xDFFF)
-            {
-                cp = 0xFFFD;  // lone trailing surrogate
-            }
-
-            append_utf8(out, cp);
-        }
-        return out;
     }
 
     std::string sanitize_utf8(const char *utf8)
