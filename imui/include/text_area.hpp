@@ -1,5 +1,6 @@
 #pragma once
 
+#include "editor_history.hpp"
 #include "event.hpp"
 #include "widget.hpp"
 
@@ -31,7 +32,17 @@ namespace zb::ui
      * inverted face over the wrapped spans. Ctrl+C / Ctrl+Insert copy
      * the selection, Ctrl+V / Shift+Insert paste at the caret — through
      * the process-wide ClipboardSink (clipboard.hpp; a null sink drops
-     * copy silently and makes paste a no-op). No undo/redo.
+     * copy silently and makes paste a no-op).
+     *
+     * Undo/redo (code-contract §2 "Undo/redo"): the shared bounded
+     * history (editor_history.hpp) — every user edit records one
+     * step, consecutive same-kind edits merge, the stacks hold at
+     * most 5 steps and a new edit clears the redo side. Ctrl+Z
+     * undoes, Ctrl+Y / Ctrl+Shift+Z redo; enter (a '\n' insert) is
+     * its own step. The history lives for one focus session —
+     * cleared on focus gain and loss. undo()/redo() are public
+     * (can_undo()/can_redo() report the stacks); read-only gates
+     * them like every other edit primitive.
      *
      * Read-only (set_read_only, code-contract §2): user edits stop at
      * the edit primitives — typing/IME ch, enter's '\n', space,
@@ -72,6 +83,13 @@ namespace zb::ui
             mark_dirty();
         }
         [[nodiscard]] bool is_read_only() const { return read_only_; }
+
+        // bounded undo/redo (code-contract §2 "Undo/redo"); a call
+        // with an empty stack is a silent no-op
+        void undo();
+        void redo();
+        [[nodiscard]] bool can_undo() const { return history_.can_undo(); }
+        [[nodiscard]] bool can_redo() const { return history_.can_redo(); }
 
         // the current selection as UTF-8 (empty when collapsed)
         [[nodiscard]] std::string selected_text() const;
@@ -118,6 +136,14 @@ namespace zb::ui
         void copy_selection();
         void paste_at_caret();
 
+        // §2 "Undo/redo" bookkeeping (see TextInput): the history owns
+        // the stacks and the merge policy; a restore also re-anchors
+        // the column goal and scrolls the caret back into view
+        using history_step = editor_history::step;
+        [[nodiscard]] history_step capture() const;
+        void record_edit(editor_history::kind k, const history_step &before);
+        void apply_state(const history_step &s);
+
         // the pitch, inner wrap width, and caret geometry shared by the
         // input and draw paths — one definition so a click, a caret
         // move, and the paint never disagree about the line map
@@ -145,6 +171,7 @@ namespace zb::ui
         size_t sel_anchor = 0;
         bool selecting_ = false;  // a selection drag is in flight
         bool read_only_ = false;  // code-contract §2 "Read-only mode"
+        editor_history history_;
         // pixel column kept across vertical moves; every non-vertical
         // caret change re-anchors it to the caret's own column
         int column_goal = 0;

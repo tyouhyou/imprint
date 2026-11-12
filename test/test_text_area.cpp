@@ -598,5 +598,183 @@ int test_text_area()
         EXPECT(t.area->get_text() == std::u16string(u"seed!"));
     }
 
+    // undo/redo (code-contract §2 "Undo/redo"): a typing run is one
+    // step; Ctrl+Z restores text + caret and fires changed; Ctrl+Y
+    // and Ctrl+Shift+Z redo
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.d.dispatch(t.root, char_ev('c'));
+        EXPECT(t.area->get_text() == std::u16string(u"abc"));
+        EXPECT(t.area->can_undo());
+        EXPECT(!t.area->can_redo());
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+        EXPECT(t.last.empty());  // changed fired with the restored text
+        EXPECT(t.area->can_redo());
+        t.d.dispatch(t.root, char_ev('x'));  // caret was restored to 0
+        EXPECT(t.area->get_text() == std::u16string(u"x"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+        t.d.dispatch(t.root, key_mod('y', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"x"));
+        t.d.dispatch(t.root,
+                     key_mod('z', zb::input::mod_ctrl | zb::input::mod_shift));
+        EXPECT(t.area->get_text() == std::u16string(u"x"));
+    }
+
+    // enter is its own undo step (T-4: enter is content here)
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::enter)));
+        t.d.dispatch(t.root, char_ev('c'));
+        t.d.dispatch(t.root, char_ev('d'));
+        EXPECT(t.area->get_text() == std::u16string(u"ab\ncd"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab\n"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+        EXPECT(!t.area->can_undo());
+    }
+
+    // a backspace run merges — including the one that removes the '\n'
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::enter)));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::backspace)));
+        EXPECT(t.area->get_text().empty());
+        EXPECT(t.area->can_undo());
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab\n"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+        EXPECT(!t.area->can_undo());
+    }
+
+    // a caret move breaks the run; paste is its own step
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.d.dispatch(t.root,
+                     key_ev(static_cast<int>(zb::input::key_code::left)));
+        t.d.dispatch(t.root, char_ev('c'));  // "acb"
+        EXPECT(t.area->get_text() == std::u16string(u"acb"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+
+        TestSink sink;
+        sink.canned = "XY";
+        SinkGuard guard(&sink);
+        t.d.dispatch(t.root, key_mod('v', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"aXYb"));  // caret 1
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+    }
+
+    // a non-BMP typed char (a surrogate pair) is one undo step
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev(0x1F600));
+        EXPECT(t.area->get_text() == std::u16string(u"\U0001F600"));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+    }
+
+    // the undo stack caps at 5 steps: the oldest drops
+    {
+        Editor t;
+        // six runs: each typed char is separated by a caret move
+        for (const int ch : {'a', 'b', 'c', 'd', 'e', 'f'})
+        {
+            t.d.dispatch(t.root, char_ev(ch));
+            t.d.dispatch(t.root,
+                         key_ev(static_cast<int>(zb::input::key_code::left)));
+        }
+        EXPECT(t.area->get_text() == std::u16string(u"fedcba"));
+        for (int i = 0; i < 5; ++i)
+        {
+            EXPECT(t.area->can_undo());
+            t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        }
+        EXPECT(!t.area->can_undo());
+        EXPECT(t.area->get_text() == std::u16string(u"a"));
+    }
+
+    // a new edit clears the redo stack
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->can_redo());
+        t.d.dispatch(t.root, char_ev('c'));
+        EXPECT(!t.area->can_redo());
+        EXPECT(t.area->get_text() == std::u16string(u"c"));
+    }
+
+    // empty stacks: the chord is consumed but nothing changes
+    {
+        Editor t;
+        EXPECT(!t.area->can_undo());
+        EXPECT(!t.area->can_redo());
+        EXPECT(t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl)));
+        t.area->undo();
+        t.area->redo();
+        EXPECT(t.area->get_text().empty());
+    }
+
+    // the history lives for one focus session: focus loss clears it
+    // (SelTree's second focusable takes the focus away)
+    {
+        SelTree t;
+        t.d.dispatch(t.root, press_at(5, 5));
+        t.d.dispatch(t.root, release_at(5, 5));
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.d.dispatch(t.root, press_at(5, 65));  // the TextInput below
+        t.d.dispatch(t.root, release_at(5, 65));
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        t.d.dispatch(t.root, press_at(5, 5));  // back to the area
+        t.d.dispatch(t.root, release_at(5, 5));
+        EXPECT(!t.area->can_undo());
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+    }
+
+    // read-only gates undo/redo like every other edit primitive
+    {
+        Editor t;
+        t.d.dispatch(t.root, char_ev('a'));
+        t.d.dispatch(t.root, char_ev('b'));
+        t.area->set_read_only(true);
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text() == std::u16string(u"ab"));
+        EXPECT(t.last == "ab");      // the gated undo never fired changed
+        EXPECT(t.area->can_undo());  // the history is intact, just gated
+        t.area->set_read_only(false);
+        t.d.dispatch(t.root, key_mod('z', zb::input::mod_ctrl));
+        EXPECT(t.area->get_text().empty());
+    }
+
     return test::report("text_area");
 }
