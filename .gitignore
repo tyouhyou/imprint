@@ -70,9 +70,12 @@ Thumbs.db
 /design/
 # operator-local, untracked since 2026-11-07: the dev container, the
 # tianji client composition layer (CMake/CI gate on its absence), the
-# local ROM launcher
+# local ROM launcher. studio/ joins them since 2026-11-14 (the studio
+# client layer is on hold and was never CI-verifiable — it references
+# tj_json from the untracked tianji/).
 /docker/
 /tianji/
+/studio/
 /run_showcase.bat
 /snapshot_test_out/
 
