@@ -12,6 +12,7 @@ add_executable(
     test_text_area.cpp
     test_button.cpp
     test_label.cpp
+    test_group_box.cpp
     test_dialog.cpp
     test_dispatch.cpp
     test_hit_override.cpp

@@ -151,6 +151,7 @@ build; this rule governs the build-time gate only.
 |---|---|---|
 | `div` | `column` / `row` | default `column` (block reading order); `flex-direction: row` → `row`, and a bare `display: flex` also selects `row` (the CSS flex default — stylesheets that lay out with `display: flex` alone depend on it). `display: block` (or anything else) keeps `column`. The div is a content-measuring flex container, **not** HTML block layout; it never stretches to fill a parent's main axis. `flex:` markup drives fill |
 | `div` (with `overflow: scroll`) | `scroll_panel` | H-4: the container becomes a vertical scroll container — the flow stacks (`flex-direction: row` does **not** make it horizontal), children lay out per the flex rules, and overflow is reachable by wheel or the scrollbar thumb instead of clipping. See code-contract §3.4 |
+| `group-box` | `group_box` | Imprint custom container; `title` supplies the frame caption, children are laid out vertically with `padding` and `gap` |
 | `p` | `label` | the paragraph element: the text wraps at the element's assigned width and `br` is a hard line break (§Text wrapping) |
 | `span`, `label`, `small` | `label` — or, inside a wrapping `p`, styled runs | single-line labels (`small` defaults to `font-size: 12px` unless an explicit `font-size` wins); inside a wrapping `p` a `span` is **not** a child label: its text and any bare text around it concatenate into the paragraph in document order as styled runs (code-contract §2 "Styled text runs", T-5), carrying `color` / `font-size` / `font-weight`. A span-level `letter-spacing` warns once and is ignored — letter-spacing stays the paragraph's whole-text dressing (P-2a) |
 | `button` | `button` | `text` = element text content |
@@ -174,6 +175,7 @@ build; this rule governs the build-time gate only.
 | `id` | any element | `find_by_id` handle (unquoted digits accepted, stored as decimal — the `.ui` rule) |
 | `style` | any element | inline declaration list, wins over every rule |
 | `class` | any element | drives `.class` selector matching (§`<style>` rule matching); multi-class lists split on whitespace |
+| `title` | `group-box` | frame caption |
 | `min` / `max` / `step` / `value` | gauge / knob / slider / meter | range/value properties (full integers, negatives accepted; the widget clamps `value` into [`min`, `max`] and collapses a reversed range to a point; `step` stays a non-negative magnitude) |
 | `checked` | checkbox / radio / toggle | boolean, by presence |
 | `group` | radio | radio group id (integer, any sign — equality-matched, never indexed) |
